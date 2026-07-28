@@ -337,7 +337,7 @@ describe('buildYear', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §15.D / §19 slice)
+// resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §1.D / §3 slice)
 // ─────────────────────────────────────────────────────────────
 
 describe('resolveBaseRateForWeek', () => {
@@ -370,7 +370,7 @@ describe('resolveBaseRateForWeek', () => {
   })
 })
 
-describe('resolvePrevWeekNet (TODO §15 — "This Week\'s Check" annual-average dilution fix, 2026-07-19)', () => {
+describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average dilution fix, 2026-07-19)', () => {
   const BASE_CONFIG = {
     ...DEFAULT_CONFIG,
     employerPreset: null,
@@ -453,7 +453,7 @@ describe('resolvePrevWeekNet (TODO §15 — "This Week\'s Check" annual-average 
   })
 })
 
-describe('buildYear — point-in-time baseRate (TODO §15.D)', () => {
+describe('buildYear — point-in-time baseRate (TODO §1.D)', () => {
   const BASE_CONFIG = {
     ...DEFAULT_CONFIG,
     employerPreset: null,
@@ -1738,6 +1738,34 @@ describe('calcEventImpact', () => {
       const result = calcEventImpact(event, cfg)
       expect(result.grossGained).toBe(500)
       expect(result.grossLost).toBe(0)
+    })
+  })
+
+  describe('tips_commission', () => {
+    it('returns grossGained = amount, grossLost = 0 — mirrors the bonus branch', () => {
+      const event = makeEvent({ type: 'tips_commission', weekEnd: '2026-02-02', amount: 250 })
+      const result = calcEventImpact(event, cfg)
+      expect(result.grossGained).toBe(250)
+      expect(result.grossLost).toBe(0)
+    })
+
+    it('a $0 amount ("No" answer) is a real, resolved entry with zero impact', () => {
+      const event = makeEvent({ type: 'tips_commission', weekEnd: '2026-02-02', amount: 0 })
+      const result = calcEventImpact(event, cfg)
+      expect(result.grossGained).toBe(0)
+      expect(result.netGained).toBe(0)
+    })
+
+    // "If you claim all tips" (LogPanel's tips-only running total) is just
+    // grossGained - netGained — the same tax-aware gap every other event type's
+    // net impact already runs through (DW-5), never a parallel formula.
+    it('grossGained - netGained is the extra tax owed if the tip were claimed', () => {
+      // weekIdx=7 is a taxed week (see "tax calculation" describe above).
+      const event = makeEvent({ type: 'tips_commission', weekRotation: '4-Day', weekIdx: 7, weekEnd: '2026-02-23', amount: 20 })
+      const result = calcEventImpact(event, cfg)
+      const effectiveRate = cfg.ficaRate + cfg.w1FedRate + cfg.w1StateRate
+      const extraTaxOwed = result.grossGained - result.netGained
+      expect(extraTaxOwed).toBeCloseTo(20 * effectiveRate)
     })
   })
 

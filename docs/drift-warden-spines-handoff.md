@@ -37,7 +37,7 @@ references.
 - Branch: **`claude/drift-app-warden-structure-24fykc`** — develop, commit, and push
   here. Commit per spine (or per logical group), push immediately after each commit.
 - Section numbering: §17 (T10) is the last written section. **Spine sections are
-  §18–§23** (A→F in order). Tick each spine off in the §6 checklist as you go
+  §2–§9** (A→F in order). Tick each spine off in the §6 checklist as you go
   (the last checklist item covers all spines — split it into six lines when you start).
 - Function numbering: **F1–F95 are used. You start at F96.** Numbering never resets;
   it's one running sequence so "F41" is unambiguous doc-wide.
@@ -108,7 +108,7 @@ new-field checklist as a named procedure (F68 sketched it).
 
 **Spine C — Entitlements & Gating [G]** (`subscription.js`, `entitlements.js`, tier
 flags). Mostly covered: `getEntitlement` (F80), enforcement fork (F81), tax plan gates
-(F43/F50), tier/RLS checklist (F69), tester division (§23 everywhere, DW-7).
+(F43/F50), tier/RLS checklist (F69), tester division (§9 everywhere, DW-7).
 **You owe:** `entitlements.js` itself (`hasTesterAccess` base, the structural-superset
 construction — verify the code matches the a643153 claim), and the one-page gate
 registry: every gate function → its call sites client and server.
@@ -118,7 +118,7 @@ registry: every gate function → its call sites client and server.
 `AskCoachPanel.jsx`). Partially covered: trigger chain (F22/F24 + quarantined
 `estimateRunwayDays`), DW-5's weekMeta lesson, runwayDays-never-wired gap (§8 Block 4).
 **You owe:** `buildCoachContext()` field-by-field — each context line → the
-authoritative Spine-A function it must resolve through (the §24 grounding rule is the
+authoritative Spine-A function it must resolve through (the §6 grounding rule is the
 whole game here), the privacy rule (goal labels excluded), the server-side gate
 re-check in `api/coach.js`, and the dormant `coach_chats` persistence layer
 (migration 023, unwired — don't let anyone wire it without a map entry).

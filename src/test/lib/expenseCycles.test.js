@@ -13,7 +13,7 @@ import {
 import { toLocalIso } from '../../lib/finance.js'
 
 // ─────────────────────────────────────────────────────────────
-// getNextDueDate — §15.C5 countdown tiles
+// getNextDueDate — §1.C5 countdown tiles
 // ─────────────────────────────────────────────────────────────
 
 describe('getNextDueDate', () => {
@@ -62,7 +62,7 @@ describe('getNextDueDate', () => {
     expect(getNextDueDate(e, new Date())).toBeNull()
   })
 
-  it('prefers dueDateAnchor over billingMeta.effectiveFrom (TODO §15 Job Loss due-date fix)', () => {
+  it('prefers dueDateAnchor over billingMeta.effectiveFrom (TODO §1 Job Loss due-date fix)', () => {
     // effectiveFrom gets stamped to "today" on every BudgetPanel amount edit, so it's
     // an amount-edit timestamp, not a real bill due date — dueDateAnchor is the honest one.
     const e = { dueDateAnchor: '2026-05-20', billingMeta: { amount: 50, cycle: 'every30days', effectiveFrom: '2026-07-01' } }
@@ -74,7 +74,7 @@ describe('getNextDueDate', () => {
     expect(iso(getNextDueDate(e, new Date(2026, 4, 10, 12)))).toBe('2026-05-10')
   })
 
-  it('computes a loan\'s next due date from loanMeta.firstPaymentDate, not billingMeta (TODO §15 loan fix)', () => {
+  it('computes a loan\'s next due date from loanMeta.firstPaymentDate, not billingMeta (TODO §1 loan fix)', () => {
     const loan = { type: 'loan', loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-05-10' } }
     expect(iso(getNextDueDate(loan, new Date(2026, 4, 1)))).toBe('2026-05-10')
     // Past the anchor — advances by the monthly (30-day) cadence, same as a regular bill.
@@ -98,7 +98,7 @@ describe('getNextDueDate', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §15 Job Loss
+// resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §1 Job Loss
 // expense review's payment-date step + JobLossBudgetPanel's add-expense fix
 // ─────────────────────────────────────────────────────────────
 

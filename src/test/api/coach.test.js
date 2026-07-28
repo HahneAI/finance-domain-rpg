@@ -1,4 +1,4 @@
-// §18.G — api/coach.js proxies Claude API calls so ANTHROPIC_API_KEY never
+// §2.G — api/coach.js proxies Claude API calls so ANTHROPIC_API_KEY never
 // reaches the client. Auth guard mirrors delete-account.js; the Anthropic
 // call itself is mocked via a stubbed global fetch.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -13,7 +13,7 @@ const { mocks } = vi.hoisted(() => {
 // existing isAdmin/isTester-only tests are unaffected unless they opt into a
 // trial/paid shape via the subscription* overrides.
 function stubAccess({
-  isAdmin = false, isTester = false, rowError = null,
+  isAdmin = false, isTester = false, isInvestor = false, rowError = null,
   subscriptionStatus = null, trialEndsAt = null, accessEndsAt = null,
   currentPeriodEnd = null, stripeSubscriptionId = null,
 } = {}) {
@@ -24,6 +24,7 @@ function stubAccess({
           data: rowError ? null : {
             is_admin: isAdmin,
             is_tester: isTester,
+            is_investor: isInvestor,
             subscription_status: subscriptionStatus,
             trial_ends_at: trialEndsAt,
             access_ends_at: accessEndsAt,
@@ -185,6 +186,31 @@ describe("coach — canAccessAskCoachGeneral gate (docs/coach-entry-points.md §
     const fromCall = mocks.userClient.from.mock.results[0].value;
     expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_admin/));
     expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_tester/));
+  });
+
+  // Locked decision 2026-07-25 (entitlements.js's hasPrivilegedAccess): investor
+  // accounts bypass the paid wall too — verified server-side from the DB row,
+  // same as admin/tester, never trusted from anything the client sends.
+  it("allows an investor caller through to the Anthropic call, even with no admin/tester flag or entitlement", async () => {
+    stubAccess({ isAdmin: false, isTester: false, isInvestor: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull();
+  });
+
+  it("selects is_investor alongside is_admin/is_tester so the query itself can't silently drop investor access", async () => {
+    stubAccess({ isInvestor: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) }));
+
+    await handler(mkReq(), mkRes());
+
+    const fromCall = mocks.userClient.from.mock.results[0].value;
+    expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_investor/));
   });
 
   // The whole point of the DW-flip: a real, non-admin, non-tester account on

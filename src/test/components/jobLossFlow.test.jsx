@@ -10,6 +10,11 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from '../../lib/jobLossRunway.js'
 import { toLocalIso } from '../../lib/finance.js'
 
+// jsdom doesn't implement scrollIntoView — JobHuntChatPanel (§18.E, mounted
+// inside JobLossHomePanel when canAccessAiFeatures is true) calls it on
+// every message-list update to keep the latest turn in view.
+Element.prototype.scrollIntoView ??= () => {}
+
 // CoachNetWorthCard (mounted inside JobLossHomePanel per the DW-8 fix) calls
 // chatWithCoach — mocked here the same way CoachNetWorthCard.test.jsx does,
 // so these tests never touch the network/API key.
@@ -20,6 +25,16 @@ function chunkGenerator(chunks) {
     for (const c of chunks) yield c
   }
 }
+
+// ResumeReviewCard (mounted inside JobLossHomePanel when canAccessAiFeatures
+// is true, §18.E1) reads/writes via lib/db.js — mocked so its effects never
+// touch the real Supabase client, which would otherwise throw at import time
+// in this test environment (no VITE_SUPABASE_URL set).
+vi.mock('../../lib/db.js', () => ({
+  loadResumeProfile: vi.fn().mockResolvedValue(null),
+  saveResumeProfile: vi.fn().mockResolvedValue(true),
+  saveCoachChat: vi.fn().mockResolvedValue('chat-id'),
+}))
 
 const JOB_LOSS_CONFIG = {
   ...DEFAULT_CONFIG,
@@ -63,7 +78,7 @@ describe('LifeEventMenu', () => {
     expect(onSelect).toHaveBeenCalledWith('structure_change')
   })
 
-  it('routes "Quick Rate Update" to the rate_update modal (TODO §15.D, no longer Coming Soon)', () => {
+  it('routes "Quick Rate Update" to the rate_update modal (TODO §1.D, no longer Coming Soon)', () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()
     render(<LifeEventMenu open onClose={onClose} onSelect={onSelect} />)
@@ -117,7 +132,7 @@ describe('JobLossEntry', () => {
       unemploymentDurationWeeks: null,
       unemploymentWaitingWeek: false,
     }))
-    // TODO §15.H17 — the decay clock starts at the job-loss effective date.
+    // TODO §1.H17 — the decay clock starts at the job-loss effective date.
     const activatedPatch = onActivate.mock.calls[0][0]
     expect(activatedPatch.jobLossCashOnHandAsOf).toBe(activatedPatch.jobLossDate)
     expect(onClose).toHaveBeenCalled()
@@ -156,7 +171,7 @@ describe('JobLossEntry', () => {
     expect(onActivate).not.toHaveBeenCalled()
   })
 
-  // TODO §15.H13 — cash on hand is mandatory: blocks Next/Activate while
+  // TODO §1.H13 — cash on hand is mandatory: blocks Next/Activate while
   // empty, accepts 0 as a real answer, shows the red-border/required state
   // only after a failed attempt (not on first render).
   it('blocks Next until cash on hand is entered, with no red border before the first attempt', () => {
@@ -193,10 +208,10 @@ describe('JobLossEntry', () => {
     expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
   })
 
-  // TODO §15.H15 — pending/final paycheck: skippable Y/N gate; Yes reveals a
+  // TODO §1.H15 — pending/final paycheck: skippable Y/N gate; Yes reveals a
   // worked-days grid + a single-select arrival-day picker; resolved once at
   // Activate time into a concrete amount + date (raw picks aren't stored).
-  describe('Pending/final paycheck (§15.H15)', () => {
+  describe('Pending/final paycheck (§1.H15)', () => {
     const PAY_CONFIG = {
       payPeriodEndDay: 0, userPaySchedule: 'weekly', baseRate: 20, shiftHours: 8,
       fedRateLow: 0.08, stateRateLow: 0.03, ficaRate: 0.0765, k401Rate: 0,
@@ -374,7 +389,7 @@ describe('JobLossEntry', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// RateUpdateModal (TODO §15.D)
+// RateUpdateModal (TODO §1.D)
 // ─────────────────────────────────────────────────────────────
 
 describe('RateUpdateModal', () => {
@@ -428,7 +443,7 @@ describe('RateUpdateModal', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// JobLossHomePanel + JobLossBudgetPanel (TODO §15 mode rebuild, 2026-07-18)
+// JobLossHomePanel + JobLossBudgetPanel (TODO §1 mode rebuild, 2026-07-18)
 // — replace JobLossDashboard/ExpenseTriage as Job Loss Mode's own dedicated
 // Home/Budget views instead of a pinned card layered over the normal panels.
 // ─────────────────────────────────────────────────────────────
@@ -454,11 +469,11 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Runway')).toBeTruthy()
   })
 
-  // TODO §15.H14 bullet 2 / §15.H16 — Lifestyle spend is excluded from
+  // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from
   // weeklyBurn on purpose (survival-spend focus), but a user who keeps those
   // bills tracked is still paying for them; this caption is the transparency
   // fix so the headline number doesn't silently omit real spend.
-  describe('Lifestyle spend caption (§15.H16)', () => {
+  describe('Lifestyle spend caption (§1.H16)', () => {
     const GYM = {
       id: 'exp_gym', category: 'Lifestyle', label: 'Gym',
       billingMeta: { amount: 40, cycle: 'every7days', effectiveFrom: '2026-01-01' },
@@ -527,11 +542,11 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Target annual')).toBeTruthy()
   })
 
-  // TODO §15.H17 — cash on hand is now a pencil-badged card (not a plain
+  // TODO §1.H17 — cash on hand is now a pencil-badged card (not a plain
   // input), edited through CashOnHandSheet's bottom sheet. expenses: [] in
   // these tests isolates "does the field wire up correctly" from decay
   // behavior, which gets its own describe block below.
-  describe('Cash On Hand card + sheet (TODO §15.H17)', () => {
+  describe('Cash On Hand card + sheet (TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure on the card', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
       render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
@@ -567,7 +582,7 @@ describe('JobLossHomePanel', () => {
       fireEvent.click(screen.getByText('Cancel'))
       expect(setConfig).not.toHaveBeenCalled()
       // The sheet stays mounted through its animated slide-down exit (TODO
-      // §15.H17 — matches the "up-from-bottom entry, slide-down exit" ask),
+      // §1.H17 — matches the "up-from-bottom entry, slide-down exit" ask),
       // so it's still in the DOM immediately after the click; only gone once
       // the exit tween finishes.
       await waitFor(() => expect(screen.queryByText('Update Cash On Hand')).toBeNull())
@@ -581,10 +596,10 @@ describe('JobLossHomePanel', () => {
     })
   })
 
-  // TODO §15.H17 — the headline figure decreases automatically as tracked
+  // TODO §1.H17 — the headline figure decreases automatically as tracked
   // essential bills come due since jobLossCashOnHandAsOf (falls back to
   // jobLossDate when unset), instead of silently going stale.
-  describe('Cash On Hand — timeline-aware decay (§15.H17)', () => {
+  describe('Cash On Hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
       id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
       dueDateAnchor: '2026-06-04',
@@ -669,6 +684,96 @@ describe('JobLossHomePanel', () => {
       )
       expect(screen.queryByText('Coach — Critical')).toBeNull()
       expect(coachMocks.chatWithCoach).not.toHaveBeenCalled()
+    })
+
+    // Locked decision 2026-07-25 — investor accounts bypass this too, even
+    // with no entitlement at all (investor accounts routinely carry none).
+    it('renders the Red tier for an investor account with no entitlement', async () => {
+      coachMocks.chatWithCoach.mockImplementation(chunkGenerator(['Runway is tight — here is what to do.']))
+      render(
+        <JobLossHomePanel
+          config={{ ...RUNWAY_UNDER_30, isInvestor: true }} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits={false} currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: false, state: 'none' }}
+        />
+      )
+      expect(await screen.findByText('Coach — Critical')).toBeTruthy()
+    })
+  })
+
+  // §18 sections 4+ standing constraint — Job Hunt Assistant (§18.E) and
+  // Résumé Review (§18.E1) stay on the narrow canAccessAiFeatures gate
+  // (admin/tester/investor — hasPrivilegedAccess), unlike the Net Worth card
+  // above which left it for a wider trial/paid gate. A real trial
+  // entitlement alone (no admin/tester/investor) must NOT be enough.
+  describe('Job Hunt Assistant + Résumé Review gate (§18 sections 4+)', () => {
+    it('does not render for a non-admin/non-tester account, even with a real trial entitlement', () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+        />
+      )
+      expect(screen.queryByText('Job Hunt Assistant')).toBeNull()
+      expect(screen.queryByText('Résumé Review')).toBeNull()
+    })
+
+    it('renders both for an admin account', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      // ResumeReviewCard loads its profile async on mount before rendering.
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    it('renders both for a manually-flagged tester account', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    // Locked decision 2026-07-25 (entitlements.js's hasPrivilegedAccess):
+    // investor/demo accounts bypass every paid wall too, AI features
+    // included — even with no admin/tester flag and no real subscription
+    // entitlement at all (investor accounts routinely have neither).
+    it('renders both for an investor account, even with no admin/tester flag or entitlement', async () => {
+      render(
+        <JobLossHomePanel
+          config={{ ...JOB_LOSS_CONFIG, isInvestor: true }} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: false, state: 'none' }}
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    it('opens the Job Hunt chat panel on tap', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin
+        />
+      )
+      await screen.findByText('Résumé Review') // let ResumeReviewCard's mount-load settle first
+      fireEvent.click(screen.getByText('Talk to Coach about the search'))
+      expect(screen.getByLabelText('Close Job Hunt Assistant')).toBeTruthy()
     })
   })
 })
@@ -765,10 +870,10 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.queryByText('Paused')).toBeNull()
   })
 
-  // TODO §15.H17 — same shared CashOnHandSheet as JobLossHomePanel's card,
+  // TODO §1.H17 — same shared CashOnHandSheet as JobLossHomePanel's card,
   // triggered from a compact pencil-badged row instead of a plain input.
   // expenses: [] avoids decay noise (own describe block below covers that).
-  describe('Cash on hand / current savings (persisted, TODO §15.H17)', () => {
+  describe('Cash on hand / current savings (persisted, TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure in the row', () => {
       renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
       expect(screen.getByText('$1,500')).toBeTruthy()
@@ -803,8 +908,8 @@ describe('JobLossBudgetPanel', () => {
     })
   })
 
-  // TODO §15.H17 — same decay math as Home, same describe convention.
-  describe('Cash on hand — timeline-aware decay (§15.H17)', () => {
+  // TODO §1.H17 — same decay math as Home, same describe convention.
+  describe('Cash on hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
       id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
       dueDateAnchor: '2026-06-04',

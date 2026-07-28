@@ -12,7 +12,7 @@
 // Supabase's .select() at runtime, so it fails the moment the two drift
 // apart again, for any field, not just this one.
 //
-// Extended for the beta-halfway check (docs/TODO.md §37) — that block reads
+// Extended for the beta-halfway check (docs/TODO.md §21) — that block reads
 // row.is_tester/beta_code_used/beta_started_at/halfway_email_sent_at directly
 // in cron-subscription-lifecycle.js itself, OUTSIDE decideLifecycleAction, so
 // scanning only _lifecycleEngine.js would leave it structurally unprotected —

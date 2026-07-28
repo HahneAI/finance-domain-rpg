@@ -15,11 +15,11 @@ const STATUS_OPTIONS = [
 const isFlexibleCategory = (cat) => cat === "Lifestyle";
 
 /**
- * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §15 mode rebuild).
+ * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §1 mode rebuild).
  *
  * Replaces BudgetPanel entirely while `config.jobLossMode` is true. The cash
- * on hand figure (persisted `config.jobLossCashOnHand`, TODO §15.H13,
- * timeline-aware per §15.H17) is editable here AND on JobLossHomePanel via
+ * on hand figure (persisted `config.jobLossCashOnHand`, TODO §1.H13,
+ * timeline-aware per §1.H17) is editable here AND on JobLossHomePanel via
  * the same CashOnHandSheet — both commit to the same config fields via eager
  * save, so there's no single "owner" to drift from; the benefit-scenario
  * toggle (session-only, unrelated) still lives here only, with Home reading
@@ -70,7 +70,7 @@ export function JobLossBudgetPanel({
   }), [config, expenses, effectiveToday, huntIncome]);
 
   // Same shared editor as JobLossHomePanel's Cash On Hand card (TODO
-  // §15.H17) — confirming a value here resets the decay clock the same way,
+  // §1.H17) — confirming a value here resets the decay clock the same way,
   // since both surfaces commit to the identical config fields.
   const saveCashOnHand = (parsedValue) => {
     const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
@@ -78,7 +78,7 @@ export function JobLossBudgetPanel({
     saveConfigNow?.(next);
   };
 
-  // Only expenses the user chose to track during Job Loss Mode (TODO §15
+  // Only expenses the user chose to track during Job Loss Mode (TODO §1
   // expense review step) show up anywhere on this panel — untracked ones
   // stay untouched for normal-mode Budget, just invisible here.
   const trackedExpenses = useMemo(

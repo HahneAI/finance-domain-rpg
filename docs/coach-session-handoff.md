@@ -21,7 +21,7 @@ Two Coach surfaces are **live and open to the full user base**, trial included:
    debounced, and not only on close), a "Chat History" view (header icon) lists the last 3
    saved conversations grouped by date with a short Coach-written summary, tapping one resumes
    it, and older conversations beyond the last 3 are pruned automatically (never the one
-   currently open). Full detail: `docs/TODO.md` §18.H3–H4, `docs/drift-app-warden.md` §21 F123.
+   currently open). Full detail: `docs/TODO.md` §2.H3–H4, `docs/drift-app-warden.md` §8 F123.
 2. **The Net Worth Check-In card.** A small card on the Home screen (both the normal Home and
    the separate Job Loss Mode Home) that proactively speaks up about savings trends — a gentle
    heads-up, a critical job-loss warning, or a recovery acknowledgment.
@@ -101,7 +101,7 @@ today** (how much metaphor/boxing language to use); everything else is a blank s
 waiting to be scored one situation at a time. Any new Coach copy should be checked against
 this file, not invented fresh.
 
-### 3. `docs/drift-app-warden.md` §21 — "Spine D: AI Layer & Context Grounding" (the guardrail)
+### 3. `docs/drift-app-warden.md` §8 — "Spine D: AI Layer & Context Grounding" (the guardrail)
 
 This whole document is a running ledger that answers one question for the entire app: "I'm
 about to change X — what else might silently break because of it?" It exists because this
@@ -114,16 +114,16 @@ broken in the past, Coach ended up telling a user a number that didn't match wha
 screen said, or a stale one. Read this section before wiring any new data into Coach's context
 — it documents the real past incidents as precedent.
 
-### 4. `docs/TODO.md` §18 and §21 — the written plans
+### 4. `docs/TODO.md` §2 and §8 — the written plans
 
-- **§18** is the real, numbered build-out plan for Coach — subsections A through J cover
+- **§2** is the real, numbered build-out plan for Coach — subsections A through J cover
   Coach's identity, the general chat, the Net Worth trigger, statement insights, the job hunt
   assistant, résumé help, the shared plumbing all of it runs through, chat/search history
   persistence, job scout, and guided tax setup. Anything with a letter and a number (like
-  §18.H3) is real, scoped, written-down work — just not necessarily started.
-- **§21** ("Fable Five Creative Brainstorming") is a separate, much looser idea pool — some of
-  it Coach-related (§21.C "Coach Expansions," §21.F "Horizon Tier — Fable-Class Features").
-  Nothing in §21 is committed work; it's explicitly labeled brainstorming, not a plan.
+  §2.H3) is real, scoped, written-down work — just not necessarily started.
+- **§8** ("Fable Five Creative Brainstorming") is a separate, much looser idea pool — some of
+  it Coach-related (§8.C "Coach Expansions," §8.F "Horizon Tier — Fable-Class Features").
+  Nothing in §8 is committed work; it's explicitly labeled brainstorming, not a plan.
 
 ---
 
@@ -140,16 +140,16 @@ again:
 - **Retention (3 chats) and the end-of-session summary are `ask_coach`-specific.** If Job
   Scout, résumé help, or statement insights ever get a UI caller using a different
   `coach_chats.chat_type`, that type needs its own retention/summary decision — don't assume
-  today's behavior generalizes. `drift-app-warden.md` §21 F123 has the full IF/THEN.
+  today's behavior generalizes. `drift-app-warden.md` §8 F123 has the full IF/THEN.
 
 Remaining, not yet built:
 1. **Admin diagnostic** — a "Coach Chats" count line in the DB Row Viewer tool
-   (`docs/TODO.md` §18.H4's last bullet).
+   (`docs/TODO.md` §2.H4's last bullet).
 2. Everything else in `docs/coach-entry-points.md` sections 3–10 (character/avatar, statement
    insights, Job Hunt Assistant, résumé help, Application Assistant, Job Scout, guided tax
    setup) — unchanged, still not started.
 
-Full reference: `docs/TODO.md` §18.H, subsections H3 (chat history UI) and H4 (summary
+Full reference: `docs/TODO.md` §2.H, subsections H3 (chat history UI) and H4 (summary
 generation).
 
 ---

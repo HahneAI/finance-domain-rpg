@@ -4,775 +4,34 @@
 
 ---
 
-## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
-
-*New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
-backend server… no Stripe — yet"). This section adds a paid subscription gated behind a 14-day
-free trial. The app stays a Vite/React frontend; all Stripe secret-key work lives in Vercel
-serverless functions under `api/` (same pattern as `api/delete-account.js`: verify the caller
-with their Supabase Bearer token, then act with the service-role client). Subscription state is the
-source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
-gate without hitting Stripe on every load.*
-
-**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
-- **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
-  $134.91 (9-months-for-12) figure specifically for the clean, quotable "$10 a month when you pay
-  annually" line. This also happens to equate to **~4 months free** (120 / 14.99 ≈ 8.0 months
-  paid), so the "months free" framing still works and is slightly more generous than before. Two
-  Stripe prices: `monthly` and `annual`.
-- **Monthly + annual only — no weekly, no quarterly.** Considered and rejected 2026-07-01:
-  **weekly billing reads as a dark pattern** (the exact "$X.99/week to obscure the real monthly
-  cost" trick used by low-trust mobile subscriptions) and directly contradicts an app whose whole
-  value prop is financial clarity. **Quarterly** adds a third price point/decision without adding
-  real conversion value — the annual discount already exists to soften a bigger commitment; a
-  third SKU just adds paradox-of-choice clutter. Two tiers, presented as a Monthly ↔ Annual
-  toggle (not stacked cards), with the monthly-equivalent price always shown next to the annual
-  price (e.g. "$120/yr — $10.00/mo billed annually") so the real per-month cost is never hidden
-  behind a headline number.
-- **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
-  user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
-  card early to avoid interruption").
-- **Gate strictness:** after expiry the app drops to a **read-only** experience on the **Home** and
-  **Budget** panels only — see §E for the exact locked view (expense category dropdowns disabled;
-  Lifestyle / Needs show title + per-check-period total only). Editing/saving is blocked everywhere.
-- **Free access window:** **3 weeks total**, structured as a public 14-day trial + a **hidden 7-day
-  grace**. ⚠️ **The extra week is never disclosed** — all user-facing copy and emails reference the
-  **14-day** trial only. Internally, full access continues through day 21; the read-only expiry
-  screen does not kick in until day 21.
-- **Post-expiry deletion buffer:** once expired (day 21+) with no card on file, send an account-
-  deletion warning email **every other day** until a card is added (or the account is deleted).
-
-**Lifecycle phases (single source of truth for the engine):**
-
-| Phase | Day (from `trial_started_at`) | App access | User sees | Notifications |
-|-------|------|-----------|-----------|---------------|
-| **Trial** | 0–13 | Full | "X days left in your free trial" countdown | Day 7+: in-app + email "add card to avoid interruption" |
-| **Grace** *(hidden)* | 14–20 | **Full** (undisclosed) | "Trial ended — add a card to keep using the app" | Escalating add-card warnings; **never** reveals the extra week |
-| **Expired** | 21+ | **Read-only** (Home + Budget, locked dropdowns) | Expiry / upgrade screen | Account-deletion warning **every other day** until card added |
-| **Deletion** | 21 + 7 | — | — | Account archived + deleted if still no card after the 7-day buffer — see §I for the revival path this enables |
-
-> Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
-> ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
-> gate). Entitlement is keyed off `access_ends_at`; the countdown UI is keyed off `trial_ends_at`.
-
----
-
-### A. Data model & migration
-
-- [x] **Migration `017_add_subscription_fields.sql`** *(renumbered — `016` was already taken by
-  `016_add_tax_projections_flag.sql`)* — add to `user_data`:
-  - [x] `stripe_customer_id TEXT` (nullable; set on first Checkout)
-  - [x] `stripe_subscription_id TEXT` (nullable)
-  - [x] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
-    canceled | incomplete | unpaid`; default `null` until trial is seeded
-  - [x] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
-  - [x] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
-  - [x] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
-    (the hidden 7-day grace; never surfaced)
-  - [x] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
-    webhook / Checkout); gates the dunning + deletion logic
-  - [x] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
-    every-other-day deletion emails and the trial add-card nudges
-  - [x] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
-  - [x] `plan TEXT` (nullable; `monthly` / `annual`)
-  - **Run in Supabase (confirmed 2026-07-07)** — along with every migration through 020.
-- [x] **Seed trial on account creation** — implemented in `src/lib/db.js` `syncUserProfile()`
-  (called on every `SIGNED_IN`, same place the OAuth row is seeded, §5). Keyed off
-  `trial_started_at IS NULL` rather than row-existence, since email sign-up (`LoginScreen.jsx`)
-  already inserts a bare row before `SIGNED_IN` fires — this still fires exactly once and never
-  re-stamps a returning user.
-- [x] **`db.js` mapping** — `loadUserData()` fetches the new columns in their own isolated query
-  (same pattern as `week_confirmations`, so a not-yet-migrated DB falls back to
-  `DEFAULT_SUBSCRIPTION` instead of breaking the whole load) and maps them into a `subscription`
-  object; kept OUT of the `config` JSON blob.
-- [x] **RLS** — landed via migration `019_enable_user_data_rls.sql` (security audit
-  `docs/security-audit-2026-07-04.md` finding #1) plus its two required companion moves,
-  completed 2026-07-06:
-  - [x] **`api/seed-trial.js`** — new service-role route. `syncUserProfile()` in `src/lib/db.js`
-    now POSTs its Bearer token here instead of upserting `trial_started_at`/`trial_ends_at`/
-    `access_ends_at`/`subscription_status` directly; the route re-checks `trial_started_at IS
-    NULL` server-side before seeding. `display_name`/`avatar_url` stay a direct client upsert
-    (still client-writable columns).
-  - [x] **`api/seed-investor.js`** — new service-role route. `createInvestorAccount()` now upserts
-    `user_data` without `is_investor`, then POSTs the investor code here to grant `is_investor =
-    true`; the route re-validates the code against `investor_codes.is_active` itself rather than
-    trusting the client. Known gap: if email confirmation is required at sign-up there's no
-    session yet to call this route, so `is_investor` stays unset until a later authenticated
-    sign-in seeds it — a limitation the RLS migration introduces for any unauthenticated write to
-    this table, not specific to this one column.
-  - Both routes + `db.js` covered by updated `db.test.js` / `dbInvestor.test.js` (fetch mocked,
-    same pattern as `UpgradeCard`'s checkout call).
-
-### B. Stripe account & product setup *(config steps, no app code)*
-
-- [x] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
-  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Price IDs captured.
-  No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
-- [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
-  card / switch plan without custom UI. *(Not yet confirmed done.)*
-- [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
-  be added in the Vercel dashboard.
-
-### C. Serverless API routes (`api/`, Vercel functions)
-
-*Follow `api/delete-account.js`: reject non-POST, require `Authorization: Bearer <supabase token>`,
-verify with an anon client `getUser()`, then use the service-role client for privileged writes.*
-
-- [x] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
-  (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
-  → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
-  `APP_URL` (new env var, §J).
-  - [x] **Fixed (2026-07-06): stale-domain crash on checkout return.** Reported symptom — an
-    expired-trial user on the `Version-control` preview deployment hit "back" from Stripe Checkout
-    and landed on a flash of Home, then a stuck loading screen, at
-    `authority-finance.vercel.app//?checkout=cancel`. Root cause: `success_url`/`cancel_url` (and
-    `return_url` in `stripe-portal.js`) were built from a single static `APP_URL` env var, so
-    Stripe always redirected back to whichever one deployment that var named — here,
-    `authority-finance.vercel.app`, which (confirmed via `git show origin/master:...`) is running a
-    build from before `getEntitlement`/`checkoutReturn` existed at all, so it has no idea what to do
-    with a `?checkout=` param and just hangs. The double slash in the reported URL was a second,
-    independent bug — `APP_URL` had a trailing slash. Fix: `api/_stripeClient.js` now exports
-    `resolveAppOrigin(req)`, which derives the redirect origin from the actual request's `Origin` /
-    `Referer` header (validated against an allowlist — `*.vercel.app`, `localhost`, or `APP_URL`'s
-    own hostname — so this can't become an open redirect), falling back to `APP_URL` (trailing
-    slash stripped) only when neither header is present. Both `stripe-create-checkout.js` and
-    `stripe-portal.js` now use it instead of the static `appUrl`. `APP_URL` itself is unchanged and
-    still required as the fallback/config-check value — no Vercel env var changes needed.
-- [x] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
-  **raw** request body — `bodyParser: false`). Handles `checkout.session.completed`,
-  `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,
-  upserts `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
-  `user_data` via service-role, keyed by `stripe_customer_id` (or `client_reference_id` for the
-  first `checkout.session.completed`, since that's the only event where the customer↔user link is
-  being established). Idempotent on event id via new migration `018_add_stripe_webhook_events.sql`
-  — atomically claims the event id (unique-constraint insert) before doing any work, so Stripe
-  retries/redeliveries can't double-process.
-- [x] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
-  `stripe_customer_id` → return the URL (for the "Manage subscription" button).
-- [x] **Validated end-to-end in test mode (2026-07-03)** — both plans tested via the temporary
-  Subscription buttons in `ProfilePanel` (`AccountDetail`): Checkout Session created and opened
-  correctly for monthly and annual, test card `4242 4242 4242 4242` completed successfully,
-  `checkout.session.completed` webhook fired and populated `stripe_customer_id`,
-  `stripe_subscription_id`, and `subscription_status` on the `user_data` row (confirmed via the
-  admin Config JSON / DB Row tools). §C is fully working; not yet tested against live mode.
-
-### D. Trial logic (14-day public + 7-day hidden grace)
-
-- [x] **Single entitlement helper** — `src/lib/subscription.js → getEntitlement(subscription, now)`
-  returning `{ state, trialDaysLeft, isEntitled, accessDaysLeft }` where
-  `state ∈ "trial" | "grace" | "active" | "expired" | "none"`:
-  - `active` — `subscription_status === "active"` (or `trialing` w/ a real Stripe sub) → entitled.
-    **Extended beyond the original spec** to also cover the §H dunning/cancellation cases as
-    `active`, since leaving them out would have been a live bug against code already shipped in
-    §C: `past_due` (webhook sets this on `invoice.payment_failed`) and `canceled` both stay
-    entitled *while `now < current_period_end`* — matches §H "keep entitlement until
-    current_period_end" / "cancel at period end" verbatim. Once that period passes, they fall
-    through to the trial/grace/expired math like anyone else (which resolves to `expired` for any
-    real past subscriber, since their trial window is long over).
-  - `trial` — `now < trial_ends_at` → entitled; `trialDaysLeft = ceil((trial_ends_at − now)/day)`
-  - `grace` — `trial_ends_at ≤ now < access_ends_at` → **still entitled**, but UI/email say "trial
-    ended." `trialDaysLeft = 0`. **`accessDaysLeft` is computed but reserved for admin-only
-    surfaces (Live State Inspector / Config Raw View) — never rendered to a non-admin user.**
-  - `expired` — `now ≥ access_ends_at` → **not entitled** (read-only gate on)
-  - `none` — no trial window seeded at all (investor/demo accounts, or a pre-migration-017 row)
-  - `isEntitled = active || trial || grace`
-  - `now` is always a real wall-clock `Date` (defaults to `new Date()`) — **never** the app's admin
-    Lock Date / `effectiveToday` simulation, so Lock Date can't be used to extend a trial or grace.
-  - Unit-tested (`src/test/lib/subscription.test.js`, 15 tests): every state, the exact day-14 and
-    day-21 boundaries (inclusive/exclusive verified precisely), `past_due`/`canceled` before and
-    after `current_period_end`, and the missing-timestamps/`null` defensive cases. This also
-    satisfies the equivalent test bullet listed under §H.
-- [x] **Lock off the internal cutoff, not the public one** — the read-only gate keys off
-  `access_ends_at` (day 21). The countdown + "trial ended" banner key off `trial_ends_at` (day 14).
-  Both transitions are time-derived (don't wait on a webhook to flip) — satisfied by
-  `getEntitlement` computing both directly from stored timestamps vs. wall-clock `now`.
-- [x] **No double trials** — already satisfied by §A's `syncUserProfile()` (keyed off
-  `trial_started_at IS NULL`, not row-existence) — a returning user's trial timestamps are never
-  re-seeded, so an expired/grace user who never paid always resolves to `expired`/`grace` (upgrade
-  path), never gets a fresh window.
-- [x] **Disclosure guard** — no UI string may reference the 21-day / grace / "extra week" concept;
-  public surfaces only ever say 14 days. `src/test/components/UpgradeModal.test.jsx` and
-  `UpgradePanel.test.jsx` render the actual paywall UI (both presentations of the shared
-  `UpgradeCard`) and assert on rendered text (not source text — scanning source would false-positive
-  on legitimate internal comments, e.g. this very codebase's `subscription.js` correctly says
-  "grace" throughout as the technical term) against forbidden patterns (`21-day`, `grace`, `extra
-  week`), plus a sanity check guarding against a vacuous pass on an empty/broken render. Email
-  templates not built yet (§G) — covered when they exist.
-
-### E. Frontend gating / paywall
-
-- [x] **Entitlement gate** — `App.jsx` computes `getEntitlement(subscription, new Date())` (real
-  wall-clock time, never `effectiveToday`/`tempLockDate`) and derives `isExpiredReadOnly = !(isAdmin
-  || config.isInvestor) && entitlement.state === "expired"`. Investors and admins bypass the paywall
-  entirely — investors aren't paying customers and admins need unrestricted access to support users.
-- [x] **Expired read-only experience** — settled on a split treatment after two rounds of live
-  testing (2026-07-05): **Home and Budget stay read-only-viewable** (values render, editing
-  disabled); **Income and Log are fully replaced** by a dedicated Upgrade panel.
-  - **Round 1** (shipped first): Income/Log fully replaced by a blocking `<UpgradeModal />`
-    (`createPortal`, fixed full-viewport backdrop) with no dismiss — hard-blocked, no way to "click
-    off" and keep browsing.
-  - **Round 2** (correction): made Income/Log read-only-viewable too, matching Home/Budget, so
-    nothing was walled off.
-  - **Round 3 — final, per explicit direction**: back to fully replacing Income/Log, but *not* with
-    a viewport-covering modal — with a real panel. `src/components/UpgradePanel.jsx` renders as
-    ordinary content inside `.main-content` (no `createPortal`, no fixed overlay), so the header,
-    hamburger menu, and bottom nav all stay exactly as they are; only the panel body changes. The
-    user is never trapped (nav still works to reach Home/Budget/Account), but Income/Log
-    specifically show only the upgrade pitch, not real data.
-  - **Shared card, two presentations**: the checkout pitch + Monthly/Annual buttons live once in
-    `src/components/UpgradeCard.jsx` (no opinion on presentation). `UpgradeModal.jsx` wraps it in a
-    `createPortal` backdrop with a dismiss ✕ — used as an overlay triggered from Home/Budget's
-    read-only notice button (real content behind it). `UpgradePanel.jsx` wraps it in a plain
-    centered container with no dismiss — used to fully replace Income/Log (nothing behind it to
-    dismiss back to).
-  - **Resolved the "Confirm Income/Log/Goals" open question**: there is no separate "Goals" nav tab
-    — goals live inside Home (`goals`/`setGoals` are HomePanel props, not BudgetPanel's, confirmed
-    by reading `App.jsx`'s panel routing block), so Home's `readOnly` prop already covers goal
-    editing; nothing separate needed for "Goals."
-  - [x] **Read-only Home + Budget** — implemented as a `readOnly` prop on both panels (the "one
-    switch" the TODO asked for), with a shadow-safety guarantee underneath the UI polish: each panel
-    renames its mutation setter prop(s) to `...Prop` and declares a local
-    `const setX = readOnly ? noop : setXProp` — every existing mutation call in that file, however
-    deeply nested, is automatically a no-op in read-only mode without having to find and gate each
-    call site individually. Covers `setGoals`/`setConfig` (Home), `setExpenses` (Budget). On top of
-    that data guarantee, the visible entry points are hidden: "+ ADD GOAL", the per-goal action row
-    (REORDER/EDIT/DONE/DEL — both mobile and desktop blocks), "Reset Timeline" (Home); "+ ADD
-    EXPENSE LINE", "+ ADD LOAN", the loans-tab EDIT/DEL row (Budget). Values render, nothing
-    persists. (IncomePanel/LogPanel briefly had the same `readOnly` plumbing during round 2 — reverted
-    since they're now never rendered at all when expired, and dead plumbing for an unreachable prop
-    value is worse than no plumbing.)
-  - [x] **Locked expense categories** — `isCatExpanded = !readOnly && expandedCats.has(cat)` forces
-    every category collapsed regardless of the user's remembered expand state; the header's
-    `onClick`/`cursor` are disabled and the chevron `<svg>` itself is hidden when `readOnly`. Since
-    loan rows render nested inside the "Needs" category's fold-out (`loanItems = cat === "Needs" ?
-    loans : []`), forcing categories collapsed also hides loan row-level edit/delete in the
-    Overview tab as a side effect — the standalone Loans tab needed its own separate gate (above).
-  - [x] Implemented as the explicit `readOnly` prop the TODO asked for, not inline conditionals.
-  - **Known gap, not covered**: "run wizard" — `SetupWizard` re-entry via `LifeEventMenu`/life-event
-    flows isn't blocked yet. Exhaustively tracing every wizard entry point across the app was out of
-    scope for this pass; flagging so it isn't mistaken for handled.
-- [x] **Upgrade modal / screen** — Liquid-Glass styled (`purpose="modal"`, already whitelisted — no
-  doc update needed for a new *usage* of an existing purpose), shows monthly ($14.99) vs. annual
-  ($120, "$10.00/mo billed annually"), opens Stripe Checkout via `api/stripe-create-checkout` using
-  the same `getSession()`/Bearer-token pattern as `ProfilePanel`. See the split-treatment note above
-  for `UpgradeModal` vs. `UpgradePanel` vs. shared `UpgradeCard`. A minimal (non-phase-aware)
-  read-only notice with an "Upgrade" button was added directly in `App.jsx` for Home/Budget —
-  **not to spec**, since §F's full trial/dunning banner is the "real" version of this; added now
-  only so silently-disabled buttons don't read as broken before §F ships. §F should replace/absorb
-  it rather than stack alongside it.
-- [x] **Post-checkout return** — `App.jsx` reads `?checkout=success|cancel` once on mount, scrubs
-  the query string immediately (so a manual reload doesn't re-trigger it), shows a confirming
-  banner, and polls `loadUserData()` every 2s (max 5 attempts) while `checkoutReturn === "success"`
-  until `subscription.status === "active"`, updating `subscription` state each time — which
-  re-evaluates `getEntitlement` and lifts the gate as soon as the webhook lands.
-- **Not yet verified live**: this was built and statically verified (lint clean relative to
-  baseline, full production build succeeds, full test suite green, 2 new test files covering
-  `getEntitlement` boundaries and the disclosure guard) but **not exercised in a real browser
-  against a live Supabase account** — this sandbox has no `.env`/Supabase credentials configured,
-  so an actual login + expired-account click-through hasn't happened yet. Needs a real pass once
-  deployed to a preview environment, same as §C's Stripe testing.
-
-### F. Trial + subscription UI
-
-- [x] **Free trial explainer screen** — `src/components/TrialExplainerScreen.jsx`, shown once by
-  `App.jsx` right after a fresh signup, ahead of first-run `SetupWizard` entry (gated on
-  `wizardEntry === false` — never on a life-event re-entry string — plus `!config.isInvestor` and
-  `entitlement.state === "trial"`). Breaks down the trial (full access for `trialDaysLeft` days —
-  dynamic, not hardcoded, so it also reads correctly for a beta tester's longer seeded window; no
-  card required; day-7 add-card reminder; the real `trial_ends_at` date when known; post-trial
-  pricing) behind a required "I understand" checkbox that gates the Continue button. Reuses
-  `LoginScreen.jsx`'s exported `Shell` for the standalone full-screen layout, same pattern as
-  `ReviveScreen`. Not persisted server-side — local `trialExplainerAcknowledged` state only, so it
-  re-prompts on a later session the same way `wizardEntry` itself does until `setupComplete` flips
-  true. Disclosure-guard tested (`TrialExplainerScreen.test.jsx`) — never mentions "grace,"
-  "21-day," "extra week," or "access ends."
-- [x] **Trial/dunning banner** — `src/components/TrialBanner.jsx`, wired into `App.jsx` in place of
-  the §E minimal read-only notice it was always meant to be replaced by. Phase-aware copy: **trial**
-  → "N days left in your free trial" (amber/warning tone once `trialDaysLeft ≤ 3`, otherwise a
-  neutral tone); **grace** → "Your trial ended — add a card to keep using the app"; **expired** →
-  "Trial ended — add a card to restore full access" (red tone). Renders nothing for `active`/`none`.
-  Persistent across every view except Income/Log while expired (those are already fully replaced by
-  `UpgradePanel` — showing both would be redundant). Dismiss state is a plain `useState` (not
-  persisted), so it re-shows on reload, same pattern as the Job Loss banner. Disclosure-guard tested
-  (`TrialBanner.test.jsx`) — grace/expired copy asserted to never mention "grace," "21-day," or
-  "extra week."
-- [x] **ProfilePanel → Account: Subscription card** — replaces the §8 placeholder in
-  `AccountDetail` (`ProfilePanel.jsx`). Status label prioritizes the **raw Stripe status**
-  (`past_due`/`canceled`) over the collapsed entitlement state, but only while `getEntitlement`
-  still resolves `active` (i.e. within `current_period_end`) — Trial/Active/Past Due/Canceled as
-  specced; once a canceled/past-due period actually lapses it falls into the same "Trial Ended"
-  bucket as any other non-entitled account (no invented fifth label — mirrors how `subscription.js`
-  itself already collapses a long-lapsed real subscriber into `expired`). Investor/demo/pre-migration
-  accounts (`entitlement.state === "none"`) show "N/A — no subscription required" with no
-  checkout/manage buttons at all, instead of a misleading "Trial Ended." Shows plan + price when
-  known. **Manage Subscription** (→ `api/stripe-portal`, same `getSession()`/Bearer pattern as
-  checkout) appears once `stripe_customer_id` exists; the Monthly/Annual checkout buttons appear
-  otherwise — never both. `subscription` threaded App.jsx → ProfilePanel → AccountDetail as a new
-  prop. 10 tests (`AccountDetailSubscription.test.jsx`) cover every status branch and the portal
-  call/error path.
-- [x] **Admin visibility** — Live State Inspector gains `Sub Phase` (resolved phase + raw Stripe
-  status as its sub-label), `Trial Ends`, `Access Ends` (hidden cutoff — this Inspector is
-  isAdmin-gated already, so no new disclosure risk), `Period End`, `Card / Dunning`. Turned out the
-  **DB Row Viewer already covers "Config Raw View"** for this — its `select("*")` was already
-  pulling every subscription column before this pass; nothing to add there. CLAUDE.md's admin
-  toolkit table and "Diagnostic request templates" updated to match (11 → 16 Live values, new
-  template #6 pointing at DB Row + Live State together for billing/paywall issues).
-
----
-
-**Handoff checkpoint (2026-07-06) — §A–F are done; picking up here in a fresh session:**
-All work so far is on branch `claude/stripe-paywall-integration-d2b3sw` (repo
-`HahneAI/finance-domain-rpg`), validated in Stripe test mode end-to-end including a real
-manual click-through (expired user → Income/Log Upgrade panels → Checkout → back-button
-return, all confirmed working). Load-bearing context for whatever's next:
-- `getEntitlement()` (`src/lib/subscription.js`) is the one place phase math lives —
-  trial/grace/active/expired/none. Never re-derive it inline; `now` must always be real
-  wall-clock time, never the admin Lock Date simulation.
-- The disclosure rule is absolute: no user-facing string (UI, email, API response) may ever
-  say "grace," "21-day," "extra week," or otherwise hint the trial is longer than 14 days.
-  Every surface built so far has a test enforcing this — copy that pattern for anything new
-  (see `TrialBanner.test.jsx` / `UpgradeModal.test.jsx` for the shape).
-- Migration `019_enable_user_data_rls.sql` (RLS) is written and both required companion
-  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist.
-  **Resolved 2026-07-07 — confirmed run in Supabase**, along with every migration through
-  020. RLS is live; the column-privilege lockdown is DB-enforced, not just app-layer.
-- `api/_stripeClient.js` exports `resolveAppOrigin(req)` for any redirect URL (success/
-  cancel/return) — derives the origin from the request instead of a static `APP_URL`, since
-  there are multiple live deployments (preview + production) and a hardcoded URL bounces
-  users to the wrong one. Use it, don't reintroduce a static URL.
-- This sandbox has no live Supabase/Stripe credentials — verification here means
-  `npm run test:run` (846 passing as of this checkpoint) + `npx eslint` (diff against
-  `git stash` to catch only new issues — there are pre-existing baseline warnings) +
-  `npm run build`. Real browser/backend verification has only ever happened via the user's
-  own manual pass on the deployed preview — ask for that before marking anything "done."
-- §G–K below are still italicized-intro-only or partially stale relative to what §A–F
-  actually shipped; skim them for the plan but verify against the current code before
-  assuming a referenced file/component doesn't exist yet.
-
----
-
-### G. Notifications & lifecycle emails (Vercel Cron)
-
-*New infra: the app has no transactional email today (only Supabase auth emails). The card-nudge,
-grace, and every-other-day deletion warnings need an email provider + a scheduled job. All sends
-are server-side via a daily cron route; nothing here runs on the client. Depends on §D/§F's phase
-math and columns, both already shipped. Code shipped 2026-07-05 — remaining unchecked items below
-are account/config steps plus the §I-blocked deletion hook.*
-
-- [x] **Pick an email provider** — **Resend** (decided 2026-07-05). Free tier: 3,000/mo, 100/day,
-  one verified domain — covers 300+ concurrent trial users at ~8–10 lifecycle emails per full
-  trial→deletion cycle. SendGrid ruled out (Twilio killed the permanent free tier May 2025; 60-day
-  trial then $19.95/mo minimum) and Postmark has no free production tier (~$15/mo). Sends go
-  through Resend's REST API via plain `fetch` (`api/_email.js`) — no npm dependency added.
-  - [x] **Create the Resend account + API key** — done 2026-07-05; key set in Vercel
-    (accepted as either `EMAIL_API_KEY` or `RESEND_API_KEY`). Resend account owner email:
-    anthonyhahne20@gmail.com — the only deliverable recipient until a domain is verified.
-  - [ ] **Verified sender domain — deliberately deferred.** Built against Resend's shared dev
-    sender (`onboarding@resend.dev`, the `EMAIL_FROM` default); it only delivers to the Resend
-    account owner's own address, which is exactly right for testing. A custom domain (can't be
-    `*.vercel.app` — no DNS control over it) must be verified in Resend and set as `EMAIL_FROM`
-    **before real users hit day 7 of a trial**, or dunning mail lands in spam / doesn't deliver.
-- [x] **`api/cron-subscription-lifecycle.js`** — scheduled daily via `vercel.json` `crons`
-  (15:00 UTC ≈ morning US Central). Runs service-role over every `user_data` row with a seeded
-  trial; per-row decisions live in the pure engine `api/_lifecycleEngine.js` (delegates phase math
-  to `getEntitlement` — never re-derived), templates in `api/_lifecycleEmails.js`. Skips
-  `is_admin`/`is_investor` rows entirely (they bypass the paywall, §E — must never be dunned).
-  Throttle state is stamped only **after** a successful send, so failures retry next run; one bad
-  row can't abort the run (per-row try/catch; summary JSON `{checked, sent, reset, deleteDue,
-  errors}` returned + logged). User emails come from `auth.admin.getUserById` per actionable row.
-  - [x] **Trial, day ≥ 7, no card** → "add your card to avoid interruption" nudge, once at day 7
-    and once at day 12 (`TRIAL_NUDGE_DAYS`), keyed off `last_dunning_email_at` vs. the milestone
-    timestamp — a cron outage catches up with at most one send, never two.
-  - [x] **Grace (day 14–20), no card** → "trial ended — add a card to keep using the app."
-    Every 2 days; **never** mentions the remaining access.
-  - [x] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
-    `now − last_dunning_email_at ≥ 2 days`); increments `dunning_email_count`.
-  - [x] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
-    **Implemented 2026-07-06** (§I item unblocked — the `deleted_accounts` table already existed
-    in migration 017): the cron now acts on `deleteDue` rows via `archiveAndDeleteAccount()` —
-    snapshot → cancel any lingering Stripe sub → tombstone upsert → hard delete. Takes
-    precedence over the same-run deletion-warning email. See the §I archive bullet for details.
-  - [x] **Card on file / active** → no lifecycle emails; resets `dunning_email_count` +
-    `last_dunning_email_at` so a future lapse starts a fresh cycle.
-- [x] **Idempotency / safety** — safe to run any number of times a day: every send keys off the
-  stored throttle timestamps, never "did the day flip" (verified by the twice-daily-run tests).
-  Route requires `Authorization: Bearer <CRON_SECRET>` — Vercel sends that header automatically on
-  cron invocations when the `CRON_SECRET` env var is set; anonymous requests get 401.
-- [x] **Copy review** — all templates reference the **14-day** trial only. Enforced by
-  `src/test/api/lifecycleEmails.test.js`: forbidden patterns (`grace`, any `21`, `extra week`,
-  `access ends`) asserted against every template's subject/html/text with a vacuous-pass guard —
-  same approach as `TrialBanner.test.jsx`. Also deliberate: no "you won't be charged until your
-  trial ends" phrasing anywhere, since the trial is app-managed (§B) and Checkout charges
-  immediately on upgrade. Engine schedule/throttle covered by
-  `src/test/api/lifecycleEngine.test.js` (26 tests total across both files).
-- [x] **Verified live end-to-end (2026-07-05)** — cron registered on production
-  (Vercel → Cron Jobs, `0 15 * * *`), manual Run returned 200 with a clean summary
-  (`{"checked":2,"sent":0,...}` — both checked accounts correctly skipped: one active
-  subscriber, one admin). A real send was then proven by temporarily backdating the
-  Anthony Hahne test account (auth email = the Resend owner address) to trial day 8 and
-  suspending its active status: cron produced `sent:1` and the "6 days left in your free
-  trial" email delivered to the inbox with the brand template rendering correctly; account
-  restored to its real active state afterward. Also verified along the way: the Resend
-  dev-sender 403 path (send to a non-owner address) is caught per-row, counted in `errors`,
-  and leaves the throttle unstamped for retry — exactly as designed.
-- **Beta-tester exemption (2026-07-05):** the two family beta accounts (never trial-seeded —
-  they haven't signed in since the paywall deployed) were flagged `is_investor = true` in
-  Supabase so they bypass the paywall and lifecycle emails entirely during beta. Flip back to
-  `false` when beta ends to put them on real trials (seeding fires on their next sign-in).
-- [ ] **(Optional, later) Web Push** — the app is already a PWA w/ service worker; the same phase
-  signals could fire push notifications. Defer behind email v1.
-
-**Handoff checkpoint #2 (2026-07-05) — §G done and verified live; next is §H:**
-Branch `claude/free-email-provider-6u3kbo` (merged to master via Version-control). Everything in
-the first checkpoint below §F still applies (getEntitlement is the single source of phase math,
-disclosure rule absolute, resolveAppOrigin for redirects, sandbox has no creds — 872-test baseline).
-New since then:
-- §G lifecycle emails are **live**: Resend key + `CRON_SECRET` set in Vercel, daily cron registered
-  and verified in production, a real nudge email delivered end-to-end. Still on the resend.dev dev
-  sender — domain verification for **authority-os.com** (ZenBusiness DNS) is mid-propagation and
-  being finished in a separate session; once Resend shows Verified, set `EMAIL_FROM` in Vercel and
-  redeploy. Until then the cron can only deliver to the Resend owner's address; other sends 403
-  and retry harmlessly.
-- The two family beta accounts are `is_investor = true` in Supabase (paywall + email exempt);
-  flip back when beta ends.
-- §H's one real code gap: `api/delete-account.js` does not yet cancel the Stripe subscription.
-  Most other §H bullets are audit-and-test-only — webhook signatures and past_due/canceled
-  entitlement already exist in code.
-- §B leftover: Stripe Customer Portal dashboard config still unconfirmed.
-
-### H. Edge cases, security & testing
-
-*Mostly a hardening/audit pass over what §A–F already shipped, not new build-out — several
-bullets below may already be satisfied by existing code and just need a test written or a
-double-check, not fresh implementation. E.g. webhook signature verification and the past_due/
-canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
-before treating any bullet here as starting from zero.*
-
-***Code + audit completed 2026-07-06.** The audit confirmed exactly that split: five bullets were
-already satisfied by §A–G code and needed only verification + notes; the one real code change was
-the delete-account Stripe cancellation, and the new tests are the signed-fixture webhook suite,
-the create-checkout token guards, and the delete-account cancellation suite. Two §A–H leftovers,
-both deliberately parked for the final pre-launch pass: §B's Customer Portal dashboard config
-(config-only, no code) and the live cancel-on-delete verification (last bullet below).*
-
-- [x] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
-  **Audited 2026-07-06 — already existed** (`constructWebhookEvent` in `api/_stripeClient.js`
-  verifies the raw body against both modes' secrets; `stripe-webhook.js` 400s on any failure, and
-  `subscription_status` is only ever written server-side — webhook, seed-trial, lifecycle cron).
-  Now also test-covered: `src/test/api/stripeWebhook.test.js` signs fixture events with Stripe's
-  real `generateTestHeaderString` (real HMAC, not a mocked verifier) and asserts that a missing
-  header, a wrong-secret signature, and a tampered body all reject with zero DB writes.
-- [x] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
-  surface the Stripe-hosted update-card flow via the portal. **Audited 2026-07-06 — already
-  existed**: §D's `getEntitlement` extension keeps `past_due` entitled while
-  `now < current_period_end` (boundary-tested in `subscription.test.js`), the webhook sets
-  `past_due` on `invoice.payment_failed` (now fixture-tested), and AccountDetail's Manage
-  Subscription button opens the Stripe portal (tested in `AccountDetailSubscription.test.jsx`).
-  Nothing rebuilt.
-- [x] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
-  period end"), then drops to read-only. **Audited 2026-07-06 — already existed**: same
-  `getEntitlement` branch as `past_due` (tested before/after the period boundary), and
-  `customer.subscription.deleted` forces status to `canceled` regardless of the event object's
-  own status field (now fixture-tested). Nothing rebuilt.
-- [x] **Account deletion** — **implemented 2026-07-06**: `api/delete-account.js` now looks up
-  `stripe_subscription_id` and cancels the subscription **immediately** (not at period end)
-  before deleting anything. Stored subscription ids don't record which Stripe mode minted them
-  (preview checkout = test mode, production = live), so a new `STRIPE_CLIENTS` export in
-  `_stripeClient.js` tries the deployment's own mode first, then the sibling —
-  `resource_missing` means wrong mode or already gone, both safe to move past. Already-canceled
-  subs are skipped; an unexpected cancel failure **aborts the deletion with a 500** so the
-  request is retryable rather than leaving a deleted-but-still-billed user. Still a true hard
-  delete, no archive (the archive-first path is §G's non-payment cron only, blocked on §I).
-  9 tests in `src/test/api/deleteAccount.test.js`.
-- [x] **Clock skew / tz** — **audited 2026-07-06**: all phase math in `getEntitlement` is
-  UTC-epoch-ms comparison against the stored timestamps, and every caller — `App.jsx:1068`,
-  `ProfilePanel.jsx` (AccountDetail), and the server-side `_lifecycleEngine.js` — passes real
-  wall-clock `new Date()`, never `effectiveToday`/Lock Date. Boundary behavior (day-14 and
-  day-21 inclusive/exclusive) pinned by `subscription.test.js`.
-- [x] **Disclosure** — **audited 2026-07-06**: every rendered surface has a forbidden-pattern
-  test (`UpgradeModal`/`UpgradePanel`/`TrialBanner` component tests + `lifecycleEmails.test.js`),
-  and API responses expose nothing: seed-trial returns only `{seeded}`, checkout/portal only a
-  URL, webhook only `{received}`. One inherent caveat, accepted per §D's design: the raw
-  `access_ends_at` value does travel to the client inside `loadUserData()`'s row because the
-  gate is computed client-side — it is never *rendered* on a non-admin surface, but a devtools
-  user could read it. Moving the gate fully server-side is the only fix and out of scope for v1.
-- [x] **Tests** — `getEntitlement` states + day-14/21 boundaries (§D, `subscription.test.js`);
-  cron phase-routing + every-other-day throttle (§G, `lifecycleEngine.test.js`); webhook upsert
-  mapping with signed fixture events and create-checkout missing/invalid-token rejection
-  (**added 2026-07-06**: `stripeWebhook.test.js`, `stripeCreateCheckout.test.js`, plus
-  `deleteAccount.test.js` for the new cancellation path — 23 new tests, 895 total).
-- [ ] **Live verification: cancel-on-delete (deliberately left open until the end).** The
-  delete-account cancellation is unit-tested but has never run against real Stripe — this sandbox
-  has no credentials. On the preview deployment, in **test mode**: subscribe with the test card
-  (`4242 4242 4242 4242`), run the "type DELETE" flow in ProfilePanel, then confirm in the Stripe
-  test dashboard that the subscription shows **canceled** (not just the account gone). This is the
-  last §H box and should be checked during the final pre-launch pass, alongside §B's Customer
-  Portal config.
-
-### I. Account Revival After Non-Payment Deletion
-
-*New workstream (2026-07-01). When the day-21+7 dunning cron (§G) finally deletes an account for
-non-payment, the user should still be able to come back — but coming back must require a real,
-successful charge, not just re-entering the same info. This section defines that recovery path.
-Depends on §G's deletion cron writing an archive record instead of a bare hard-delete — since §G
-hasn't been built yet either, nothing here is actionable until that lands first. **(Update
-2026-07-06: §G is live and the archive-then-delete step below is now wired in — the remaining
-§I bullets, revival detection/screen/checkout/restore, are actionable.)***
-
-**Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
-ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
-gets no archive. The **cron-driven non-payment deletion** (§G, day 21+7) is the only path that
-archives first, specifically so revival is possible. Both still delete the live `auth.users` row
-and `user_data` row — the difference is only whether a recoverable snapshot was taken first.
-
-- [x] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
-  hard-deletes a non-payment account, it upserts a snapshot into `deleted_accounts` (migration
-  017, added below) keyed by email: `config`, `expenses`, `goals`, `logs`, `show_extra`,
-  `week_confirmations`, `pto_goal`, `stripe_customer_id`, `plan`, `display_name`, `avatar_url`,
-  and the OAuth provider if any (so the revival screen can say "Continue with Google" instead of
-  a password field). `deletion_reason = 'non_payment_dunning_expired'`. Upsert-on-email so a
-  second deletion cycle (revive → cancel again) overwrites the same tombstone rather than piling
-  up duplicates.
-  **Implemented 2026-07-06** — `archiveAndDeleteAccount()` in the cron, ordered for retry
-  safety (any step failing leaves the account intact for the next daily run): resolve auth
-  user → snapshot full row → cancel any lingering Stripe sub (shared `cancelStripeSubscription`
-  helper, now exported from `_stripeClient.js` and reused by `delete-account.js`) → tombstone
-  upsert (`onConflict: "email"`, explicitly resetting `revived_at`/attempt/decline fields so a
-  second cycle reopens the tombstone fresh) → delete `user_data` → delete auth user. Supabase
-  reports `provider: "email"` for password accounts, so only real OAuth providers are recorded.
-  7 tests in `src/test/api/cronLifecycleDelete.test.js` (first coverage of the cron route
-  itself) drive the real engine with day-30 fixtures: full tombstone mapping, OAuth provider,
-  sub cancel, cancel-failure and archive-failure both blocking deletion, day-23 still emailing
-  instead of deleting. ⚠️ **Verify in Supabase that migration 017's `deleted_accounts` table
-  actually exists** (`select count(*) from deleted_accounts;`) — the §A note that 017 was
-  unrun proved stale for the subscription columns, but the table half of that file hasn't been
-  independently confirmed.
-- [x] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
-  "this email belongs to an archived, revivable account":
-  - [x] **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
-    credentials" for both wrong-password and no-such-user, so the client can't tell them apart
-    from the auth error alone. On any login failure, look up the email against
-    `deleted_accounts` via a server route (`api/revival-lookup.js`, service-role — never expose
-    this table to anon/authenticated SELECT directly, since it holds archived financial data).
-    If a match with `revived_at IS NULL` exists, route to the Revive Account screen instead of
-    showing the generic error. **Implemented 2026-07-06** — `lookupRevivable()` in
-    `LoginScreen.jsx` fires on every failed sign-in; a match switches to the new `"revive"` mode
-    (new-password form, or "Continue with Google" when the tombstone records an OAuth provider).
-    Lookup failures fall back to the generic error so a transient server problem can never block
-    a normal login. Note: the unauthenticated lookup returns ONLY `{revivable, oauthProvider}` —
-    never archived identity — and is deliberately an existence oracle (accepted trade-off,
-    documented in the route).
-  - [x] **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
-    `auth.users` row (OAuth signup doesn't fail for "new" emails) before the app ever gets a
-    chance to object. The `SIGNED_IN` handler must check `deleted_accounts` for that email
-    *before* `syncUserProfile` seeds a fresh trial — if a revivable tombstone exists, short-circuit
-    into the Revive Account screen and hold off on trial seeding / normal onboarding entirely.
-    **Implemented 2026-07-06** — `checkRevival()` (`db.js`) runs first in App.jsx's SIGNED_IN
-    handler; only when it resolves null does `syncUserProfile()` (and thus trial seeding) run.
-    The authenticated lookup keys off the **session's** email (never client input) and returns
-    the archived identity for the Revive screen.
-- [x] **Revive Account screen** — reachable only via the redirect above (not a normal nav
-  destination). Shows the archived `display_name`/`avatar_url`/email so the user recognizes their
-  old account, and: **Implemented 2026-07-06** as two halves: LoginScreen's `"revive"` mode
-  handles re-authentication (new password → `signUp`, or Google), and
-  `src/components/ReviveScreen.jsx` (rendered by App.jsx whenever `revivalInfo` is set —
-  before the wizard, panels, or anything else) handles identity display + plan choice +
-  revive checkout. App clears the screen only when the post-checkout poll sees
-  `subscription_status = "active"` (the webhook restore landing), then closes any wizard the
-  bare pre-restore row opened and reloads the restored data.
-  - Prompts for a **new password** (email/password accounts) — note in the UI copy (and here, for
-    the humans building this): **there is no restriction on reusing the exact same password they
-    had before cancellation** — that part is intentionally unblocked. For OAuth accounts, this
-    step is just "Continue with Google" again.
-  - Requires choosing a plan (monthly/annual) and entering a payment method via Stripe Checkout —
-    **entering a card, even the exact same card that was on file before, does not by itself
-    restore access.** Access is only restored once that card is actually **charged successfully**
-    for the selected plan. No free re-entry path.
-  - Reuses `stripe_customer_id` from the archive when present (same Stripe customer, new
-    subscription) rather than creating a duplicate customer.
-- [x] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
-  archived tombstone rather than an existing `user_data` row: verify the new (just-created, empty)
-  Supabase session belongs to the matching email, create/reuse the Stripe customer from
-  `deleted_accounts.stripe_customer_id`, create a Checkout Session for the chosen plan.
-  **Implemented 2026-07-06** — the tombstone is looked up by the verified session's email only
-  (403 when none), so no one can revive or probe another email's archive. Sessions carry
-  `metadata: { revival: "true", revival_email }` for the webhook branch, and every checkout
-  attempt stamps `revival_attempt_count` + `last_revival_attempt_at`. Never touches `user_data`.
-- [x] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
-  restore the archived `config`/`expenses`/`goals`/`logs`/`show_extra`/`week_confirmations`/
-  `pto_goal` into the new `user_data` row, set `subscription_status = 'active'`, `plan`, and
-  `stripe_subscription_id`, stamp `deleted_accounts.revived_at = now()` (tombstone consumed —
-  next cancellation cycle starts a fresh one via the same upsert-on-email), and clear
-  `revival_attempt_count`.
-  **Implemented 2026-07-06** — `restoreRevivedAccount()` in `stripe-webhook.js`, branching on
-  `metadata.revival`. Two deliberate details: (1) the trial window is seeded entirely **in the
-  past** (`trial/access_ends_at = now`) because a revived account must never get a second free
-  window — with null timestamps a later lapse would resolve entitlement `"none"`, which App.jsx
-  doesn't gate, i.e. permanent free access; seeding a spent window makes a lapse resolve
-  `"expired"` like any other non-payer. (2) A revival event whose tombstone was already consumed
-  falls through to the plain status update, so a racing/duplicate session can't wipe restored
-  data.
-- [x] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
-  **Implemented 2026-07-06, with one honest deviation.** Hosted Stripe Checkout handles card
-  declines entirely on Stripe's page (the user retries different cards there without ever
-  returning to the app), so the app never observes individual declines. What's implemented:
-  attempt tracking stamps on every checkout-session creation (a superset of "on decline");
-  returning with `?checkout=cancel` shows the retry guidance ("try a different payment method,
-  make sure the card isn't frozen, or add funds…" — softened lead since a plain back-button
-  lands on the same return) with the plan buttons immediately usable again; nothing ever routes
-  the user back to re-enter password/email; no attempt cap.
-  - [ ] **(Open, minor) `last_decline_code`/`last_decline_message` capture** — would need
-    `payment_intent.payment_failed` webhook wiring mapped back to the tombstone; deferred until
-    there's a real support need, since hosted Checkout already shows the user Stripe's own
-    decline message in the moment.
-- [x] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
-  short-circuit; successful-charge → full data restore + tombstone consumed; declined-charge →
-  attempt count increments and the screen remains usable; second deletion cycle after a revival
-  correctly overwrites (not duplicates) the same tombstone row.
-  **Added 2026-07-06 (26 tests):** `revivalLookup.test.js` (disclosure minimalism, session-email
-  keying, `revived_at IS NULL` filter), `stripeReviveCheckout.test.js` (guards, customer reuse,
-  revival metadata, attempt stamping), two signed-fixture revival cases in
-  `stripeWebhook.test.js` (full restore + tombstone consume; consumed-tombstone fall-through),
-  `ReviveScreen.test.jsx` (identity, checkout call, two-way-door retry, disclosure guard), and
-  five LoginScreen revival-routing cases. Tombstone overwrite-on-second-cycle is asserted in
-  `cronLifecycleDelete.test.js` (upsert on email + revival-field reset). **Not covered:** the
-  App.jsx SIGNED_IN short-circuit itself (App has no component test harness) — see the parked
-  live-verification bullet below.
-- [ ] **Live verification: tombstoned-email Google OAuth sign-in (deliberately parked for the
-  final pre-launch pass, alongside §H's cancel-on-delete bullet).** The one §I path no unit test
-  can reach: App.jsx's SIGNED_IN short-circuit. On the preview deployment, with a
-  `deleted_accounts` tombstone whose `oauth_provider = 'google'` and `revived_at IS NULL`
-  (backdate a Google test account past day 28 and run the cron, or hand-insert a tombstone in
-  the SQL editor): sign in with that Google account and confirm it lands on **ReviveScreen** —
-  not the setup wizard, and with **no fresh trial seeded** (check via DB Row Viewer that
-  `trial_started_at` stays null on the new `user_data` row until revival). Then complete the
-  revive checkout with the test card and confirm the archived data comes back and the tombstone's
-  `revived_at` is stamped. While here, also do the email/password variant (failed sign-in →
-  revive password form) — same session, much cheaper than a separate pass.
-
-**Handoff checkpoint #3 (2026-07-06) — §H + §I code-complete; branch
-`claude/stripe-paywall-hardening-audit-1a9s6u`:**
-Everything in checkpoints #1–2 still applies. New since then: §H shipped (delete-account cancels
-the Stripe sub; signed-fixture webhook + checkout-guard tests), the §G/§I archive-then-delete cron
-step is live in code, and the full §I revival flow is built (lookup route, LoginScreen routing,
-App SIGNED_IN short-circuit, ReviveScreen, revive-checkout, webhook restore). 928 tests green.
-Still open / needs the user:
-- **Migration 019 (RLS) is confirmed NOT yet run in Supabase** (user, 2026-07-06). All §17
-  privileged columns are app-layer-protected only until it runs. `deleted_accounts` (017) IS live.
-- Live verification pass on the preview deployment: cancel-on-delete (§H's parked bullet), the
-  §B Customer Portal config, and the full revival loop including the tombstoned-email Google
-  OAuth sign-in (§I's parked bullet above — the one path unit tests can't reach).
-- §I minor leftover: decline-code capture (open sub-bullet above).
-
-### J. Env vars (Vercel)
-
-*Reference only — all Stripe/Supabase vars listed here are already set in Vercel and working
-(validated by the §C test-mode checkout pass and confirmed live by the user). `EMAIL_API_KEY` and
-`CRON_SECRET` are the only two not yet set — §G's code now ships and requires both (the cron route
-500s with a "Server configuration is missing" log until they exist). `EMAIL_FROM` is optional.*
-
-```
-STRIPE_SECRET_KEY=...             # LIVE server key (api/ functions)
-STRIPE_SECRET_KEY_TEST=...        # TEST server key
-STRIPE_WEBHOOK_SECRET=...         # LIVE webhook signing secret
-STRIPE_WEBHOOK_SECRET_TEST=...    # TEST webhook signing secret
-STRIPE_PRICE_MONTHLY=price_...    # LIVE — $14.99/mo
-STRIPE_PRICE_MONTHLY_TEST=price_... # TEST — $14.99/mo
-STRIPE_PRICE_ANNUAL=price_...     # LIVE — $120/yr ($10.00/mo flat, ~4 months free)
-STRIPE_PRICE_ANNUAL_TEST=price_...  # TEST — $120/yr
-APP_URL=https://...               # server only — whitelisted base URL for Checkout/Portal
-                                   # success, cancel, and return URLs. Not mode-specific.
-EMAIL_API_KEY=...                 # Resend API key (§G lifecycle emails; api/_email.js) —
-                                   # RESEND_API_KEY (the name Resend's Vercel integration
-                                   # injects) is accepted as a fallback
-
-EMAIL_FROM=...                    # optional verified sender, e.g. "Authority Finance <no-reply@domain>"
-                                   # — defaults to onboarding@resend.dev (dev-only delivery) when unset
-CRON_SECRET=...                   # guards api/cron-subscription-lifecycle; Vercel auto-sends it
-                                   # as the Authorization header on cron invocations
-VITE_STRIPE_PUBLISHABLE_KEY=...   # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
-# Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
-```
-
-**Test mode vs. live mode (2026-07-03).** The Stripe account defaults to live mode with no
-visible toggle in the mobile UI — it's under account name → **Test mode** (the simple, classic
-toggle; *not* "Switch to sandbox", which is Stripe's newer isolated-environment feature and is
-more than this app needs). Test and live are fully separate: products, prices, customers, and
-webhooks created in one never appear in the other. Both sets now exist:
-
-| | Live mode (for launch) | Test mode (for building/testing now) |
-|---|---|---|
-| Product | (not captured — see live price IDs below) | `prod_UodCQD1AbN33wy` |
-| Price — monthly $14.99 | `price_1TodbhD1cN4rPkqb510vKlKi` | `price_1TozwQD1cN4rPkqb1NqhIQoR` |
-| Price — annual $120 | `price_1Toe4ND1cN4rPkqbf9EmRJQr` | `price_1TozwQD1cN4rPkqbahFeMbOL` |
-| Webhook secret | set in Vercel, not repeated here | set in Vercel, not repeated here |
-| Secret key | set in Vercel, not repeated here | set in Vercel, not repeated here |
-
-Price/product IDs aren't secret (Stripe treats them as public identifiers — they're useless
-without the secret key), so they're safe to keep here. **Webhook secrets and the Stripe secret
-keys are never written to this repo** — only to Vercel env vars.
-
-**Distinct env var names per mode, not Vercel environment scoping** (switched from the original
-plan 2026-07-03 — trying to keep one key name with different values per Vercel environment scope
-turned out to be more friction than it was worth). Every `STRIPE_*` var now has a `_TEST` sibling
-holding the test-mode value, and both live in Vercel simultaneously regardless of environment.
-`api/_stripeClient.js` picks which pair to use:
-- **Checkout/Portal (routes we call outward)** — no ambiguity, so pick by `VERCEL_ENV`:
-  `production` → live vars, anything else (preview/development/unset) → test vars. Defaults to
-  test whenever `VERCEL_ENV` is missing, so a misconfigured/local run never silently uses live.
-- **Webhook (Stripe calls us)** — this is the one case with real ambiguity: both the live and
-  test webhook endpoints were registered against the *same* deployed URL, so a single running
-  instance can receive events from either mode. There's no per-request mode signal except "which
-  secret validates the signature," so `constructWebhookEvent()` tries the live secret first, then
-  the test one, and returns whichever Stripe client actually verified it — that client (not a
-  fixed one) is what's used for any follow-up Stripe API call the handler makes for that event
-  (e.g. `subscriptions.retrieve`), since a test-mode object only exists in the test account.
-
-`PLAN_BY_PRICE_ID` merges both modes' price IDs into one lookup for the same reason — an incoming
-webhook event's price id could be either mode's, so there's no "pick a side" step there either.
-
-### K. Future Ideas (not in scope for v1)
-
-*Deliberately deferred — don't pick these up unless the user explicitly asks, even if §G–I are
-finished first.*
-
-- [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
-  week at a time) into a banked balance on their account, purely as a voluntary buffer against a
-  future missed payment — explicitly **not** "paying the bill early," and copy must make that
-  distinction clear so it doesn't read as a coerced prepayment.
-
----
-
-## 18. AI Layer — Coach + Contextual Intelligence
+## 2. AI Layer — Coach + Contextual Intelligence
 
 *Authority Finance's AI layer is built around a single character: **Coach** — a financial wellness
 companion with a visual mascot identity. Coach appears across the app as a contextual presence:
 answering how-to questions, responding to financial stress signals, and delivering insight-rich
 summaries tied to the user's real data. All AI calls run through the Claude API (Anthropic).*
 
-*Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
-AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
+*Items consolidated here from: §1.E (Job Hunt AI), §1.F (Application Assistant), §9 (Statements
+AI layer), and archived past-TODO-tasks.md §16 (Financial alert copy + Net Worth mental health trigger).*
 
 **⚠️ Standing constraint — all AI features are `isAdmin`/`isTester`-gated for now.** Every
 Coach-facing surface (chat entry points, triggered insight cards, statement summaries, any future
-§18/§21 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
+§2/§8 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
 on both sides: client-side to hide the entry point from ungated users, and server-side in the
 relevant `api/*.js` route so a request is rejected even if called directly. `is_tester`
 (`user_data.is_tester`, migration `021_add_is_tester_beta_flag.sql`) is a manually-granted beta
 flag — set only by Anthony via SQL on an already-existing account, never self-service — that exists
 specifically so AI features can get real usage outside the personal admin account. **Beta testers
 are NOT investors:** this check must never fold in `isInvestor`; see
-`docs/active-systems.md` §23 (Beta Tester Accounts) and §18 (Investor & Demo Accounts) for the
+`docs/active-systems.md` §9 (Beta Tester Accounts) and §2 (Investor & Demo Accounts) for the
 full division. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
 (and update this note) once Coach is ready for a general rollout.
 
 ---
 
-### §18.0 — Scaffolding pass (2026-07-06): build order, resolved technical decisions, open questions
+### §2.0 — Scaffolding pass (2026-07-06): build order, resolved technical decisions, open questions
 
-*Added before any §18 code exists. Model/pricing/caching facts below are from the Claude API
+*Added before any §2 code exists. Model/pricing/caching facts below are from the Claude API
 reference (cached 2026-06-24) — re-verify against platform.claude.com before the first API call
 is written, since model lineups move.*
 
@@ -781,18 +40,18 @@ is written, since model lineups move.*
 1. **Phase A — Walking skeleton (§G + minimal §B).** `api/coach.js` streaming proxy +
    `lib/aiContext.js` serializer + a minimal Ask Coach chat panel with **no persistence** (history
    lives in component state, lost on close). Smallest end-to-end slice that proves auth → context
-   injection → streamed response → mobile UX. Everything else in §18 layers on this.
+   injection → streamed response → mobile UX. Everything else in §2 layers on this.
 2. **Phase B — Persistence (§H).** `coach_chats` migration + RLS, `db.js` load/save/delete,
    history list UI, end-of-session summaries. Ship only after Phase A feels right in the hand.
 3. **Phase C — Coach presence (§C + §D).** Net worth trigger tiers + the `NetWorthHealthTips.jsx`
-   rewrite (the §16 close-out's deferred half), then statement summaries. These reuse Phase A's
+   rewrite (the archived §16 Priority Sprint's deferred half), then statement summaries. These reuse Phase A's
    proxy + serializer wholesale.
-4. **Phase D — Job Hunt + Job Scout (§E, §I).** Needs §15.C Job Loss Mode surfaces (partially
+4. **Phase D — Job Hunt + Job Scout (§E, §I).** Needs §1.C Job Loss Mode surfaces (partially
    live already — `JobLossDashboard`/`JobLossEntry` shipped) plus a Google Places key (§I) —
-   the one §18 feature with a second external vendor.
+   the one §2 feature with a second external vendor.
 - **§A (identity) runs in parallel** — mascot mark + personality brief have no code dependency,
   but Phase A shouldn't ship to non-admin users without at least a placeholder avatar and the
-  agreed voice. **§J (tax interview) stays behind §20's accountant gate** regardless of phase.
+  agreed voice. **§J (tax interview) stays behind §4's accountant gate** regardless of phase.
 - **Gate everything behind `isAdmin` initially** — Coach ships admin-only until cost telemetry
   (below) shows per-conversation cost is acceptable, then investors, then everyone.
 
@@ -821,14 +80,14 @@ is written, since model lineups move.*
   loading state.
 - **`ANTHROPIC_API_KEY` is server-side only** — plain Vercel env var, never `VITE_`-prefixed,
   never in the client bundle (same rule as `STRIPE_SECRET_KEY`).
-- **`lib/aiContext.js` must exclude subscription internals.** The §17 disclosure rule extends to
+- **`lib/aiContext.js` must exclude subscription internals.** The archived Stripe section's disclosure rule extends to
   Coach: the serializer never includes `accessEndsAt`, grace state, dunning fields, or anything
-  that could let Coach mention the hidden week. Enforce with a unit test on the serializer output
-  (deterministic output makes this test trivial — same reason caching and the §21.E eval suite
+  that could let Coach mention the hidden trial extension. Enforce with a unit test on the serializer output
+  (deterministic output makes this test trivial — same reason caching and the §8.E eval suite
   want determinism).
-- **§19 is a Coach context source.** `account_history` (live since 2026-07-06) gives Coach the
+- **§3 is a Coach context source.** `account_history` (live since 2026-07-06) gives Coach the
   user's config-change timeline — life-event sequence, raises, employer switches — exactly the
-  personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
+  personalization hook parked in §3.D2's commented block. Phase A ships without it; wire it into
   the serializer when a real use case (e.g. "your raise in March changed this") justifies the
   tokens.
 - **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 022 are now
@@ -837,10 +96,10 @@ is written, since model lineups move.*
   **`023_add_coach_chats.sql`** (shipped 2026-07-10) — check `database/migrations/` before writing
   any future migration, since numbering collisions across concurrent sessions keep happening.
 - **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
-  cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
+  cache read/write splits) per request from the first deployed call — §8.E's "AI cost telemetry"
   starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
 
-#### Brainstorm additions (scoped to §18, grounded in what exists)
+#### Brainstorm additions (scoped to §2, grounded in what exists)
 
 - [ ] **Per-user message budget** — a daily Coach message cap per user (config- or DB-backed,
   generous, invisible in normal use) so a runaway client loop or abusive user can't turn the
@@ -850,13 +109,14 @@ is written, since model lineups move.*
   deep-linking to the panel that computes it ("weekly net → Income panel"). Turns Coach answers
   into navigation and enforces the data-grounded voice mechanically, not just by prompt.
 - [ ] **Seed the eval suite from Phase A day one** — every admin-flagged bad answer during the
-  admin-only phase gets saved (snapshot + question + bad answer) into a fixtures folder; §21.E's
+  admin-only phase gets saved (snapshot + question + bad answer) into a fixtures folder; §8.E's
   10 tealen conversations assemble themselves before public launch instead of being invented.
 - [ ] **Live State Inspector: Coach line** — admin-only "last Coach call: [type] · [model] ·
   [tokens in/out] · [cache hit?]" so cost behavior is verifiable from a phone, same pattern as
-  §19's config-history line.
-- [ ] **Reuse the §17 test pattern for Coach copy** — TrialBanner-style forbidden-pattern tests on
-  every hardcoded Coach surface (trigger card templates, empty states): no "grace", no "21", plus
+  §3's config-history line.
+- [ ] **Reuse the Stripe disclosure test pattern for Coach copy** — TrialBanner-style forbidden-pattern tests on
+  every hardcoded Coach surface (trigger card templates, empty states): consistent with Stripe Monetization's
+  disclosure guardrails (see past-TODO-tasks.md), plus
   the §C guardrails (no catastrophizing words on red-tier cards).
 
 #### Open product questions (need your call, not research)
@@ -875,8 +135,8 @@ is written, since model lineups move.*
   a separate function from `canAccessAiFeatures`, which stays the narrow admin/tester-only gate for
   every other, not-yet-built Coach surface — the deeper, section-specific ones (Statements Insights
   §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are still
-  the planned paid-conversion upsell once they exist, reusing the existing §17.E paywall/readOnly
-  gate rather than inventing a separate Coach-tier flag. Full write-up:
+  the planned paid-conversion upsell once they exist, reusing the existing paywall/readOnly
+  gate (see archived Stripe Monetization in past-TODO-tasks.md) rather than inventing a separate Coach-tier flag. Full write-up:
   `docs/coach-entry-points.md` §§1–2.
 - [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
   SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
@@ -960,7 +220,7 @@ financial advisor — Coach answers questions about the app using the user's rea
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer
   multi-step responses; prompt caching on the feature guide context block
 - [ ] **Conversation persistence** — chat history, Coach summaries, and key insights are saved
-  per-session to Supabase via the `coach_chats` table → full schema in **§18.H**; "New Chat"
+  per-session to Supabase via the `coach_chats` table → full schema in **§2.H**; "New Chat"
   starts a fresh record; past chats are browsable in a history list
 - [ ] **Auto-summary** — at end of session (user closes chat or after 10 min idle), Coach
   generates a 1–3 sentence summary of the conversation stored in `coach_chats.summary`; surfaced
@@ -978,7 +238,7 @@ trend, and the static copy is rewritten to match Coach's voice.*
 
 *Built 2026-07-07 as `src/lib/coachTriggers.js` (pure signal resolution + rate-limiting),
 `src/lib/coachPrompts.js` (per-tier system prompts), and `CoachNetWorthCard.jsx`, wired into
-`HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §18
+`HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §2
 standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 - [x] **Copy audit — static tips rewrite** — done 2026-07-25. All 6 tips in `NetWorthHealthTips.jsx`
@@ -1004,7 +264,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
     `estimateRunwayDays()` in `coachTriggers.js` (independent of JobLossDashboard's own runway
     calc, which has a session-only savings override this trigger can't see — assumes $0 extra)
   - ~~A goal falling critically behind schedule (> 4 weeks off projected finish)~~ —
-    **not implemented, needs history** (§21.A's Goal ETA Drift Alerts is the fuller version)
+    **not implemented, needs history** (§8.A's Goal ETA Drift Alerts is the fuller version)
 - [x] **Signal tiers:**
   - [x] **Amber (attention)** — fires on the thin-cushion proxy above; see
     `buildNetWorthSystemPrompt("amber")` in `coachPrompts.js` for the live prompt
@@ -1019,7 +279,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
   `coachPrompts.js`
 - [x] **Rate-limiting** — `shouldFireForTier()` compares fiscal week index (not wall-clock days);
   state persisted in `localStorage` (`coachNetWorthSignal`) rather than config/Supabase — a
-  session-scoped rate limiter, not a durable one; §18.H's `coach_chats` table would make this
+  session-scoped rate limiter, not a durable one; §2.H's `coach_chats` table would make this
   durable across devices once it exists
 - [x] **Dismissal** — `✕` button in `CoachNetWorthCard`; dismissal keyed to `(tier, weekIdx)` so
   a new week or a tier change un-dismisses it
@@ -1040,18 +300,27 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 ---
 
-### E. Job Hunt AI Assistant *(extracted from §15.E — Phase 3)*
+### E. Job Hunt AI Assistant *(extracted from §1.E — Phase 3)*
 
-*Requires Job Loss Mode (§15.C) to be live first.*
+*Requires Job Loss Mode (§1.C) to be live first.*
 
-*Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
+**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
+session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
+gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
+feature is finished, mirroring the precedent Coach's own gate-flip already set
+(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
+entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
+Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
+is happening in another session, so don't duplicate work here without checking in first.
+
+*Job Loss Mode's §1.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
 have to re-derive them or, worse, write a fourth parallel runway calc:*
 - **`lib/jobLossRunway.js`** — `computeJobLossRunway({ config, expenses, effectiveToday, savings })`
   is the authoritative runway/burn function (weeklyBurn, essentialCount, benefitsRemainingWeeks,
   projectedUnemploymentTotal, withBenefits/withoutBenefits cash+days+cliff). Both `JobLossHomePanel`
   and `JobLossBudgetPanel` already read from this — grounding any Coach context in it (not a new
-  calc) keeps the number Coach quotes identical to what the user sees on screen, per §24's rule.
+  calc) keeps the number Coach quotes identical to what the user sees on screen, per §6's rule.
   Also exports `firstUnemploymentPaymentDate(cfg)` and `sumJobHuntIncome(cfg)`.
 - **`config.jobHuntIncomeLog`** (`{ id, amount, note, loggedAt }[]`) — gig/odd-job cash logged from
   the Home widget, already summed into runway via `sumJobHuntIncome`. Good context for "how much
@@ -1063,50 +332,49 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
   today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
   "how long can I be selective" framing (what's actually due before benefits run out).
-- **Known drift to fix before/while building this — worse than originally flagged, re-confirmed
-  during the §15.H14 birdseye review (2026-07-19):** `lib/coachTriggers.js`'s `estimateRunwayDays`
-  (used by `CoachNetWorthCard.jsx` for the §18.C Red-tier trigger) is a **second, independent**
-  runway calc. Its own doc comment says it "assumes $0 extra savings, the conservative floor" —
-  that comment predates `jobLossCashOnHand` existing as a real persisted field (§15.H13); the
-  "additional savings" input it's talking about used to be a session-only draft `JobLossBudgetPanel`
-  owned, which no longer describes the current architecture at all. It also still predates the
-  `trackDuringJobLoss` flag added in §15.H8/H9, so it counts bills the user unchecked from tracking.
-  Two independent sources of drift on the same function now, both confirmed live: it disagrees with
-  Job Loss Home/Budget on both *which bills count* and *how much cash the user actually has*. Either
-  retrofit both (`trackDuringJobLoss` filter + `jobLossCashOnHand`) into it, or (cleaner) have it
-  call `computeJobLossRunway` directly once this feature gives a reason to touch that file. Separate
-  and worth fixing regardless of whether this feature gets built: `App.jsx` never actually passes
-  `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
-  context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
-  `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §15.H14.
-  **Closed, 2026-07-22 (§15.H17):** both paragraphs above are now stale — `coachTriggers.js`'s
-  `estimateRunwayDays` was deleted outright (not retrofitted), and every runway consumer
-  (`CoachNetWorthCard.jsx`, `App.jsx`'s `coachRunwayDays`) now calls `computeJobLossRunway()`
-  directly, so there is no second drifted calc left to reconcile. `runwayDays` is also now wired
-  into Coach's context (`App.jsx` → `buildCoachContext`), not the bare `"Job Loss Mode: active"`
-  string. See `docs/BUG_FIX_TODO.md` DW-8/DW-9 and `drift-app-warden.md` §21 F24 for the fix
-  history — this stale note is left in place (not deleted) as the historical record of the drift
-  this feature would otherwise have needed to fix.
+- **Known drift, corrected 2026-07-25 — the paragraph below is stale, kept for history.** Both
+  items it flags were already fixed by the time this feature got built (`active-systems.md`'s
+  2026-07-24 stale-note correction, `drift-app-warden.md` §8 F24): `estimateRunwayDays` was
+  **deleted outright**, not retrofitted — every runway caller, this feature included, goes
+  through `computeJobLossRunway`/`resolvePrimaryRunwayDays` now. And `runwayDays` **is** wired
+  into `buildCoachContext` (`App.jsx`'s `coachRunwayDays`). Original (now-resolved) text: <details>
+  `lib/coachTriggers.js`'s `estimateRunwayDays` (used by `CoachNetWorthCard.jsx` for the §2.C
+  Red-tier trigger) was a second, independent runway calc that disagreed with Job Loss Home/
+  Budget on both which bills count and how much cash the user actually has; separately,
+  `App.jsx` never passed `runwayDays` into `buildCoachContext` at all, so Coach's Job Loss Mode
+  context was the bare string `"Job Loss Mode: active"`, no numbers.</details>
 
-- [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
-  API) with a system prompt including: current role title, prior income, runway days, target income,
-  state/region, application log summary
-- [ ] **Contextual prompt modes:**
-  - [ ] "Help me with my resume" — structured resume review tied to target roles
-  - [ ] "Write a cover letter for [role]" — drafts from stored job title + experience summary
-  - [ ] "Prep me for [company] interview" — role-specific Q&A from company + job title
-  - [ ] "Salary negotiation coaching" — uses prior income + target income + runway as context
-  - [ ] "How long can I be selective?" — runway-aware guidance on holding out vs. taking a quick offer
-- [ ] **Financial context injection** — every session receives a condensed snapshot (runway, burn
-  rate, target net, current week) so advice is grounded in real numbers
-- [ ] **Prompt caching** — cache the financial context block across the conversation session
+- [x] **Job Hunt Chat panel** — built 2026-07-25 as `JobHuntChatPanel.jsx`, opened via a "Talk to
+  Coach about the search" button in `JobLossHomePanel` (not a Job Loss Dashboard sub-view — no
+  such dashboard exists; this app's Job Loss Mode is `JobLossHomePanel`/`JobLossBudgetPanel`
+  directly). System prompt (`JOB_HUNT_SYSTEM_PROMPT`, `coachPrompts.js`) grounds in runway days,
+  burn rate, target income, and application log summary via the new `buildJobHuntContext()`
+  (`aiContext.js`) — **not** current role title / prior income / state/region, which aren't
+  tracked fields anywhere in this app today; scope this if a real need for them surfaces. Uses
+  Sonnet per §18.G's cost split. v1-scoped like Ask Coach originally was: single-session, no
+  chat-history/retention system yet (that's the natural next pass once this mode proves itself,
+  same as Ask Coach's history list arrived after its own v1).
+- [x] **Contextual prompt modes — supported via open-ended chat, not discrete UI shortcuts.**
+  No per-mode buttons ("Prep me for [company] interview," etc.) — the system prompt instructs
+  Coach to help with all of these when asked in free text, using the real application log for
+  company-specific coaching. **Deliberate exception: "Help me with my resume" is explicitly
+  redirected**, not answered inline — the addendum tells Coach "you're not a resume-writing
+  service... redirect to what you can help with here," keeping this mode and Résumé Review
+  (§18.E1) properly separated rather than overlapping.
+- [x] **Financial context injection** — `buildJobHuntContext()`, grounded in
+  `computeJobLossRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` (never a parallel
+  estimate, per §21 F113's rule) plus `config.targetIncomeAnnual`/`jobApplications`/
+  `returnToWorkDate`. Tested: `aiContext.test.js`.
+- [x] **Prompt caching** — inherited from the shared `api/coach.js` pipeline (system + context
+  blocks already get `cache_control: ephemeral`, multi-turn messages already cache the growing
+  history) — no new work needed since this mode reuses that route rather than a new one.
 
-#### E1. Résumé upload / skill-gap analysis — scoped, 2026-07-22 — SCOPED, nothing started
+#### E1. Résumé upload / skill-gap analysis — v1 built 2026-07-25 (scoped 2026-07-22)
 
-*Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §15.H14
+*Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §1.H14
 bullet 6 as "genuinely absent as an idea" — the only prior trace anywhere in this doc was that one
-unbuilt chat-prompt bullet and §15.F's "Profile store for auto-fill," which is explicitly scoped as
-plain user-entered text for form auto-fill, not this. This pass answers §15.H14's three open
+unbuilt chat-prompt bullet and §1.F's "Profile store for auto-fill," which is explicitly scoped as
+plain user-entered text for form auto-fill, not this. This pass answers §1.H14's three open
 questions (storage, parsing, standalone vs. tied to `ReemploymentTracker`) and proposes a phased
 scope — documentation only, nothing below is implemented.*
 
@@ -1140,34 +408,55 @@ scope — documentation only, nothing below is implemented.*
   captured by `ReemploymentTracker`, zero new input), with `resume_profile.target_role` as a
   free-text override when the user wants to compare against a role they haven't applied to yet.
   No change to `ReemploymentTracker.jsx` itself required for this — read-only reference.
-- **AI pipeline reuses existing §18.G infra — no new serverless route.** Add `'resume_review'` to
+- **AI pipeline reuses existing §2.G infra — no new serverless route.** Add `'resume_review'` to
   `coach_chats`'s `chat_type` check constraint (currently `ask_coach`, `job_scout`, `job_hunt`,
   `statement_summary`) rather than building a separate endpoint — `api/coach.js`'s existing
-  auth/gating/streaming already covers this. Use Sonnet, not Haiku (§18.G's existing model split:
+  auth/gating/streaming already covers this. Use Sonnet, not Haiku (§2.G's existing model split:
   Haiku for chat/FAQ/triggers, Sonnet for statement summaries and job-hunt drafts — a resume review
   is closer to the latter in depth). Store the structured skill-gap output in `coach_chats.insights`
   (already a jsonb column, already used for "statement insight keys" — no schema change needed
   beyond the chat_type enum value) alongside a written review in `messages`.
 - **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
-  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
-  the broader AI-features rollout question being resolved first — worth noting again here, not a
-  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+  gate needed. `canAccessAiFeatures` itself widened 2026-07-25 to admin/tester/investor
+  (`hasPrivilegedAccess`, entitlements.js) — see the locked decision below. H14 bullet 5's
+  finding still applies to everyone outside those three tiers: real (non-privileged) users
+  can't reach this without the broader AI-features rollout question being resolved first —
+  worth noting again here, not a blocker to scoping, but a real blocker to shipping this to
+  anyone but admins/testers/investors.
+- **Locked decision (2026-07-25) for when this leaves the admin/tester/investor gate: paid-only
+  for everyone else, not trial-included.** Both this feature and §18.E (Job Hunt Assistant) are
+  a real, post-card-charge subscription only (`entitlement.state === "active"`) for accounts
+  outside the privileged tier — deliberately narrower than `canAccessAskCoachGeneral`'s trial/
+  grace/active check that sections 1–2 use. Admin, tester, and investor accounts keep bypassing
+  unconditionally regardless (same `hasPrivilegedAccess` decision — this doesn't change when the
+  feature splits off, only the requirement for everyone else does). Do not reuse
+  `canAccessAskCoachGeneral` when splitting this off; see `coach-entry-points.md` §5/§6 and
+  `drift-app-warden.md` §21 F124.
 - **Recommended phasing:**
-  - **v1** — `resume_profile` table + RLS; a "Resume" card in `ReemploymentTracker` (or its own
-    section in the Job Loss Dashboard) with a paste-text textarea + "Get skill-gap review" button;
-    `resume_review` chat_type wired through the existing `api/coach.js`; output rendered as a
-    bullet list of gaps + a short written review, saved to `coach_chats`.
+  - [x] **v1 — built 2026-07-25.** `resume_profile` table + RLS (migration `036_add_resume_profile.sql`,
+    `user_id` as the primary key, not a surrogate `id` — genuinely 1:1 per account, unlike
+    `coach_chats`); `loadResumeProfile`/`saveResumeProfile` in `db.js`. `ResumeReviewCard.jsx` —
+    its own section in `JobLossHomePanel` (the "or" option from the original phasing note; no
+    change to `ReemploymentTracker.jsx` itself, exactly as scoped) — with a paste-text textarea +
+    target-role field (defaults from the most recent `jobApplications` entry, free-text override)
+    + "Get Skill-Gap Review" button. One deviation from the spec text above: the review isn't
+    rendered as a literal bullet list — `RESUME_REVIEW_SYSTEM_PROMPT`'s own no-Markdown rule
+    (inherited from `COACH_PERSONA_PROMPT`) rules out literal bullet characters, so it's several
+    short paragraphs instead, each grounded in one résumé line. `resume_review` added to
+    `coach_chats.chat_type`; the review saves there via the existing `api/coach.js`/`saveCoachChat`
+    path, same as the spec intended — no `insights` JSONB populated yet (that's for structured
+    extraction beyond a written review; not needed for v1's plain-text output).
   - **v2 (only if v1 shows real usage)** — file upload (PDF/DOCX) via a new Supabase Storage
     bucket + client-side text extraction feeding the same v1 analysis pipeline unchanged.
   - **Not scoped even for v2:** any auto-apply / auto-tailor-resume-per-listing feature — that's a
     materially different (and higher-liability) feature than "review my resume against a role,"
-    and depends on §15.F's job-board integrations existing first regardless.
+    and depends on §1.F's job-board integrations existing first regardless.
 
 ---
 
-### F. Application Assistant *(extracted from §15.F — Phase 4)*
+### F. Application Assistant *(extracted from §1.F — Phase 4)*
 
-*Requires Job Board integrations (§15.F) to be live first.*
+*Requires Job Board integrations (§1.F) to be live first.*
 
 - [ ] **Draft application mode** — for saved job listings, "Draft application" launches Coach
   pre-loaded with the specific job description for cover letter / interview prep mode
@@ -1189,17 +478,17 @@ scope — documentation only, nothing below is implemented.*
 - [x] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
   for statement summaries and job hunt drafts; log token counts per call type in dev
 - [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
-- [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§18.H**;
+- [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§2.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
 - [ ] **Context serializer roadmap** — `lib/aiContext.js` keeps a running comment map of context
-  fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
+  fields future AI features will need (§2.D/E/J, §8.A/B/C, §8 F1–F3); extend `buildCoachContext`
   and that map together whenever one of those items gets scoped, so context-building stays
   centralized instead of growing a bespoke builder per feature
 - [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
   + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
   `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
   app-side trial window, explicitly excluded from `is_investor`/demo-account access and from the
-  lifecycle cron's dunning/deletion. Full writeup: `docs/active-systems.md` §23
+  lifecycle cron's dunning/deletion. Full writeup: `docs/active-systems.md` §9
 
 ---
 
@@ -1209,7 +498,7 @@ scope — documentation only, nothing below is implemented.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `023_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
+#### H1. Migration — `023_add_coach_chats.sql` (renumbered — see §2.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -1273,7 +562,7 @@ CREATE INDEX coach_chats_user_id_created_at
   DB generate one for a new chat (returned to the caller so it can keep upserting into the same
   row). `user_id` always comes from the session, never the caller. **Wired 2026-07-25** —
   `AskCoachPanel.jsx`'s `persistChat` calls it immediately after every completed turn (eager
-  save, not debounced — see §18.H drift note below).
+  save, not debounced — see §2.H drift note below).
 - [x] **`deleteCoachChat(id)`** — function built (`db.js` + tests) 2026-07-10; UI wired
   2026-07-25 — a trash-icon button per history row (`AskCoachPanel.jsx`), not swipe/long-press
   as originally sketched — simpler and equally reachable at the 44px mobile tap-target standard.
@@ -1290,13 +579,13 @@ CREATE INDEX coach_chats_user_id_created_at
   `title` (or first user message truncated), `summary` preview when one exists, and `created_at`
   relative date. **No `chat_type` chip** — every row is `ask_coach` today (the list explicitly
   filters to that type), so a chip would say the same word on every row; add it when a second
-  type gets a UI caller (see drift-app-warden §21 F123).
+  type gets a UI caller (see drift-app-warden §8 F123).
 - [x] **Tap to resume** — built 2026-07-25. Loads the chat's full `messages` array back into the
   active view.
 - [x] **New Chat button** — built 2026-07-25. Header icon, not inline atop the history list as
   originally sketched — reachable from both the chat and history views so starting fresh doesn't
   require opening history first. Resets to `messages: []` and focuses the input.
-- [ ] **Job Scout entries** — not applicable yet; Job Scout (§18.I) isn't built, so no
+- [ ] **Job Scout entries** — not applicable yet; Job Scout (§2.I) isn't built, so no
   `chat_type: 'job_scout'` rows exist to render.
 
 #### H4. Summary + insight generation
@@ -1328,8 +617,8 @@ job board, not a posting aggregator. Coach runs a grid of industry-category sear
 business lookup API, compiles every result into a deduplicated employer list with phone numbers,
 and saves the whole thing as a persistent "search" that the user can call from.*
 
-*Saved as `chat_type: 'job_scout'` in `coach_chats`. Lives inside the Job Loss Dashboard (§15.C)
-and the Job Hunt panel (§18.E), but the search entry point can also live in the Ask Coach panel
+*Saved as `chat_type: 'job_scout'` in `coach_chats`. Lives inside the Job Loss Dashboard (§1.C)
+and the Job Hunt panel (§2.E), but the search entry point can also live in the Ask Coach panel
 history sidebar for quick re-access.*
 
 #### I1. Search input
@@ -1388,7 +677,7 @@ history sidebar for quick re-access.*
 - [ ] **Re-run search** — "Refresh" button re-runs the same params and overwrites `search_results`
   + `updated_at` on the existing row
 - [ ] **Application tracker link** — each employer row has a secondary "Track" action that creates
-  a Re-employment Tracker entry (§15.C6) pre-filled with business name and "Applied" status
+  a Re-employment Tracker entry (§1.C6) pre-filled with business name and "Applied" status
 
 #### I6. Serverless route — `api/job-scout.js`
 
@@ -1406,10 +695,10 @@ history sidebar for quick re-access.*
 
 ### J. Tax Onboarding Interview — AI-Guided Paystub Capture & Withholding Setup
 
-*Crossover with **§20** (Tax Accuracy). Two ideas from the same brain-dump: (1) let a user
+*Crossover with **§4** (Tax Accuracy). Two ideas from the same brain-dump: (1) let a user
 photograph/screenshot a paystub and have an AI model pull the tax figures instead of hand-typing
 them into the existing Sharpen Rates modal; (2) once split fed/state exempt tracking exists
-(§20.B) and the pre-account history gap is real (§20.C), route the whole tax setup through a
+(§4.B) and the pre-account history gap is real (§4.C), route the whole tax setup through a
 short, guided Coach conversation instead of a wall of form fields — the account-variable surface
 (job start date, account creation date, exempt history, split fed/state gap) is too tangled for a
 generic form to ask the right follow-up questions on its own.*
@@ -1425,11 +714,11 @@ generic form to ask the right follow-up questions on its own.*
   Rates fields (`sg1/sf1/ss1`, etc.) rather than writing straight to config — the user still sees
   and confirms the numbers before `applySharpener()` runs, same trust boundary as today's manual
   flow.
-- [ ] **Backfill target for pre-account weeks** — per §20.C, let the uploader optionally target a
+- [ ] **Backfill target for pre-account weeks** — per §4.C, let the uploader optionally target a
   specific past `weekIdx` (for a paystub predating `firstActiveIdx`'s confirmation window) instead
   of only ever setting the current rate going forward.
-- [ ] **Guided tax setup interview** — once §20.B's split fed/state schema exists, a short Coach
-  conversation (reuses §18.B's "Ask Coach" infra) walks a user through questions like "Is your
+- [ ] **Guided tax setup interview** — once §4.B's split fed/state schema exists, a short Coach
+  conversation (reuses §2.B's "Ask Coach" infra) walks a user through questions like "Is your
   federal withholding currently on or off? What about state — same or different?" / "When did
   that change?" / "Do you have a recent paystub to scan?" — replacing a dense settings form with a
   handful of short, punchy questions. **Exact question set deferred** — flagged by product as "to
@@ -1437,20 +726,23 @@ generic form to ask the right follow-up questions on its own.*
 - [ ] **Context injection** — this Coach mode needs the account-variable snapshot (job start
   date/`firstActiveIdx`, account `created_at`, current `taxedWeeksFed`/`taxedWeeksState`,
   `taxHistoryReliableFrom`) so its questions are actually informed by what the app already knows —
-  same `lib/aiContext.js` serializer pattern as the rest of §18.
-- [ ] **Same accountant gate as §20.D** — this entire flow is downstream of the split-tracking
+  same `lib/aiContext.js` serializer pattern as the rest of §2.
+- [ ] **Same accountant gate as §4.D** — this entire flow is downstream of the split-tracking
   schema and the disclosure boundary; it cannot ship ahead of either, and the guided interview's
   question set/copy needs the same professional review before it goes live.
 
 ---
 
-## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
+## 3. Master Timeline — Config History & Point-in-Time Computation Integrity
 
-*Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-01 — placed
-right after the AI section deliberately: once §18's Coach chat history (`coach_chats`) is
-live, we may fold it into the same history table this section builds rather than giving it a
-permanent table of its own. Still fuzzy on exact mechanics below — this section is the
-structural map to de-fuzz it before implementation, not a locked spec.*
+**STATUS: FOUNDATION COMPLETE · PROOF-OF-CONCEPT SHIPPED · 70 FIELDS REMAIN**
+
+- ✅ **Write Path:** Complete. `account_history` table live in Supabase (migration 020 confirmed 2026-07-07). All config changes auto-captured with `effectiveFrom` dates. Admin verification live in DB Row Viewer.
+- ✅ **Read Path (1 of 71 fields):** `baseRate` point-in-time resolution implemented 2026-07-17 for Quick Rate Update. Proof that the pattern works; other 70 historically-sensitive fields still apply retroactively to all weeks.
+- ❌ **Remaining Read Path (70 of 71 fields):** Schedule, tax rates, benefits, employer preset, deductions, attendance/PTO — all still retroactively rewrite past weeks when changed mid-year.
+- ❌ **Related Bug Fixes:** Loan history (`buildLoanHistory` regenerates full payment trace on every edit), goals versioning (no history today).
+
+**The Gap in Impact:** The write path captures "what changed and when," but the engine doesn't consult it yet. When a user edits their `otThreshold` from 40 to 45 hours in June, `buildYear()` recalculates ALL 52 weeks using the new threshold. April weeks now incorrectly show no overtime they actually earned. Annual tax projections, goal timelines, and spending forecasts all get silently rewritten — the exact "annual estimation of the year doesn't change when a bill is updated" problem the feature was meant to solve.
 
 **Original brain-dump (verbatim, for provenance):**
 
@@ -1567,7 +859,7 @@ create index account_history_user_id_effective_from on account_history (user_id,
   ship in the same pass as the write path** — capturing history correctly first, then wiring
   the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
   **A first narrow slice shipped 2026-07-17** — `resolveBaseRateForWeek()` / `buildYear(cfg,
-  baseRateHistory)` (§15.D), covering `baseRate` only, added because Quick Rate Update's live QA
+  baseRateHistory)` (§1.D), covering `baseRate` only, added because Quick Rate Update's live QA
   caught the exact bug this bullet describes (a rate edit was retroactively rewriting elapsed
   weeks). The general resolver for every other whitelisted field is still unbuilt — treat this as
   proof of the pattern, not the read path being done.
@@ -1581,7 +873,7 @@ create index account_history_user_id_effective_from on account_history (user_id,
   resolution.
 - **Storage — the `account_history` child table**, not a JSONB array on `user_data`: keeps the
   hot-path row from growing forever, stays queryable for admin diagnostics, and is the landing
-  zone for the possible §18.H `coach_chats` fold-in. Rows load once at sign-in alongside
+  zone for the possible §2.H `coach_chats` fold-in. Rows load once at sign-in alongside
   `loadUserData`; the resolver runs fully in memory — the engine never touches the network.
 - **Write path — one `commitConfigChange(oldConfig, newConfig, source, effectiveFrom?)` choke
   point**, not a wrapper around `saveConfigNow` alone: config also persists via the 800ms
@@ -1591,8 +883,8 @@ create index account_history_user_id_effective_from on account_history (user_id,
   persists as normal.
 - **`effective_from` semantics** — stored as a **date**, never a week idx (idx is
   fiscal-year-relative and breaks across year boundaries; derive idx at read time). Defaults to
-  **today** for plain ProfilePanel edits; only the wizard-driven flows (§15.B structure change,
-  §15.D Quick Rate Update) pass an explicit effective/change date — no effective-date prompt on
+  **today** for plain ProfilePanel edits; only the wizard-driven flows (§1.B structure change,
+  §1.D Quick Rate Update) pass an explicit effective/change date — no effective-date prompt on
   quick edits.
 - **Backfill — clean start + seed row**: at rollout, insert one snapshot per existing account
   (current config, `effective_from` = rollout date, `source: 'rollout_seed'`) so the resolver
@@ -1605,7 +897,7 @@ create index account_history_user_id_effective_from on account_history (user_id,
   loans their own expense-style `history[]`; scoped as a separate follow-up, not wired into
   `account_history` v1.
 - **Schema drift tolerance** — snapshots capture whatever config shape existed at write time
-  (e.g. pre-§20 rows won't have `taxedWeeksFed/State`); the read-path resolver must spread each
+  (e.g. pre-§4 rows won't have `taxedWeeksFed/State`); the read-path resolver must spread each
   snapshot over `DEFAULT_CONFIG` before use, same as loads already do.
 
 **Historically-sensitive field whitelist (v1)** — `commitConfigChange` records a snapshot when
@@ -1644,23 +936,23 @@ comment so the v1 whitelist stays honest about what exists in the codebase today
 Employer identity (beyond presets):
 - Free-text employer name / employer history as users list actual employers over time — today
   the ONLY employer identity in config is `employerPreset` ("DHL" | null); there is no name
-  field. When the §21.D preset marketplace or any "who do you work for" field lands, each
+  field. When the §8.D preset marketplace or any "who do you work for" field lands, each
   employer change is both a history boundary and prime Coach context ("you've been at [X] for
   14 months; your last move came with a $2.10 raise").
 
-Job Loss Mode outputs still unbuilt (§15.C):
+Job Loss Mode outputs still unbuilt (§1.C):
 - Per-expense triage stances (`jobLossStatus: active | paused | cancelled`) — snapshot each
   triage decision; "what did this user protect first when income stopped" is the single
   strongest signal of their real priorities Coach will ever get.
-- Auto-reactivate elections, state benefit-estimator inputs — names/types TBD with §15.C.
+- Auto-reactivate elections, state benefit-estimator inputs — names/types TBD with §1.C.
 
-§20 split-tax fields (blocked on the accountant gate):
+§4 split-tax fields (blocked on the accountant gate):
 - `taxedWeeksFed` / `taxedWeeksState` + the split per-week overrides — replace `taxedWeeks` in
   the whitelist wholesale when the schema splits. Exempt-status changes per lane are exactly
-  the "separate independent timeline" §20.B requires — account_history can carry that timeline
+  the "separate independent timeline" §4.B requires — account_history can carry that timeline
   for free.
 
-Coach/AI-context candidates (decide alongside §18, not before):
+Coach/AI-context candidates (decide alongside §2, not before):
 - Life-event occurrences themselves — which flow fired and when; the `source` column already
   encodes this per row ('life_event:lost_job', 'setup_wizard', …), so this may be a read-out
   of existing data rather than new capture. A user's sequence of life events is the
@@ -1668,11 +960,11 @@ Coach/AI-context candidates (decide alongside §18, not before):
 - Goal target / due-date revisions (§B's "lower-risk" note) — ambition vs. follow-through
   patterns; would land as entity_type: 'goal' rows rather than config snapshots.
 - Attendance/PTO *balances* over time as job-quality signals (the policy fields are already
-  whitelisted above; balance trajectories are a different, noisier thing — decide with §18).
+  whitelisted above; balance trajectories are a different, noisier thing — decide with §2).
 
-Privacy rail: anything captured here that feeds Coach context inherits §21.E's rules —
+Privacy rail: anything captured here that feeds Coach context inherits §8.E's rules —
 confidence labeling, the human-confirm boundary for AI writes, and (if ever used for model
-training or cross-user aggregates) explicit opt-in per §21.D's benchmark privacy rules.
+training or cross-user aggregates) explicit opt-in per §8.D's benchmark privacy rules.
 History rows are per-user data under the same RLS as every other table; capture is not a
 license to train.
 ──────────────────────────────────────────────────────────────────────────────────────── -->
@@ -1682,77 +974,117 @@ license to train.
 - [x] **Snapshot granularity** — resolved 2026-07-06: full **new-value** whole-config snapshot
   per change (see §D2); field-level diffs rejected as harder to reconstruct from.
 - [x] **Which fields are actually in scope** — resolved 2026-07-06: the v1 whitelist in §D2,
-  plus the commented-out future-fields block beneath it (employer identity, §15.C job-loss
-  outputs, §20 split-tax fields, Coach/AI candidates). Expense billing amounts stay covered by
+  plus the commented-out future-fields block beneath it (employer identity, §1.C job-loss
+  outputs, §4 split-tax fields, Coach/AI candidates). Expense billing amounts stay covered by
   the existing mechanism (§A); loan terms are a separate expense-style `history[]` follow-up.
 - [x] **Backfill or clean start?** — resolved 2026-07-06: clean start plus one `rollout_seed`
   snapshot per existing account so the resolver always has a floor entry (§D2).
 - [x] **Fold in or leave alone** — resolved 2026-07-06: leave alone. `pastWeekTaxStatusOverrides`
   / `weekConfirmations` / `logs` are actuals/corrections, not config versions; they stay as
   their own columns and only new config-history is added alongside them (§D2).
-- [ ] **AI chat history hook (flagged explicitly by product)** — once §18.H's `coach_chats`
+- [ ] **AI chat history hook (flagged explicitly by product)** — once §2.H's `coach_chats`
   table ships, evaluate folding it into `account_history` as `entity_type: 'coach_chat'`
-  instead of keeping its own table. Don't block this section on that decision — §18 needs to
+  instead of keeping its own table. Don't block this section on that decision — §2 needs to
   ship first.
 
-### F. Suggested first implementation slice
+### F. Implementation Status
 
-*Deliberately small — a proof of the write path, not the full system.*
+#### F1. Write Path — COMPLETE (2026-07-07)
 
-- [x] **Migration** — `database/migrations/020_add_account_history.sql`: table per §D's sketch
-  as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
-  select/insert only — **append-only from the client**: no update/delete policies exist and
-  those privileges are revoked outright, so history can never be rewritten after the fact —
-  plus the per-account `rollout_seed` snapshot. **Run in Supabase (confirmed 2026-07-07)** —
-  the seed snapshot has landed for every existing account.
-- [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
-  (a `useEffect` diffing `prevConfigRef` vs. `config` via
-  `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
-  `saveConfigSnapshot` in `db.js`) rather than the literal `commitConfigChange` wrapper —
-  strictly stronger than call-site routing: **no** `setConfig` site or save path (immediate
-  or debounced) can bypass capture. Attributed flows tag `source`/`effectiveFrom` through
-  `configHistoryMetaRef` just before their `setConfig`: `setup_wizard` /
-  `life_event:<x>` (wizard, passes `startDate` as the explicit effective date),
-  `life_event:lost_job` (JobLossEntry, passes `jobLossDate`), `profile_edit`
-  (`saveConfigNow`), `force_pull` (admin pull, so drift re-adoption isn't logged as an edit);
-  everything untagged records as `config_edit` effective today (real wall clock, never the
-  admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
-- [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
-  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch.
-  Migration 020 is confirmed run (2026-07-07), so this should read real counts, not the
-  error string — worth a live Fetch to double-check on the next admin pass.
-- **§17.I interaction (noted on merge, 2026-07-06):** the non-payment deletion cron
-  hard-deletes the `user_data` row, and `account_history`'s FK cascades with it — the
-  `deleted_accounts` tombstone does **not** archive history rows, so a revived account
-  restarts with fresh history (its new floor entry is its first whitelisted edit, typically
-  the wizard-complete snapshot — same as any post-rollout signup, which never gets a
-  `rollout_seed` row either). Intentional: deleted account = deleted history is the right
-  privacy posture; revisit only if the future read path needs pre-deletion history restored.
-- [x] **Tests** — 26 new: `configHistory.test.js` (whitelist↔`DEFAULT_CONFIG` drift guard, no
-  duplicates, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) +
-  `db.test.js` additions (insert shape, missing-table tolerance, meta fetch paths). 890 total
-  passing; lint diff-clean vs. baseline; production build green.
-- [ ] **Verify live once deployed** — run migration 020 in Supabase, then from the deployed
-  app: make a pay-rate edit in ProfilePanel and confirm DB Row → Fetch shows
-  "config history: 2 snapshots" (seed + edit) with `baseRate` in the changed fields.
-- [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
-  is its own follow-up task once the write path has real data to test against, and the loan
-  `history[]` fix is its own separate follow-up (§D2). Don't try to land any of these in the
-  same PR as the write path.
+*The infrastructure that makes the timeline possible: capture every config change with a timestamp.*
+
+- [x] **Migration 020** — `database/migrations/020_add_account_history.sql` creates the table per §D2 design (full-value `snapshot` + `changed_fields TEXT[]`). RLS: append-only from client (no update/delete). Includes per-account `rollout_seed` snapshot so the resolver always has a floor entry. **Confirmed run in Supabase 2026-07-07** — seed snapshot landed for all existing accounts.
+- [x] **Config-transition watcher** — `App.jsx` uses `useEffect` with `prevConfigRef` to diff config changes, filters through `diffSensitiveFields()` (`lib/configHistory.js`), and calls `saveConfigSnapshot()` (`db.js`). **Critically:** this watches the app's one canonical `config` state — no `setConfig` call or save path (immediate or debounced) can bypass capture, because the watcher fires on every render where config differs.
+- [x] **Metadata tagging** — Life-event flows tag `source`/`effectiveFrom` through `configHistoryMetaRef` before mutating config:
+  - `setup_wizard`: tags `source: "setup_wizard"`, passes `startDate` as explicit effective date
+  - `life_event:lost_job`: tags `source: "life_event:lost_job"`, passes `jobLossDate`
+  - `life_event:rate_update`: tags `source: "life_event:rate_update"`, passes effective date from modal
+  - `profile_edit`: tags `source: "profile_edit"`, defaults effective date to today
+  - `force_pull` (admin): tags `source: "force_pull"`, so drift re-adoption isn't logged as an edit
+  - Untagged changes: default to `source: "config_edit"` effective today (wall-clock real date, never admin Lock Date)
+  - Investor sandbox accounts: exempt, matching archived Stripe Monetization's lifecycle email precedent
+- [x] **Admin verification surface** — DB Row Viewer shows "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch. Live data, not stubbed — ready for live QA.
+- [x] **Tests** — 26 new tests: `configHistory.test.js` (whitelist→DEFAULT_CONFIG drift guard, no dupes, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) + `db.test.js` additions (insert shape, missing-table tolerance, meta fetch). 890 tests total passing; lint clean; prod build green.
+- **Account deletion interaction:** non-payment deletion cron hard-deletes `user_data` row; `account_history` FK cascades. The `deleted_accounts` tombstone does NOT archive history rows — by design (privacy-first posture). Revived account restarts with fresh history.
+- [ ] **Verify live once deployed** — make a pay-rate edit in ProfilePanel, confirm DB Row → Fetch shows "config history: 2+ snapshots" with `baseRate` in changed fields.
+
+#### F2. Read Path Proof-of-Concept — COMPLETE (2026-07-17)
+
+*One field working correctly shows the pattern; baseRate was chosen because Quick Rate Update live-QA caught the bug.*
+
+The Problem: when you edit a field in June, `buildYear()` recalculates *all* weeks (past and future) using the new value. `baseRate: 22/hr` changes in week 26, but weeks 1–25 (already happened) retroactively recalculate gross pay as if you earned $22/hr there too — if you actually earned $20/hr, the damage is done.
+
+**The Fix (baseRate only):**
+- [x] **`resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate)`** (`lib/finance.js:579–582`) — looks up the right rate for each week's end date. Mirrors `getEffectiveAmount` algorithm: latest history entry with `effectiveFrom ≤ weekEnd`, else fall back to current rate. Past April weeks keep the old rate until June change date; June forward uses the new rate.
+- [x] **`buildYear(cfg, baseRateHistory = null)`** — new optional parameter. Call sites that omit it (SetupWizard, DemoAccountTree, math audit) behave byte-identical to before; only `App.jsx`'s live call passes `baseRateHistory`.
+- [x] **`loadUserData()` fetch** — queries `account_history` filtered to `baseRate` changes, maps to `{ effectiveFrom, baseRate }` via `extractBaseRateHistory()` (same missing-table tolerance as `weekConfirmations`).
+- [x] **`App.jsx` state threading** — `baseRateHistory` state threaded through `applyLoadedData`/`handleForcePull`, passed into live `buildYear()` call. Optimistic local append when `saveConfigSnapshot` fires, closing the gap where future-dated effective dates would misapply the new rate too early before the DB row round-trips into memory.
+- [x] **Tests** — 13 new: `resolveBaseRateForWeek` point-in-time cases + `buildYear` past-week handling + `extractBaseRateHistory` fallback/null cases. 1063 tests passing; lint clean; prod build green.
+
+**Why only baseRate:** This was implemented as a narrow slice to fix Quick Rate Update's live QA finding. The pattern works. Treating this as proof-of-concept, not "read path done" — every other historically-sensitive field is still unbuilt.
+
+#### F3. Read Path — Remaining 70 Fields (NOT STARTED)
+
+*Generalize the baseRate pattern to all historically-sensitive config fields. This is the actual work to complete the feature.*
+
+**The 70 fields that still retroactively rewrite past weeks:**
+
+| Category | Fields | Count | Core Problem |
+|----------|--------|-------|--------------|
+| **Pay structure** | `annualSalary`, `shiftHours`, `diffRate`, `nightDiffRate`, `nightDiffEnabled`, `otThreshold`, `otMultiplier`, `commissionMonthly` | 8 | OT thresholds, differential rates apply to all 52 weeks; June change retroactively recalculates April earnings |
+| **Schedule** | `maxWeeklyHours`, `customWeeklyHours`, `customWeeklyHoursLong/Short`, `scheduleIsVariable`, `userPaySchedule`, `payPeriodEndDay`, `biweeklyPayWeekParity`, `startDate`/`firstActiveIdx` | 8 | Schedule changes alter rotation, hours/week, pay-period boundaries for all past weeks |
+| **Employer identity** | `employerPreset` (DHL↔base), `dhlNightShift`, `dhlCustomSchedule`, `startingWeekIsLong` + `dhl*` fields | 8+ | DHL↔base flip swaps entire `buildYear` branch for all 52 weeks — **single highest-blast-radius field** |
+| **Tax** | `fedRateLow/High`, `stateRateLow/High`, `taxRatesEstimated`, `ficaRate`, `fedStdDeduction`, `filingStatus`, `userState`, `targetOwedAtFiling`, `taxedWeeks`, `taxExemptOptIn` | 10 | Tax rates apply to all weeks; mid-year change retroactively rewrites annual tax liability |
+| **Deductions / benefits** | `selectedBenefits` + 9 per-check premiums (`healthPremium`, `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`, `lifePremium`, `hsaWeekly`, `fsaWeekly`) + `otherDeductions`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate` | 16 | Benefit changes retroactively recalculate 401k/insurance deductions for all weeks |
+| **Attendance / PTO / bucket** | `attendanceBucketEnabled`, `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`, `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate` | 11 | Accrual policy changes retroactively recalculate balances |
+| **Buffer / risk** | `bufferEnabled`, `paycheckBuffer` | 2 | Buffer changes affect all weeks' surplus calculations |
+| **Job loss** | `jobLossMode`, `jobLossDate`, `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`, `targetIncomeAnnual`, `startedUnemployed` | 7 | Already point-in-time-aware for earned-income zeroing (inJobLoss boolean); deductions/benefits within loss window not yet |
+
+**Implementation Pattern (generalize from baseRate):**
+
+For each field or field group (some are tightly coupled):
+1. Write a `resolve<FieldName>ForWeek(history, weekEnd, liveValue)` function in `lib/finance.js`, following `resolveBaseRateForWeek` exactly
+2. Thread the history array through `loadUserData()` via `account_history` query + extraction helper
+3. Update `buildYear()` and `computeNet()` call sites to pass the resolved values instead of `cfg.<field>`
+4. Add tests: past-week unchanged, change-date boundary, null/missing history fallback
+5. Do NOT try to land multiple fields in one PR — one or two per pass, test thoroughly, watch for side effects
+
+**Why it's not trivial:**
+- Some fields couple tightly (e.g., `employerPreset` changes the entire `buildYear` branch — test fixtures need a multi-job synthetic case)
+- Tax-rate resolution also affects `computeNet()`, which is called downstream by every week and every log entry
+- Benefits/deductions couple to 401k/FICA math — changes propagate through multiple functions
+- Some fields don't exist yet (§4 split tax: `taxedWeeksFed`/`taxedWeeksState` will replace `taxedWeeks`; that's a design gate before the resolver can be written)
+
+**Open design questions:**
+- **Employer preset (highest risk):** Should changing from DHL→base recalculate past weeks' rotation? User's DHL May, switch to base June — do May's rotation stay 6-day/4-day or recompute as flat 40hr? Answer depends on what "switching employer preset" semantically means (data correction vs. new rules going forward).
+- **Tax-exempt windows:** `taxedWeeks` is already a per-week array. Once split into `taxedWeeksFed`/`taxedWeeksState`, do the resolvers read the live array or account_history? (Likely hybrid: account_history for *when* the change happened, but `taxedWeeks` array for *which* weeks to actually exempt, since that's a per-week manual override that lives outside config.)
+- **Benefits mid-year cliffs:** If 401k match rate changes June 1, should May's 4 weeks keep the old rate? Or does "match rate" apply only going forward? (Likely the latter — match rates are annual/per-pay-period, not retrospective.)
+
+- [ ] **Implementation roadmap (suggested order):**
+  1. Schedule fields (`maxWeeklyHours`, `customWeeklyHours`, `userPaySchedule`) — couples to `totalHours` calculation; high-impact but contained
+  2. Deduction fields (`k401Rate`, `k401MatchRate`, benefits premiums) — already modular; each has its own resolver candidate
+  3. Tax fields (`fedRateLow/High`, `stateRateLow/High`, `ficaRate`) — feeds `computeNet()`; high stakes, test carefully
+  4. Employer preset (`employerPreset`, DHL fields) — highest blast radius; save for when you understand the others first
+  5. Attendance/PTO fields — lower priority; couple to accrual balance tracking that's still evolving
+
+#### F4. Related Bug Fixes (Deferred, Separate Follow-up)
+
+- [ ] **Loan history** — `buildLoanHistory(loan)` regenerates entire weekly-payment history from `loanMeta` on every load. Mid-year loan-term edit (payment amount, rate, payoff date) retroactively rewrites the whole trace, same bug as pay-structure edits. **Cheap fix:** give loans their own `history[]` field (expense-style), parallel to expense `history[]`. Defer this pending whether to fold loans into expense-history migration or keep them separate.
+- [ ] **Goal versioning** — goals carry no `history` field today. Goal timeline is forward-looking (mostly benign), but "what was my goal target on date X" has no answer. Lower priority than config fields; decide alongside §2 (Coach AI context — goal revisions are a personalization signal).
+
+- [ ] **Verify live once deployed** — with multiple fields wired, make edits on a deployed preview: change schedule in June, confirm May weeks stay old schedule. Change 401k rate mid-month, confirm old weeks' contributions unchanged. Watch for tax-total drift.
 
 ---
 
-## 15. Life Events Feature
+## 1. Life Events Feature
 
 *Life events are moments that fundamentally change a user's financial picture. The app should
 meet users there — not just re-run the setup wizard, but offer purpose-built flows that understand
 the emotional and practical weight of what just happened.*
 
-**Resynced 2026-07-17 — §A/§B/§C were stale.** This whole section sat unchecked while the actual
-feature shipped; verified against source and against `docs/active-systems.md` §10 (which already
-correctly flags itself as "more built than TODO.md §15's checkbox state suggests"). Real gaps are
-§D, the back half of §H, and §I — see those sections below. §A/§B/§C are collapsed to a status
-note rather than re-listed here to avoid two competing specs for the same shipped code.
+**✅ FOUNDATION + JOBLESS MODE COMPLETE** — §A/§B/§C (Entry Point, Structure Wizard, Job Loss Mode) LIVE; 
+§D (Quick Rate Update) DONE 2026-07-17; §H1–H13 (Jobless Onboarding Path) DONE through 2026-07-19 with H12 scoped but not started. 
+**OPEN:** §I (Admin Toolkit updates for Job Loss UI), §H12 (mid-year gaps in annual pace), §F/§G (future Phase 3+/4).
 
 ---
 
@@ -1787,10 +1119,10 @@ note rather than re-listed here to avoid two competing specs for the same shippe
   would've been dead UI; cut rather than half-built.
 - [x] **Effective-date handling** — **not** `firstActiveIdx` (that's the account-wide "when did
   this account start" scalar, unrelated to a single field edit). Instead uses the account_history
-  mechanism §19 already shipped: the modal's date travels as `effectiveFrom` into
+  mechanism §3 already shipped: the modal's date travels as `effectiveFrom` into
   `configHistoryMetaRef` exactly like `JobLossEntry`'s `jobLossDate` does, tagging the automatic
   config-history snapshot with `source: "life_event:rate_update"`. `baseRate` was already on the
-  §19 historically-sensitive whitelist, so no new plumbing was needed there.
+  §3 historically-sensitive whitelist, so no new plumbing was needed there.
 - [x] **Confirmation diff** — shows old rate → new rate + an estimated weekly net delta, computed
   via a new shared `estimateWeeklyNet()` (`src/lib/finance.js`) extracted from `SetupWizard.jsx`'s
   `StepWrapUp` live-preview formula (was duplicated logic in the wizard alone; now both callers
@@ -1808,7 +1140,7 @@ note rather than re-listed here to avoid two competing specs for the same shippe
   but tag the audit-trail snapshot — `buildYear()` applied the new `baseRate` uniformly to every
   week including already-elapsed ones the moment Confirm was hit, silently rewriting past months'
   reported income and every annual total (Tax Plan, goal timeline) that sums across the whole
-  year. Fixed as a deliberately narrow slice of §19's deferred Master Timeline read-path — **just
+  year. Fixed as a deliberately narrow slice of §3's deferred Master Timeline read-path — **just
   `baseRate`**, not a general point-in-time config resolver:
   - `resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate)` (`lib/finance.js`) — mirrors
     `getEffectiveAmount`'s exact algorithm (latest entry with `effectiveFrom <= weekEnd`, else
@@ -1824,7 +1156,7 @@ note rather than re-listed here to avoid two competing specs for the same shippe
     without it, a **future-dated** effective date would misapply the new rate too early to weeks
     between today and that date, since the just-inserted DB row hasn't round-tripped into memory yet.
   - **Deliberately out of scope**: every other historically-sensitive field (schedule, tax rates,
-    benefits, ...) still applies uniformly to every week as before — this is not §19's read path
+    benefits, ...) still applies uniformly to every week as before — this is not §3's read path
     being "done," just the one field this feature surfaced. `calcEventImpact`'s own `cfg.baseRate`
     reads (Log panel per-event math) and the bucket-payout-rate fallback are untouched — those
     price a specific already-logged event against *current* config by design, not an annual grid.
@@ -1836,7 +1168,7 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 
 ### E. Future — AI Job Hunt Assistant *(Phase 3)*
 
-*Consolidated into §18.E. Requires Job Loss Mode (§15.C) to be live first.*
+*Consolidated into §2.E. Requires Job Loss Mode (§1.C) to be live first.*
 
 ---
 
@@ -1848,11 +1180,11 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 - [ ] **One-click application tracking** — "Save to tracker" button on any listing → auto-creates
   an entry in the Re-employment Tracker (C6) with company, role, and date pre-filled
 - [ ] **Application assistant** — for saved listings, "Draft application" launches Coach
-  pre-loaded with the specific job description for cover letter / prep mode → **§18.F**
+  pre-loaded with the specific job description for cover letter / prep mode → **§2.F**
 - [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
   (user-entered) used to pre-fill application fields and feed the AI assistant context. Scoped as
   plain user-entered text for auto-fill, not a file upload or an AI-analyzed résumé — that's a
-  separate feature, now scoped at **§18.E1** (résumé upload / skill-gap analysis).
+  separate feature, now scoped at **§2.E1** (résumé upload / skill-gap analysis).
 
 ---
 
@@ -1908,7 +1240,7 @@ required field.*
   left to set them. Optional prior hourly rate, assumed a 40hr week, computed straight into
   `targetIncomeAnnual` (the exact field `ReemploymentTracker` already reads with priority) —
   **dropped "prior employer name"** from the original spec: there's no schema field or any
-  consumer for free-text employer identity anywhere in the app (confirmed against §19's own
+  consumer for free-text employer identity anywhere in the app (confirmed against §3's own
   parked "future fields" list), so it would've been a UI input with nowhere to go. Same
   no-dead-inputs call as Quick Rate Update's dropped "note" field.
 - [x] **Screen 3 — `StepJoblessWrapUp`** (0e): plain confirm/finish summary (job loss date,
@@ -1961,7 +1293,7 @@ validation gates, full payload contents, and the diff empty-state; 3 in `jobLoss
 for the new dashboard prompt). 1084 tests total passing; lint diff-clean vs. baseline; production
 build green. **Not covered by tests:** `App.jsx`'s `handleWizardComplete` conditionals
 (Food-seed skip, `startedUnemployed` clear) — same "no component test harness" gap already noted
-for the SIGNED_IN short-circuit in §15.I's parked live-verification bullet; needs a real
+for the SIGNED_IN short-circuit in §1.I's parked live-verification bullet; needs a real
 click-through (start signup → answer Yes → finish → confirm empty expenses + Job Loss Dashboard
 → Back to Work → confirm diff empty-state + `startedUnemployed` cleared) on a deployed preview.
 
@@ -2161,7 +1493,7 @@ got a "Needs Coverage" flag, and displayed no amount in the JobLossBudgetPanel c
 
 *Caught during a discussion of the Persistence — Eager Save Pattern (CLAUDE.md, documented on
 Version-control the same day). Every mutation in `JobLossHomePanel`/`JobLossBudgetPanel`/
-`ReemploymentTracker`/`JobLossEntry` built across §15.H7–H9 called raw `setConfig`/`setExpenses`
+`ReemploymentTracker`/`JobLossEntry` built across §1.H7–H9 called raw `setConfig`/`setExpenses`
 with no eager-save callback — none of it would survive a backgrounded/reclaimed tab before the
 800ms debounce fired, the exact production data-loss bug the pattern exists to prevent. `App.jsx`
 already threads `saveConfigNow`/`onSaveExpensesNow`/`savePersistedStateNow` to every normal-mode
@@ -2173,7 +1505,7 @@ panel; the Job Loss rebuild in H7 never picked them up.*
   `savePersistedStateNow({ config: nextConfig, expenses: updatedExpenses })` (single atomic write
   covering both fields) right alongside the existing `setConfig`/`setExpenses` calls.
 - [x] **`JobLossHomePanel`** — new `saveConfigNow`/`readOnly` props, `noop`-shadowed when
-  read-only (same pattern as `HomePanel`/`BudgetPanel`, §17.E). `logIncome`/`removeEntry` compute
+  read-only (same pattern as `HomePanel`/`BudgetPanel` from archived Stripe Monetization). `logIncome`/`removeEntry` compute
   the next config synchronously and eager-save it.
 - [x] **`ReemploymentTracker`** (embedded in `JobLossHomePanel`, predates this session's rebuild)
   — new `applyConfigUpdate(updater)` wrapper, same shape as `BudgetPanel.jsx`'s
@@ -2234,7 +1566,7 @@ nearly every real account.*
   mathematically correct answer — the old formula gave a materially different, wrong number, not a
   rounding difference). Separately, `aiContext.js`'s own `annualSavings`/`netWorthHealth` used a
   **hardcoded** `* 52` (not `activeWeeksThisYear` at all) — a straight-up drift from the Home tile
-  it's labeled as matching, the exact anti-pattern `docs/active-systems.md` §24's grounding
+  it's labeled as matching, the exact anti-pattern `docs/active-systems.md` §6's grounding
   discipline exists to prevent. Fixed by scaling `weeklyIncome` by the real active-week count
   instead of a flat 52 in `App.jsx` and `DemoAccountTree.jsx` (byte-identical output for any
   `firstActiveIdx: 0` account — i.e. every existing test fixture — since 52 active weeks ÷ 52 is
@@ -2258,7 +1590,7 @@ nearly every real account.*
   (`HomePanel.jsx` ~line 38) spelling out why re-adding that fallback would reintroduce the bug.
   Re-verified: 1128 tests passing, lint diff-clean, build green.
 - **Not fixed here — real scope, deliberately deferred, not urgent (flagged 2026-07-19):** see
-  §15.H12 below for the full write-up. Short version: none of H11's fix accounts for mid-year gaps
+  §1.H12 below for the full write-up. Short version: none of H11's fix accounts for mid-year gaps
   *within* an otherwise-active year (Job Loss Mode weeks sitting inside the active range) — only
   for an account that started the year late.
 - **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
@@ -2379,7 +1711,7 @@ attempted here.*
   write entirely when the blurred value matches what's already persisted (no-op saves avoided).
   `JobLossBudgetPanel` didn't receive `setConfig`/`saveConfigNow` props before this pass (it only
   ever touched expenses) — threaded in from `App.jsx` for the first time, with the same `readOnly`
-  no-op shadow `JobLossHomePanel` already had from §15.H10, plus `disabled={readOnly}` on the input
+  no-op shadow `JobLossHomePanel` already had from §1.H10, plus `disabled={readOnly}` on the input
   itself so a paywall-expired account can't edit even though the write path is already a no-op
   (defense in depth, matching the existing convention documented in CLAUDE.md's eager-save section).
 - [x] **`App.jsx` simplified** — the lifted `jobLossSavingsDraft`/`setJobLossSavingsDraft` session
@@ -2450,10 +1782,10 @@ how directly each one touches "is the runway number on screen actually correct."
   the "Weekly Burn" tile or the runway-days countdown. Their real runway is shorter than the number
   on screen, silently. **Sketch of a minimal fix:** a one-line "+ $X/wk Lifestyle spend (not counted
   in runway above)" caption under the Weekly Burn tile — no calc change, pure transparency.
-- [ ] **`coachTriggers.js`'s `estimateRunwayDays` drift, now worse than when §18.E flagged it.**
+- [ ] **`coachTriggers.js`'s `estimateRunwayDays` drift, now worse than when §2.E flagged it.**
   Already documented as a known second runway calc that doesn't respect `trackDuringJobLoss`
-  (§18.E, "Known drift to fix"). Confirmed during this pass: it's *also* completely blind to
-  `jobLossCashOnHand` (§15.H13) — its own doc comment says it "assumes $0 extra savings, the
+  (§2.E, "Known drift to fix"). Confirmed during this pass: it's *also* completely blind to
+  `jobLossCashOnHand` (§1.H13) — its own doc comment says it "assumes $0 extra savings, the
   conservative floor," which predates cash-on-hand existing as a real field at all. For a user with
   real cash on hand (this scenario: $400), Coach's background Red-tier "you're running low" trigger
   computes a bleaker runway than what the user's own Home/Budget screens show them. Two drift
@@ -2469,10 +1801,10 @@ how directly each one touches "is the runway number on screen actually correct."
   `is_admin`/`is_tester`-gated** (`canAccessAiFeatures`, `entitlements.js`). A real user living this
   exact scenario likely cannot reach any of "getting the best help" today regardless of what gets
   built — worth keeping in view as a business/rollout question, not just an engineering one, before
-  investing further in §18.E/§18.I.
-- [x] **Résumé upload / skill tips / skill-gap analysis — scoped 2026-07-22, see §18.E1.** Was
+  investing further in §2.E/§2.I.
+- [x] **Résumé upload / skill tips / skill-gap analysis — scoped 2026-07-22, see §2.E1.** Was
   genuinely absent as an idea (only trace was one unbuilt chat prompt and a passing "resume text"
-  auto-fill mention in §15.F). Now has a full spec: plain-text v1 (no file upload/parsing — a
+  auto-fill mention in §1.F). Now has a full spec: plain-text v1 (no file upload/parsing — a
   Supabase Storage bucket is new infra this codebase doesn't have anywhere yet, and text-in/
   text-out is a wash for the LLM either way), a new standalone `resume_profile` table (not a
   `config` field — modeled on `coach_chats`'s own-row-RLS pattern) that reads `ReemploymentTracker`'s
@@ -2492,6 +1824,12 @@ how directly each one touches "is the runway number on screen actually correct."
   `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
   proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
   question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
+- **AI-gating question resolved, 2026-07-25 (user directive) — see §18.E header for the full
+  note.** Stays `canAccessAiFeatures` (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then
+  moves to a paid-tier gate (mirrors Coach's own `canAccessAskCoachGeneral` gate-flip,
+  2026-07-24). The Job Hunt Assistant build itself is being tracked in a separate session —
+  checkbox above left unticked as the historical record of what was open at the time of this
+  birdseye pass, not because the question is still live.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 
@@ -2528,7 +1866,7 @@ formula as both an amount and an arrival date — plus a small UI line counting 
   live preview line once an arrival day is picked. Resolved once at Activate time into concrete
   `jobLossPendingCheckAmount`/`jobLossPendingCheckDate` values — raw day picks aren't stored,
   same pattern as `DueDatePicker`'s `resolveDueDateAnchor`. Reused the native-disabled-button-
-  blocks-onClick fix from §15.H13 (`nextNativeDisabled` split from `nextDisabled`) so the new
+  blocks-onClick fix from §1.H13 (`nextNativeDisabled` split from `nextDisabled`) so the new
   step's required-field error can still fire on a "visually disabled but genuinely clickable"
   Next/Activate button. **Deliberately scoped to a single 7-day picker regardless of pay
   schedule** — for biweekly/salary users this covers only the final week worked, not the full
@@ -2541,7 +1879,7 @@ formula as both an amount and an arrival date — plus a small UI line counting 
   same `computeJobLossRunway` output the headline runway numbers already use — no parallel calc.
 - [x] Tests — `src/test/components/jobLossFlow.test.jsx`: 6 existing `JobLossEntry` tests fixed
   for the new step (button-label/navigation changes from inserting Step 1); 6 new tests added
-  under `describe('Pending/final paycheck (§15.H15)')` covering skippability, blocked-Next
+  under `describe('Pending/final paycheck (§1.H15)')` covering skippability, blocked-Next
   validation, 0-worked-days validity, exact amount/date computation (cross-checked directly
   against the three new lib functions), live preview rendering, and toggle-off behavior. Full
   suite: 1144 tests, 1 pre-existing unrelated flake in `LoginScreen.test.jsx` confirmed via
@@ -2554,7 +1892,7 @@ formula as both an amount and an arrival date — plus a small UI line counting 
 
 #### H16. Lifestyle spend caption — the second H14 gap, built, 2026-07-22 — DONE
 
-*Closes the second bullet from §15.H14's birdseye review: `weeklyBurn` deliberately excludes
+*Closes the second bullet from §1.H14's birdseye review: `weeklyBurn` deliberately excludes
 Lifestyle-category expenses (survival-spend focus), but nothing told a user who keeps those bills
 tracked that their real burn is higher than the headline number — a "stubborn" user's runway was
 silently shorter than what Home displayed. Pure transparency fix, no calc change to the existing
@@ -2571,7 +1909,7 @@ runway math itself.*
   list via the pre-existing `isFlexibleCategory` helper), so no change was needed there — the gap
   H14 flagged was specifically about the headline number on Home.
 - [x] Tests — `src/test/components/jobLossFlow.test.jsx`, new `describe('Lifestyle spend caption
-  (§15.H16)')` under `JobLossHomePanel`: caption appears for a tracked active Lifestyle expense
+  (§1.H16)')` under `JobLossHomePanel`: caption appears for a tracked active Lifestyle expense
   with the correct weekly amount, does not appear with no Lifestyle expenses, does not appear when
   the Lifestyle expense is untracked (`trackDuringJobLoss: false`). Full suite: 1147 tests, all
   green (including the H15 write-up's flagged `LoginScreen.test.jsx` flake — passed clean this
@@ -2617,7 +1955,7 @@ that decay into the runway instead of the number silently going stale between ma
   amounts (`getExpenseDisplayAmount`), floored at 0 against `jobLossCashOnHand` to produce
   `effectiveCashOnHand` — the figure both cards display and the number that now feeds the
   runway/cliff math (`withBenefits`/`withoutBenefits.cash`). Falls back to `jobLossDate` as the
-  decay anchor for pre-§15.H17 accounts that never got a real `jobLossCashOnHandAsOf` stamp.
+  decay anchor for pre-§1.H17 accounts that never got a real `jobLossCashOnHandAsOf` stamp.
   `computeJobLossRunway`'s `savings` param renamed to `extraCash` (now just gig income —
   `sumJobHuntIncome()` — since raw cash is read from `config` internally instead of pre-summed by
   the caller) — forced every call site to be touched deliberately rather than silently
@@ -2627,7 +1965,7 @@ that decay into the runway instead of the number silently going stale between ma
 - [x] **External consumers updated for the `extraCash` rename** (drift-app-warden Spine A / D1
   check — `computeJobLossRunway` is a mapped LEDGER item, cross-checked against every call site,
   not just the two panels): `components/CoachNetWorthCard.jsx`'s Red-tier runway trigger and
-  `App.jsx`'s Ask Coach `coachRunwayDays` memo (both closed drift-app-warden §21 quarantines from
+  `App.jsx`'s Ask Coach `coachRunwayDays` memo (both closed drift-app-warden §8 quarantines from
   earlier work) each used to pre-sum `jobLossCashOnHand + sumJobHuntIncome()` into a local
   `savings` var — both now pass `extraCash: sumJobHuntIncome(config)` only, and both automatically
   gained decay-awareness for free since `computeJobLossRunway` now reads cash internally.
@@ -2653,30 +1991,37 @@ that decay into the runway instead of the number silently going stale between ma
   build green.
 - **Scope note:** `sumBillsDueSince` only decays against essential (Needs + loan) bills, matching
   the same category gate `weeklyBurn` already uses — Lifestyle spend still isn't part of any cash
-  figure, consistent with §15.H16's deliberate exclusion, not an oversight.
+  figure, consistent with §1.H16's deliberate exclusion, not an oversight.
 
 ---
 
-### I. Admin Toolkit updates for §15 work
+### I. Admin Toolkit updates for §1 work — BUILT 2026-07-25
 
-- [ ] **Live State Inspector — Job Loss Mode pill**
-  - [ ] Amber pill when `config.jobLossMode === true`
-  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
-- [ ] **Week Inspector — unemployment income row**
-  - [ ] When `w.unemploymentIncome > 0`, show "Unemployment" line in Pay section
-  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface "Job Loss Mode — outside benefit window"
-- [ ] **DB Row Viewer — expense triage summary**
-  - [ ] One-liner: "Triage: X active · Y paused · Z cancelled"
-  - [ ] Flag any expense where `autoReactivateOnIncome === false`
-- [ ] **Config Raw View — Life Events header**
-  - [ ] Short header above JSON listing only §15-relevant fields with values
-- [ ] **CLAUDE.md update**
-  - [ ] Append Job Loss state to "Diagnostic request templates"
-  - [ ] Document per-week `unemploymentIncome` annotation on `buildYear` output
+- [x] **Live State Inspector — Job Loss Mode pill**
+  - [x] Amber dot on the pill (top-right corner) when `config.jobLossMode === true`, visible without opening the card
+  - [x] Three amber-highlighted rows in the expanded card: `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` via a shared `jobLossDash` memo — same call Coach's `coachRunwayDays` uses, no second derivation, per F24)
+- [x] **Week Inspector — unemployment income row**
+  - [x] `w.unemploymentIncome > 0` → green "Unemployment" row in the Pay section
+  - [x] Job Loss window with no benefit paid that week → "Unemployment — Job Loss Mode — outside benefit window" (window boundary mirrors buildYear's `inJobLoss` check — `jobLossDate`/`returnToWorkDate` — diagnostic-only, never feeds math, same pattern as `resolveBaseRateForWeek`)
+- [x] **DB Row Viewer — expense triage summary**
+  - [x] "Triage: X active · Y paused · Z cancelled" line (only shown when something's actually paused/cancelled/flagged)
+  - [x] Flags expense count where `autoReactivateOnIncome === false`
+- [x] **Config Raw View — Life Events header**
+  - [x] "Life Events" header above the JSON dump, listing only §1 fields that currently carry a value
+- [x] **CLAUDE.md update**
+  - [x] Appended Job Loss state (§7 in Diagnostic request templates)
+  - [x] Documented per-week `unemploymentIncome` annotation on `buildYear` output (Week Inspector + template §7 entries)
+- All four admin surfaces are duplicated three times in `App.jsx` (desktop sidebar, mobile
+  hamburger drawer, mobile bottom sheet) — pre-existing architecture, not introduced by this
+  pass. Computed once via shared memos (`jobLossDash`, `expenseTriageLine`,
+  `lifeEventsConfigFields`) and rendered into all three so the triplication stays presentation-
+  only, not a fourth parallel calculation. 1231 tests passing (no new tests — pure admin-only
+  diagnostic surface, isAdmin-gated, no math path exercised); lint diff-clean vs. baseline;
+  production build green.
 
 ---
 
-### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
+### J. Visual Testing Checklist — foundation phase (§1.A–C5 + H seed)
 
 *Manual smoke pass, originally scoped to run before merging the foundation phase branch — that
 branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (30 tests across LifeEventMenu,
@@ -2691,18 +2036,18 @@ optional manual pass, not a blocking item — no reason to re-run this by hand u
   Quick Rate Update (Coming Soon, disabled)
 - [ ] Backdrop click and Escape close the modal
 
-#### Setup wizard seed (§15.H)
+#### Setup wizard seed (§1.H)
 - [ ] Step 0 shows "Are you currently unemployed?" Y/N pills; Next disabled until answered
 - [ ] Re-entry flows skip the Y/N question entirely
 
-#### Pay Structure Changed wizard (§15.B)
+#### Pay Structure Changed wizard (§1.B)
 - [ ] Wizard opens in `structure_change` mode; Step 0 shows brief overview
 - [ ] All wizard fields pre-fill from existing config
 - [ ] DHL ↔ Base toggle surfaces accent callout explaining preset defaults
 - [ ] Wrap Up shows "What's Changing" diff card; final button reads "Confirm Changes"
 - [ ] Goals, expenses, and logs unchanged after completion
 
-#### Job Loss entry (§15.C1 + C2)
+#### Job Loss entry (§1.C1 + C2)
 - [ ] Lost My Job tile opens the JobLossEntry modal (not the wizard)
 - [ ] Y/N "Are you getting unemployment benefits?" required to enable Activate
 - [ ] Choosing Yes reveals weekly amount, duration weeks, waiting-week toggle
@@ -2714,13 +2059,13 @@ optional manual pass, not a blocking item — no reason to re-run this by hand u
 - [ ] When duration is set, appends "Unemployment runs out on [date]"
 - [ ] Triage Expenses and Back to Work buttons functional; Dismiss hides + reload restores
 
-#### Job Loss Dashboard runway tile (§15.C4)
+#### Job Loss Dashboard runway tile (§1.C4)
 - [ ] Three headline numbers: Runway days, Runway ends date, Weekly burn
 - [ ] Color: red ≤ 30 days, amber ≤ 90, green otherwise
 - [ ] "Current savings" input updates runway live (not persisted on reload)
 - [ ] Scenario toggle visible only when benefits configured
 
-#### Expense Triage sheet (§15.C3 + C5)
+#### Expense Triage sheet (§1.C3 + C5)
 - [ ] Essential rows above Flexible; three-state toggle per row
 - [ ] Pausing drops weekly burn and BudgetPanel weekly spend immediately
 - [ ] "Pause all Flexible (N)" visible only when ≥1 active Lifestyle row
@@ -2733,12 +2078,12 @@ optional manual pass, not a blocking item — no reason to re-run this by hand u
 
 ---
 
-## 20. Tax Accuracy — Split Withholding, Paystub Capture & Pre-Account History Gap
+## 4. Tax Accuracy — Split Withholding, Paystub Capture & Pre-Account History Gap
 
 *Seeded 2026-07-02 from two brain-dump excerpts (verbatim below). Consolidates the
 `taxExemptOptIn` item that previously sat alone under **Deferred** with two new, closely related
 problems — all three share the same accountant-sign-off gate, so they're tracked together instead
-of scattered. Crossover with **§18.J** for the AI-guided capture/interview half of this work.*
+of scattered. Crossover with **§2.J** for the AI-guided capture/interview half of this work.*
 
 **Original brain-dump excerpts (verbatim, for provenance):**
 
@@ -2775,7 +2120,7 @@ of scattered. Crossover with **§18.J** for the AI-guided capture/interview half
   withheld from a real paystub (`sg1/sf1/ss1`, plus a second pair `sg2/sf2/ss2` when
   `scheduleIsVariable`), and it derives `fedRateLow/High` + `stateRateLow/High` as percentages
   (`sharpenDr(gross, withheld) = withheld / gross`). This is the exact "pre-work" the first
-  excerpt references — the screenshot/AI uploader (§18.J) should feed this same pipeline (gross +
+  excerpt references — the screenshot/AI uploader (§2.J) should feed this same pipeline (gross +
   fed$ + state$ → rate) rather than inventing a parallel one.
 - [ ] **Fed/state gap math is already split internally, just not surfaced separately** —
   `taxDerived` in `App.jsx` (~line 741) computes `fedGap` (`fG`) and the state gap (`mG`) as two
@@ -2835,7 +2180,7 @@ of scattered. Crossover with **§18.J** for the AI-guided capture/interview half
   that period for a more accurate number, or treat this as directional until your next full year."*
   Exact copy TBD, but the gate must exist before this feature ships — this is the core "must be
   figured out before general release" requirement from the excerpt.
-- [ ] **Overlaps with the paystub uploader (§18.J)** — a scanned paystub from *before* signup is
+- [ ] **Overlaps with the paystub uploader (§2.J)** — a scanned paystub from *before* signup is
   one legitimate way to backfill real numbers into this gap without a manual week-by-week crawl —
   if the user kept an old paystub from the pre-account period, letting them upload it to correct
   that one week's actual gross/withholding closes part of the gap. Not a full fix (most users won't
@@ -2852,12 +2197,12 @@ of scattered. Crossover with **§18.J** for the AI-guided capture/interview half
   covers.
 - [ ] **`taxExemptOptIn` wire-up** — stays gated on the above; do not wire it into `App.jsx` /
   `IncomePanel` until the accountant pass is done.
-- [ ] **§18.J's guided interview copy** — the AI-guided tax setup conversation (§18.J) ships under
+- [ ] **§2.J's guided interview copy** — the AI-guided tax setup conversation (§2.J) ships under
   this same gate — its question set and any tax-status copy it generates needs the same review.
 
 ---
 
-## 21. Fable Five Creative Brainstorming — Tasks & Features
+## 8. Fable Five Creative Brainstorming — Tasks & Features
 
 *Seeded 2026-07-04 by Claude as an open idea pool: features, AI/automation intelligence, and
 best practices that apps in this category should be building toward. Nothing here is committed
@@ -2897,7 +2242,7 @@ with it — projections learn from confirmed actuals instead of trusting the sch
 ### B. Automation Intelligence — the app does the housekeeping
 
 *Section thesis: the user should never do bookkeeping the app could have drafted for them —
-automation proposes, the human approves with one tap (see §21.E human-confirm boundary).*
+automation proposes, the human approves with one tap (see §8.E human-confirm boundary).*
 
 - [ ] **Smart check-in prefill** — the weekly confirm modal pre-answers itself from the user's
   dominant pattern (e.g. "you've confirmed this exact schedule 9 of the last 10 weeks");
@@ -2921,7 +2266,7 @@ automation proposes, the human approves with one tap (see §21.E human-confirm b
   Example events: an all-day "Payday — projected $947" each pay Friday, and a "Confirm week 26"
   reminder the morning the weekly check-in opens.
 
-### C. Coach Expansions — beyond chat (builds on §18)
+### C. Coach Expansions — beyond chat (builds on §2)
 
 *Section thesis: Coach stops being a chat window you visit and becomes a presence with good
 timing — it shows up with the right sentence at the right moment, then gets out of the way.*
@@ -2975,21 +2320,21 @@ or crew at a time — never from engagement mechanics.*
 *Grounded in where the category is heading in 2026: forecasting over reporting, contextual
 insight over raw categorization, and consolidation into fewer, smarter surfaces.*
 
-- [ ] **Human-confirm boundary for all AI writes** — codify the §18.J paystub rule as a global
+- [ ] **Human-confirm boundary for all AI writes** — codify the §2.J paystub rule as a global
   invariant: AI may *propose* config/log/expense changes, only the user commits them. Write it
   into CLAUDE.md as a standard once the first AI-write feature ships. Vision: every AI proposal
   renders as the same diff-style confirm card (current value → proposed value, one Apply button)
   so the trust boundary looks identical everywhere it appears.
 - [ ] **Confidence labeling** — every AI-generated number carries a visible basis:
   "projected" vs. "confirmed" vs. "estimated from pattern." Never let a guess cosplay as a fact
-  (this is the same disclosure discipline as §20.C, generalized).
+  (this is the same disclosure discipline as §4.C, generalized).
 - [ ] **Coach eval suite** — a fixture set of (user snapshot → expected answer quality) cases
   run against prompt changes, so Coach regressions are caught like code regressions. Start with
   10 tealen conversations; grow it from real flagged answers. Example tealen case: given a
   snapshot with a $3,690 tax gap, Coach's answer must mention the gap, name the per-check extra,
   and propose exactly one action — an answer missing any of the three fails the eval.
-- [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log
-  call-type + token counts, per §18.G) so a runaway prompt is a graph, not a surprise invoice.
+- [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §2 (log
+  call-type + token counts, per §2.G) so a runaway prompt is a graph, not a surprise invoice.
   Implementation option worth considering instead of (or alongside) a custom dashboard: split
   `ANTHROPIC_API_KEY` into one key per feature area (net worth trigger, Ask Coach, Job Scout, …)
   — Anthropic's Console breaks down usage by API key natively, so this gets per-feature cost
@@ -3037,7 +2382,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
   a dollar amount appears in the app, long-press flips it into hours-of-your-actual-shift at
   your real marginal after-tax rate ("this bill = 6.2 hours on the floor"). Later: an optional
   browser extension that overlays the same translation on shopping sites. *Tether: the
-  marginal-rate math ships with §21.A's OT ROI calculator; the extension is a WebExtension
+  marginal-rate math ships with §8.A's OT ROI calculator; the extension is a WebExtension
   reading DOM prices.*
 - [ ] **The Fog Index** — a single 0–100 ambient-financial-anxiety score, tracked like net
   worth. Inputs: 2-tap micro check-ins ("how heavy does money feel today?"), plus behavioral
@@ -3063,7 +2408,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
   patterns stabilize (confirmations consistent, fog index falling, goals on-trend), Coach's
   cadence deliberately decays from weekly briefings to monthly to quarterly — and it *says
   so*: "You don't need me weekly anymore. That's the win." An AI whose KPI is its own growing
-  silence inverts the entire engagement industry. *Tether: a cadence policy over signals §21
+  silence inverts the entire engagement industry. *Tether: a cadence policy over signals §8
   already computes.*
 - [ ] **Council of Future Selves** — the fable feature. Coach can stage a conversation with
   *you at 60* — but grounded: the future self's circumstances are computed from the user's
@@ -3080,7 +2425,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
   food, Dave says Saturday OT is open." Coach parses it into log entries, a calendar note,
   and a heads-up for the OT decision — confirm-all with one tap at home. The app dissolves
   into the user's day instead of demanding a sit-down session. *Tether: Whisper-class
-  speech-to-text + the §21.B natural-language logging pipeline.*
+  speech-to-text + the §8.B natural-language logging pipeline.*
 - [ ] **The Whisper Model (on-device Coach)** — a small local model (WebGPU / WebLLM-class)
   handles the intimate layer — urge logging, fog check-ins, quick math — entirely on the
   phone, offline, with financial details never leaving the device; the cloud Claude tier is
@@ -3105,7 +2450,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
   underneath. Rendered in the Flow palette, calm and painterly — Ghibli, not Vegas.
   *Tether: it's a data-driven SVG/Canvas scene over state the engine already computes; the
   fog-of-war mapping to unconfirmed weeks is almost embarrassingly literal.*
-- [ ] **Chronicle of the Year** — the year-end "Wrapped" (§21.C) told as an illustrated saga:
+- [ ] **Chronicle of the Year** — the year-end "Wrapped" (§8.C) told as an illustrated saga:
   "In the eighth week, the furnace failed — a $600 raid. You held the wall without touching
   the keep." Generated from real log entries, in Coach's voice, exportable as a keepsake.
   Emotional truth from literal data. *Tether: narrative generation over the logs table.*
@@ -3114,7 +2459,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
   collective siege victories ("the crew retired $11k of debt this quarter"), and one shared
   ritual: when someone's loan dies, the crew sees the banner fall. Solidarity mechanics for
   people who already cover each other's shifts. *Tether: presence + aggregate counters over
-  the employer-preset relation; the §21.D benchmark privacy rules apply verbatim.*
+  the employer-preset relation; the §8.D benchmark privacy rules apply verbatim.*
 - [ ] **Heirloom Letters** — at any goal's creation, the user can seal a note to the person
   who finishes it ("if you're reading this, the truck is paid off — I wrote this in the
   break room"). Sealed until the goal completes; delivered by Coach with ceremony. Zero AI,
@@ -3127,29 +2472,29 @@ here as a second currency the app helps the user stop hemorrhaging.*
 #### F4. Honesty rails for the whole horizon tier
 
 - [ ] **Label the magic** — every F-tier feature that estimates, roleplays, or narrativizes
-  carries the §21.E confidence labels; the Council of Future Selves and Fog Index especially
+  carries the §8.E confidence labels; the Council of Future Selves and Fog Index especially
   must never present themselves as prediction or diagnosis.
 - [ ] **No dark-pattern inversions** — the attention features must never become their own
   dopamine loop (no Reclaimed-total push notifications, no fog-score shame states). Each F1
   feature gets audited against the Calm Covenant before ship.
 - [ ] **Mental-health boundary** — the Fog Index and Burnout Sentinel are wellness mirrors,
-  not clinical instruments; copy review with the same rigor as §20.D's accountant gate, and
+  not clinical instruments; copy review with the same rigor as §4.D's accountant gate, and
   a visible hand-off line to real resources when signals are severe.
 
 ---
 
 ### G. Post-Merge Honing Pass — grounded by the 2026-07-05 master sync
 
-*Third pass. Master landed five workstreams since §21 was seeded: the §17.D/E entitlement
+*Third pass. Master landed five workstreams since §8 was seeded: the archived Stripe Monetization's entitlement
 state machine + read-only paywall, the security breach audit (`docs/security-audit-2026-07-04.md`)
 with RLS remediation migration 019, the Google OAuth callback-failure surfacing, 157 new tests
 (exposing Job Loss engine math, investor/demo account infra, and the swipe/scroll hooks as
-mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipment either
+mature systems), and archived Stripe subscriptions validated end-to-end in test mode. Each shipment either
 **sharpens an existing fable idea's tether** or **opens a door that wasn't visible before**.*
 
 #### G1. Tethers that just got shorter (existing ideas, now cheaper)
 
-- [ ] **Household view-only mode (§21.D) — the mechanism now exists.** The paywall pass built
+- [ ] **Household view-only mode (§8.D) — the mechanism now exists.** The paywall pass built
   exactly the primitive this idea needed: a `readOnly` prop on Home/Budget whose noop-setter
   pattern (`setGoals = readOnly ? noop : setGoalsProp`) makes every nested mutation a no-op
   with one switch. A partner's shared view is that same prop pointed at someone else's data —
@@ -3158,7 +2503,7 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   `jobLossFlow` tests confirm the engine can already recompute a whole year around a job-loss
   event. New idea on top: let a *currently-employed* user run the storm as a **drill** — "if I
   lost my job today, my runway is 11 weeks; here's the week the keep wall breaks" — sandboxed
-  (cloned config, like §21.C's what-if simulator), never touching live state. Preparedness is
+  (cloned config, like §8.C's what-if simulator), never touching live state. Preparedness is
   the single best fog-cutter there is, and the math is already tested. On the Domain Map (F3),
   this renders literally as a storm rolling across the territory.
 - [ ] **Council of Future Selves (F2) — stronger legs.** `estimateGoalNextYear` shipping with
@@ -3183,7 +2528,7 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   about taking control back should hand the user the keys inventory. Sibling to F1's Calm
   Covenant: **Calm Covenant for attention, Open Keep for data.** Example page lines: "We cannot
   move your money. We never see your bank. Here is every column we store, and who can read it."
-- [ ] **RLS regression sentinel** — promote the audit's recommendation #4 into §21.E practice:
+- [ ] **RLS regression sentinel** — promote the audit's recommendation #4 into §8.E practice:
   a standing test that signs in as user B and asserts user A's row is unreachable
   (read/write/delete all fail), so the crown-jewel protection can never silently regress.
   Cheap, permanent, and the Open Keep page can truthfully say "verified on every deploy."
@@ -3193,16 +2538,16 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   a **pre-made character** — a fictional hourly worker with a year of history, goals mid-siege,
   a storm on the horizon — and poke every panel. The RPG frame makes this natural (every RPG
   lets you try a character before you build your own), it converts better than screenshots,
-  and it's the §18 Coach demo stage too. The infra cost was already paid for investors.
+  and it's the §2 Coach demo stage too. The infra cost was already paid for investors.
   Vision: the login screen offers "Play a character" — you step into Sam, a forklift operator
   31 weeks into the year with a truck-loan siege half-broken and a storm on the radar — and
   signup reframes as "Create your own character."
 - [ ] **Honest-failure standard** — the OAuth fix (surfacing a silently-failed Google callback
-  instead of dumping the user on a blank login form) is a pattern worth codifying in §21.E:
+  instead of dumping the user on a blank login form) is a pattern worth codifying in §8.E:
   *no dead-end states.* Every failure the app can detect, it explains in one sentence and
   offers one next action. Fog thrives on unexplained dead ends; an app against brain fog
   never leaves the user asking "…did that work?"
-- [ ] **Expired ≠ erased — the Archive promise.** The read-only expired mode (§17.E) locks
+- [ ] **Expired ≠ erased — the Archive promise.** The read-only expired mode (see archived Stripe Monetization) locks
   editing, which is fair — but pair it with an explicit promise: your *history* (chronicle,
   logs, completed goals, Heirloom Letters) stays readable and exportable forever, paid or
   not. The paywall gates the engine, never the user's own memories. That single sentence of
@@ -3211,13 +2556,13 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
 
 ---
 
-## 22. CPA/Tax-Ready Statement Export
+## 5. CPA/Tax-Ready Statement Export
 
 *Seeded 2026-07-11. Answers "can a user hand something to their accountant" — today the app has
 no export surface at all (the `[x]` "Statements Tab" entry in `docs/past-TODO-tasks.md` §9 does
 not reflect working code — no component, no PDF/CSV dependency in `package.json`; treat it as
-stale, not shipped). This section is the real plan. Directly depends on **§20** for tax-number
-correctness and gates, and is the missing prerequisite **§18.D (Statements AI Insights)** already
+stale, not shipped). This section is the real plan. Directly depends on **§4** for tax-number
+correctness and gates, and is the missing prerequisite **§2.D (Statements AI Insights)** already
 assumes exists ("when a monthly/quarterly/yearly statement is generated...").*
 
 ### A. Scope — what this app can honestly hand a CPA
@@ -3227,7 +2572,7 @@ payroll system and not a multi-source tax engine. No 1099/Schedule C, no itemize
 beyond the standard deduction, no investment income, no dependents/credits beyond filing status.
 The statement is the user's own modeled projection, cross-checkable against their real paystubs
 and W-2 — not a replacement for either. Every exported document needs a persistent disclaimer
-banner saying exactly that; wording is covered by the same accountant pass as §20.D, not invented
+banner saying exactly that; wording is covered by the same accountant pass as §4.D, not invented
 ad hoc here.
 
 ### B. Data already available — reuse, don't rebuild
@@ -3253,7 +2598,7 @@ ad hoc here.
    no liability judgment, no accountant gate needed for this section alone.
 3. **Projected liability vs. withheld (safe-harbor check)** — `fedLiability` vs `fedWithheldBase`,
    `moLiability` vs `moWithheldBase`, the resulting gap. This is the section that tells a user
-   "you may owe" or "you're on track" — it does NOT ship to any user until **§20.D's accountant
+   "you may owe" or "you're on track" — it does NOT ship to any user until **§4.D's accountant
    audit clears**, full stop, same gate as the rest of the withholding-catch-up mechanism.
 4. **Per-pay-period detail table** — week/pay-period rows of gross, fed, state, FICA, 401k, net —
    the reconciliation table a CPA actually wants when checking a W-2 against reality.
@@ -3275,10 +2620,10 @@ ad hoc here.
   (`jspdf`/`@react-pdf/renderer`) for real typographic control at the cost of bundle size. Decide
   based on how polished v1 needs to look — don't default to the heavier option without checking.
 - **Period selector** — month / quarter / year-to-date / prior full year. **Real blocker, not a
-  nice-to-have:** once §19's Master Timeline read-path exists, a statement covering a past period
+  nice-to-have:** once §3's Master Timeline read-path exists, a statement covering a past period
   must resolve that period's *historical* config (rates, filing status, etc.), not today's — until
-  §19's read side is built, any "prior period" statement is silently wrong the moment a user has
-  edited pay/tax settings mid-year. Gate the period selector to "current period only" until §19
+  §3's read side is built, any "prior period" statement is silently wrong the moment a user has
+  edited pay/tax settings mid-year. Gate the period selector to "current period only" until §3
   lands, or disclose loudly that past periods reuse current settings.
 
 ### E. Access gating
@@ -3287,15 +2632,15 @@ ad hoc here.
   population already trusted with tax numbers elsewhere in the app; no separate flag needed.
 - **Internal split, mirroring the Tax Plan precedent:** §C.2/C.4/C.6/C.7/C.8 (objective totals —
   money already paid, no liability judgment) can ship to that population without further review.
-  §C.3 (liability vs. withheld / safe-harbor gap) additionally requires §20.D's accountant
+  §C.3 (liability vs. withheld / safe-harbor gap) additionally requires §4.D's accountant
   sign-off before it renders for anyone, admin included — the accountant gate is about the content
   being shown, not who's allowed to see the feature.
 
 ### F. Open dependencies
 
-- **§19** (Master Timeline read-path) — blocks honest past-period statements; see §D.
-- **§20.D** (accountant audit) — blocks §C.3 specifically.
-- **§20.B** (fed/state split withholding) — blocks true quarterly rollups (§C.5) until the single
+- **§3** (Master Timeline read-path) — blocks honest past-period statements; see §D.
+- **§4.D** (accountant audit) — blocks §C.3 specifically.
+- **§4.B** (fed/state split withholding) — blocks true quarterly rollups (§C.5) until the single
   blended timeline is split.
 - **State coverage** — confirm `STATE_TAX_TABLE` covers every tester's state before exposing state
   liability figures beyond the personal/admin account.
@@ -3324,7 +2669,7 @@ maps cleanly onto data this app already has, not because the numbers are audit-g
   bank account. Log any real variance in the Log panel to keep this accurate."*
 
 **Annual Cash Flow Statement (Modeled)** — same four sections rolled up across the fiscal year,
-with quarterly subtotals (depends on §20.B's fed/state split for the tax line to be trustworthy
+with quarterly subtotals (depends on §4.B's fed/state split for the tax line to be trustworthy
 quarter-by-quarter, same dependency as §C.5/§F).
 
 ### H. Goal funding as a statement milestone (Authority Finance signature)
@@ -3343,7 +2688,7 @@ paperwork, not a buried number.*
 - **Goal Funding Ledger** — a standalone, chronological report (separate from the cash flow
   statements) listing every goal with target, funded date, and time-to-fund — the story of a
   user's goal progress across the account, not just one period. Full accuracy for goals funded in
-  a *past* period depends on §19's Master Timeline read-path the same way past cash flow periods
+  a *past* period depends on §3's Master Timeline read-path the same way past cash flow periods
   do (§D); until then this ledger reflects live goal state only, not a true historical record.
 - **Why this belongs to Authority Finance specifically** — no generic bank or budgeting export
   does this; it's the one document type that's inseparable from the app's stated purpose (helping
@@ -3384,16 +2729,16 @@ export menu should offer:
 2. **Annual Cash Flow Statement (Modeled)**, with quarterly subtotals — §G
 3. **Goal Funding Ledger** — §H, the signature/differentiated document
 4. **Income & Withholding Summary** — §C.2 (ungated beyond §E's base tax-plan access)
-5. **Projected Liability vs. Withheld (Safe-Harbor Check)** — §C.3 (gated behind §20.D)
+5. **Projected Liability vs. Withheld (Safe-Harbor Check)** — §C.3 (gated behind §4.D)
 6. **Income Summary Statement** (lender-facing) — §I
 7. **Debt Summary Statement** (lender-facing) — §I, pending the `interestRate` gap above
 
 All seven share §D's export mechanics (PDF/CSV) and §E's access gating split (objective totals
-open to the base tax-plan population; anything liability-flavored stays behind §20.D).
+open to the base tax-plan population; anything liability-flavored stays behind §4.D).
 
 ---
 
-## 23. Multi-Year Fiscal Rollover — Beyond FY2026
+## 9. Multi-Year Fiscal Rollover — Beyond FY2026
 
 *Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-13, surfaced while
 fixing the Year-End Outlook card's date scoping (`HomePanel.jsx`, branch
@@ -3508,7 +2853,7 @@ surgery, not a one-line config edit.
    rollover without an idx-space rearchitecture, but still needs a real design pass on exactly
    what carries forward vs. resets, and how "look back at last year's data" would work afterward
    (Option 1's tuple gives that for free; Option 3 needs its own archive-read path, likely sharing
-   infrastructure with §19 below).
+   infrastructure with §3 below).
 
 No option is chosen yet — this needs a decision session before any implementation starts.
 
@@ -3530,7 +2875,7 @@ No option is chosen yet — this needs a decision session before any implementat
   bounded `HomePanel.jsx`'s `annualSavings`/outlook window to the job-start-aware single-year
   window and dropped the literal "Fiscal Year 2026" text; explicitly did not touch cross-year
   rollover. This section is the deferred follow-up that surfaced from it.
-- **§19 Master Timeline** — a related but distinct gap: `buildYear`/`computeNet` apply the
+- **§3 Master Timeline** — a related but distinct gap: `buildYear`/`computeNet` apply the
   *current* config uniformly to every week including past ones (point-in-time correctness within
   a single year), not a cross-year rollover gap. Worth reviewing together before committing to
   Option 3 above — a Master Timeline redesign aimed at point-in-time correctness might naturally
@@ -3544,13 +2889,13 @@ No option is chosen yet — this needs a decision session before any implementat
 
 ### G. Out of scope for this section
 
-- Actual tax-rate/bracket changes year-to-year (a §20 concern, not a fiscal-week-engine one).
+- Actual tax-rate/bracket changes year-to-year (a §4 concern, not a fiscal-week-engine one).
 - Demo fixture regeneration (`src/fixtures/demo-account-*.js`) — cosmetic, do last, after a real
   design is chosen.
 
 ---
 
-## 24. Needs-Expense Shortfall Redistribution — "a missed check still owes rent"
+## 6. Needs-Expense Shortfall Redistribution — "a missed check still owes rent"
 
 *New workstream (2026-07-13), scoped from a user brain-dump, not yet started. Core-finance-engine
 change — touches `computeGoalTimeline`, `App.jsx`'s `eventImpact`, and several downstream displays —
@@ -3672,7 +3017,7 @@ replacing) the existing per-week event pipeline:
 
 ---
 
-## 25. Expense Input/Editor Revamp — Mandatory Rent + Preset Categories
+## 7. Expense Input/Editor Revamp — Mandatory Rent + Preset Categories
 
 *Seeded 2026-07-16, not yet started. Two related but distinct threads: (A) add Rent as a second
 mandatory, pinned expense alongside Food; (B/C) a broader editor revamp — quick-select preset
@@ -3750,7 +3095,7 @@ to building from an assumed category list.*
 
 ---
 
-## 26. In-App Tutorials, Onboarding & Help
+## 10. In-App Tutorials, Onboarding & Help
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started, no design
 decisions made. Pure greenfield: nothing below is a partial build to finish.*
@@ -3794,10 +3139,10 @@ regular user population that would need it most.
 
 ---
 
-## 27. Data Encryption & At-Rest Security Posture
+## 11. Data Encryption & At-Rest Security Posture
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started. Read
-`docs/drift-app-warden.md` §19 F120 before touching any persisted field that might fall into a
+`docs/drift-app-warden.md` §3 F120 before touching any persisted field that might fall into a
 higher sensitivity class than what the app collects today — that entry is the authoritative
 trigger check for this whole section.*
 
@@ -3812,7 +3157,7 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 - [ ] **No action needed on current fields.** This section is a readiness/gap flag, not a
   "go encrypt `user_data`" ticket — don't build anything here speculatively (see CLAUDE.md's
-  no-speculative-abstraction rule). The actionable trigger is §19 F120: a *new* field in a
+  no-speculative-abstraction rule). The actionable trigger is §3 F120: a *new* field in a
   genuinely high-sensitivity class (SSN, DOB, bank account/routing, government ID).
 - [ ] **If/when that trigger fires** — decide app-layer encrypt-before-write /
   decrypt-after-read (in the `db.js` write path / `loadUserData`, F67) vs. a `pgcrypto`-backed
@@ -3830,12 +3175,129 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 ---
 
-## 28. Irregular / Flexible Shift Hours Support
+## 12. Beta Program & Testing Infrastructure — 10-Week Cohort Execution & Monitoring
 
-*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Touches the
-core fiscal engine (`finance.js` `buildYear` and friends) — read `docs/drift-app-warden.md` §18
-(Spine A — Fiscal Math) before starting; this is exactly the kind of change that class of section
-exists to gate.*
+*Umbrella workstream (2026-07-28) covering all build, testing, launch, and lifecycle phases of the
+10-week beta program. Scoped from active beta program (migrations 025–036, `beta_activity_events`,
+`beta_codes` channel pool). Subsections cover test infrastructure (A-F), cohort planning & execution
+(G-N), and ongoing observability.*
+
+**The goal.** Execute a complete, monitored beta program with full visibility into tester behavior and
+quality validation at every stage:
+- **Phase 1 (A-F):** Set up repeatable, automated test infrastructure to:
+1. Create synthetic beta tester accounts with controlled state (different pay structures, tax elections, expenses)
+2. Execute scripted user flows (income logging, expense entry, weekly confirmations, Coach interactions)
+3. Verify that `beta_activity_events` captures the intended granularity of user actions
+4. Validate the feedback channel (`beta_activity_events` with `event_type: 'feedback'`) accepts and stores submissions
+5. Establish baseline metrics (event frequency per action type, latency, storage footprint) for the beta report
+
+**The gap.** Today, beta-tester activity tracking exists (migrations 025–036 are live, `api/admin-beta-report.js`
+generates CSV exports) but there's no synthetic test harness to verify:
+- That new features automatically log `beta_activity_events` when a tester uses them
+- That the feedback channel flow (UI capture → DB insert) is wired end-to-end
+- That per-account window boundaries (`beta_started_at` → +10 weeks) filter correctly in the report
+- That concurrent, overlapping testers' data doesn't leak across accounts
+- What the normal event volume looks like (for quota/cost planning if events grow beyond migrations 025–036)
+
+### A. Test Account Factory
+
+- [ ] **Create `scripts/create-beta-test-account.js`** — a CLI tool that accepts parameters:
+  - Account name (display_name)
+  - Employer preset (`"DHL"` | `"base"`)
+  - Pay structure (hourly rate, OT threshold, commission Y/N)
+  - Tax state + filing status
+  - Goal setup (optional — auto-create 2–3 goals for variety)
+  - Outputs: newly created `user_id`, auth token, test credentials for headless login
+  - Uses the same `seed.js` function paths as the existing `POST /api/seed` (type: "beta") to keep
+    seeding logic in one place
+- [ ] **Optional: Seed multiple account variants** — e.g. "dhl-standard", "base-commission", "no-taxes"
+  so test flows can cover different config branches without re-running the script
+- [ ] **Document the account factory in `docs/beta-testing.md`** — how to invoke it, what state
+  it sets up, how to tear down accounts, any cleanup needed (Supabase RLS considerations)
+
+### B. Scripted User Flow Harness (Headless)
+
+- [ ] **Create `scripts/run-beta-user-flows.js`** — uses Playwright (already in `PLAYWRIGHT_BROWSERS_PATH`)
+  to execute repeatable flows as if a tester were using the app:
+  1. **Login flow** — accept test account email + password, verify auth token
+  2. **Income logging** — use LogPanel to submit 3–5 varied log entries (base pay, bonus, missed shift, PTO)
+  3. **Expense entry** — BudgetPanel: add/edit/delete expenses spanning categories
+  4. **Weekly confirm** — submit 2 confirmed weeks (missed shifts, OT adjustments)
+  5. **Coach interaction** (if access unlocked) — submit an Ask Coach question, verify response streams
+  6. **Feedback submission** — use the feedback channel UI to submit a test comment
+  - **Parametrized by account variant** — takes a config name ("dhl-standard", etc.) and runs the same
+    flow across multiple account types to catch variant-specific bugs
+  - **Logs each action's timestamp and expected `beta_activity_events` row** (server-side) for cross-check
+
+### C. Event Telemetry Validation
+
+- [ ] **Build `scripts/verify-beta-events.js`** — after a flow runs, query the `beta_activity_events` table
+  and verify:
+  - [ ] **Event count matches expected.** Flow submits N log entries → expect N `event_type: 'log'` rows
+  - [ ] **Event types are correct.** Expense add → `event_type: 'expense'` (or check naming convention against
+    `database/migrations/025_add_beta_activity_events.sql`)
+  - [ ] **Timestamps are reasonable.** Events within ±30s of script's action-submission timestamp (catches
+    clock-skew bugs, timezone mismatches)
+  - [ ] **User ID isolation.** Events for account A don't appear in account B's event list (RLS leakage test)
+  - [ ] **Beta window filtering.** `beta_started_at + 10 weeks` cutoff works correctly in the admin report
+  - [ ] **Feedback channel integrity.** Submitted feedback text is stored verbatim and retrievable
+  - [ ] **Null/optional fields handled.** Event rows with sparse data (e.g. a log entry with no `additional_info`)
+    don't cause schema mismatches or report generation crashes
+- [ ] **Generate a report showing event breakdown by type** — e.g.:
+  ```
+  Tester: dhl-standard | Events logged: 42 | Breakdown: {log: 8, expense: 12, confirm: 5, feedback: 2, ...}
+  Tester: base-commission | Events logged: 38 | ...
+  ```
+
+### D. Feedback Channel End-to-End
+
+- [ ] **Verify UI → DB path exists.** Locate feedback submission UI (likely in a "Beta Feedback" button/modal)
+  and confirm it calls a route (e.g. `POST /api/submit-beta-feedback` or a Supabase RLS insert on `beta_activity_events`)
+  - [ ] If no route exists yet, create one: `api/submit-beta-feedback.js` (or inline in Coach panel if feedback
+    is bundled with chat exit)
+  - [ ] Route validates `is_tester && beta_code_used` (or uses session user_id + RLS)
+  - [ ] Inserts a row into `beta_activity_events` with `event_type: 'feedback'`, `event_data: { text: "..." }`
+- [ ] **Test error cases.** What if feedback is empty? Too long? Submitted while not a beta tester?
+  - [ ] Should return sensible error (not 500), not create a partial event, not leak user state
+- [ ] **UI component library.** Document the feedback widget (modal, inline, toast, etc.) so testers
+  and internal users know where to find it
+  - [ ] Consider adding a subtle **"Send Feedback"** button to the admin tools section (visible only to `is_tester`)
+    for zero-friction, in-app submission during live testing
+
+### E. Event Volume & Cost Baseline
+
+- [ ] **Document expected event cardinality.** Once the script runs across 3–5 account variants, measure:
+  - Average events per account per day (for 10-week projection)
+  - Storage cost (rows × per-row size) for beta period + historical archive
+  - Query cost if telemetry dashboard eventually queries `beta_activity_events` in real time
+  - Recommend a migration `037_add_beta_activity_events_indexes.sql` if query perf becomes an issue
+- [ ] **Log the baseline in this section** (e.g. "typical tester: 8–12 events/day, 560–840 per 10-week window,
+  ~2KB per account across all events") for future reference
+- [ ] **Update `docs/drift-app-warden.md` F126** (if it exists — a new drift entry for beta telemetry)
+  to capture the observability contract: "every user action that affects `config`, `expenses`, `goals`, `logs`
+  must log a corresponding `beta_activity_events` row with (user_id, timestamp, event_type, event_data)"
+
+### F. Continuous Integration / Automated Testing
+
+- [ ] **Add a GitHub Actions workflow** (e.g. `.github/workflows/beta-test-harness.yml`) that:
+  - Runs the account factory script to create a test account
+  - Runs the flow harness
+  - Queries and verifies events
+  - Reports pass/fail + summary (for PR checks, nightly runs, or manual trigger)
+  - Cleans up test accounts after (Supabase cleanup hook or manual delete in the workflow)
+- [ ] **Gating:** Run on `Version-control` branch merges + nightly to catch regressions in beta telemetry
+- [ ] **No-op for now if secrets aren't available** (e.g., `TEST_ACCOUNT_EMAIL`/`TEST_ACCOUNT_PASSWORD`
+  not set in CI) — just log a warning, don't fail the build. Once CI credentials are set up, enable the gate.
+
+---
+
+## 13. Income Model Expansion — Variable Hours & Tip Tracking
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Both subsections
+touch the core fiscal engine (`finance.js` `buildYear` and friends) — read `docs/drift-app-warden.md` §2
+(Spine A — Fiscal Math) before starting.*
+
+### A. Irregular / Flexible Shift Hours Support
 
 **The gap.** The income engine is built around a single fixed `shiftHours` value per user
 (`config.shiftHours` — 12 for the DHL preset, defaults to 8 for base users); every hour
@@ -3867,7 +3329,7 @@ gig-style variable-hours pattern — doesn't fit the model today.
   repeated across gross-pay, OT-threshold, and week-total calculations; `WeekConfirmModal.jsx` has
   it again for missed/pickup-shift hour math. A per-day-hours model would need all of these
   re-derived from a day-level source of truth instead of `shiftCount × shiftHours`, not patched
-  individually (the drift risk §18 exists to catch).
+  individually (the drift risk §2 exists to catch).
 - [ ] **OT-threshold interaction** — `otThreshold`/`otMultiplier` math currently assumes a known
   shift-count-derived weekly total; per-day variable hours changes how OT is detected (running
   daily/weekly total vs. a precomputed shift count) and needs its own design pass, not an
@@ -3876,11 +3338,7 @@ gig-style variable-hours pattern — doesn't fit the model today.
   of (or alongside) the current missed/pickup shift-toggle UX — a real UI redesign for that
   screen, not a data-model-only change.
 
----
-
-## 29. Tip Income Tracking
-
-*New workstream (2026-07-22), scoped from a codebase status review — not yet started.*
+### B. Tip Income Tracking
 
 **The gap.** There is no field, wizard question, or log-entry type for tip/gratuity income
 anywhere in the app — confirmed empty across `constants/config.js`, `finance.js`,
@@ -3903,20 +3361,18 @@ scoped to Job Loss Mode only.
   existing `EVENT_TYPES`/Log Effect Summary infrastructure already generalizes to "a dollar-impact
   event type."
   - [ ] **If a new field lands in `config` or a week record** — this is a "new persisted field"
-    for `docs/drift-app-warden.md` §19 F110's four-site procedure (the destructure sites, the ref,
+    for `docs/drift-app-warden.md` §3 F110's four-site procedure (the destructure sites, the ref,
     the drift badge) — run that checklist, don't hand-roll persistence for it.
 - [ ] **Tax-plan interaction** — if tips are ever pulled into the withholding model, this needs to
   be reconciled with the existing `taxExemptOptIn`/`canAccessTaxPlan` liability-hold decision
-  (`entitlements.js`, drift-app-warden §20 F111) rather than adding a second, parallel tax-estimate
+  (`entitlements.js`, drift-app-warden §4 F111) rather than adding a second, parallel tax-estimate
   path.
 - [ ] **Rolling income view** — `IncomePanel`'s week-by-week gross/net breakdown would need a line
   for tip income distinct from base gross, so the "receipt behind every dollar" framing
   (`coachFeatureGuide.js`'s own description of the Income panel) stays true once a second income
   stream exists.
 
----
-
-## 30. Beta Program — Per-User Beta Window (Report Scoping)
+### G. Per-User Beta Window (Report Scoping)
 
 *New workstream (2026-07-24), scoped from a codebase status review. Builds directly on the
 already-shipped beta usage-tracking system (migrations `025_add_beta_code_used.sql`,
@@ -3951,7 +3407,7 @@ would quietly distort the actual scoring numbers, not just leave a nice-to-have 
 
 ---
 
-## 31. Beta Program — Pre-Launch Dry Run Checklist
+### H. Pre-Launch Dry Run Checklist
 
 *New workstream (2026-07-24). Not a code change — a verification checklist to run once before
 handing out any of the 40 real beta codes, using the infrastructure already shipped in this session.*
@@ -3983,7 +3439,7 @@ same bug caught in five minutes before day 1.
 
 ---
 
-## 32. Beta Program — Code Redemption Flow
+### I. Code Redemption Flow
 
 *New workstream (2026-07-24). This is the "orchestrated later" piece explicitly deferred during the
 usage-tracking build — `is_tester`/`beta_code_used` are manual-SQL-only today. Scoped here so it's
@@ -4007,7 +3463,7 @@ in `db.js`) — this app already has a working, tested pattern for "redeem a cod
 - [ ] **`api/seed-beta.js`** (new service-role route, mirroring `api/seed-investor.js` and
   `api/seed-trial.js` exactly) — verifies the caller's Bearer token, re-validates the code against
   `beta_codes.is_active` server-side (never trust the client's validation), then atomically sets
-  `is_tester = true`, `beta_code_used = '<code>'`, and (once §30 lands) `beta_started_at = now()` in
+  `is_tester = true`, `beta_code_used = '<code>'`, and (once §14 lands) `beta_started_at = now()` in
   one write — closing the "two/three fields set together" risk at the source instead of relying on a
   human to remember every field on every manual SQL run.
 - [ ] **Client wiring** — a new `redeemBetaCode()` in `db.js` that POSTs to `api/seed-beta.js`, called
@@ -4015,7 +3471,7 @@ in `db.js`) — this app already has a working, tested pattern for "redeem a cod
 
 ---
 
-## 33. Beta Program — In-App Feedback Channel
+### J. In-App Feedback Channel
 
 *Shipped 2026-07-24 (built as Option A, upgraded to Option B same day once the beta scoring rubric
 made it non-optional — "Feedback Submitted — 25 pts, frequency + specificity" can't be scored from a
@@ -4035,7 +3491,7 @@ mailto link, which produces zero queryable data).*
 
 ---
 
-## 34. Beta Program — Attrition Visibility Mid-Program
+### K. Attrition Visibility Mid-Program
 
 *New workstream (2026-07-24). The smallest addition in this list — purely additive to
 `api/admin-beta-report.js`, no schema change, no new hook points.*
@@ -4057,7 +3513,7 @@ quiet requires eyeballing raw timestamps; nothing calls it out.
 
 ---
 
-## 35. Beta Program — Offboarding Decision (End of Week 10)
+### L. Offboarding Decision (End of Week 10)
 
 *Resolved 2026-07-24 — superseded by an actual scoring rubric (100 pts: App Usage 50 w/ 30-pt floor,
 Feedback 25, Call Attendance 15, Longevity 10 → three outcome tiers), not the earlier three
@@ -4087,7 +3543,7 @@ human" premise — no auto-scoring formula was built.
 
 ---
 
-## 36. Beta Program — In-App "Beta Tester" Badge
+### M. In-App "Beta Tester" Badge
 
 *New workstream (2026-07-24). Purely cosmetic/motivational — no data flow changes, fully isolated
 from the tracking system itself.*
@@ -4109,10 +3565,10 @@ exactly zero risk, since it touches no finance logic and no persisted data.
 
 ---
 
-## 37. Beta Program — Week-5 "Halfway" Nudge Email
+### N. Week-5 "Halfway" Nudge Email
 
 *New workstream (2026-07-24). Reuses existing lifecycle-email infrastructure rather than standing up
-a new send pathway. Depends on §30 (`beta_started_at`) as the anchor date — build that first.*
+a new send pathway. Depends on §15 (`beta_started_at`) as the anchor date — build that first.*
 
 **The idea.** A single motivational touchpoint at the program's midpoint, reusing the same
 infrastructure that already sends trial/dunning emails (`api/_email.js`'s sender, the
@@ -4131,12 +3587,12 @@ not a new email system.
 - [ ] **New template in `api/_lifecycleEmails.js`** — short, motivational, references the program by
   name; follow the existing template function pattern (`buildLifecycleEmail` or equivalent) rather than
   hand-rolling a one-off send.
-- [ ] **Low priority relative to §30–34** — this is pure polish; the report and its scoping fix matter
+- [ ] **Low priority relative to §14–34** — this is pure polish; the report and its scoping fix matter
   more to the program's actual goal (scoring 40 people against a rubric) than a reminder email does.
 
 ---
 
-## 38. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
+## 14. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
 
 *New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
 
@@ -4237,9 +3693,9 @@ not a new email system.
   - LogPanel entry type: `pay_change: { label: "Pay Changed", icon: "📊" }` with an inline diff summary.
 - **Blocked by:** OCR engine decision + Tesseract's paystub field extraction (feature #3).
 - **Unblocks:** None directly.
-- **Drift warning:** `buildYear` is a critical fiscal engine (drift-app-warden §18 Spine A). Any change to how it's triggered needs to be audited carefully. The recompute path here is straightforward (user snappped a new paystub, we re-derived income model), but add a manual "Review Changes" step before auto-applying to `config` so the user sees what changed.
+- **Drift warning:** `buildYear` is a critical fiscal engine (drift-app-warden §2 Spine A). Any change to how it's triggered needs to be audited carefully. The recompute path here is straightforward (user snappped a new paystub, we re-derived income model), but add a manual "Review Changes" step before auto-applying to `config` so the user sees what changed.
 - **Notes:**
-  - **Storage:** `lastPaystubSnapshot` lives in `user_data.config` JSON? Or a separate column? Leaning toward a separate column (keeps config schema clean) — requires a new migration. Follow `docs/drift-app-warden.md` §19 F110's four-site procedure (destructure + ref + drift badge + eager-save).
+  - **Storage:** `lastPaystubSnapshot` lives in `user_data.config` JSON? Or a separate column? Leaning toward a separate column (keeps config schema clean) — requires a new migration. Follow `docs/drift-app-warden.md` §3 F110's four-site procedure (destructure + ref + drift badge + eager-save).
   - **Privacy:** storing paystub data locally. Reassure in UX: "This stays on your device and is only used to detect changes."
   - **Accuracy fallback:** if OCR confidence is low, prompt user to review extracted fields before storing.
 
@@ -4307,7 +3763,7 @@ Feature #5 (Pay-cycle detection)
   ├─ OCR engine (from #3 decision)
   ├─ lastPaystubSnapshot migration
   ├─ Diff logic
-  └─ buildYear recompute (drift-app-warden §18 audit required)
+  └─ buildYear recompute (drift-app-warden §2 audit required)
 
 Feature #6 (Shelf-tag capture) — isolated, deferred
   ├─ TextDetection API (not viable) OR TensorFlow.js (high cost)
@@ -4320,7 +3776,7 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 ---
 
-## 39. UI Cohesion — Cross-Panel Header/Accent Consistency
+## 15. UI Cohesion — Cross-Panel Header/Accent Consistency
 
 *New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
 making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
@@ -4434,7 +3890,7 @@ audit only, no runtime/visual walkthrough performed):
 
 ---
 
-## 40. Dev Infrastructure — Claude Code on the web headless UI testing
+## 16. Dev Infrastructure — Claude Code on the web headless UI testing
 
 *Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
 `90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
@@ -4460,17 +3916,17 @@ headless-login driver script.*
 - [ ] **Once merged to `master`,** every future Claude Code on the web session on this repo picks
   the hook up automatically — no per-session setup beyond the one-time env vars above.
 - [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
-  session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
+  session can actually drive the §1.H15/H16 screens this hook was built to unblock testing for —
   worth doing as part of the same setup pass, not a separate task.
 
 ---
 
-## 41. Terms of Service / Privacy Policy Consent Capture
+## 17. Terms of Service / Privacy Policy Consent Capture
 
 *Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
 consent gate before signup. The mechanism is real and live for new signups; the legal content it
 records agreement to is not — see `constants/legalDocuments.js`'s header comment, which is the
-authoritative pointer for what's still outstanding. Ties into §27 (Data Encryption): that section's
+authoritative pointer for what's still outstanding. Ties into §11 (Data Encryption): that section's
 own conclusion stands — no field-level encryption is needed today because nothing currently
 collected is regulated/high-sensitivity data, and this workstream doesn't change that.*
 
@@ -4526,3 +3982,179 @@ collected is regulated/high-sensitivity data, and this workstream doesn't change
 - [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
   `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
   was added for it in this pass — worth a look next time either section gets a surgical pass.
+## 18. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+
+*Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
+a critical bug — linting errors don't prevent the app from running or tests from passing. But
+tracking here to prevent regression, consolidate cleanup work, and provide a priority guide for
+opportunistic fixes when touching these files.*
+
+**Current state:** `npm run lint` exits with code 1 on 41 errors (mostly unused imports/variables)
++ 12 warnings (React hooks, unused directives). See `src/` section below for per-file breakdown.
+Categorized by impact for triage.
+
+### A. Critical — must fix before deploying or accepting new PRs in these files
+
+These affect correctness or performance and can cause subtle bugs:
+
+#### 1. **Test setup broken — missing vitest global (`vi`)**
+   - File: `src/test/components/panels.test.jsx`
+   - Lines: 7–10
+   - Issue: `vi` is not defined (5 references)
+   - Impact: Test file likely cannot run; this is a vitest configuration or import issue
+   - Fix: Either import `{ vi } from 'vitest'` at top of file or ensure vitest's `globals: true`
+     is set in `vitest.config.js`
+   - Status: ⚠️ Highest priority — blocks tests from running
+
+#### 2. **React Compiler memoization skipped (`JobLossBudgetPanel.jsx:102`)**
+   - File: `src/components/JobLossBudgetPanel.jsx`
+   - Lines: 102–122
+   - Issue: React Compiler rejected manual memoization on `useMemo` block (3-variable `upcomingBills`)
+   - Impact: Memoization optimization was skipped; component may re-render unnecessarily
+   - Cause: Compiler failed to preserve the memoization due to the complexity of the callback
+   - Fix: Simplify the memoization callback or split into smaller memoized helpers
+   - Estimated effort: Medium
+
+#### 3. **Ref accessed during render (`SetupWizard.jsx:2556`)**
+   - File: `src/components/SetupWizard.jsx`
+   - Line: 2556
+   - Issue: `originalConfigRef.current` read during component render (only safe in effects/handlers)
+   - Impact: Component may not update as expected; ref access violates React invariants
+   - Fix: Move ref access outside render; pass ref value or derived state as prop instead
+   - Estimated effort: Medium
+
+#### 4. **setState called directly in effect — cascading renders (LoginScreen.jsx:40 + 138)**
+   - File: `src/components/LoginScreen.jsx`
+   - Lines: 40, 138
+   - Issue: `setCur()` called directly within `useEffect()` body (2 separate effects)
+   - Impact: Triggers cascading renders on every mount/mode change; performance issue
+   - Fix: Restructure to avoid setState in effect; use a layout effect or move logic to event handler
+   - Estimated effort: Medium
+
+#### 5. **React purity violation — `Date.now()` in render (`HomePanel.jsx:476`)**
+   - File: `src/components/HomePanel.jsx`
+   - Line: 476
+   - Issue: `Date.now()` (impure function) called inside render phase when creating new goal ID
+   - Impact: Produces different values on every render; component not idempotent
+   - Fix: Move `Date.now()` call into event handler (`handleAddGoal`) instead of inline in JSX
+   - Estimated effort: Low (simple move)
+
+### B. High Priority — affects rendering or hook behavior; should fix when touching these files
+
+React Hook dependency issues + unused imports in critical paths:
+
+#### 6. **Missing hook dependency (`App.jsx:993`)**
+   - File: `src/components/App.jsx`
+   - Line: 993
+   - Issue: `useMemo` missing `entitlement` in dependency array
+   - Impact: Memoized value could be stale; entitlement changes may not trigger recalculation
+   - Fix: Add `entitlement` to deps array or confirm it's intentionally omitted
+
+#### 7. **Unnecessary hook dependency (`App.jsx:1126`)**
+   - File: `src/components/App.jsx`
+   - Line: 1126
+   - Issue: `effectiveToday` listed but doesn't affect memo output
+   - Impact: Unnecessary re-memoization on every date change (minor)
+   - Fix: Remove `effectiveToday` from deps array
+
+#### 8. **Missing hook dependencies (`LoginScreen.jsx:44`)**
+   - File: `src/components/LoginScreen.jsx`
+   - Line: 44
+   - Issue: `useEffect` missing `cur.key` and `cur.node` dependencies
+   - Impact: Stale closure; could reference old state values
+   - Fix: Add both to dependency array or restructure effect
+
+#### 9. **Missing hook dependencies (`WeekConfirmModal.jsx:229`)**
+   - File: `src/components/WeekConfirmModal.jsx`
+   - Line: 229
+   - Issue: `useEffect` missing `otDays` and `requiredOtCount`
+   - Impact: Effect may not re-run when these values change
+   - Fix: Add to dependency array
+
+#### 10. **Conditional logic in memo deps (`ReemploymentTracker.jsx:97`)**
+   - File: `src/components/ReemploymentTracker.jsx`
+   - Line: 97
+   - Issue: The `apps` conditional could change on every render, breaking memo deps
+   - Impact: `useMemo` at line 117 loses cache on every render
+   - Fix: Wrap `apps` initialization in its own `useMemo()` before using as a dependency
+
+#### 11–14. **Unused imports in component files (low impact, easy fix)**
+   - `App.jsx:4, 6` — `getPayPeriodEndDate`, `formatFiscalWeekLabel` (2 imports)
+   - `BudgetPanel.jsx:5, 6` — `applyMonthEditForward`, `roundToQuarter`, `toMonthlyCost`, 
+     `fromMonthlyCost`, `formatFiscalWeekLabel` (5 imports)
+   - `HomePanel.jsx:9` — `formatFiscalWeekLabel` (1 import)
+   - `IncomePanel.jsx` — (no unused imports, only `isWeekly` variable)
+   - `LogPanel.jsx:5` — `formatFiscalWeekLabel` (1 import)
+   - `LoginScreen.jsx:28` — `useRef` (1 import)
+   - **Impact:** Bloats bundle; clutters code. Non-functional but sloppy.
+   - **Fix:** Delete the unused import lines. Safe; linting will confirm they're truly unused.
+
+### C. Medium Priority — cleanup, low runtime impact
+
+Dead code that should be removed but doesn't break anything:
+
+#### Unused variables (simple deletions)
+| File | Line | Variable | Type | Note |
+|------|------|----------|------|------|
+| `App.jsx` | 286 | `investorProfile` | assigned, never used | Delete assignment or use it |
+| `BudgetPanel.jsx` | 135 | `pendingDelete` | assigned, never used | Likely dead from refactor |
+| `BudgetPanel.jsx` | 268 | `shortMonth` | assigned, never used | Month formatting, no longer needed? |
+| `BudgetPanel.jsx` | 613, 757, 915 | `saveEditExp`, `deleteExp`, `executeUndo` | assigned, never used | Dead handlers from old UI |
+| `BudgetPanel.jsx` | 2181 | `fy` | assigned, never used | Fiscal year calc, unused |
+| `HomePanel.jsx` | 95 | `projectedWeeklyLeft` | assigned, never used | Goal projection, unused |
+| `HomePanel.jsx` | 141 | `weeksLeftCount` | assigned, never used | Same as above |
+| `IncomePanel.jsx` | 77 | `isWeekly` | assigned, never used | Pay period classification, unused |
+| `JobLossEntry.jsx` | 218 | `totalSteps` | assigned, never used | Step counter, unused |
+| `ProfilePanel.jsx` | 2084 | `isBaseUser` | assigned, never used | Employer type check, unused |
+| `SetupWizard.jsx` | 1565 | `isBaseUser` | assigned, never used | Same as above |
+| `expense.js` | 133, 136, 153 | `_cpm` (3 refs) | destructured, never used | Cost-per-mille calc, unused |
+| `finance.js` | 287 | `dhlTotalWeekendHours` | assigned, never used | DHL payroll calc, unused |
+| `fiscalWeek.js` | 115 | `checksPerYear` | assigned, never used | Pay frequency calc, unused |
+
+**Fix strategy:** Delete these in a single "cleanup" commit per file. Safe because they're truly
+unused (linting confirms it). Group by file to minimize PR review overhead:
+- [ ] App.jsx — 3 removals
+- [ ] BudgetPanel.jsx — 8 removals
+- [ ] HomePanel.jsx — 2 removals
+- [ ] IncomePanel.jsx — 1 removal
+- [ ] JobLossEntry.jsx — 1 removal
+- [ ] ProfilePanel.jsx — 1 removal
+- [ ] SetupWizard.jsx — 1 removal
+- [ ] finance.js — 1 removal
+- [ ] fiscalWeek.js — 1 removal
+- [ ] expense.js — 3 removals (same variable `_cpm` in different functions)
+
+### D. Low Priority — stale directives (cleanup only)
+
+Unused eslint-disable comments (no actual violation, just the suppression is obsolete):
+
+| File | Line | Directive | Status |
+|------|------|-----------|--------|
+| `App.jsx` | 558, 639, 1102 | `// eslint-disable-next-line react-hooks/set-state-in-effect` | No violation found; directive can be removed |
+| `App.jsx` | 656 | `// eslint-disable-next-line react-hooks/exhaustive-deps` | No violation found; directive can be removed |
+| `LoginScreen.jsx` | 40 | **ACTIVE** (not stale) | setState in effect IS happening here; directive is needed but rule should be fixed instead (see §A.4) |
+| `db.js` | 302 | `// eslint-disable-next-line no-console` | No violation found; directive can be removed |
+
+**Fix:** Delete the unused directives (not the rules they were suppressing—those don't exist).
+
+---
+
+### Summary & Regression Prevention
+
+**Test status:** ✅ All 1,231 tests pass (no regression). This lint audit is *not* a blocker for
+shipping or merging.
+
+**Recommended workflow:**
+1. **Fix §A (critical) immediately** if touching those components (test runner, SetupWizard, 
+   LoginScreen, HomePanel). These could cause bugs.
+2. **Fix §B (high) opportunistically** when landing refactors in those files (App.jsx, various
+   panels, hooks).
+3. **Fix §C (medium) in bulk** as a standalone "cleanup" PR when lint debt is prioritized (low
+   urgency; can wait weeks).
+4. **§D (directives)** delete when you're already in those files; don't land a PR just for this.
+
+**To prevent regressions:**
+- Before merging any PR, run `npm run lint` and reject new violations (or explicitly accept them
+  with a documented reason in the commit message).
+- Mark this section as "resolved" when the error count drops to ≤5 (acceptable technical debt).
+- Re-run this audit quarterly (or after major refactors) to track progress and catch new drift.

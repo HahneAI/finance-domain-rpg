@@ -3,8 +3,8 @@ import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent } from "./lib/db.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { diffSensitiveFields } from "./lib/configHistory.js";
@@ -21,16 +21,18 @@ import { ReviveScreen } from "./components/ReviveScreen.jsx";
 import { TrialExplainerScreen } from "./components/TrialExplainerScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
-import { ProfilePanel } from "./components/ProfilePanel.jsx";
+import { ProfilePanel, BetaFeedbackDetail } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { TipsCommissionCheckIn } from "./components/TipsCommissionCheckIn.jsx";
 import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
+import { BetaSignupNoticeBanner } from "./components/BetaSignupNoticeBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
-import { Pressable, FoldSwitch } from "./components/ui.jsx";
+import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
@@ -41,6 +43,42 @@ import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
 import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
+
+// Website/flyer-QR-code signup funnel — a link shaped like
+// "https://<app>/?beta=<code>" lands a NEW visitor here, often before they've
+// signed up at all. Captured on mount (below) into localStorage, then
+// consumed once a real session exists (App.jsx's SIGNED_IN handler) via
+// redeemBetaCode — the same call the account panel's manual "Redeem Beta
+// Code" row already uses (BetaRedeemDetail, ProfilePanel.jsx), so both paths
+// land on the identical is_tester=true + beta_code_used write
+// (api/seed.js's seedBeta). localStorage, not sessionStorage — unlike the
+// OAuth consent handoff (PENDING_CONSENT_STORAGE_KEY), which only needs to
+// survive a same-tab redirect, this needs to survive an email-confirmation
+// signup too, where the confirmation link can be opened in a different tab
+// (e.g. a phone's mail app), so a tab-scoped store isn't reliable here.
+//
+// Stored as JSON `{ code, attempts }`, not a bare string — a transient
+// failure (redeemBetaCode's retryable:true — no session yet, network blip,
+// 5xx) leaves the entry in place so the next real sign-in tries again,
+// instead of the old behavior of deleting it the instant it was read
+// regardless of outcome, which silently stranded anyone who hit a momentary
+// failure. Capped at MAX_PENDING_BETA_CODE_ATTEMPTS so a persistently-failing
+// retryable case doesn't hold the slot (and re-show the failure banner)
+// forever. A non-retryable failure (bad/expired/already-claimed code, seat
+// cap full) clears it immediately — retrying an invalid request changes
+// nothing. parsePendingBetaCode() also accepts the old plain-string format
+// for anyone with a pre-hardening value already sitting in localStorage.
+const PENDING_BETA_CODE_STORAGE_KEY = "pendingBetaCode";
+const MAX_PENDING_BETA_CODE_ATTEMPTS = 5;
+
+function parsePendingBetaCode(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.code === "string") return { code: parsed.code, attempts: parsed.attempts ?? 0 };
+  } catch { /* pre-hardening plain-string format */ }
+  return { code: raw, attempts: 0 };
+}
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -98,7 +136,7 @@ const BOTTOM_NAV = [
   },
 ];
 
-// §18.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
+// §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
 // always just ask_coach (job_scout/job_hunt/statement_summary have no UI caller yet), but this
@@ -299,19 +337,16 @@ export default function App() {
   // null = idle; { op, pending, ok, ts, err } = in-flight or result
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
-  const [toolSheetOpen, setToolSheetOpen] = useState(false);
   const [askCoachOpen, setAskCoachOpen] = useState(false);
   // askCoachExiting: true while the Ask Coach panel is animating out (180ms
   // foldLiftOut) — mirrors wizardExiting's pattern so the panel stays mounted
   // through its exit instead of vanishing on the close tap.
   const [askCoachExiting, setAskCoachExiting] = useState(false);
-  const [sheetDragY, setSheetDragY] = useState(0);
-  const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
-  const [historyMeta, setHistoryMeta] = useState(null); // §19 config-history line in DB Row viewer
-  const [coachChatsMeta, setCoachChatsMeta] = useState(null); // §18.H4 Coach Chats line in DB Row viewer
+  const [historyMeta, setHistoryMeta] = useState(null); // §3 config-history line in DB Row viewer
+  const [coachChatsMeta, setCoachChatsMeta] = useState(null); // §2.H4 Coach Chats line in DB Row viewer
   const [coachChatsListOpen, setCoachChatsListOpen] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -321,7 +356,7 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
-  // Point-in-time baseRate lookup (TODO §15.D / §19 narrow slice) — sorted-or-not
+  // Point-in-time baseRate lookup (TODO §1.D / §3 narrow slice) — sorted-or-not
   // list of { effectiveFrom, baseRate } fed to buildYear() so a rate change only
   // recomputes weeks from its effective date forward. See resolveBaseRateForWeek
   // in lib/finance.js for the resolution algorithm.
@@ -336,16 +371,25 @@ export default function App() {
   // itself does until setupComplete flips true.
   const [trialExplainerAcknowledged, setTrialExplainerAcknowledged] = useState(false);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
+  // Mobile-drawer-only entry point for BetaFeedbackDetail (Account panel keeps
+  // its own copy via ProfilePanel's sub-view router) — tracked beta testers only.
+  const [drawerFeedbackOpen, setDrawerFeedbackOpen] = useState(false);
+  const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
+  // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
+  // { status: "success" | "error", message } | null. Shown once via
+  // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
+  // instead of only a console warning on failure.
+  const [betaSignupNotice, setBetaSignupNotice] = useState(null);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
-  // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
+  // TODO §1 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
   // which is now a real persisted config.jobLossCashOnHand field edited
   // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
   // design — lifted here so both panels agree without either owning the
   // other's state.
   const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
-  // matching the §15.C1 spec ("dismissible but re-shows on reload").
+  // matching the §1.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -392,7 +436,7 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
 
-  // TODO §15 nav restructuring — Income/Log are dropped from the nav entirely
+  // TODO §1 nav restructuring — Income/Log are dropped from the nav entirely
   // in Job Loss Mode (effectiveBottomNav/effectiveNavItems above), but a user
   // could already be sitting on one of those tabs the instant jobLossMode
   // flips true (Back to Work's counterpart already reuses whatever tab was
@@ -414,39 +458,6 @@ export default function App() {
     setMainContentEl(el);
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
-
-  // Prevent background scroll while the admin sheet is open. On mobile the scroll
-  // container is .main-content (overflow-y:auto) — not <body> — so locking only the
-  // body did nothing and scroll leaked to the dashboard behind the sheet. Lock the
-  // actual container too; the sheet keeps its own overflow so it still scrolls.
-  useEffect(() => {
-    const sc = mainContentRef.current;
-    const lock = () => {
-      document.body.style.overflow = "hidden";
-      document.body.style.overscrollBehavior = "none";
-      if (sc) { sc.style.overflow = "hidden"; sc.style.overscrollBehavior = "none"; }
-    };
-    const unlock = () => {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-      if (sc) { sc.style.overflow = ""; sc.style.overscrollBehavior = ""; }
-    };
-    if (toolSheetOpen) lock(); else unlock();
-    return unlock;
-  }, [toolSheetOpen]);
-
-  // ≥44px tap target for the admin Tools sheet "View/Hide/Fetch" toggle links.
-  // They were ~10px tall (padding:0) and sit directly above the Demo Account
-  // buttons, so a missed tap launched the demo view (debug.md §4b). Negative
-  // margins absorb the extra padding into the surrounding 20px gutter so the
-  // header rows stay visually compact while the touch area meets the minimum.
-  const sheetToggleBtnStyle = {
-    background: "transparent", border: "none", color: "var(--color-accent-primary)",
-    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-    padding: "12px 10px", margin: "-10px -10px -10px 0",
-    minWidth: "44px", minHeight: "44px",
-    display: "inline-flex", alignItems: "center", justifyContent: "flex-end",
-  };
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -546,6 +557,34 @@ export default function App() {
             recordConsent(user.id, pendingConsentVersion);
           }
         } catch { /* private mode etc. */ }
+        // Beta-code signup-link handoff (captured on mount above) — same
+        // independent-of-revival reasoning as the consent handoff just above.
+        // Only cleared on success or a non-retryable failure; a retryable one
+        // (see MAX_PENDING_BETA_CODE_ATTEMPTS comment above) is written back
+        // with its attempt count bumped so the next real sign-in tries again.
+        try {
+          const pending = parsePendingBetaCode(window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY));
+          if (pending) {
+            redeemBetaCode(pending.code).then((result) => {
+              if (result.ok) {
+                window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
+                setBetaSignupNotice({ status: "success" });
+                return;
+              }
+              const attempts = pending.attempts + 1;
+              if (result.retryable && attempts < MAX_PENDING_BETA_CODE_ATTEMPTS) {
+                console.warn(`Beta signup-link code redemption failed (attempt ${attempts}/${MAX_PENDING_BETA_CODE_ATTEMPTS}), will retry on next sign-in:`, result.error);
+                try {
+                  window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, JSON.stringify({ code: pending.code, attempts }));
+                } catch { /* private mode etc. */ }
+                return;
+              }
+              window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
+              console.warn("Beta signup-link code redemption failed:", result.error);
+              setBetaSignupNotice({ status: "error", message: result.error });
+            });
+          }
+        } catch { /* private mode etc. */ }
         checkRevival()
           .then((revival) => {
             if (revival) {
@@ -574,6 +613,22 @@ export default function App() {
     }
     prevAuthedUserRef.current = authedUser;
   }, [authedUser]);
+
+  // ── Capture a beta-code signup link (website / flyer QR code) ──
+  // Runs once on mount, independent of auth state — a visitor can land here
+  // signed out (about to sign up) or, less commonly, already signed in.
+  // Stash-then-strip mirrors the OAuth-callback-failure cleanup just below;
+  // the value is consumed later in the SIGNED_IN handler, not here, since no
+  // session exists yet for most visitors hitting this link cold.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const betaCode = params.get("beta");
+    if (!betaCode) return;
+    try { window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, betaCode.trim()); } catch { /* private mode etc. */ }
+    params.delete("beta");
+    const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : "") + window.location.hash;
+    window.history.replaceState(window.history.state, "", cleanUrl);
+  }, []);
 
   // ── Detect a Google OAuth callback that reached the app but produced no session ──
   // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
@@ -745,7 +800,7 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
-  // ── Config history write path (TODO §19 phase 1) ──
+  // ── Config history write path (TODO §3 phase 1) ──
   // Watches every config transition rather than wrapping individual save calls,
   // so no whitelisted change can bypass capture regardless of which setConfig
   // site or save path (immediate vs. debounced) it flows through. Attributed
@@ -772,7 +827,7 @@ export default function App() {
       source: meta?.source ?? "config_edit",
       effectiveFrom,
     });
-    // Optimistic local append (TODO §15.D / §19 narrow slice) — the DB insert above
+    // Optimistic local append (TODO §1.D / §3 narrow slice) — the DB insert above
     // is fire-and-forget, so without this the just-made change wouldn't affect
     // buildYear()'s point-in-time resolution until the next full reload. Matters
     // most for a future-dated effective date: without the local entry, weeks
@@ -894,7 +949,7 @@ export default function App() {
     setSyncStatus({ op: "pull", pending: true });
     try {
       const data = await loadUserData();
-      // §19: a pull re-adopts what the DB already holds — if it diffs against
+      // §3: a pull re-adopts what the DB already holds — if it diffs against
       // in-memory state (drift), attribute the snapshot honestly, not as an edit.
       configHistoryMetaRef.current = { source: "force_pull" };
       setConfig(data.config);
@@ -956,8 +1011,8 @@ export default function App() {
         .eq("user_id", user.id)
         .single();
       setRowData(error ? { __error: error.message } : data);
-      setHistoryMeta(await fetchConfigHistoryMeta()); // §19 snapshot count + latest
-      setCoachChatsMeta(deriveCoachChatsMeta(await loadCoachChats())); // §18.H4 Coach Chats line
+      setHistoryMeta(await fetchConfigHistoryMeta()); // §3 snapshot count + latest
+      setCoachChatsMeta(deriveCoachChatsMeta(await loadCoachChats())); // §2.H4 Coach Chats line
     } catch (e) {
       setRowData({ __error: e.message });
     }
@@ -1035,7 +1090,7 @@ export default function App() {
   const entitlement = getEntitlement(subscription, new Date());
 
   const effectiveBottomNav = useMemo(() => {
-    // TODO §15 nav restructuring — Income and Log both assume an active pay
+    // TODO §1 nav restructuring — Income and Log both assume an active pay
     // structure (projected income, per-paycheck event log) that a Job Loss
     // Mode account doesn't have. Drop to Home/Budget/Account so nothing in the
     // nav points at a screen that's misleading or meaningless right now.
@@ -1044,9 +1099,9 @@ export default function App() {
       : [...BOTTOM_NAV];
     // Ask Coach general chat left the admin/tester-only standing constraint
     // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
-    // entitlement, not just isAdmin/isTester. Every OTHER Coach surface stays
-    // on canAccessAiFeatures (docs/TODO.md §18.0 build order).
-    if (canAccessAskCoachGeneral({ isAdmin, isTester, entitlement })) {
+    // entitlement, not just isAdmin/isTester/isInvestor. Every OTHER Coach
+    // surface stays on canAccessAiFeatures (docs/TODO.md §2.0 build order).
+    if (canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement })) {
       items.push({
         key: "__coach__",
         label: "Coach",
@@ -1057,19 +1112,8 @@ export default function App() {
         ),
       });
     }
-    if (isAdmin) {
-      items.push({
-        key: "__tools__",
-        label: "Tools",
-        icon: (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
-          </svg>
-        ),
-      });
-    }
     return items;
-  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode]);
+  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode, config.isInvestor]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1094,7 +1138,7 @@ export default function App() {
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
   }, [rowData, config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
-  // §19.F verification surface — one line summarizing account_history capture,
+  // §3.F verification surface — one line summarizing account_history capture,
   // shown in every DB Row viewer block alongside updated_at/drift.
   const historyLine = useMemo(() => {
     if (!historyMeta) return null;
@@ -1106,13 +1150,58 @@ export default function App() {
     return `config history: ${count} snapshot${count === 1 ? "" : "s"} · latest ${latest?.effective_from ?? "?"}${src}${fields}`;
   }, [historyMeta]);
 
-  // §18.H4 — "Coach Chats" line in the DB Row viewer.
+  // §2.H4 — "Coach Chats" line in the DB Row viewer.
   const coachChatsLine = useMemo(() => {
     if (!coachChatsMeta) return null;
     const { count, breakdown } = coachChatsMeta;
     if (!count) return "Coach Chats: 0 saved chats";
     return `Coach Chats: ${count} saved chat${count === 1 ? "" : "s"}${breakdown ? ` (${breakdown})` : ""}`;
   }, [coachChatsMeta]);
+
+  // §15.I — expense triage summary line for the DB Row viewer, shown next to
+  // historyLine/coachChatsLine so triage state (active/paused/cancelled) is
+  // visible without expanding the full expenses JSON. Reads exp.jobLossStatus/
+  // autoReactivateOnIncome directly (same fields JobLossBudgetPanel's triage
+  // UI writes — F44) rather than deriving a parallel status.
+  const expenseTriageLine = useMemo(() => {
+    if (!expenses?.length) return null;
+    let active = 0, paused = 0, cancelled = 0;
+    const noAutoReactivate = [];
+    for (const exp of expenses) {
+      const status = exp.jobLossStatus ?? "active";
+      if (status === "active") active++;
+      else if (status === "paused") paused++;
+      else if (status === "cancelled") cancelled++;
+      if ((exp.autoReactivateOnIncome ?? true) === false) noAutoReactivate.push(exp.name ?? exp.id);
+    }
+    if (paused === 0 && cancelled === 0 && noAutoReactivate.length === 0) return null;
+    const flag = noAutoReactivate.length > 0 ? ` · ${noAutoReactivate.length} won't auto-reactivate` : "";
+    return `Triage: ${active} active · ${paused} paused · ${cancelled} cancelled${flag}`;
+  }, [expenses]);
+
+  // §15.I — Config Raw View header: only the §15 Life Events fields that
+  // currently carry a value, so triaging a Job Loss account doesn't require
+  // eyeballing the full config JSON dump for these specific fields.
+  const lifeEventsConfigFields = useMemo(() => {
+    const fmt = v => Array.isArray(v) ? `${v.length} entr${v.length === 1 ? "y" : "ies"}` : String(v);
+    return [
+      ["jobLossMode", config.jobLossMode],
+      ["jobLossDate", config.jobLossDate],
+      ["jobLossCashOnHand", config.jobLossCashOnHand],
+      ["jobLossCashOnHandAsOf", config.jobLossCashOnHandAsOf],
+      ["jobLossPendingCheckAmount", config.jobLossPendingCheckAmount],
+      ["jobLossPendingCheckDate", config.jobLossPendingCheckDate],
+      ["unemploymentEnabled", config.unemploymentEnabled],
+      ["unemploymentWeekly", config.unemploymentWeekly],
+      ["unemploymentDurationWeeks", config.unemploymentDurationWeeks],
+      ["unemploymentWaitingWeek", config.unemploymentWaitingWeek],
+      ["returnToWorkDate", config.returnToWorkDate],
+      ["jobApplications", config.jobApplications?.length ? config.jobApplications : null],
+      ["jobHuntIncomeLog", config.jobHuntIncomeLog?.length ? config.jobHuntIncomeLog : null],
+    ]
+      .filter(([, v]) => v !== null && v !== undefined && v !== false && v !== "")
+      .map(([label, v]) => [label, fmt(v)]);
+  }, [config]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config, baseRateHistory), [config, baseRateHistory]);
@@ -1143,6 +1232,23 @@ export default function App() {
     // Base user: any time after midnight following payPeriodEndDay.
     return payPeriodEndIso < effectiveToday;
   }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
+
+  // ── Tips/Commission daily check-in eligibility ──
+  // A given calendar day becomes askable at noon the day after it — mirrors the
+  // DHL Monday-6am gate above (trigger date = day+1, real wall-clock hour check
+  // only on the trigger date itself, admin Lock Date bypasses the hour check for
+  // testability). Any day further back than its own trigger date is unconditionally
+  // eligible any time — only the freshest ("yesterday") day waits on the noon gate.
+  const isTipsCommissionDayEligible = useCallback((dateIso) => {
+    const triggerDate = new Date(dateIso + "T00:00:00");
+    triggerDate.setDate(triggerDate.getDate() + 1);
+    const triggerIso = toLocalIso(triggerDate);
+    if (effectiveToday < triggerIso) return false;
+    if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+      return new Date().getHours() >= 12;
+    }
+    return true;
+  }, [effectiveToday, isAdmin, tempLockDate]);
 
   // Weeks before this fiscal idx are auto-assumed worked and never prompt the
   // confirm modal; only weeks from account creation onward are confirmable.
@@ -1219,6 +1325,75 @@ export default function App() {
     [eligiblePastPayWeeks, weekConfirmations]
   );
 
+  // ── Tips/Commission daily check-in queue ──
+  // tipsCommissionSkippedToday: session-only (React state, resets on reload — same
+  // semantics as confirmDismissed above), NOT persisted. A skip only needs to hide
+  // that day for the rest of THIS sitting so the queue can chain to the next-older
+  // backlog day; the day must still be askable again next session (with weekday+date
+  // phrasing instead of "yesterday") until it's answered or ages out of the 10-day
+  // backlog window — persisting the skip would wrongly suppress that re-ask.
+  const [tipsCommissionSkippedToday, setTipsCommissionSkippedToday] = useState(() => new Set());
+
+  const tipsCommissionLoggedDates = useMemo(
+    () => new Set(logs.filter(e => e.type === "tips_commission").map(e => e.date)),
+    [logs]
+  );
+
+  // Newest-first walk over the last 10 days: the first unresolved (not logged,
+  // not skipped this session) + eligible (past its own noon gate) day found is
+  // always the one surfaced. Answering or skipping it removes it from
+  // consideration, so the next render immediately surfaces the next-older
+  // backlog day in the same sitting — no separate "advance" step needed.
+  const tipsCommissionTriggerDate = useMemo(() => {
+    if (!config.tipsOrCommissionEnabled) return null;
+    const enabledAt = config.tipsOrCommissionEnabledAt;
+    for (let back = 1; back <= 10; back++) {
+      const d = new Date(effectiveToday + "T00:00:00");
+      d.setDate(d.getDate() - back);
+      const dIso = toLocalIso(d);
+      if (enabledAt && dIso < enabledAt) return null; // dates only get older from here — nothing further qualifies either
+      if (tipsCommissionLoggedDates.has(dIso)) continue;
+      if (tipsCommissionSkippedToday.has(dIso)) continue;
+      if (!isTipsCommissionDayEligible(dIso)) continue;
+      return dIso;
+    }
+    return null;
+  }, [config.tipsOrCommissionEnabled, config.tipsOrCommissionEnabledAt, tipsCommissionLoggedDates, tipsCommissionSkippedToday, effectiveToday, isTipsCommissionDayEligible]);
+
+  const tipsCommissionTriggerIsYesterday = useMemo(() => {
+    if (!tipsCommissionTriggerDate) return false;
+    const y = new Date(effectiveToday + "T00:00:00");
+    y.setDate(y.getDate() - 1);
+    return tipsCommissionTriggerDate === toLocalIso(y);
+  }, [tipsCommissionTriggerDate, effectiveToday]);
+
+  // Logs a tips_commission entry for the given day — the same "log gained money"
+  // mechanism the bonus event type uses (calcEventImpact's tips_commission branch
+  // mirrors its bonus branch), just entered through the daily check-in card instead
+  // of the full Log Event form. amount 0 ("No" answer) still counts as resolved —
+  // it's a real answer, not a skip, so it must not be asked again.
+  const handleTipsCommissionLog = useCallback((dateIso, amount) => {
+    const weekIdx = dateToWeekIdx(dateIso);
+    const weekMeta = allWeeks.find(w => w.idx === weekIdx) ?? null;
+    const entry = {
+      id: Date.now(),
+      type: "tips_commission",
+      date: dateIso,
+      weekIdx,
+      weekEnd: weekMeta ? toLocalIso(weekMeta.weekEnd) : "",
+      weekRotation: weekMeta?.rotation ?? "6-Day",
+      amount,
+      note: "",
+    };
+    const nextLogs = [...logs, entry];
+    setLogs(nextLogs);
+    savePersistedStateNow({ logs: nextLogs });
+  }, [logs, allWeeks, savePersistedStateNow]);
+
+  const handleTipsCommissionSkip = useCallback((dateIso) => {
+    setTipsCommissionSkippedToday(prev => new Set(prev).add(dateIso));
+  }, []);
+
   // ── Admin: most-recent CONFIRMED eligible pay week (null when none) ──
   // The "Reopen Last Check-In" tool targets this week so admins can re-review
   // the weekly confirm modal on demand.
@@ -1241,7 +1416,6 @@ export default function App() {
     setWeekConfirmations(nextWeekConfirmations);
     savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs });
     setConfirmDismissed(false);  // ensure the modal pops back open
-    setToolSheetOpen(false);     // close the admin sheet so the modal is visible
   }, [reopenableWeekIdx, weekConfirmations, logs, savePersistedStateNow]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
@@ -1374,7 +1548,7 @@ export default function App() {
   // year silently diluted it by every inactive week before firstActiveIdx.
   // For a brand-new or just-reactivated (Back to Work) account that's most
   // of the year, so the "typical week" figure came out a fraction of a real
-  // paycheck (TODO §15 Job Loss Mode investigation, 2026-07-19). For a
+  // paycheck (TODO §1 Job Loss Mode investigation, 2026-07-19). For a
   // full-year account (firstActiveIdx 0) this is byte-identical to /52.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
   const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
@@ -1418,7 +1592,7 @@ export default function App() {
     [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
-  // ── Job Loss Mode expense triage (TODO §15.C3) ──
+  // ── Job Loss Mode expense triage (TODO §1.C3) ──
   // Paused/cancelled expenses drop out of forward projections while jobLossMode
   // is active. Missing jobLossStatus is treated as "active" so existing rows
   // need no migration.
@@ -1432,19 +1606,25 @@ export default function App() {
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
-  // Real runway for Ask Coach (drift-app-warden §21 quarantine-2 fix) — was
+  // Real runway for Ask Coach (drift-app-warden §8 quarantine-2 fix) — was
   // never wired at all before, so a Job Loss Mode user asking Coach about
   // runway got a bare "Job Loss Mode: active" with no number. Same
   // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
   // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
   // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
   // jobLossCashOnHand is read internally by computeJobLossRunway (and
-  // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
-  const coachRunwayDays = useMemo(() => {
+  // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
+  // §1.I — shared dash so the Live State Inspector's Job Loss rows read the
+  // same computeJobLossRunway() result Coach uses, instead of a third call
+  // site (drift-app-warden §8 F24: never a second/third runway derivation).
+  const jobLossDash = useMemo(() => {
     if (!config.jobLossMode) return null;
-    const dash = computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
-    return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
-  }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
+    return computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
+  }, [config, expenses, effectiveToday]);
+  const coachRunwayDays = useMemo(
+    () => resolvePrimaryRunwayDays(jobLossDash, config, jobLossIncludeBenefits),
+    [jobLossDash, config, jobLossIncludeBenefits],
+  );
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => ({
@@ -1514,15 +1694,15 @@ export default function App() {
   }
 
   function handleWizardComplete(mergedConfig) {
-    // §19: wizard flows are the one path that passes an explicit effective date
+    // §3: wizard flows are the one path that passes an explicit effective date
     // (the job start / change date anchor); plain edits default to today.
     configHistoryMetaRef.current = {
       source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
       effectiveFrom: mergedConfig.startDate ?? undefined,
     };
-    // §15.H4: Back to Work's structure_change flow is how a jobless-started user
+    // §1.H4: Back to Work's structure_change flow is how a jobless-started user
     // first fills in real pay structure. Clear the flag on success so future Life
-    // Events (and the §15.H5 banner copy) stop treating this as a no-prior-history
+    // Events (and the §1.H5 banner copy) stop treating this as a no-prior-history
     // account — otherwise a later job loss would incorrectly show the "no prior pay
     // history" banner even though real pay data exists now.
     const finalConfig = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
@@ -1530,7 +1710,7 @@ export default function App() {
       : mergedConfig;
     setConfig(finalConfig);
     closeWizardWithAnimation();
-    // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
+    // §1.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
     // Tax steps entirely and has no real income yet — defer the pinned Food default
     // to the user's first expense-triage pass instead of seeding it unseen. Passed
     // into the save overrides directly (not a separate setExpenses call) so the
@@ -1538,9 +1718,9 @@ export default function App() {
     // savePersistedStateNow's own doc comment calls out.
     const skipFoodSeed = wizardEntry === false && finalConfig.jobLossMode === true;
     if (skipFoodSeed) setExpenses([]);
-    // §15.H4: the reverse of the skip above — Back to Work is exactly when a
+    // §1.H4: the reverse of the skip above — Back to Work is exactly when a
     // jobless-started account gets real income again, so the mandatory Food
-    // expense (the only real mandatory expense that exists today — §25's planned
+    // expense (the only real mandatory expense that exists today — §7's planned
     // Rent expense isn't built yet) needs to come back. ensureInitialFoodExpense
     // is a no-op if the user already has one (e.g. added manually via Triage).
     const restoredExpenses = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
@@ -1557,11 +1737,11 @@ export default function App() {
     });
   }
 
-  // TODO §15 nav/panel restructuring — shared by the Job Loss banner's "Back to
+  // TODO §1 nav/panel restructuring — shared by the Job Loss banner's "Back to
   // Work" button and the new Account panel entry point (setup wizard rewrite,
   // 2026-07-18), so there's exactly one place that resets the job-loss fields.
   function handleBackToWork() {
-    // Auto-reactivate flagged expenses on exit (§15.C3).
+    // Auto-reactivate flagged expenses on exit (§1.C3).
     setExpenses(prev => prev.map(exp => {
       const status = exp.jobLossStatus ?? "active";
       const auto = exp.autoReactivateOnIncome ?? true;
@@ -1578,7 +1758,7 @@ export default function App() {
       unemploymentWeekly: null,
       unemploymentDurationWeeks: null,
       unemploymentWaitingWeek: false,
-      // §15.C6: projected return date is moot once they're actually
+      // §1.C6: projected return date is moot once they're actually
       // re-employed via the wizard. Job application log stays as
       // user history.
       returnToWorkDate: null,
@@ -1653,10 +1833,13 @@ export default function App() {
     return <FullScreenLoadingState />;
   }
 
-  // Investors/demo accounts and admins never hit the paywall — they either
-  // aren't real paying customers (investors) or need unrestricted access to
-  // support other users (admins).
-  const paywallBypassed = isAdmin || config.isInvestor;
+  // Investors/demo accounts, admins, and testers never hit the paywall — they
+  // aren't real paying customers (investors), need unrestricted access to
+  // support other users (admins), or are the same "bypasses every paid wall"
+  // tier as the other two by locked decision (2026-07-25, entitlements.js's
+  // hasPrivilegedAccess) — a tester previously only got a long trial window
+  // here, not an unconditional bypass; that asymmetry is now closed.
+  const paywallBypassed = isAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
 
   // Free trial breakdown — shown once ahead of first-run SetupWizard entry,
@@ -1845,7 +2028,6 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
-            .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
             .admin-inspector { bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
@@ -1881,7 +2063,6 @@ export default function App() {
           @media (min-width: 768px) {
             .mobile-header { display: none !important; }
             .mobile-bottom-nav { display: none !important; }
-            .mobile-admin-sheet { display: none !important; }
             /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
                ghost behind the sidebar if the user resizes the window. */
             .mobile-drawer-overlay { display: none !important; }
@@ -2108,6 +2289,17 @@ export default function App() {
                 </div>
                 {configViewOpen && (
                   <div style={{ position: "relative" }}>
+                    {lifeEventsConfigFields.length > 0 && (
+                      <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "6px", lineHeight: "1.5" }}>
+                        <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "3px" }}>Life Events</div>
+                        {lifeEventsConfigFields.map(([k, v]) => (
+                          <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                            <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                            <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
@@ -2137,6 +2329,7 @@ export default function App() {
                           {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                           {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                           {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                          {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                           {coachChatsLine && (
                             <div style={{ marginBottom: "4px" }}>
                               <Pressable
@@ -2418,6 +2611,18 @@ export default function App() {
               onShowChangelog={() => setShowChangelogModal(true)}
             />
           )}
+          {/* readOnly gate: an expired/paywalled account must not be able to write a
+              new log entry through this path even though it's outside the Log panel's
+              own readOnly-swap render (see CLAUDE.md's "readOnly gate" persistence note). */}
+          {!isExpiredReadOnly && tipsCommissionTriggerDate && (
+            <TipsCommissionCheckIn
+              label={config.tipsOrCommissionLabel ?? "tips"}
+              dateIso={tipsCommissionTriggerDate}
+              isYesterday={tipsCommissionTriggerIsYesterday}
+              onLog={(amount) => handleTipsCommissionLog(tipsCommissionTriggerDate, amount)}
+              onSkip={() => handleTipsCommissionSkip(tipsCommissionTriggerDate)}
+            />
+          )}
           <ChangelogModal
             open={showChangelogModal}
             entry={latestChangelogEntry}
@@ -2430,7 +2635,14 @@ export default function App() {
             agreeLoading={consentGateSaving}
           />
           {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
-          {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
+          {betaSignupNotice && (
+            <BetaSignupNoticeBanner
+              status={betaSignupNotice.status}
+              message={betaSignupNotice.message}
+              onDismiss={() => setBetaSignupNotice(null)}
+            />
+          )}
+          {/* ── Job Loss Mode banner (TODO §1.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
             // show a "runs out on" cliff warning. Waiting week shifts the start.
@@ -2464,7 +2676,7 @@ export default function App() {
                   Job Loss Mode
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                  {/* §15.H5: users who started jobless have no real pay history to compare
+                  {/* §1.H5: users who started jobless have no real pay history to compare
                       against — say so plainly instead of implying a job was actually lost. */}
                   {config.startedUnemployed === true ? (
                     "Started in Job Loss Mode — no prior pay history."
@@ -2489,7 +2701,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {/* TODO §15 mode rebuild — triage now lives inline on Budget
+                {/* TODO §1 mode rebuild — triage now lives inline on Budget
                     itself (JobLossBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
@@ -2540,7 +2752,7 @@ export default function App() {
             </div>
             );
           })()}
-          {/* TODO §15 mode rebuild (2026-07-18) — the standalone pinned dashboard
+          {/* TODO §1 mode rebuild (2026-07-18) — the standalone pinned dashboard
               card is gone; its content now lives in JobLossHomePanel/
               JobLossBudgetPanel, which render in place of the normal Home/Budget
               panels above instead of being layered on top of them. */}
@@ -2642,6 +2854,22 @@ export default function App() {
             >
               Life Events
             </Pressable>
+            {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
+              <Pressable
+                onClick={() => { setDrawerFeedbackOpen(true); setDrawerOpen(false); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "14px 20px", fontSize: "11px",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  background: "transparent",
+                  color: "var(--color-text-primary)",
+                  borderLeft: "3px solid transparent",
+                  border: "none", cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                Send Feedback
+              </Pressable>
+            )}
             {!isStandalone && (
               <Pressable
                 type="button"
@@ -2792,6 +3020,17 @@ export default function App() {
               </div>
               {configViewOpen && (
                 <div>
+                  {lifeEventsConfigFields.length > 0 && (
+                    <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "8px", lineHeight: "1.6" }}>
+                      <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "4px" }}>Life Events</div>
+                      {lifeEventsConfigFields.map(([k, v]) => (
+                        <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                          <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                     {JSON.stringify(config, null, 2)}
                   </pre>
@@ -2821,6 +3060,7 @@ export default function App() {
                         {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                         {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                         {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                        {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                         {coachChatsLine && (
                           <div style={{ marginBottom: "4px" }}>
                             <Pressable
@@ -2985,12 +3225,10 @@ export default function App() {
           {/* Sliding tab indicator — 2px teal bar that moves to the active tab.
               Contained within the pill via overflow:hidden on LiquidGlass. */}
           {(() => {
-            const toolsActive = toolSheetOpen && isAdmin;
             const coachActive = askCoachOpen;
             const baseIdx = effectiveBottomNav.findIndex(i => i.key === currentView);
-            const toolsIdx = effectiveBottomNav.findIndex(i => i.key === "__tools__");
             const coachIdx = effectiveBottomNav.findIndex(i => i.key === "__coach__");
-            const activeIdx = toolsActive ? toolsIdx : coachActive ? coachIdx : Math.max(baseIdx, 0);
+            const activeIdx = coachActive ? coachIdx : Math.max(baseIdx, 0);
             const pct = 100 / effectiveBottomNav.length;
             return (
               <div style={{
@@ -2999,30 +3237,23 @@ export default function App() {
                 left: `${activeIdx * pct}%`,
                 width: `${pct}%`,
                 height: "2px",
-                background: toolsActive ? "var(--color-warning)" : "var(--color-accent-primary)",
+                background: "var(--color-accent-primary)",
                 transition: "left 0.3s ease, background 0.2s ease",
                 borderRadius: "0 0 1px 1px",
               }} />
             );
           })()}
           {effectiveBottomNav.map(item => {
-            const isToolsBtn = item.key === "__tools__";
             const isCoachBtn = item.key === "__coach__";
-            const active = isToolsBtn ? toolSheetOpen : isCoachBtn ? askCoachOpen : (currentView === item.key && !toolSheetOpen && !askCoachOpen);
+            const active = isCoachBtn ? askCoachOpen : (currentView === item.key && !askCoachOpen);
             return (
               <Pressable
                 key={item.key}
                 onClick={() => {
-                  if (isToolsBtn) {
-                    setToolSheetOpen(v => !v);
-                    setAskCoachOpen(false);
-                    setDrawerOpen(false);
-                  } else if (isCoachBtn) {
+                  if (isCoachBtn) {
                     setAskCoachOpen(v => !v);
-                    setToolSheetOpen(false);
                     setDrawerOpen(false);
                   } else {
-                    setToolSheetOpen(false);
                     setAskCoachOpen(false);
                     navigateDirect(item.key);
                   }
@@ -3032,9 +3263,7 @@ export default function App() {
                   height: "100%",
                   background: "transparent",
                   border: "none",
-                  color: active
-                    ? (isToolsBtn ? "var(--color-warning)" : "var(--color-accent-primary)")
-                    : "var(--color-text-disabled)",
+                  color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
@@ -3095,6 +3324,14 @@ export default function App() {
                 ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
+                // §15.I — Job Loss Mode rows, only when active. unemploymentRemainingWeeks
+                // reads jobLossDash.benefitsRemainingWeeks (computeJobLossRunway) rather
+                // than re-deriving the benefit window here (F24: one runway calc only).
+                ...(config.jobLossMode ? [
+                  ["Job Loss Date", config.jobLossDate ?? "—", null, true],
+                  ["Unemployment Wkly", config.unemploymentWeekly ? `$${config.unemploymentWeekly}` : "—", null, true],
+                  ["Unemployment Wks Left", jobLossDash?.benefitsRemainingWeeks ?? 0, null, true],
+                ] : []),
                 // §17.F admin visibility — resolved phase + the raw lifecycle
                 // fields a diagnostic session needs. Access Ends is the hidden
                 // day-21 cutoff (§D/§H disclosure rule) — this Inspector is
@@ -3104,11 +3341,11 @@ export default function App() {
                 ["Access Ends", subscription.accessEndsAt ? new Date(subscription.accessEndsAt).toLocaleDateString() : "—", "hidden cutoff"],
                 ["Period End", subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : "—", null],
                 ["Card / Dunning", subscription.cardOnFile ? "on file" : "none", subscription.dunningEmailCount ? `${subscription.dunningEmailCount} sent` : null],
-              ].map(([label, val, sub]) => (
+              ].map(([label, val, sub, amber]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
                   <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
                   <div style={{ textAlign: "right" }}>
-                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: label === "Effective Today" && today !== effectiveToday ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
+                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: amber || (label === "Effective Today" && today !== effectiveToday) ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
                     {sub && <div style={{ fontSize: "8px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{sub}</div>}
                   </div>
                 </div>
@@ -3119,6 +3356,7 @@ export default function App() {
           <Pressable
             onClick={() => setInspectorOpen(v => !v)}
             style={{
+              position: "relative",
               background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
               border: `1px solid ${inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.4)"}`,
               borderRadius: "20px",
@@ -3136,6 +3374,13 @@ export default function App() {
               transition: "all 0.15s ease",
             }}
           >
+            {/* §15.I — amber dot when the account is in Job Loss Mode, visible without opening the panel */}
+            {config.jobLossMode && (
+              <span
+                title="Job Loss Mode active"
+                style={{ position: "absolute", top: "-3px", right: "-3px", width: "9px", height: "9px", borderRadius: "50%", background: "var(--color-warning)", border: "1.5px solid var(--color-bg-base)" }}
+              />
+            )}
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
             </svg>
@@ -3151,6 +3396,14 @@ export default function App() {
         const wLookup = weekNetLookup[w.idx] ?? null;
         const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
         const weekLogs = logs.filter(e => resolveEventWeekMeta(e, allWeeks).weekIdx === w.idx);
+        // §15.I — mirrors buildYear's inJobLoss window boundary (finance.js) so the
+        // "outside benefit window" note only fires for weeks actually inside Job
+        // Loss Mode, not every pre-firstActiveIdx week. Diagnostic-only (never feeds
+        // math), same "mirror the exact algorithm" pattern as resolveBaseRateForWeek.
+        const weekEndIso = toLocalIso(w.weekEnd);
+        const inJobLossWindow = config.jobLossMode && config.jobLossDate
+          && weekEndIso >= config.jobLossDate
+          && (!config.returnToWorkDate || weekEndIso < config.returnToWorkDate);
         const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fN = n => n != null ? fC(n) : "—";
         const Row = ({ label, val, mono = true, color }) => (
@@ -3216,6 +3469,12 @@ export default function App() {
               <SH>Pay</SH>
               <Row label="Gross Pay" val={fN(w.grossPay)} />
               <Row label="Taxable Gross" val={fN(w.taxableGross)} />
+              {w.unemploymentIncome > 0 && (
+                <Row label="Unemployment" val={fN(w.unemploymentIncome)} color="var(--color-green)" />
+              )}
+              {inJobLossWindow && w.unemploymentIncome === 0 && (
+                <Row label="Unemployment" val="Job Loss Mode — outside benefit window" mono={false} color="var(--color-text-disabled)" />
+              )}
               <Row label="Benefits Deduction" val={fN(w.benefitsDeduction)} color="var(--color-deduction)" />
               <Row label="401k (Employee)" val={fN(w.k401kEmployee)} color="var(--color-deduction)" />
               <Row label="401k (Employer)" val={fN(w.k401kEmployer)} color="var(--color-green)" />
@@ -3263,331 +3522,6 @@ export default function App() {
           </div>
         );
       })()}
-
-      {/* ── Admin Tools slide-up sheet ── */}
-      {isAdmin && (
-        <>
-          {/* Backdrop — also hides the nav pill beneath it */}
-          {toolSheetOpen && (
-            <div
-              onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
-              style={{
-                position: "fixed", inset: 0, zIndex: 24,
-                background: "rgba(3, 10, 7, 0.82)",
-                cursor: "pointer",
-                touchAction: "none",
-              }}
-            />
-          )}
-          {/* Sheet */}
-          <div
-            className="mobile-admin-sheet"
-            style={{
-              display: "none",
-              position: "fixed",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 25,
-              transform: toolSheetOpen ? `translateY(${sheetDragY}px)` : "translateY(100%)",
-              transition: sheetDragY > 0 ? "none" : "transform 0.28s ease",
-              borderRadius: "20px 20px 0 0",
-              background: "var(--color-bg-surface)",
-              borderTop: "1px solid var(--color-border-accent)",
-              borderLeft: "1px solid var(--color-border-subtle)",
-              borderRight: "1px solid var(--color-border-subtle)",
-              maxHeight: "82vh",
-              overflowY: "auto",
-              overflowX: "hidden",
-              touchAction: "pan-y",
-            }}
-          >
-            {/* Handle bar — full-width drag zone, min 44px tall */}
-            <div
-              style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "44px", cursor: "grab", touchAction: "none" }}
-              onTouchStart={e => { sheetDragStartY.current = e.touches[0].clientY; }}
-              onTouchMove={e => {
-                if (sheetDragStartY.current === null) return;
-                const dy = e.touches[0].clientY - sheetDragStartY.current;
-                if (dy > 0) setSheetDragY(dy);
-              }}
-              onTouchEnd={() => {
-                if (sheetDragY > 120) {
-                  setToolSheetOpen(false);
-                }
-                setSheetDragY(0);
-                sheetDragStartY.current = null;
-              }}
-            >
-              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: sheetDragY > 0 ? "rgba(0,200,150,0.6)" : "rgba(0,200,150,0.3)", transition: "background 0.15s ease" }} />
-            </div>
-
-            {/* Header */}
-            <div style={{ padding: "10px 20px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-              {/* Row 1: title + close */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
-                    Admin Tools
-                  </span>
-                </div>
-                <Pressable
-                  onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
-                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", lineHeight: 1, flexShrink: 0 }}
-                  aria-label="Close admin tools"
-                >×</Pressable>
-              </div>
-              {/* Row 2: current panel context + active lock pill */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-                  On: <span style={{ color: "var(--color-text-primary)" }}>{NAV_ITEMS.find(i => i.key === currentView)?.label ?? "Home"}</span>
-                </span>
-                {tempLockDate && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "3px 7px 3px 8px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "12px", lineHeight: 1, cursor: "pointer", padding: "0", marginLeft: "1px" }}
-                      aria-label="Clear lock date"
-                    >×</Pressable>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tool sections — each separated by a divider */}
-            <div style={{ padding: "0 20px" }}>
-
-              {/* ── Lock Date ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Lock Date</div>
-                {tempLockDate ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "13px", color: "var(--color-warning)", fontFamily: "var(--font-mono)", flex: 1 }}>{tempLockDate}</span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                    >Clear ×</Pressable>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <input
-                      type="date"
-                      value={adminDateDraft}
-                      onChange={e => setAdminDateDraft(e.target.value)}
-                      style={{ width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "16px", padding: "10px 12px", fontFamily: "var(--font-mono)", colorScheme: "dark", boxSizing: "border-box" }}
-                    />
-                    <Pressable
-                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
-                      disabled={!adminDateDraft}
-                      style={{ width: "100%", background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "8px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", minHeight: "44px" }}
-                    >Set Lock Date</Pressable>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Force Sync ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Sync</div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {["push", "pull"].map(op => (
-                    <Pressable
-                      key={op}
-                      onClick={op === "push" ? handleForcePush : handleForcePull}
-                      disabled={!!syncStatus?.pending}
-                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
-                    >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
-                  ))}
-                </div>
-                {syncStatus && (
-                  <div style={{ fontSize: "10px", marginTop: "8px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
-                    {syncStatus.pending
-                      ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
-                      : syncStatus.ok
-                        ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
-                        : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Reopen Last Check-In ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Weekly Check-In</div>
-                <button
-                  onClick={handleReopenLastCheckIn}
-                  disabled={reopenableWeekIdx == null}
-                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer", minHeight: "44px", fontWeight: "bold" }}
-                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last Check-In · Wk ${reopenableWeekIdx}`}</button>
-                <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: "1.4" }}>
-                  Reopens the most recent confirmed week's modal for review. Income projections are unaffected.
-                </div>
-              </div>
-
-              {/* ── Config JSON ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
-                  <Pressable
-                    onClick={() => setConfigViewOpen(v => !v)}
-                    style={sheetToggleBtnStyle}
-                  >{configViewOpen ? "Hide ↑" : "View ↓"}</Pressable>
-                </div>
-                {configViewOpen && (
-                  <div>
-                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                      {JSON.stringify(config, null, 2)}
-                    </pre>
-                    <Pressable
-                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
-                      style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: "pointer", minHeight: "44px" }}
-                    >Copy to Clipboard</Pressable>
-                  </div>
-                )}
-              </div>
-
-              {/* ── DB Row Viewer ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: rowData && rowViewOpen ? "10px" : "0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
-                    {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px" }}>{rowDiff.length} drift</span>}
-                  </div>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ ...sheetToggleBtnStyle, cursor: rowFetching ? "not-allowed" : "pointer" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
-                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ ...sheetToggleBtnStyle, color: "var(--color-text-secondary)" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</Pressable>}
-                  </div>
-                </div>
-                {rowData && rowViewOpen && (
-                  rowData.__error
-                    ? <div style={{ fontSize: "10px", color: "var(--color-red)" }}>{rowData.__error}</div>
-                    : <>
-                        <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
-                          {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
-                          {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
-                          {historyLine && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{historyLine}</span>}
-                          {coachChatsLine && (
-                            <Pressable
-                              as="span"
-                              onClick={() => coachChatsMeta?.count > 0 && setCoachChatsListOpen(v => !v)}
-                              style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default" }}
-                            >
-                              {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
-                            </Pressable>
-                          )}
-                        </div>
-                        {coachChatsListOpen && coachChatsMeta?.count > 0 && (
-                          <div style={{ marginBottom: "8px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
-                            {coachChatsMeta.recentTitles.map((t, i) => (
-                              <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
-                            ))}
-                          </div>
-                        )}
-                        <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                          {JSON.stringify(rowData, null, 2)}
-                        </pre>
-                      </>
-                )}
-              </div>
-
-              {/* ── Tax Weeks Grid ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: taxGridOpen ? "10px" : "0" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <Pressable onClick={() => setTaxGridOpen(v => !v)} style={sheetToggleBtnStyle}>{taxGridOpen ? "Hide ↑" : "View ↓"}</Pressable>
-                </div>
-                {taxGridOpen && (() => {
-                  const overrides = config.pastWeekTaxStatusOverrides ?? {};
-                  const activeWeeks = allWeeks.filter(w => w.active);
-                  return (
-                    <>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "10px" }}>
-                        {activeWeeks.map(w => {
-                          const wIso = toLocalIso(w.weekEnd);
-                          const isPast = wIso < effectiveToday;
-                          const isCurrent = w.idx === currentWeek?.idx;
-                          const hasOverride = overrides[w.idx] !== undefined;
-                          const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
-                          return (
-                            <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "20px", height: "20px", borderRadius: "3px", background: bg, border: isCurrent ? "2px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
-                              {hasOverride && <div style={{ position: "absolute", top: "2px", right: "2px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-red)" }} />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                        {[
-                          { bg: "rgba(0,200,150,0.25)", label: "Taxed / future" },
-                          { bg: "var(--color-bg-base)", label: "Untaxed / future" },
-                          { bg: "var(--color-bg-raised)", label: "Past" },
-                        ].map(({ bg, label }) => (
-                          <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: bg, border: "1px solid var(--color-border-subtle)", flexShrink: 0 }} />
-                            <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                          <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--color-bg-base)", border: "2px solid #c8a84b", flexShrink: 0 }} />
-                          <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Current wk</span>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* ── Beta Report ── docs/TODO.md, admin-only usage/feedback CSV export */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Beta Report</div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <Pressable
-                    onClick={() => handleDownloadBetaReport("summary")}
-                    disabled={betaReportStatus?.loading}
-                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
-                  >
-                    {betaReportStatus?.loading ? "…" : "Usage CSV"}
-                  </Pressable>
-                  <Pressable
-                    onClick={() => handleDownloadBetaReport("feedback")}
-                    disabled={betaReportStatus?.loading}
-                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
-                  >
-                    {betaReportStatus?.loading ? "…" : "Feedback CSV"}
-                  </Pressable>
-                </div>
-                {betaReportStatus?.error && (
-                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
-                )}
-              </div>
-
-              {/* ── Demo Accounts ── */}
-              <div style={{ padding: "14px 0" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
-                  Demo Accounts
-                  {adminDemoView !== null && (
-                    <span style={{ color: "var(--color-warning)", marginLeft: "8px" }}>· Editing Demo {adminDemoView}</span>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {[1, 2].map(n => (
-                    <Pressable
-                      key={n}
-                      onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setToolSheetOpen(false); }}
-                      style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", minHeight: "44px" }}
-                    >
-                      {adminDemoView === n ? "← Exit Demo" : `Demo ${n}`}
-                    </Pressable>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bottom safe-area spacer */}
-              <div style={{ height: "calc(72px + env(safe-area-inset-bottom, 0px))" }} />
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ── Weekly work confirmation modal ──
           Shows when: unconfirmed past week exists AND confirmDismissed is false.
@@ -3666,9 +3600,9 @@ export default function App() {
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
 
-      {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
+      {/* ── Ask Coach (§2.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
-      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement }) && (
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
           isExiting={askCoachExiting}
@@ -3693,7 +3627,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
+      {/* ── Life Events menu (entry point modal — TODO §1.A) ── */}
       <LifeEventMenu
         open={lifeEventMenu}
         onClose={() => setLifeEventMenu(false)}
@@ -3703,7 +3637,43 @@ export default function App() {
           else setWizardEntry(route);
         }}
       />
-      {/* ── Job Loss Mode entry (TODO §15.C1) ── */}
+      {/* ── Mobile-drawer Send Feedback modal ── reuses BetaFeedbackDetail as-is;
+          its own BackBar (backLabel="Close") is the modal's only header, so no
+          separate header/close-X wrapper is added on top of it. Same
+          backdrop/card shell as LifeEventMenu for visual consistency. */}
+      {drawerFeedbackFold.mounted && (
+        <div
+          className="fold-backdrop" data-fold={drawerFeedbackFold.fold}
+          onClick={() => setDrawerFeedbackOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 70,
+            background: "rgba(0,0,0,0.78)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="fold-modal" data-fold={drawerFeedbackFold.fold}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border-subtle)",
+              borderRadius: "14px",
+              width: "100%", maxWidth: "440px",
+              maxHeight: "90vh", overflowY: "auto",
+              padding: "18px 20px",
+            }}
+          >
+            <BetaFeedbackDetail
+              isTester={isTester}
+              betaCodeUsed={betaCodeUsed}
+              backLabel="Close"
+              onBack={() => setDrawerFeedbackOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+      {/* ── Job Loss Mode entry (TODO §1.C1) ── */}
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
@@ -3720,7 +3690,7 @@ export default function App() {
           savePersistedStateNow(updatedExpenses ? { config: nextConfig, expenses: updatedExpenses } : { config: nextConfig });
         }}
       />
-      {/* ── Quick Rate Update (TODO §15.D) ── */}
+      {/* ── Quick Rate Update (TODO §1.D) ── */}
       <RateUpdateModal
         open={rateUpdateOpen}
         onClose={() => setRateUpdateOpen(false)}

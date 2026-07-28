@@ -5,7 +5,7 @@ import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 
-// §18.H — how many past Ask Coach conversations we keep. Matches the standing
+// §2.H — how many past Ask Coach conversations we keep. Matches the standing
 // plan's "save a person's last three conversations" — refreshHistory() below
 // prunes anything past this count every time a chat is saved, except the one
 // currently open (never delete out from under an active session).
@@ -68,13 +68,13 @@ function FeatherIcon({ children, size = 16 }) {
 }
 
 /**
- * §18.B/H — Ask Coach chat panel. Multi-turn conversation persists to
+ * §2.B/H — Ask Coach chat panel. Multi-turn conversation persists to
  * `coach_chats` (migration 023) after every completed turn — not just on
  * close — so a backgrounded tab can't lose an exchange (same eager-save
  * reasoning CLAUDE.md's Persistence section applies to config/goals/etc.).
  * A lightweight history view lists the user's last `MAX_SAVED_CHATS` saved
  * conversations, grouped by date, resumable with a tap. Gated at the call
- * site (canAccessAskCoachGeneral) per the §18 standing constraint.
+ * site (canAccessAskCoachGeneral) per the §2 standing constraint.
  */
 export function AskCoachPanel({
   onClose,

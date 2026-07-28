@@ -38,7 +38,7 @@ function advanceAnchorToNextDue(anchorIso, todayDate, cycleDays) {
 const LOAN_FREQUENCY_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
 
 // Returns the next calendar date this expense (or loan) is due, or null when
-// there's nothing to anchor on. Used by §15.C5 countdown tiles.
+// there's nothing to anchor on. Used by §1.C5 countdown tiles.
 //
 // Anchor resolution for regular expenses: prefers `expense.dueDateAnchor` (a
 // real bill due-date, set explicitly via the Job Loss expense review flow or
@@ -74,7 +74,7 @@ export function getExpenseDisplayAmount(expense) {
   return expense?.billingMeta?.amount ?? 0;
 }
 
-// ─── Job Loss due-date assignment (TODO §15 expense review) ─────────────────
+// ─── Job Loss due-date assignment (TODO §1 expense review) ─────────────────
 // Quick "week of month" presets for the payment-date step, plus a resolver
 // that turns a pick into a concrete anchor date. The day picks (1/8/15/22)
 // split the month into four roughly-even chunks. getNextDueDate's cycle math

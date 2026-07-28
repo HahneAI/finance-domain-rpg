@@ -35,7 +35,7 @@ function fmt(dateStr) {
 // ── Shared layout atoms ─────────────────────────────────────────────────────
 
 // Back nav header used by all sub-views
-function BackBar({ onBack, title }) {
+function BackBar({ onBack, title, backLabel = "Profile" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
@@ -43,7 +43,7 @@ function BackBar({ onBack, title }) {
         style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
+        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>{backLabel}</span>
       </Pressable>
       <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
@@ -1931,7 +1931,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-// docs/TODO.md §32 — self-serve redemption for an already-signed-in account.
+// docs/TODO.md §16 — self-serve redemption for an already-signed-in account.
 // Mirrors the investor code flow's client-side validate-then-redeem shape
 // (LoginScreen.jsx's investorCode handling), but simpler: this upgrades an
 // existing account in place rather than routing into a separate registration
@@ -2001,12 +2001,17 @@ function BetaRedeemDetail({ onBack }) {
   );
 }
 
-// docs/TODO.md §33 — replaces the earlier mailto: link. The beta scoring
+// docs/TODO.md §17 — replaces the earlier mailto: link. The beta scoring
 // rubric needs feedback to be both countable ("frequency") and readable
 // ("specificity"), which a mailto link can never supply — this logs the
 // actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
 // instead of handing it off to the user's mail client.
-function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
+// Exported so App.jsx can reuse it directly for the mobile-drawer entry
+// point — same component, two launch sites (Account panel's sub-view router,
+// and a standalone modal from the drawer). `backLabel` lets each site's
+// BackBar say the right thing ("Profile" inside the Account flow, "Close"
+// when launched as a standalone drawer modal with nothing to navigate back to).
+export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
 
@@ -2024,7 +2029,7 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Send Feedback" />
+      <BackBar onBack={onBack} title="Send Feedback" backLabel={backLabel} />
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (
@@ -2294,7 +2299,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
   const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
-  // docs/TODO.md §33/§36 — the real 10-week cohort only (isAdmin does NOT count,
+  // docs/TODO.md §17/§20 — the real 10-week cohort only (isAdmin does NOT count,
   // same distinction isTrackedBetaTester enforces everywhere else).
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
   const [activeSection, setActiveSection] = useState(null);
@@ -2358,12 +2363,12 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     <div style={{ maxWidth: "520px" }}>
       <PanelHero eyebrow="Authority Finance">Account</PanelHero>
 
-      {/* TODO §15 nav/panel restructuring — Job & Pay and Retirement & Benefits
+      {/* TODO §1 nav/panel restructuring — Job & Pay and Retirement & Benefits
           both show figures (rate, 401k contribution/match) that are either
           stale or actively misleading while there's no real income to speak
           of. Swapped for a single "Back to Work" entry point instead — the
           same structure_change flow the Job Loss banner's button already
-          uses (§15.H4) — as a second route to it beyond the banner. */}
+          uses (§1.H4) — as a second route to it beyond the banner. */}
       {config?.jobLossMode ? (
         <>
           <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Job Search</div>
@@ -2441,7 +2446,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         )}
       </div>
 
-      {/* Beta Program group (docs/TODO.md §32/§33/§36) — one section that adapts
+      {/* Beta Program group (docs/TODO.md §16/§17/§20) — one section that adapts
           to redemption state instead of two near-duplicate UI elements. Before
           redemption: a "Redeem Beta Code" entry point visible to every user,
           same always-visible-regardless-of-invite pattern LoginScreen already

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolvePrimaryRunwayDays, sumBillsDueSince, computeJobLossRunway } from "../../lib/jobLossRunway.js";
 
 // resolvePrimaryRunwayDays is the shared selector introduced to close
-// drift-app-warden §21's F24 quarantine — it must mirror the exact
+// drift-app-warden §8's F24 quarantine — it must mirror the exact
 // `hasBenefits && includeBenefits` ternary JobLossHomePanel.jsx/
 // JobLossBudgetPanel.jsx each use inline for their headline runway tile, so
 // any other consumer (Coach) quoting "the" runway number can't disagree.
@@ -42,7 +42,7 @@ describe("resolvePrimaryRunwayDays", () => {
   });
 });
 
-// Timeline-aware cash on hand (TODO §15.H17) — jobLossCashOnHand is a
+// Timeline-aware cash on hand (TODO §1.H17) — jobLossCashOnHand is a
 // point-in-time snapshot; essential bills whose due date passes since it was
 // last confirmed (jobLossCashOnHandAsOf) get subtracted automatically.
 const RENT = {
@@ -99,7 +99,7 @@ describe("sumBillsDueSince", () => {
   });
 });
 
-describe("computeJobLossRunway — timeline-aware cash on hand (§15.H17)", () => {
+describe("computeJobLossRunway — timeline-aware cash on hand (§1.H17)", () => {
   const baseConfig = {
     jobLossMode: true,
     jobLossDate: "2026-06-01",
@@ -121,7 +121,7 @@ describe("computeJobLossRunway — timeline-aware cash on hand (§15.H17)", () =
     expect(dash.effectiveCashOnHand).toBe(0);
   });
 
-  it("falls back to jobLossDate as the decay anchor when jobLossCashOnHandAsOf is unset (pre-§15.H17 accounts)", () => {
+  it("falls back to jobLossDate as the decay anchor when jobLossCashOnHandAsOf is unset (pre-§1.H17 accounts)", () => {
     const legacyConfig = { jobLossMode: true, jobLossDate: "2026-06-01", jobLossCashOnHand: 2000 };
     const dash = computeJobLossRunway({ config: legacyConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
     expect(dash.cashAsOf).toBe("2026-06-01");

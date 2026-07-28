@@ -1,4 +1,4 @@
-// §18.H — Ask Coach multi-turn chat + memory. chatWithCoach and the
+// §2.H — Ask Coach multi-turn chat + memory. chatWithCoach and the
 // coach_chats persistence layer are both mocked so these tests never touch
 // the network/DB — same isolation pattern as CoachNetWorthCard.test.jsx.
 import { describe, it, expect, vi, beforeEach } from "vitest";

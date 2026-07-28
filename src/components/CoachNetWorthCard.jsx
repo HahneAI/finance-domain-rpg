@@ -27,8 +27,8 @@ const DEFAULT_SIGNAL_STATE = {
 };
 
 /**
- * §18.C — Net Worth Trend Mental Health Trigger. Admin-gated at the call site
- * in HomePanel.jsx/JobLossHomePanel.jsx (docs/TODO.md §18 standing constraint
+ * §2.C — Net Worth Trend Mental Health Trigger. Admin-gated at the call site
+ * in HomePanel.jsx/JobLossHomePanel.jsx (docs/TODO.md §2 standing constraint
  * — every AI feature stays isAdmin/isTester-only for now). Rate-limits to one
  * Coach message per fiscal week per signal tier, and caches the message text
  * so a reload within the same week/tier replays it instead of re-calling the
@@ -70,9 +70,9 @@ export function CoachNetWorthCard({
 
   // Real runway, not the old independent estimate — computeJobLossRunway()
   // is the same function the Job Loss panels use, so this can't understate
-  // runway vs. what those panels show (drift-app-warden §21 F24). Raw
+  // runway vs. what those panels show (drift-app-warden §8 F24). Raw
   // jobLossCashOnHand is read internally by computeJobLossRunway now (and
-  // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
+  // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
   // Now that this card also mounts inside JobLossHomePanel (DW-8 fix),
   // includeBenefits is threaded through as a real prop instead of hardcoded —
   // the default stays true only for the plain HomePanel call site, which has

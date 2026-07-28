@@ -84,7 +84,7 @@ export const PRIVACY_POLICY_MARKDOWN = `**[PLACEHOLDER — draft structure only,
 
 ## 4. Data Storage & Security
 
-[PLACEHOLDER] Current posture: data is encrypted in transit (TLS) and access-controlled via row-level security. No field-level encryption at rest exists today because nothing currently collected falls into a regulated/high-sensitivity class (see internal tracking: docs/TODO.md §27). This section must be updated if that changes.
+[PLACEHOLDER] Current posture: data is encrypted in transit (TLS) and access-controlled via row-level security. No field-level encryption at rest exists today because nothing currently collected falls into a regulated/high-sensitivity class (see internal tracking: docs/TODO.md §11). This section must be updated if that changes.
 
 ## 5. Data Sharing
 

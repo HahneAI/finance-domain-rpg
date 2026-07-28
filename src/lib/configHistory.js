@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────
-// CONFIG HISTORY — TODO §19 phase 1 (write path)
+// CONFIG HISTORY — TODO §3 phase 1 (write path)
 //
 // The v1 historically-sensitive field whitelist and the diff that decides
 // whether a config transition earns an account_history snapshot. Everything
 // NOT listed here (UI prefs, dismissal state, goalTimelineEpochIdx, investor
 // display fields, wizard gate flags) is noise and must never trigger a row.
 //
-// Future fields with no schema yet (employer name, §15.C triage stances,
-// §20 taxedWeeksFed/State) are parked in the commented-out block in
-// docs/TODO.md §19.D2 — add them here when they exist in DEFAULT_CONFIG.
+// Future fields with no schema yet (employer name, §1.C triage stances,
+// §4 taxedWeeksFed/State) are parked in the commented-out block in
+// docs/TODO.md §3.D2 — add them here when they exist in DEFAULT_CONFIG.
 // ─────────────────────────────────────────────────────────────
 
 export const HISTORY_SENSITIVE_FIELDS = [

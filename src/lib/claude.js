@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js";
 
 /**
- * §18.G — thin client for the Ask Coach feature. Talks only to our own
+ * §2.G — thin client for the Ask Coach feature. Talks only to our own
  * api/coach.js serverless route (never Anthropic directly) so the API key
  * stays server-side. Retries are for network failure before any response —
  * a non-2xx from the route is a real error and is thrown, not retried.

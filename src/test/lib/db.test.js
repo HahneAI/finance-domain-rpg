@@ -17,7 +17,7 @@ vi.mock('../../lib/supabase.js', () => ({
 }))
 
 import { getCachedAuthSnapshot, getCurrentUserId, supabase } from '../../lib/supabase.js'
-import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta, flushUserDataKeepalive } from '../../lib/db.js'
+import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta, flushUserDataKeepalive, redeemBetaCode } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
 // Mock helpers
@@ -26,7 +26,7 @@ import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchC
 /** account_history's query chain (.select().eq().order()) — distinct shape from
  * the .single()-based user_data/investor_users chains below, so every
  * setupLoad* helper must branch on table name rather than using one blanket
- * mockReturnValue (added for TODO §15.D / §19's baseRate-history fetch). */
+ * mockReturnValue (added for TODO §1.D / §3's baseRate-history fetch). */
 function historyChain(historyRows) {
   return {
     select: vi.fn().mockReturnValue({
@@ -505,7 +505,7 @@ describe('loadUserData — misc fields', () => {
   })
 })
 
-describe('loadUserData — baseRate history (TODO §15.D / §19 narrow slice)', () => {
+describe('loadUserData — baseRate history (TODO §1.D / §3 narrow slice)', () => {
   it('defaults baseRateHistory to [] when account_history has no rows', async () => {
     setupLoadMock(makeRow())
     const result = await loadUserData()
@@ -854,7 +854,65 @@ describe('syncUserProfile — profile metadata + trial seeding (migration 017/01
 })
 
 // ─────────────────────────────────────────────────────────────
-// TODO §19 phase 1 — account_history write path (migration 020)
+// redeemBetaCode — App.jsx's signup-link auto-redeem retries on
+// { retryable: true } and gives up on { retryable: false }; this covers the
+// classification redeemBetaCode hands back for each failure mode.
+// ─────────────────────────────────────────────────────────────
+
+describe('redeemBetaCode', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns ok:true on a successful grant', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
+    const result = await redeemBetaCode('CLARITY')
+    expect(result).toEqual({ ok: true })
+    expect(fetch).toHaveBeenCalledWith('/api/seed', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
+      body: JSON.stringify({ type: 'beta', code: 'CLARITY' }),
+    }))
+  })
+
+  it('flags a missing session as retryable — the token may just not have landed yet', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
+    const result = await redeemBetaCode('CLARITY')
+    expect(result).toEqual({ ok: false, error: 'Not signed in', retryable: true })
+  })
+
+  it('flags a network failure (fetch throws) as retryable', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    const result = await redeemBetaCode('CLARITY')
+    expect(result).toEqual({ ok: false, error: 'Failed to fetch', retryable: true })
+  })
+
+  it('flags a 5xx server error as retryable', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: 'Failed to grant beta access' }) }))
+    const result = await redeemBetaCode('CLARITY')
+    expect(result).toEqual({ ok: false, error: 'Failed to grant beta access', retryable: true })
+  })
+
+  it('flags a 403 (invalid/inactive/already-claimed code) as NOT retryable', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'Invalid or inactive beta code' }) }))
+    const result = await redeemBetaCode('NOPE')
+    expect(result).toEqual({ ok: false, error: 'Invalid or inactive beta code', retryable: false })
+  })
+
+  it('flags a 400 (missing code) as NOT retryable', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: 'Missing beta code' }) }))
+    const result = await redeemBetaCode('')
+    expect(result).toEqual({ ok: false, error: 'Missing beta code', retryable: false })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// TODO §3 phase 1 — account_history write path (migration 020)
 // ─────────────────────────────────────────────────────────────
 
 describe('saveConfigSnapshot', () => {

@@ -15,9 +15,9 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
  *
  * Step 0 (unchanged): captures the job-loss effective date, mandatory
- * cash-on-hand (§15.H13), and the unemployment-benefit setup (§15.C1/C2).
+ * cash-on-hand (§1.H13), and the unemployment-benefit setup (§1.C1/C2).
  *
- * Step 1 (new — §15.H15 pending/final paycheck): mimics the weekly
+ * Step 1 (new — §1.H15 pending/final paycheck): mimics the weekly
  * check-in's day-picker UX (WeekConfirmModal.jsx) rather than reusing it —
  * that component is DHL-rotation/bucket/OT-aware and far heavier than this
  * needs. Skippable Y/N gate ("any paycheck still coming?"); if yes, a plain
@@ -31,9 +31,9 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * resolve-to-a-concrete-value pattern as `dueDateAnchor` below. Deliberately
  * scoped to a single 7-day picker regardless of pay schedule — for biweekly/
  * salary users this covers only the final week, not the full period; flagged
- * as a known scope limit in `docs/TODO.md` §15.H15, not silently wrong.
+ * as a known scope limit in `docs/TODO.md` §1.H15, not silently wrong.
  *
- * Step 2 (was Step 1 — TODO §15 expense review): a multi-select checklist of
+ * Step 2 (was Step 1 — TODO §1 expense review): a multi-select checklist of
  * the user's current expenses, all checked by default, letting them uncheck
  * anything they don't want tracked while job hunting. Unchecking never
  * deletes or edits the expense — it only sets `trackDuringJobLoss: false`,
@@ -78,7 +78,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
   const [durationDraft, setDurationDraft] = useState("");
   const [waitingWeek, setWaitingWeek] = useState(true);
 
-  // ── Pending/final paycheck (§15.H15) — skippable, unlike cash-on-hand.
+  // ── Pending/final paycheck (§1.H15) — skippable, unlike cash-on-hand.
   // null = unanswered; true/false once picked. workedDays is a Set of
   // DAY_NAMES strings; arrivalDow is a JS getDay() value (0-6) or null.
   const [pendingCheckAnswered, setPendingCheckAnswered] = useState(null);
@@ -126,7 +126,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
   const unemploymentFieldsValid = !hasUnemployment || ((weeklyVal ?? 0) > 0 && (durationVal ?? 0) > 0);
   const step0Valid = !!date && cashOnHandValid && unemploymentAnswered !== null && unemploymentFieldsValid;
 
-  // ── Pending check derivation (§15.H15) ────────────────────────────────
+  // ── Pending check derivation (§1.H15) ────────────────────────────────
   const hasPendingCheck = pendingCheckAnswered === true;
   const pendingCheckValid = pendingCheckAnswered !== null && (!hasPendingCheck || arrivalDow !== null);
   const pendingPeriodEnd = hasPendingCheck
@@ -223,11 +223,11 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
   const nextDisabled = step === 0 ? !step0Valid : step === 1 ? !pendingCheckValid : step === 3 ? !dueDatesValid : false;
   // A native `disabled` button never dispatches onClick at all, so a click on
   // it can't reach goNext()'s `setAttempted(true)` branch — the red-border/
-  // required feedback (TODO §15.H13) would never actually show. Steps 0/1's
+  // required feedback (TODO §1.H13) would never actually show. Steps 0/1's
   // buttons stay visually greyed via nextDisabled above but must stay truly
   // clickable so a tap while a required field is empty surfaces the error
   // instead of just doing nothing. Steps 2/3 keep the prior native-disabled
-  // behavior (pre-existing gap there, not introduced here — see §15.H15).
+  // behavior (pre-existing gap there, not introduced here — see §1.H15).
   const nextNativeDisabled = (step === 0 || step === 1) ? false : nextDisabled;
 
   const labelStyle = { fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
@@ -327,7 +327,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                 </div>
               </div>
 
-              {/* ── Unemployment Y/N gate (§15.C2) ── */}
+              {/* ── Unemployment Y/N gate (§1.C2) ── */}
               <div>
                 <label style={labelStyle}>Are you getting unemployment benefits?</label>
                 <div style={{ display: "flex", gap: "8px" }}>

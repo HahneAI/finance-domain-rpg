@@ -12,8 +12,8 @@ import { isTrackedBetaTester } from "./entitlements.js";
 const FOOD_DEFAULT_MONTHLY = 400;
 const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
 
-// Maps raw account_history rows (TODO §19) down to the { effectiveFrom, baseRate }
-// shape finance.js's resolveBaseRateForWeek expects — narrow §15.D read-path slice,
+// Maps raw account_history rows (TODO §3) down to the { effectiveFrom, baseRate }
+// shape finance.js's resolveBaseRateForWeek expects — narrow §1.D read-path slice,
 // baseRate only. Filters to rows that actually changed baseRate and have a real
 // numeric value in their snapshot (schema drift tolerance: an old/malformed
 // snapshot missing baseRate is silently skipped rather than injecting a bad entry).
@@ -150,7 +150,7 @@ export async function loadUserData() {
   // Fetch baseRate history independently (account_history, migration 020) — same
   // isolation pattern as week_confirmations: a not-yet-migrated DB or a fetch error
   // falls back to [] (buildYear's resolver then behaves exactly as it did before
-  // this existed) instead of blowing up the whole load. TODO §15.D / §19 narrow
+  // this existed) instead of blowing up the whole load. TODO §1.D / §3 narrow
   // read-path slice — baseRate only, see resolveBaseRateForWeek in finance.js.
   const { data: historyRows } = await supabase
     .from("account_history")
@@ -489,8 +489,8 @@ export function flushUserDataKeepalive({ config, expenses, goals, logs, showExtr
 }
 
 /**
- * Append one config snapshot to account_history (TODO §19 phase 1 write path).
- * New-value snapshot per §19.D2: `config` is the full NEW config taking effect.
+ * Append one config snapshot to account_history (TODO §3 phase 1 write path).
+ * New-value snapshot per §3.D2: `config` is the full NEW config taking effect.
  * Fire-and-forget: a failure (e.g. migration 020 not yet run in Supabase) is
  * logged and never blocks the main save path — same tolerance pattern as
  * loadUserData's isolated week_confirmations fetch.
@@ -514,7 +514,7 @@ export async function saveConfigSnapshot({ config, changedFields, source, effect
 
 /**
  * Count + latest row for the admin DB Row Viewer's config-history line
- * (§19.F verification surface). Returns { count, latest } on success,
+ * (§3.F verification surface). Returns { count, latest } on success,
  * { error } when the table is missing/unreachable — the caller renders
  * whichever it gets.
  */
@@ -534,7 +534,7 @@ export async function fetchConfigHistoryMeta() {
 }
 
 /**
- * §18.H2 — Coach chat & Job Scout search history (migration 023). Fetches the
+ * §2.H2 — Coach chat & Job Scout search history (migration 023). Fetches the
  * N most recent coach_chats rows for the signed-in user; maps snake_case
  * columns to the camelCase shape the rest of the app uses. Returns [] on no
  * session, no rows, or a missing-table error (migration not yet run) — same
@@ -571,7 +571,7 @@ export async function loadCoachChats(limit = 20) {
 }
 
 /**
- * Upserts one coach_chats row (§18.H2). `chat.id` is optional — omit it for a
+ * Upserts one coach_chats row (§2.H2). `chat.id` is optional — omit it for a
  * brand-new chat and the DB generates one (returned so the caller can keep
  * upserting into the same row on later messages); pass an existing row's id
  * to update it. `user_id` always comes from the current session, never from
@@ -609,7 +609,7 @@ export async function saveCoachChat(chat) {
 }
 
 /**
- * Hard-deletes a single coach_chats row by id (§18.H2 — swipe-to-delete /
+ * Hard-deletes a single coach_chats row by id (§2.H2 — swipe-to-delete /
  * long-press in the future history list). The extra `user_id` filter is
  * defense-in-depth on top of RLS's own-row policy — same double-check pattern
  * already used for the investor_users delete below.
@@ -627,6 +627,67 @@ export async function deleteCoachChat(id) {
   if (error) {
     console.error("Failed to delete coach chat:", error.message);
   }
+}
+
+/**
+ * §18.E1 — Résumé Review v1 storage (migration 036). One row per user
+ * (`user_id` is the table's primary key, not a surrogate `id`), so this is a
+ * load-one/upsert-one shape rather than coach_chats' list shape. Returns null
+ * on no session, no saved profile yet, or a missing-table error — same
+ * tolerance pattern as loadCoachChats.
+ */
+export async function loadResumeProfile() {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from("resume_profile")
+    .select("resume_text, target_role, last_reviewed_at, created_at, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Failed to load resume profile:", error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  return {
+    resumeText: data.resume_text ?? "",
+    targetRole: data.target_role ?? "",
+    lastReviewedAt: data.last_reviewed_at,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+/**
+ * Upserts the signed-in user's resume_profile row by `user_id` (the table's
+ * primary key), so this never creates a second row for the same account.
+ * `user_id` always comes from the session, never the caller. Returns true on
+ * success, false on failure or no session.
+ */
+export async function saveResumeProfile(profile) {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const row = {
+    user_id: userId,
+    resume_text: profile.resumeText ?? null,
+    target_role: profile.targetRole ?? null,
+    last_reviewed_at: profile.lastReviewedAt ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("resume_profile")
+    .upsert(row, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("Failed to save resume profile:", error.message);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -921,19 +982,26 @@ export async function checkRevival() {
 
 /**
  * Redeems a beta program access code on the CALLER's own already-existing
- * account (docs/TODO.md §32) — unlike investor codes, this doesn't create a
+ * account (docs/TODO.md §16) — unlike investor codes, this doesn't create a
  * new account, it upgrades one that's already signed in. POSTs to api/seed.js
  * (type: "beta" — consolidated from the former api/seed-beta.js, api/seed-investor.js,
  * and api/seed-trial.js into one route to stay under Vercel's Hobby-plan
  * 12-function-per-deployment cap). Returns { ok: true } on success,
- * { ok: false, error } otherwise — the caller (ProfilePanel) is responsible
- * for reloading state after success, since is_tester/beta_code_used are
- * read-only fields loadUserData maps in.
+ * { ok: false, error, retryable } otherwise — the caller (ProfilePanel) is
+ * responsible for reloading state after success, since is_tester/beta_code_used
+ * are read-only fields loadUserData maps in.
+ *
+ * `retryable` tells a caller that auto-retries (App.jsx's signup-link handoff)
+ * whether trying the same code again later could plausibly succeed: true for
+ * a missing session or a network/server (5xx) failure — neither says anything
+ * about the code itself — false for a 4xx rejection (missing code, invalid/
+ * inactive/already-claimed code, seat cap full), which will fail identically
+ * on every retry since it's the request itself that's wrong.
  */
 export async function redeemBetaCode(code) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) return { ok: false, error: "Not signed in" };
+  if (!accessToken) return { ok: false, error: "Not signed in", retryable: true };
 
   try {
     const res = await fetch("/api/seed", {
@@ -942,10 +1010,10 @@ export async function redeemBetaCode(code) {
       body: JSON.stringify({ type: "beta", code }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code", retryable: res.status >= 500 };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, retryable: true };
   }
 }
 
@@ -974,7 +1042,7 @@ export async function logBetaEvent({ isTester, betaCodeUsed, eventType }) {
 }
 
 /**
- * Beta feedback submission (docs/TODO.md §33, migration
+ * Beta feedback submission (docs/TODO.md §17, migration
  * 030_add_beta_feedback.sql) — a 'feedback' event carrying the actual text in
  * `note`, so it's both countable (rubric's "frequency") and readable (rubric's
  * "specificity"), unlike the mailto link this replaces.

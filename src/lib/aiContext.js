@@ -2,6 +2,7 @@ import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, comput
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./jobLossRunway.js";
 
 // Pairs a fiscal week index with its real calendar date — full month name,
 // never abbreviated — and the period number in the unit this account's pay
@@ -64,7 +65,7 @@ function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx, 
 }
 
 /**
- * §18.G — deterministic compressed financial snapshot for Coach's system
+ * §2.G — deterministic compressed financial snapshot for Coach's system
  * prompt. Same line order/shape on every call (job-loss line only appears
  * when config.jobLossMode is set) so the block prompt-caches across a
  * session even as the underlying numbers change.
@@ -94,7 +95,7 @@ export function buildCoachContext({
   // so the Coach's stated annual savings/net-worth figures can't drift from
   // the Home tile they're described as matching — a flat 52 here double-
   // diluted weeklyIncome's own already-per-active-week average for any
-  // account that didn't start at fiscal week 0 (TODO §15, 2026-07-19).
+  // account that didn't start at fiscal week 0 (TODO §1, 2026-07-19).
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
   const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
@@ -203,6 +204,56 @@ export function buildCoachContext({
   return lines.join("\n");
 }
 
+/**
+ * §18.E — Job Hunt Assistant's dedicated context snapshot. A separate function
+ * from buildCoachContext (not an extra branch on it) because this mode needs
+ * fields — the full application log, target income — that would otherwise
+ * bloat the general Ask Coach/Net Worth prompt's cached prefix for every user
+ * not in this specific mode. Every figure resolves through the same
+ * authoritative functions the on-screen panels use (§21 F113's grounding
+ * rule): computeJobLossRunway/resolvePrimaryRunwayDays (JobLossHomePanel's
+ * own runway tile) and sumJobHuntIncome — never a parallel estimate.
+ *
+ * Unlike the goal-breakdown line above, application company/role names are
+ * deliberately NOT withheld — Job Hunt Assistant's whole point is company-
+ * specific coaching ("prep me for the Acme interview"), so withholding the
+ * name would break the feature, not just protect privacy the way it does
+ * for goals.
+ */
+export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
+  const lines = [];
+  const manualSavings = Math.max(0, config?.jobLossCashOnHand ?? 0);
+  const huntIncome = sumJobHuntIncome(config);
+  const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
+  if (!dash) return "";
+
+  const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);
+  lines.push(`Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
+  if (dash.lifestyleWeeklySpend > 0) {
+    lines.push(`Lifestyle spend still tracked (not counted in runway above): ${fmt$(dash.lifestyleWeeklySpend)}/wk`);
+  }
+  if (huntIncome > 0) lines.push(`Extra job-hunt income logged so far: ${fmt$(huntIncome)}`);
+
+  if (config?.targetIncomeAnnual != null) {
+    lines.push(`Target annual income: ${fmt$(config.targetIncomeAnnual)}`);
+  }
+
+  const apps = Array.isArray(config?.jobApplications) ? config.jobApplications : [];
+  if (apps.length) {
+    const recent = [...apps].sort((a, b) => (b.dateApplied ?? "").localeCompare(a.dateApplied ?? "")).slice(0, 5);
+    const items = recent.map((a) => `${a.company} — ${a.role} (${a.status}, applied ${a.dateApplied})`).join("; ");
+    lines.push(`Applications (${apps.length} total${recent.length < apps.length ? `, ${recent.length} most recent shown` : ""}): ${items}`);
+  } else {
+    lines.push("No applications logged yet.");
+  }
+
+  if (config?.returnToWorkDate) {
+    lines.push(`Expected return-to-work date already set: ${config.returnToWorkDate}`);
+  }
+
+  return lines.join("\n");
+}
+
 // ── Future context extensions ───────────────────────────────────────────
 // None of these fields exist yet — nothing below is built. Listed here so
 // each feature extends buildCoachContext instead of growing its own bespoke
@@ -211,21 +262,20 @@ export function buildCoachContext({
 // Benefits/401k (BenefitsPanel)   — deferred, not built: hold off until we've looked closer at how
 //                                   a base (non-DHL) user onboards other employer comp (signing
 //                                   bonuses, non-DHL 401k match/vesting) — don't bake in DHL-shaped
-//                                   assumptions before that's settled. See docs/TODO.md §18.B.
-// §18.D Statements AI Insights    — period totals: gross, taxes, goal velocity, biggest expense shift
-// §18.E Job Hunt AI Assistant     — target income, application log summary, state/region
-// §18.J Tax Onboarding Interview  — taxedWeeksFed/State split, taxHistoryReliableFrom, account created_at
-// §21.A Paycheck variance forecaster — confirmed-vs-scheduled variance band (last 6 weeks)
-// §21.A Seasonal pattern memory   — prior-year seasonal deltas (OT spikes, utility swings)
-// §21.A Cash-flow crunch warning  — lowest upcoming spendable week + amount
-// §21.A Overtime ROI calculator   — marginal after-tax value of one more OT hour
-// §21.A Goal ETA drift alerts     — per-goal projected-finish drift vs. trend line
-// §21.B Schedule drift detector   — confirmed-vs-configured schedule deviation streak
-// §21.B Bill-creep detector       — expense history creep, annualized
-// §21.C Weekly pre-game briefing  — upcoming bills, goal contributions, one heads-up flag
-// §21.C Raise-negotiation prep    — hours-worked %, OT reliability, attendance streak, tenure
-// §21.C Yearly recap ("Wrapped")  — full-year aggregates: gross, taxes, goals funded, biggest OT week
-// §21.F2 Council of Future Selves — multi-year projection curve (savings velocity, loan payoff, 401k)
-// §21.F2 Burnout Sentinel         — consecutive-worked-days streak, fog index, missed-day corrections
-// §21.F1 The Fog Index           — micro check-in answers, anxious-open frequency, streak breaks
-// §21.F3 Heirloom Letters        — per-goal sealed-letter-pending-delivery flag (not financial data)
+//                                   assumptions before that's settled. See docs/TODO.md §2.B.
+// §2.D Statements AI Insights    — period totals: gross, taxes, goal velocity, biggest expense shift
+// §2.J Tax Onboarding Interview  — taxedWeeksFed/State split, taxHistoryReliableFrom, account created_at
+// §8.A Paycheck variance forecaster — confirmed-vs-scheduled variance band (last 6 weeks)
+// §8.A Seasonal pattern memory   — prior-year seasonal deltas (OT spikes, utility swings)
+// §8.A Cash-flow crunch warning  — lowest upcoming spendable week + amount
+// §8.A Overtime ROI calculator   — marginal after-tax value of one more OT hour
+// §8.A Goal ETA drift alerts     — per-goal projected-finish drift vs. trend line
+// §8.B Schedule drift detector   — confirmed-vs-configured schedule deviation streak
+// §8.B Bill-creep detector       — expense history creep, annualized
+// §8.C Weekly pre-game briefing  — upcoming bills, goal contributions, one heads-up flag
+// §8.C Raise-negotiation prep    — hours-worked %, OT reliability, attendance streak, tenure
+// §8.C Yearly recap ("Wrapped")  — full-year aggregates: gross, taxes, goals funded, biggest OT week
+// §8.F2 Council of Future Selves — multi-year projection curve (savings velocity, loan payoff, 401k)
+// §8.F2 Burnout Sentinel         — consecutive-worked-days streak, fog index, missed-day corrections
+// §8.F1 The Fog Index           — micro check-in answers, anxious-open frequency, streak breaks
+// §8.F3 Heirloom Letters        — per-goal sealed-letter-pending-delivery flag (not financial data)

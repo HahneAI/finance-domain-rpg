@@ -1,6 +1,17 @@
 import { toLocalIso } from "./finance.js";
+import { FISCAL_YEAR_START } from "../constants/config.js";
 
 export const FISCAL_WEEKS_PER_YEAR = 52;
+
+// Derives the fiscal week index for a given date string "YYYY-MM-DD".
+// Week 0 ends on FISCAL_YEAR_START; each subsequent week is 7 days.
+// Returns the smallest idx such that that week's end >= the given date.
+export function dateToWeekIdx(dateStr) {
+  const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
+  const target      = new Date(dateStr       + "T00:00:00");
+  const diffDays    = (target - weekZeroEnd) / 86400000;
+  return Math.max(0, Math.min(Math.ceil(diffDays / 7), FISCAL_WEEKS_PER_YEAR - 1));
+}
 
 export function getCurrentFiscalWeek(allWeeks, todayIso = toLocalIso(new Date())) {
   return (allWeeks ?? []).find((week) => week?.active && toLocalIso(week.weekEnd) >= todayIso) ?? null;
@@ -9,7 +20,7 @@ export function getCurrentFiscalWeek(allWeeks, todayIso = toLocalIso(new Date())
 // Weeks remaining from firstActiveIdx through fiscal year-end — the divisor
 // "typical weekly income"/annual-savings math should scale by instead of a
 // flat 52, so a mid-year-start (or Back to Work) account isn't diluted by
-// the inactive weeks before it (TODO §15, 2026-07-19). One shared source so
+// the inactive weeks before it (TODO §1, 2026-07-19). One shared source so
 // App.jsx, DemoAccountTree.jsx, aiContext.js and HomePanel.jsx can't drift
 // from each other on this — they all key off the same config.firstActiveIdx.
 export function resolveActiveWeeksThisYear(firstActiveIdx) {

@@ -1,4 +1,4 @@
-// §18.C — CoachNetWorthCard orchestrates coachTriggers.js + coachPrompts.js +
+// §2.C — CoachNetWorthCard orchestrates coachTriggers.js + coachPrompts.js +
 // chatWithCoach into a rendered card. chatWithCoach is mocked (an async
 // generator of text chunks) so these tests never touch the network/API key.
 //

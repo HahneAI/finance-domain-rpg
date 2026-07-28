@@ -65,24 +65,106 @@ export default async function handler(req, res) {
   return seedTrial(res, adminClient, userId);
 }
 
-// ── beta (was seed-beta.js) — docs/TODO.md §32 ──────────────────────────────
-async function seedBeta(req, res, adminClient, userId) {
-  const code = typeof req.body?.code === "string" ? req.body.code.trim().toLowerCase() : "";
-  if (!code) return res.status(400).json({ error: "Missing beta code" });
-
-  const { data: codeRow, error: codeError } = await adminClient
+// Claims one exact code, atomically, by flipping is_active false only if it's
+// currently true — this UPDATE only touches a row that is currently active,
+// and only ONE concurrent request for the same code can ever find a matching
+// row: Postgres serializes concurrent UPDATEs against the same row, so
+// whichever commits second re-evaluates the WHERE clause against the
+// now-inactive row and matches nothing. Same race-closing shape as the
+// 40-seat cap trigger (034_beta_seat_cap.sql), just expressed as an atomic
+// UPDATE...WHERE instead of a trigger, since this only needs to guard one row
+// at a time rather than count across the whole table. Returns { id, code } or
+// null.
+async function claimExactCode(adminClient, code) {
+  const { data } = await adminClient
     .from("beta_codes")
-    .select("id")
-    .eq("code", code)
+    .update({ is_active: false })
+    .ilike("code", code)
     .eq("is_active", true)
+    .select("id, code")
     .maybeSingle();
-  if (codeError || !codeRow) return res.status(403).json({ error: "Invalid or inactive beta code" });
+  return data ?? null;
+}
+
+// Auto-assigns any one available code tagged with `channel` (migration
+// 035_add_beta_codes_channel.sql) — lets one QR code/link (e.g. "?beta=flyer")
+// serve many different physical scans/visits without each one needing its
+// own unique code baked into the URL, while still recording exactly which
+// individual code each account ended up with for attribution.
+//
+// select-then-claim-by-id, not a single UPDATE: an UPDATE matching the whole
+// "channel = X AND is_active = true" WHERE clause with no row limit would
+// claim EVERY available code in the pool at once, not just one — Postgres
+// has no UPDATE...LIMIT. Retries a few times since a candidate can lose the
+// race to another concurrent claim between the SELECT and the UPDATE; each
+// individual claim attempt is still atomic (WHERE id = X AND is_active =
+// true), so this can only ever under-claim (retry) or correctly claim
+// exactly one row — never double-claim.
+async function claimFromChannel(adminClient, channel, attempts = 5) {
+  for (let i = 0; i < attempts; i++) {
+    const { data: candidate } = await adminClient
+      .from("beta_codes")
+      .select("id")
+      .eq("channel", channel)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (!candidate) return null; // pool empty or channel doesn't exist
+    const { data: claimed } = await adminClient
+      .from("beta_codes")
+      .update({ is_active: false })
+      .eq("id", candidate.id)
+      .eq("is_active", true)
+      .select("id, code")
+      .maybeSingle();
+    if (claimed) return claimed;
+    // else: someone else claimed this exact row between the SELECT and the
+    // UPDATE above — loop and try a different candidate.
+  }
+  return null;
+}
+
+// ── beta (was seed-beta.js) — docs/TODO.md §32 ──────────────────────────────
+// Single-use as of the batch-code rollout: each row in beta_codes is consumed
+// (is_active flipped false) on its first successful redemption, reusing the
+// existing "is_active" flag rather than adding a new column — a spent code
+// fails the exact same "Invalid or inactive beta code" check an admin-
+// retired code already did, so no new error surface was needed.
+async function seedBeta(req, res, adminClient, userId) {
+  const submitted = typeof req.body?.code === "string" ? req.body.code.trim().toLowerCase() : "";
+  if (!submitted) return res.status(400).json({ error: "Missing beta code" });
+
+  // Try an exact code first (an individually-distributed one-off code, e.g.
+  // a VIP invite, still works exactly as before); fall back to treating the
+  // same submitted value as a channel/pool name. Both arrive via the same
+  // `?beta=<value>` URL param — the app never needs to know which case it is.
+  const claimedCode = (await claimExactCode(adminClient, submitted)) ?? (await claimFromChannel(adminClient, submitted));
+  if (!claimedCode) return res.status(403).json({ error: "Invalid or inactive beta code" });
 
   const { error: updateError } = await adminClient
     .from("user_data")
-    .update({ is_tester: true, beta_code_used: code })
+    .update({ is_tester: true, beta_code_used: claimedCode.code })
     .eq("user_id", userId);
   if (updateError) {
+    // The code is already consumed at this point — if granting access failed
+    // for any reason (most likely the 40-seat cap), un-consume it rather than
+    // silently burning a seat nobody actually got. Best-effort: if this
+    // reactivation itself fails, log it for manual dashboard cleanup rather
+    // than compounding the error into the response.
+    const { error: reactivateError } = await adminClient
+      .from("beta_codes")
+      .update({ is_active: true })
+      .eq("id", claimedCode.id);
+    if (reactivateError) {
+      console.error(`seed(beta) failed to reactivate code ${claimedCode.code} after a failed grant:`, reactivateError.message);
+    }
+    // 40-seat cap (migration 034_beta_seat_cap.sql) — a real, expected outcome
+    // once the program fills, not a server failure. The trigger's raised
+    // message surfaces here verbatim; match on it so this returns a clean
+    // user-facing "full" message + 403, not a generic 500 that reads like a bug.
+    if (updateError.message?.includes("beta program is full")) {
+      return res.status(403).json({ error: "The beta program is full" });
+    }
     console.error("seed(beta) update failed:", updateError.message);
     return res.status(500).json({ error: "Failed to grant beta access" });
   }

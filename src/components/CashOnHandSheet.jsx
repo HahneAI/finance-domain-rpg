@@ -4,7 +4,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 /**
  * CashOnHandSheet — single-line bottom-sheet editor for
  * `config.jobLossCashOnHand`, launched from the pencil-badged Cash On Hand
- * card (TODO §15.H17). Deliberately not the full BudgetPanel expense-detail
+ * card (TODO §1.H17). Deliberately not the full BudgetPanel expense-detail
  * sheet pattern (view/edit modes, multi-scope save buttons) — this is one
  * number, one Save. Visual language matches that sheet (bg-surface, pull
  * handle, 20px top-radius, portal-free since it isn't nested under any

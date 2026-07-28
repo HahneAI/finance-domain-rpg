@@ -1,7 +1,7 @@
 import { getEffectiveAmount, getPhaseIndex } from "./finance.js";
 import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 
-// TODO §15 mode rebuild — Job Loss Home and Budget are now two separate
+// TODO §1 mode rebuild — Job Loss Home and Budget are now two separate
 // components (not one "pinned to top" card layered over the normal panels),
 // but both need the exact same runway numbers: Home displays the headline
 // metrics, Budget owns the "additional savings" input and benefit scenario
@@ -33,7 +33,7 @@ export function sumJobHuntIncome(cfg) {
   return (cfg?.jobHuntIncomeLog ?? []).reduce((s, entry) => s + (entry.amount ?? 0), 0);
 }
 
-// ── Pending/final paycheck (TODO §15.H15) ────────────────────────────────
+// ── Pending/final paycheck (TODO §1.H15) ────────────────────────────────
 // A job loss rarely lines up with a pay period boundary — there's usually one
 // more check still owed for days actually worked before the loss date. None
 // of the above modeled this: buildYear() zeroes the whole fiscal week
@@ -83,7 +83,7 @@ export function estimatePendingCheckAmount(workedDaysCount, cfg) {
   return Math.max(0, gross * (1 - rate));
 }
 
-// ── Timeline-aware cash on hand (TODO §15.H17) ───────────────────────────
+// ── Timeline-aware cash on hand (TODO §1.H17) ───────────────────────────
 // Shared "does this expense count as an essential/needs bill for Job Loss
 // Mode math" predicate — was three separately copy-pasted inline filters
 // (weeklyBurn's essentialActive, lifestyleWeeklySpend's lifestyleActive, and
@@ -139,7 +139,7 @@ export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateIncl
  * — today that's just `sumJobHuntIncome(config)` (gig/odd-job income logged
  * on Home). The raw cash-on-hand figure itself is read from `config`
  * directly (not passed in) so it can be timeline-decayed internally — see
- * `effectiveCashOnHand` below (TODO §15.H17). Computed by the caller so this
+ * `effectiveCashOnHand` below (TODO §1.H17). Computed by the caller so this
  * stays a pure function of its arguments, not a hook.
  *
  * Returns null when jobLossMode/jobLossDate aren't set (nothing to compute).
@@ -151,7 +151,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
   const phaseIdx = getPhaseIndex(todayDate);
 
   // Essential = Needs / non-Lifestyle, tracked during Job Loss Mode (the
-  // expense review step's checklist — TODO §15 mode rebuild). Untracked
+  // expense review step's checklist — TODO §1 mode rebuild). Untracked
   // expenses (trackDuringJobLoss === false) are excluded from the runway
   // entirely, same as they're excluded from the Job Loss Budget list — they
   // stay untouched for normal-mode Budget, just not part of this math.
@@ -163,7 +163,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
     0,
   );
 
-  // Lifestyle spend (TODO §15.H14 bullet 2): still tracked/active rows in this
+  // Lifestyle spend (TODO §1.H14 bullet 2): still tracked/active rows in this
   // category are deliberately excluded from weeklyBurn above ("focuses on
   // survival spend"), but a user who keeps them checked is still actually
   // paying for them — surfaced separately so the runway UI can caption it
@@ -189,7 +189,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
   }
   const projectedUnemploymentTotal = benefitsRemainingWeeks * (config.unemploymentWeekly ?? 0);
 
-  // Timeline-aware cash on hand (TODO §15.H17): `jobLossCashOnHand` is a
+  // Timeline-aware cash on hand (TODO §1.H17): `jobLossCashOnHand` is a
   // point-in-time snapshot the user confirms via the Cash On Hand card's
   // editor, stamped with `jobLossCashOnHandAsOf` at that moment. From then
   // forward, every essential bill's due date that passes is assumed paid out
@@ -208,7 +208,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
   const withBenefitsCash = effectiveCashOnHand + safeExtraCash + projectedUnemploymentTotal;
   const withoutBenefitsCash = effectiveCashOnHand + safeExtraCash;
 
-  // Pending check (TODO §15.H15): a known future inflow, landing on a specific
+  // Pending check (TODO §1.H15): a known future inflow, landing on a specific
   // day rather than already-in-hand cash — so it extends the runway from the
   // day it's due, not from today. If cash runs dry before that day, the check
   // hasn't helped yet — the cliff lands at the dry-out point, same as if it
@@ -268,7 +268,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
  * JobLossBudgetPanel.jsx each do inline for their headline tile. Pulled out
  * so any *other* consumer (Coach's trigger/context) quoting "the" runway
  * number can't independently drift from what those two panels show (the
- * drift-app-warden §21 F24/quarantine-2 fix). If the two panels' inline
+ * drift-app-warden §8 F24/quarantine-2 fix). If the two panels' inline
  * selection logic ever changes, update this to match.
  *
  * Returns null when there's no dash (not in Job Loss Mode) or burn is zero

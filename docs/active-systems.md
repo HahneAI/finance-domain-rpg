@@ -4,10 +4,10 @@ Living doc. Describes what is built, how it works, and known gaps — organized 
 **domain/feature**, not by ship date. Renovated 2026-07-01: cross-referenced against
 `docs/past-TODO-tasks.md` and re-verified against the live codebase section by section;
 duplicate/stale entries from the old chronological version were merged or dropped.
-Extended 2026-07-07: added §21 (Monetization — the paywall/entitlement/revival system, TODO §17,
-was previously undocumented here despite being almost entirely shipped), §22 (Master Timeline
-config-history write path, TODO §19 phase 1), and §23 (Beta Tester Accounts, TODO §18); refreshed
-the §1/§5 known-gap notes to match. Extended 2026-07-16: added §24 (AI Layer — Coach, TODO §18) —
+Extended 2026-07-07: added §8 (Monetization — the paywall/entitlement/revival system, TODO §17,
+was previously undocumented here despite being almost entirely shipped), §5 (Master Timeline
+config-history write path, TODO §3 phase 1), and §9 (Beta Tester Accounts, TODO §2); refreshed
+the §1/§5 known-gap notes to match. Extended 2026-07-16: added §6 (AI Layer — Coach, TODO §2) —
 the chat panel, persona/feature-guide prompts, and context builder, plus the grounding pattern a
 live testing pass surfaced (reuse the UI's own authoritative computation, never a parallel
 approximation) that every future context-field addition should follow.
@@ -72,8 +72,8 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 - **Known gap:** `cfg` is one flat object applied to every week in `buildYear`, including
   already-elapsed ones — a mid-year pay/employer-preset edit retroactively recomputes
   past weeks, distorting annual tax totals. The write-path fix now captures every
-  sensitive change to `account_history` (§22), but `buildYear`/`computeNet` don't consult it
-  yet — the engine still applies live config uniformly. Full fix tracked in `TODO.md` §19.
+  sensitive change to `account_history` (§5), but `buildYear`/`computeNet` don't consult it
+  yet — the engine still applies live config uniformly. Full fix tracked in `TODO.md` §3.
 
 ---
 
@@ -97,7 +97,7 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 - **Point-in-time history** — each expense carries `history: [{effectiveFrom, weekly}]`
   (+ optional `monthlyOverrides[monthKey]`). `getEffectiveAmount()` /
   `getEffectiveAmountForMonth()` resolve the right entry per week/month, so editing a
-  bill's amount never rewrites past totals. This is the exact pattern `TODO.md` §19 wants
+  bill's amount never rewrites past totals. This is the exact pattern `TODO.md` §3 wants
   to generalize to pay-structure config.
 - **Save UX (shipped):** full-width "Month+ Onward" primary save action; secondary row
   offers month-only / quarter-only.
@@ -134,8 +134,8 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
   Payoff Date, Term Payment); pre-first-payment loans show a "Saving" badge instead.
 - **Known gap:** `buildLoanHistory()` regenerates a loan's *entire* history from
   `loanMeta` on every load — editing terms retroactively rewrites past weeks, same root
-  cause as the Income Engine gap above. Not yet covered by §22's `account_history` write
-  path — loans get their own expense-`history[]`-style follow-up (`TODO.md` §19).
+  cause as the Income Engine gap above. Not yet covered by §5's `account_history` write
+  path — loans get their own expense-`history[]`-style follow-up (`TODO.md` §3).
 
 ---
 
@@ -209,8 +209,8 @@ Wrap Up):
 
 ## 10. Life Events & Job Loss Mode
 
-Live, not scaffolding — more built than `docs/TODO.md` §15's checkbox state suggests. As of the
-§15.H7 rebuild (2026-07-18), Job Loss Mode is a genuinely distinct app mode, not a card layered on
+Live, not scaffolding — more built than `docs/TODO.md` §1's checkbox state suggests. As of the
+§1.H7 rebuild (2026-07-18), Job Loss Mode is a genuinely distinct app mode, not a card layered on
 the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` **instead of**
 `HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `JobLossDashboard.jsx`/
 `ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
@@ -218,9 +218,9 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
   `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick Rate
   Update → `RateUpdateModal.jsx`.
-- **`JobLossEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§15.H13,
-  persisted, accepts 0; stamps `jobLossCashOnHandAsOf` alongside it, §15.H17) + unemployment
-  benefits; (1) pending/final paycheck (§15.H15) — skippable "any check still coming?" gate, a
+- **`JobLossEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§1.H13,
+  persisted, accepts 0; stamps `jobLossCashOnHandAsOf` alongside it, §1.H17) + unemployment
+  benefits; (1) pending/final paycheck (§1.H15) — skippable "any check still coming?" gate, a
   worked-days grid, and an arrival-day picker, resolved once into a concrete
   `jobLossPendingCheckAmount`/`jobLossPendingCheckDate`; (2) expense review checklist, all bills
   checked by default, unchecking sets `trackDuringJobLoss: false` without touching anything else
@@ -236,13 +236,13 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   patched, closing that drift source for good. `weeklyBurn` only sums **Needs** (and loan)
   expenses — Lifestyle-category bills are tracked and shown but
   deliberately excluded from the burn number, surfaced instead as a separate `lifestyleWeeklySpend`
-  caption on Home (§15.H16). Cash is timeline-aware (§15.H17): `effectiveCashOnHand` = the
+  caption on Home (§1.H16). Cash is timeline-aware (§1.H17): `effectiveCashOnHand` = the
   persisted `jobLossCashOnHand` snapshot minus every essential bill's due-date occurrence that has
   landed since `jobLossCashOnHandAsOf` (`sumBillsDueSince()`, falls back to `jobLossDate` for
   accounts predating this field) — the displayed figure decreases on its own as bills come due
   instead of going stale until the user re-checks their balance. `extraCash` (just
   `sumJobHuntIncome()`, gig income logged via Home's "Log Extra Income" widget) adds on top,
-  uncounted by the decay. A pending/final paycheck (§15.H15) is folded in piecewise — it only
+  uncounted by the decay. A pending/final paycheck (§1.H15) is folded in piecewise — it only
   extends the runway once its own arrival date is reached, not lump-summed into today's cash.
 - **`JobLossHomePanel.jsx`** — a pencil-badged Cash On Hand card sits above the runway tiles;
   tapping it (or the equivalent row on Budget) opens `CashOnHandSheet.jsx`, a shared bottom-sheet
@@ -252,24 +252,29 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   return-to-work date, application CRUD with 6 statuses). **`JobLossBudgetPanel.jsx`** — the same
   Cash On Hand row/sheet, benefit-scenario toggle, upcoming-bills countdown, full expense triage
   (active/paused/cancelled) inline, simplified add-expense form. Both eager-save every mutation
-  (§15.H10).
+  (§1.H10).
 - **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work" re-enters the
   wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
   first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
   `LifeEventMenu`).
-- **Known gaps** (full write-up: `docs/TODO.md` §15.H14, closed items now in §15.H15–H17): AI
-  features (Coach, Job Hunt Assistant, Job Scout) are `is_admin`/`is_tester`-gated, so most real
-  Job Loss Mode users can't reach any of them yet — Job Hunt Assistant and Job Scout are still
-  unbuilt entirely (see `docs/coach-entry-points.md`); résumé/skill-gap analysis is scoped
-  (§18.E1) but not built. **Stale-note correction (2026-07-24):** this list previously also named
+- **Known gaps** (full write-up: `docs/TODO.md` §1.H14, closed items now in §1.H15–H17):
+  Job Hunt Assistant and Job Scout are still unbuilt entirely (see `docs/coach-entry-points.md`,
+  and note the Job Hunt Assistant build is now tracked in a separate session, not this doc's
+  worklist); résumé/skill-gap analysis is scoped (§2.E1) but not built. **Stale-note correction
+  (2026-07-25):** Coach itself is no longer `is_admin`/`is_tester`-only — its gate widened to
+  `canAccessAskCoachGeneral` (admin/tester **or** a real trial/paid entitlement, never
+  `isInvestor`) on 2026-07-24. Job Hunt Assistant/Job Scout/résumé review stay behind the
+  narrower `canAccessAiFeatures` (`isAdmin`/`isTester`) gate until each ships, then move to the
+  same paid-tier gate Coach already has — a resolved decision (`docs/TODO.md` §2.E), not an open
+  question. **Earlier stale-note correction (2026-07-24):** this list previously also named
   four gaps that have since closed and should no longer be treated as open — a pending/final
-  paycheck is now modeled in the runway calc (§15.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
-  an explicit UI callout instead of silently vanishing from `weeklyBurn` (§15.H16); the independent,
+  paycheck is now modeled in the runway calc (§1.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
+  an explicit UI callout instead of silently vanishing from `weeklyBurn` (§1.H16); the independent,
   drifted `coachTriggers.js#estimateRunwayDays` was deleted outright, not just fixed — every caller
   now goes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`; and Coach's Job Loss
   context line receives a real, computed `runwayDays` from `App.jsx` (`coachRunwayDays`), not a bare
   `"Job Loss Mode: active"` string. See `docs/BUG_FIX_TODO.md`'s Fixed table (DW-8, DW-9) and
-  `drift-app-warden.md` §21 F24 for the fix history.
+  `drift-app-warden.md` §8 F24 for the fix history.
 
 ---
 
@@ -363,10 +368,13 @@ Real, but no active roadmap item — dormant/developer-facing. `DemoAccountTree.
 (admin-editable mock accounts), `InvestorRegister.jsx` (signup path), `InvestorAdminPanel.jsx`
 + `createInvestorAccount()` (`db.js`) seed `investor_users` + `user_data` rows.
 
-**Crucial division from §23 Beta Tester Accounts:** these are two separate account tiers
-with zero overlap. `is_investor` unlocks the Demo Account Tree and the investor code
-signup path; `is_tester` unlocks in-progress AI features and nothing else. Neither flag
-should ever imply the other — see §23.
+**Still two separate account tiers for account-tier purposes — see §9.** `is_investor`
+unlocks the Demo Account Tree and the investor code signup path; `is_tester` unlocks the
+beta-tester-specific surfaces (usage tracking, the beta report). Neither flag implies the
+other for *those* surfaces. **One deliberate overlap as of 2026-07-25:** both flags (plus
+`is_admin`) now bypass every paid wall, AI features included — see §9's note and
+`entitlements.js`'s `hasPrivilegedAccess`. That's a shared "paid wall" exemption, not a
+merging of the two account tiers.
 
 ---
 
@@ -392,7 +400,7 @@ Server-side only — nothing runs on the client. Full paywall/trial context in
   domain is verified — swap before real users hit day 7 of a trial.
 - **`api/cron-subscription-lifecycle.js`** — daily Vercel cron (`vercel.json`, 15:00 UTC),
   guarded by `Authorization: Bearer <CRON_SECRET>`. Service-role scan of trial-seeded
-  `user_data` rows; skips `is_admin`/`is_investor`/`is_tester` (§23 — testers must never be
+  `user_data` rows; skips `is_admin`/`is_investor`/`is_tester` (§9 — testers must never be
   dunned or auto-deleted if their 6-month window lapses unrenewed).
 - **`api/_lifecycleEngine.js`** — pure per-row decision (phase math delegated to
   `getEntitlement`): trial nudges at day 7 + 12, grace/expired warnings every 2 days,
@@ -401,7 +409,7 @@ Server-side only — nothing runs on the client. Full paywall/trial context in
 - **`api/_lifecycleEmails.js`** — templates; disclosure rule (14-day copy only, never the
   hidden grace) enforced by `src/test/api/lifecycleEmails.test.js`; schedule/throttle by
   `src/test/api/lifecycleEngine.test.js`.
-- **On `deleteDue`:** `archiveAndDeleteAccount()` (§21) now actually runs — the archive
+- **On `deleteDue`:** `archiveAndDeleteAccount()` (§8) now actually runs — the archive
   step was the one piece missing here; it's no longer log-only.
 
 ---
@@ -432,7 +440,7 @@ no representation here until this pass).
   once in `UpgradeCard.jsx` — `UpgradeModal.jsx` wraps it as a dismissible overlay (triggered from
   Home/Budget), `UpgradePanel.jsx` as a non-dismissible full replacement. `TrialBanner.jsx` is the
   persistent countdown/warning strip, hidden only where `UpgradePanel` already replaces the view.
-- **Lifecycle emails:** own entry, §20.
+- **Lifecycle emails:** own entry, §4.
 - **Account revival:** a non-payment deletion (cron, day 21+7) tombstones the row into
   `deleted_accounts` (migration 017) before deleting — the *only* delete path that archives first;
   the user-initiated "type DELETE" flow stays a true, unrecoverable hard delete. `LoginScreen.jsx`
@@ -466,12 +474,12 @@ no representation here until this pass).
 - **Admin surface:** DB Row Viewer → Fetch shows "config history: N snapshots · latest [date]
   ([source]) · [changed fields]" (`fetchConfigHistoryMeta`, `db.js`).
 - **Known gap (by design — mostly unstarted):** almost nothing reads this table. One narrow
-  read slice is live (§15.D Quick Rate Update): `db.js#extractBaseRateHistory` filters
+  read slice is live (§1.D Quick Rate Update): `db.js#extractBaseRateHistory` filters
   `account_history` rows to baseRate changes → `App.jsx` `baseRateHistory` state →
   `buildYear(cfg, baseRateHistory)` → `resolveBaseRateForWeek` per week. The general
   read-path resolver (an analog of expenses' `getEffectiveAmount` for all sensitive fields)
   and the loan-history equivalent fix remain explicit, separate follow-ups. Full design
-  record in `docs/TODO.md` §19. Drift map for the live slice: `docs/drift-app-warden.md` §7 F10.
+  record in `docs/TODO.md` §3. Drift map for the live slice: `docs/drift-app-warden.md` §7 F10.
 
 ---
 
@@ -482,23 +490,31 @@ Anthony via the Supabase SQL editor on an already-existing account. No signup fl
 self-service opt-in, no client write path (locked the same way as `is_admin`/`is_investor`
 since migration 019's RLS column grants).
 
-- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester })` (`entitlements.js`) —
-  the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
+- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester, isInvestor })` (`entitlements.js`)
+  — the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
   checks — and, via the shared `hasTesterAccess` base, `canAccessTaxPlan({ isAdmin,
   taxProjectionsEnabled, isTester })` (`BudgetPanel.jsx`, `ProfilePanel.jsx`). Nothing else —
-  no Admin Diagnostic Toolkit, no other admin-only surface. Every per-feature gate in
-  `entitlements.js` builds on `hasTesterAccess` so `isAdmin` stays a strict superset of
-  `isTester` by construction as new gates are added.
+  no Admin Diagnostic Toolkit, no other admin-only surface. `hasTesterAccess` (admin/tester
+  only, no `isInvestor` param) still backs `canAccessTaxPlan`; `canAccessAiFeatures` and
+  `canAccessAskCoachGeneral` build on the wider `hasPrivilegedAccess` (admin/tester/investor)
+  instead, per the paid-wall decision below — the two bases are deliberately different sizes,
+  not a drift.
 - **Auto trial window:** a Postgres trigger on `user_data` seeds `trial_started_at` /
   `trial_ends_at` / `access_ends_at` to a 6-month window the moment `is_tester` flips
   false→true — one-time, not renewed on subsequent saves. This routes the account through
-  the real app-side trial state machine (`getEntitlement`, §17's Monetization system, §21)
+  the real app-side trial state machine (`getEntitlement`, §17's Monetization system, §8)
   instead of a hardcoded bypass, so it "behaves like a free trial account" per spec, just on
   a 6-month clock with no Stripe billing behind it.
-- **Crucial division:** beta testers are NOT investors — see §18. `is_tester` must never
-  grant Demo Account Tree access or the investor code path, and this gate must never fold
-  in `isInvestor`.
-- **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
+- **Still a crucial division, narrowed 2026-07-25:** beta testers are still NOT investors for
+  account-tier purposes — see §2. `is_tester` must never grant Demo Account Tree access or
+  the investor code path, and `is_investor` must never grant the beta-tester-specific surfaces
+  (`isTrackedBetaTester` usage tracking, the beta report, etc.). What changed: **every paid-wall
+  gate** (`canAccessAiFeatures`, `canAccessAskCoachGeneral` — AI features specifically, not the
+  account-tier features just listed) now treats admin/tester/investor as one "bypasses the paid
+  wall" tier (`hasPrivilegedAccess`, `entitlements.js`) — investor/demo accounts need the full
+  feature set for pitch/demo purposes, same reasoning as admin. `canAccessTaxPlan` was
+  deliberately left out of this widening; see its own docstring.
+- **Lifecycle cron:** bypassed the same as admin/investor (§4) — testers are never dunned
   or auto-deleted if the 6-month window lapses before renewal.
 
 ---
@@ -507,9 +523,9 @@ since migration 019's RLS column grants).
 
 Coach is an in-app AI companion — corner-man persona, full voice brief and scored tuning rubric
 in `docs/coach-personality-rubric.md` — that answers questions about how Authority Finance works,
-grounded in the user's real data. Gated behind `canAccessAiFeatures({isAdmin, isTester})` (§23)
+grounded in the user's real data. Gated behind `canAccessAiFeatures({isAdmin, isTester})` (§9)
 client **and** server side; every AI surface stays admin/tester-only until Coach leaves its
-build-out phase (`docs/TODO.md` §18 standing constraint).
+build-out phase (`docs/TODO.md` §2 standing constraint).
 
 - **Pieces:** `api/coach.js` (Vercel function; streams Anthropic SSE through; re-checks the gate
   server-side; prod/test key split via `ANTHROPIC_API_KEY`/`ANTHROPIC_API_KEY_TEST`, same MODE
@@ -536,6 +552,6 @@ build-out phase (`docs/TODO.md` §18 standing constraint).
   *user* volunteers it in their own message; it never learns one from data.
 - **Known gaps:** chat history persistence exists at the data layer (`coach_chats` table, migration
   023 live, `db.js` load/save/delete functions) but isn't wired into `App.jsx`/`AskCoachPanel` yet
-  (§18.H). Benefits/401k context is intentionally not wired — blocked on a product decision about
+  (§2.H). Benefits/401k context is intentionally not wired — blocked on a product decision about
   how base (non-DHL) users onboard other employer comp.
-- Full build log, deviations, and open questions: `docs/TODO.md` §18.
+- Full build log, deviations, and open questions: `docs/TODO.md` §2.

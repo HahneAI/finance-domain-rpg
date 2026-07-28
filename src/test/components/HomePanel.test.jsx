@@ -75,5 +75,24 @@ describe('HomePanel', () => {
       )
       await waitFor(() => expect(screen.getByText('trial user check-in')).toBeTruthy())
     })
+
+    // Locked decision 2026-07-25 (entitlements.js's hasPrivilegedAccess):
+    // investor accounts bypass every paid wall too, even with no entitlement
+    // at all — investor/demo accounts routinely carry none.
+    it('mounts the card for an investor account with no entitlement', async () => {
+      mocks.chatWithCoach.mockImplementation(async function* () { yield 'investor demo check-in' })
+      render(
+        <HomePanel
+          {...coachProps}
+          config={{ ...coachProps.config, isInvestor: true }}
+          isAdmin={false}
+          isTester={false}
+          entitlement={{ isEntitled: false, state: 'none' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+        />
+      )
+      await waitFor(() => expect(screen.getByText('investor demo check-in')).toBeTruthy())
+    })
   })
 })

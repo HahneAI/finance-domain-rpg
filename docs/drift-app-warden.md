@@ -197,7 +197,7 @@ Notes on deliberate placements:
 |-------|-----|-------|------------------------|----------------------|
 | **A — Fiscal Math** | L | `finance.js` (40 exports), `fiscalWeek.js`, `rollingTimeline.js`, `expense.js`, `goalFunding.js`, `jobLossRunway.js`, `stateTaxTable.js` | §1 · §2 · §7 (math) · §14 (math) | The single source of numeric truth. Every panel number must trace to an export here; `buildYear → computeNet → calcEventImpact → computeGoalTimeline` is the trunk — a change to any stage re-verifies every consumer surface (T2–T6) *and* Spine D's context fields. |
 | **B — Persistence & Save Integrity** | L | `db.js`, `useLocalStorage.js`, `supabase.js`, eager-save pattern (`savePersistedStateNow` + the four `saveXNow` wrappers), `configHistory.js`, `database/migrations/` | §22 | Every discrete mutation follows the eager-save pattern (D3); every sensitive config change must hit the `HISTORY_SENSITIVE_FIELDS` watcher; schema changes ride numbered migrations (BOOKMARK files are never migrations; next real number: 023 — verify against the folder, this doc does not track it). |
-| **C — Entitlement & Gating** | G | `subscription.js` (`getEntitlement`), `entitlements.js` (`canAccessAiFeatures`, `canAccessTaxPlan`, `hasTesterAccess` base), tier flags (`is_admin`/`is_tester`/`is_investor`/future `is_owner`) | §23 · §18 (flag semantics) · §21 (engine) | One entitlement resolver, one gate module. `isAdmin` stays a strict superset of `isTester` *by construction* (build every new gate on `hasTesterAccess`); tester⇔investor never overlap; the day-21 `access_ends_at` grace is never disclosed in user-facing strings. |
+| **C — Entitlement & Gating** | G | `subscription.js` (`getEntitlement`), `entitlements.js` (`canAccessAiFeatures`, `canAccessAskCoachGeneral`, `canAccessTaxPlan`, `hasTesterAccess`/`hasPrivilegedAccess` bases), tier flags (`is_admin`/`is_tester`/`is_investor`/future `is_owner`) | §23 · §18 (flag semantics) · §21 (engine) | One entitlement resolver, one gate module, two bases (2026-07-25). `isAdmin` stays a strict superset of `isTester` *by construction* either way; tester⇔investor never overlap for account-tier surfaces (Demo Tree, investor code, beta tracking) but **do** overlap by design on paid-wall gates (`hasPrivilegedAccess`); the day-21 `access_ends_at` grace is never disclosed in user-facing strings. |
 | **D — AI Layer & Context Grounding** | L | `aiContext.js` (`buildCoachContext`), `coachPrompts.js`, `coachFeatureGuide.js`, `coachTriggers.js`, `claude.js`, `api/coach.js`, `AskCoachPanel.jsx` | §24 | Every context field resolves through the same authoritative Spine-A function the UI displays that number with — never a parallel approximation (D1). Goal labels stay excluded (privacy rule). Gate is checked client *and* server side (Spine C). `coachTriggers.js#estimateRunwayDays` — the runway D1 violation this table used to flag — was deleted outright (`3267286`, 2026-07-22); Coach's runway now converges on `computeJobLossRunway` like every other consumer. |
 | **E — Design System & Motion** | G | `index.css` `@theme` tokens, `ui.jsx` primitives, `LiquidGlass.jsx` (`ALLOWED_PURPOSES`), animation rules, numeric-input standard, Pulse token reservation | §15 · §16 (primitives) | No raw hex for accent/green/red; Pulse tokens never on Flow elements; Liquid Glass only on whitelisted purposes; no bounce/spin/scale-up, ≤500ms; string-draft numeric inputs, parse at commit only. |
 | **F — Admin Diagnostic Toolkit** | G | Toolkit in `App.jsx` (8 Phase-1 tools), per-entry breakdown in `LogPanel.jsx` | §13 | The Warden's own instrument panel — drift *checks* are executed through it (Live Inspector, Week Inspector, DB Row drift badge, Config Raw View). A change that breaks a toolkit tool blinds every other drift check; Phase 2 (`isOwner`) tools are write-capable and get L-grade scrutiny when built. |
@@ -681,7 +681,8 @@ forward slot for a Coach-generated insight.
 
 **F24 · Coach Net Worth trigger chain** — gate `HomePanel.jsx`/`JobLossHomePanel.jsx`
 (`canAccessAskCoachGeneral` — widened from `canAccessAiFeatures` in the Coach gate-flip,
-2026-07-24: admin/tester **or** a real trial/paid entitlement, never `isInvestor`);
+2026-07-24: admin/tester/investor **or** a real trial/paid entitlement, per
+`hasPrivilegedAccess({isAdmin, isTester, isInvestor})` as of 2026-07-25 — see F111);
 `CoachNetWorthCard.jsx` computes `runwayDays` via `computeJobLossRunway()` +
 `resolvePrimaryRunwayDays()` directly (`jobLossRunway.js`) — **not** a local estimate;
 `coachTriggers.js`: `resolveNetWorthSignalTier`, `shouldFireForTier` (one message per
@@ -699,9 +700,10 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 > **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
 > formula — everything routes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`
 > (Spine A), now including the admin Live State Inspector via the shared `jobLossDash`
-> memo. **IF** the gate changes, **THEN** it must stay `canAccessAskCoachGeneral`
-> — never fold in `isInvestor` (§23 division). Check: `jobLossFlow.test.jsx`'s "Coach
-> presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
+> memo. **IF** the gate changes, **THEN** note it must stay `canAccessAskCoachGeneral` —
+> `isInvestor` now **is** folded in via `hasPrivilegedAccess` (2026-07-25), superseding
+> this entry's older "never fold in isInvestor" language; see F111. Check:
+> `jobLossFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -723,7 +725,7 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 |---|---|---|
 | `config.jobLossMode` | false / true | true: `JobLossHomePanel` *replaces* HomePanel entirely (`App.jsx:1482`); Net Worth cue suppressed (F23); nav collapses to budget+profile (`App.jsx:907`); Income/Log tabs force-redirect (`:337`) |
 | `readOnly` (paywall-expired) | false / true | true: all four mutation channels noop'd (F20) in both Home variants; values still render; UpgradeModal triggerable |
-| `isAdmin` / `isTester` | 4 cells | Coach card renders only when `canAccessAiFeatures` — admin or tester; **never** investor (§23); non-gated tiles identical across all cells |
+| `isAdmin` / `isTester` / `isInvestor` | 8 cells | Coach card renders when `canAccessAskCoachGeneral` — admin, tester, investor (all three per `hasPrivilegedAccess`, 2026-07-25), or a real trial/paid entitlement; non-gated tiles identical across all cells |
 | Pay schedule | weekly / biweekly / salary / monthly | `perCheckFactor` 1 / 2 / 2 / ~4.33 scales every tile value + "Left This Week"→"Left This Check" label swap (`:153`) |
 | Goals | empty / active / all-completed | Empty: no goal hero, `pulseGoals` undefined (no fabricated signal); completed: absorbed via `fundedGoalSpend`, hidden behind "show completed" fold |
 | `netWorthHealth.belowThreshold` | false / true | true (and not jobLossMode): Breakthrough Tips cue renders with fiscal-week-rotated 3-of-5 tips |
@@ -1752,7 +1754,9 @@ The dormant-but-live investor path: code validation (case-insensitive, active-on
 registration → `investor_users` + `user_data` seeding → demo-account tree (accounts
 1–2 demo data, 3 = wizard-driven sandbox; admin-editable via `saveDemoAccount`).
 Investor accounts are exempt from config-history capture (§7 F9) and the lifecycle
-cron; `is_investor` grants no AI features (§23 division).
+cron. **As of 2026-07-25, `is_investor` grants AI features** (`hasPrivilegedAccess`,
+F111) — supersedes this entry's older "grants no AI" claim; the account-tier firewall
+(§23) is unchanged for Demo Tree/beta-cohort surfaces specifically.
 > **IF** demo-account storage or the account-3 wizard route changes, **THEN** check
 > the isolation contract — demo edits must never touch real `user_data` rows
 > (`f9ed2ba`'s isolation docs) — and F66's `investorSession` race guard
@@ -1789,7 +1793,7 @@ machine instead of a hardcoded bypass.
 | Auth event | INITIAL_SESSION / SIGNED_IN (first per id) / SIGNED_IN (re-emit) / TOKEN_REFRESHED / SIGNED_OUT / PASSWORD_RECOVERY | Only first-per-id SIGNED_IN runs the F71 chain; re-emits and refreshes must be no-ops for data; PASSWORD_RECOVERY routes to reset form; SIGNED_OUT clears the dedup ref |
 | Account state at sign-in | existing row / no row (new) / tombstoned email / investor code session | Load & go / seed trial + reload / ReviveScreen, no seed / registration flow, wizard deferred to account 3 |
 | Load outcome | row found / PGRST116 zero-row / query failure | Normal / defaults + wizard (only legitimate case) / retry once then error state — **never** defaults |
-| Tier flags | none / admin / tester / investor (and combos) | Each unlocks only its documented surface; admin ⊇ tester structurally; investor grants no AI; combos never interact beyond that |
+| Tier flags | none / admin / tester / investor (and combos) | Each unlocks only its documented account-tier surface; admin ⊇ tester structurally; investor grants AI features (2026-07-25, `hasPrivilegedAccess`) but not Demo-Tree-adjacent account-tier surfaces beyond its own; combos never interact beyond that |
 | Write path | debounced / eager (`savePersistedStateNow`) / unload flush (keepalive) / service-role route | First three write the identical client field set; privileged columns only via the fourth |
 
 ### 14.4 Block 4 — Case law & findings
@@ -1990,18 +1994,25 @@ pre-017) are `none` — not a paywall case.
 > `subscription.test.js` + one account walked through all five states across the
 > surfaces — same story everywhere. **Never** thread `effectiveToday` into any caller.
 
-**F81 · Paywall enforcement fork** — `App.jsx:1459–1464` + consumers — **[G]**
-`paywallBypassed = isAdmin || config.isInvestor` — **deliberately not `isTester`**:
-testers ride the real trial machine on a 6-month window (§23), so they see banners and
-can expire in-app; their protection is supposed to live in the cron exemption (F86 —
-see DW-7). `isExpiredReadOnly` then splits enforcement by surface: Home/Budget (and
-Job Loss panels) get `readOnly` prop-shadowing (§8 F20, §10 F35); Income/Log are
-*replaced* by `UpgradePanel` (`:1522`, `:1570`); Account (T5) stays fully live so
-expired users can pay, manage, or delete.
+**F81 · Paywall enforcement fork** — `App.jsx` + consumers — **[G]**
+`paywallBypassed = isAdmin || isTester || config.isInvestor` (**widened 2026-07-25** — was
+`isAdmin || config.isInvestor` only, deliberately excluding `isTester`). Old rationale, now
+superseded: testers used to ride the real trial machine on a 6-month window (§23) instead of
+an unconditional bypass, relying on the cron exemption (F86 — see DW-7) as their real
+protection. **Current rule**: testers are now the same "bypasses every paid wall" tier as
+admin/investor (`hasPrivilegedAccess`, F111) — the 6-month trial window still gets seeded on
+the `is_tester` false→true flip, but it no longer does the enforcement work; the paywall
+simply never triggers for a tester regardless of where that window sits. `isExpiredReadOnly`
+still splits enforcement by surface for the accounts that *do* hit it: Home/Budget (and Job
+Loss panels) get `readOnly` prop-shadowing (§8 F20, §10 F35); Income/Log are *replaced* by
+`UpgradePanel`; Account (T5) stays fully live so expired users can pay, manage, or delete.
 > **IF** the bypass set or the per-surface split changes, **THEN** re-walk all three
 > enforcement styles per tier — the known trap: a new panel added to nav gets *no*
-> enforcement unless wired into one of the three styles explicitly. Check: expired
-> non-admin account visits every tab; nothing mutates, checkout is reachable.
+> enforcement unless wired into one of the three styles explicitly. **IF** the bypass set is
+> touched again, **THEN** re-verify against the 2026-07-25 locked decision (`hasPrivilegedAccess`
+> in `entitlements.js`) before removing anyone from it. Check: expired non-admin/non-tester/
+> non-investor account visits every tab; nothing mutates, checkout is reachable. A tester
+> account, even with an expired-looking trial window, never sees the paywall at all.
 
 **F82 · Upgrade surfaces** — `UpgradeCard.jsx` (shared pitch + checkout POST),
 `UpgradeModal.jsx` (dismissible wrapper, Home/Budget), `UpgradePanel.jsx`
@@ -2870,32 +2881,47 @@ active-systems §23 (beta testers), §18 (flag semantics), §21 (engine).
    server/RLS-side. `api/coach.js` re-checks `canAccessAiFeatures`; migration 019 locks tier
    columns to service-role. A gated surface checked only client-side is a drift finding.
 2. **`isAdmin` is a strict superset of `isTester` — by construction, not by convention.**
-   Every feature gate is built on `hasTesterAccess`, so the superset relationship cannot
-   drift feature-by-feature. `is_tester` and `is_investor` **never** overlap.
+   **Two bases now, not one (locked decision, 2026-07-25):** account-tier gates
+   (`canAccessTaxPlan`) still build on `hasTesterAccess` (`isAdmin || isTester`, no investor);
+   paid-wall gates (`canAccessAiFeatures`, `canAccessAskCoachGeneral`) build on the wider
+   `hasPrivilegedAccess` (`isAdmin || isTester || isInvestor`). Either way `isAdmin` stays a
+   superset of `isTester` structurally. **`is_tester` and `is_investor` still never overlap for
+   account-tier surfaces** (Demo Tree, investor code path, beta-cohort tracking) — the paid-wall
+   class is the one deliberate, documented exception, not a general merging of the two tiers.
 
 ### 20.1 Block 1 — Critical inventory (spine-internal machinery)
 
-**F111 · `entitlements.js` gate module** — `entitlements.js:11–47` — **[G]**
-Three pure functions, one base:
-- **`hasTesterAccess({isAdmin, isTester})`** (`:11`) — `Boolean(isAdmin || isTester)`. The
-  single OR every feature gate builds on, so `isAdmin ⊇ isTester` is guaranteed structurally
-  (verified: both gates below call it — the `a643153` claim holds in live code).
-- **`canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})`** (`:33`) —
-  `hasTesterAccess(…) || Boolean(taxProjectionsEnabled)`. **`config.taxExemptOptIn` is
+**F111 · `entitlements.js` gate module** — `entitlements.js:11–` — **[G]**
+Four pure functions, two bases (revised 2026-07-25 — was three functions/one base):
+- **`hasTesterAccess({isAdmin, isTester})`** — `Boolean(isAdmin || isTester)`. The narrower
+  base; still backs only `canAccessTaxPlan` today.
+- **`hasPrivilegedAccess({isAdmin, isTester, isInvestor})`** — `Boolean(isAdmin || isTester ||
+  isInvestor)`. New 2026-07-25. The "bypasses every paid wall" base — backs
+  `canAccessAiFeatures` and `canAccessAskCoachGeneral`. Investor/demo accounts need the full
+  feature set for pitch/demo purposes, same reasoning as admin; this was a locked product
+  decision, not a refactor of convenience.
+- **`canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})`** —
+  `hasTesterAccess(…) || Boolean(taxProjectionsEnabled)`. **Deliberately untouched by the
+  2026-07-25 widening** — still no `isInvestor` param at all. **`config.taxExemptOptIn` is
   deliberately NOT a grant path** (`a430fbf` liability hold — the wizard's "Unlock
   projections" must never reveal tax-plan UI to a normal user until an accountant reviews the
   withholding math). Re-enabling the wizard path is a one-line change *here* — the rule that
   the check lives in exactly one place is the whole point.
-- **`canAccessAiFeatures({isAdmin, isTester})`** (`:45`) — `hasTesterAccess(…)`. **`isInvestor`
-  is deliberately NOT in the OR** (the CRUCIAL comment): `is_tester` grants AI only, never
-  demo-account access or the investor code path; `is_investor` grants no AI.
-> **IF** a new gated feature is added, **THEN** it MUST build on `hasTesterAccess` (never
-> re-derive `isAdmin || isTester` inline — that's how the superset drifts) and MUST NOT fold
-> in `isInvestor` unless the feature is genuinely investor-facing (§23 firewall). **IF** the
-> `taxExemptOptIn` non-grant is touched, **THEN** it is a product/liability decision, not a
-> refactor — surface it. Check: `entitlements.test.js` (already asserts investor≠AI,
-> opt-in≠tax-plan, and the truthiness edge cases); a tester account sees AI + Tax Plan but no
-> Demo Tree / investor path.
+- **`canAccessAiFeatures({isAdmin, isTester, isInvestor})`** — `hasPrivilegedAccess(…)`.
+  **Supersedes the old "CRUCIAL — isInvestor deliberately NOT in the OR" rule** this entry used
+  to document (`is_tester` used to grant AI only, never demo-account access; that account-tier
+  separation is untouched, but `is_investor` now *does* grant AI, on purpose).
+- **`canAccessAskCoachGeneral({isAdmin, isTester, isInvestor, entitlement})`** —
+  `hasPrivilegedAccess(…) || Boolean(entitlement?.isEntitled)`. Same 2026-07-25 widening.
+> **IF** a new gated feature is added, **THEN** decide explicitly which base it needs —
+> account-tier (`hasTesterAccess`, no investor) or paid-wall (`hasPrivilegedAccess`, admin/
+> tester/investor) — and never re-derive either OR inline (that's how the superset drifts).
+> **Paid-wall is the default assumption going forward** unless the feature is genuinely
+> account-tier-specific like Tax Plan. **IF** the `taxExemptOptIn` non-grant is touched, **THEN**
+> it is a product/liability decision, not a refactor — surface it. Check: `entitlements.test.js`
+> (asserts investor DOES now grant AI features, investor does NOT grant Tax Plan, opt-in≠
+> tax-plan, and the truthiness edge cases); an investor account sees AI features but not Tax
+> Plan, Demo Tree access is unaffected either way.
 
 **F112 · Server-gate column-supply invariant (the DW-7 generalization)** — `api/coach.js:63`,
 `api/_lifecycleEngine.js:44` vs `api/cron-subscription-lifecycle.js:133–139` — **[G]**
@@ -2956,13 +2982,13 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
-| `hasTesterAccess` or either gate function (F111) | Every gate consumer (registry below) — the superset relationship moves for all at once | `entitlements.test.js`; walk the tier matrix (§20.3) | D4 |
-| A new gated feature added | Must build on `hasTesterAccess`; must decide `isInvestor` inclusion explicitly; client gate **and** server/RLS gate both present | Grep the new gate for inline `isAdmin || isTester` (forbidden); confirm a server re-check exists | D4 |
+| `hasTesterAccess`/`hasPrivilegedAccess` or any gate function built on either (F111) | Every gate consumer (registry below) — the relevant superset relationship moves for all at once | `entitlements.test.js`; walk the tier matrix (§20.3) | D4 |
+| A new gated feature added | Must build on `hasTesterAccess` (account-tier) or `hasPrivilegedAccess` (paid-wall) — decide which explicitly; client gate **and** server/RLS gate both present | Grep the new gate for inline `isAdmin || isTester` (forbidden); confirm a server re-check exists | D4 |
 | A server gate's row-field reads (F112) | The feeding SELECT must include every column — DW-7 class | Grep gate field reads vs `.select(...)`; add the field-coverage test | D4 |
 | `getEntitlement` states/precedence/timestamps (F80) | F81 fork, TrialBanner/Sub-card copy, F78 explainer condition, lifecycle engine (F85), Live Inspector Sub Phase | One account through all five states; `subscription.test.js`; **never** thread `effectiveToday` | D1 |
 | `paywallBypassed` set or per-surface split (F81) | Home/Budget readOnly shadows (F20/F35), Income/Log replacement (F81), Account fully-live rule; a **new nav panel gets no enforcement unless wired** | Expired non-admin visits every tab; nothing mutates, checkout reachable | D4 |
 | Tier-flag mapping (`is_admin`/`is_tester`/`is_investor` → camelCase, F67) | Client reads via mapping, never writes; every gate's inputs; `config.isInvestor` (paywall bypass) vs `row.is_investor` (cron) — two spellings of one fact | `db.test.js` mapping cases; DB Row Viewer tier columns | D1/D4 |
-| Tester 6-month window semantics (§23, migration 021 trigger) | F81 non-bypass (testers ride the real paywall) **and** F86 cron exemption (DW-7) — two halves of one promise | Expired tester: sees paywall in-app, never dunned/deleted by cron | D4 |
+| Tester 6-month window semantics (§23, migration 021 trigger) | **Stale as written — corrected 2026-07-25.** Testers no longer "ride the real paywall": `paywallBypassed` now includes `isTester` (same locked decision as F111's `hasPrivilegedAccess`), closing the asymmetry where testers relied only on the trial window. F86 cron exemption (DW-7) is unaffected — still exempts testers from dunning/deletion regardless. | Expired tester: paywall never triggers in-app (bypassed, not just surviving on window math); never dunned/deleted by cron | D4 |
 | A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 
@@ -2975,13 +3001,14 @@ with no server gate is a D4 finding.
 
 | Gate | Definition | Tier inputs | Client call sites | Server / RLS gate |
 |---|---|---|---|---|
-| **`canAccessAiFeatures`** | `isAdmin \|\| isTester` | `is_admin`, `is_tester` | `App.jsx:878` (Coach net-worth trigger), `:3350` (Ask Coach panel), `HomePanel.jsx:1358` (Coach card, F24) | `api/coach.js:63` — re-checks on `userRow.is_admin`/`is_tester` before streaming (the model server gate) |
-| **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
-| **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| config.isInvestor` (F81) | `is_admin`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
+| **`canAccessAiFeatures`** | `isAdmin \|\| isTester \|\| isInvestor` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor` | `JobLossHomePanel.jsx` (Job Hunt Assistant + Résumé Review entry points, F124) | Job Hunt/Résumé Review reuse `api/coach.js`'s wider `canAccessAskCoachGeneral` server-side, not this function directly — see F124's "known gap" note; no per-surface server re-check exists yet |
+| **`canAccessAskCoachGeneral`** | `isAdmin \|\| isTester \|\| isInvestor \|\| entitlement.isEntitled` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor`, subscription columns | `App.jsx` (Ask Coach panel + bottom-nav item), `HomePanel.jsx`/`JobLossHomePanel.jsx` (Net Worth card) | `api/coach.js:93` — re-checks on `userRow.is_admin`/`is_tester`/`is_investor` + server-derived `entitlement` before streaming (the real model gate for every surface that shares this route, Job Hunt/Résumé Review included) |
+| **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` — deliberately no `isInvestor` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
+| **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| isTester \|\| config.isInvestor` (F81, widened 2026-07-25 — was `isAdmin \|\| config.isInvestor` only, testers used to just ride the trial window) | `is_admin`, `is_tester`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
 | **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — SELECT now supplies `is_tester` (DW-7 fixed, F112/F86); field-coverage regression test enforces it stays that way |
 | **`isAdmin` toolkit** | `user_data.is_admin` (F67 map) | `is_admin` | Admin Tools sheet, Week Inspector, Reopen, per-entry breakdown (Spine F) | Data the tools read is the user's own RLS-scoped row; write-capable Phase-2 tools are `isOwner`-gated (not built) |
 | **`isAdmin` investor codes** | `user_data.is_admin` | `is_admin` | `ProfilePanel.jsx:2019` (ListRow), route `:1944` (**row-gate only** — DW-W2) | `InvestorAdminPanel` data calls are RLS-gated server-side (why DW-W2 is unexploitable today) |
-| **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; `is_investor` grants **no** AI (§23 firewall) |
+| **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; unaffected by the 2026-07-25 paid-wall decision — `is_investor` now **does** grant AI features (F111), but that's a separate gate, not this one |
 | **Tier flag writes** | — | all flags + subscription columns | client **never** writes (F68 whitelist-by-destructure) | migration 019 RLS + service-role `api/*` routes only |
 
 **Tier matrix (the cells every G-change must walk):**
@@ -2990,8 +3017,8 @@ with no server gate is a D4 finding.
 |---|---|---|---|---|---|
 | plain user | ✗ | ✗ (opt-in alone ✗) | ✗ | **enforced** | ✗ |
 | `taxProjectionsEnabled` | ✗ | ✓ | ✗ | enforced | ✗ |
-| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7 fixed) | ✗ |
-| `is_investor` | ✗ (firewall) | ✗ | ✓ | bypassed | ✗ |
+| `is_tester` | ✓ | ✓ | ✗ (firewall, account-tier surfaces only) | **bypassed** (2026-07-25 — was "enforced, real 6-mo trial" until `paywallBypassed` widened; cron-exempt regardless — DW-7 fixed) | ✗ |
+| `is_investor` | ✓ (2026-07-25 — was ✗ firewall) | ✗ | ✓ | bypassed | ✗ |
 | `is_admin` | ✓ | ✓ | ✗ (unless also investor) | bypassed | ✓ |
 | `is_owner` (future) | ✓ | ✓ | — | bypassed | ✓ + Phase-2 write tools |
 
@@ -3003,8 +3030,12 @@ with no server gate is a D4 finding.
   IF/THEN exists to keep every new gate on that base.
 - *Liability hold on the wizard unlock* (`a430fbf`/`09c7609`) — `taxExemptOptIn` was demoted
   from a grant path to a no-op; the check lives once, in `entitlements.js`, never scattered.
-- *Beta tester ≠ investor firewall* (`ec72a07`, §23) — `is_tester` grants AI only; the
-  CRUCIAL comment in `canAccessAiFeatures` is the in-code guard.
+- *Beta tester ≠ investor firewall, narrowed 2026-07-25* (`ec72a07`, §23) — originally
+  `is_tester` granted AI only, never Demo Tree/investor path, and `is_investor` granted no AI;
+  the CRUCIAL comment in `canAccessAiFeatures` was the in-code guard. **Superseded for the
+  AI-features half**: `is_investor` now grants AI features too (`hasPrivilegedAccess`, F111) —
+  the account-tier half (Demo Tree, investor code path, beta-cohort tracking) is unchanged and
+  still firewalled.
 - *RLS hardening* (`60a4b17`, migration 019) — privileged writes moved server-side; F68's
   whitelist-by-destructure is the client half.
 - *Migration 024* (`8f34def`/`a93dcad`) — a tier/permission migration can pass in SQL and
@@ -3081,23 +3112,33 @@ vs. recurring obligations).
 > the expense-label precedent, aspirational/personal entities follow the goal precedent —
 > decide explicitly, don't default.)*
 
-**F115 · `api/coach.js` server gate + trust boundary** — `api/coach.js:60–100` — **[G]**
-The server proxy: (1) **re-gates** AI access server-side — `SELECT is_admin, is_tester` then
-`canAccessAiFeatures({isAdmin, isTester})` (`:60–63`), the Spine-C "every gate twice" rule
-satisfied (and F112-correct: the SELECT supplies both columns the gate reads, unlike DW-7);
+**F115 · `api/coach.js` server gate + trust boundary** — `api/coach.js` — **[G]**
+The server proxy, the ONE gate every Coach surface funnels through (Ask Coach, Net Worth card,
+and — as of F124 — Job Hunt Assistant/Résumé Review too, since they share this route): (1)
+**re-gates** access server-side — `SELECT is_admin, is_tester, is_investor, ...` then
+`canAccessAskCoachGeneral({isAdmin, isTester, isInvestor, entitlement})` — **corrected
+2026-07-25**, this entry previously said `canAccessAiFeatures({isAdmin, isTester})`, which was
+already stale (the 2026-07-24 gate split moved this route onto the wider
+`canAccessAskCoachGeneral`) and is now doubly so (that function itself widened to include
+`isInvestor` the same day as this correction) — the Spine-C "every gate twice" rule satisfied
+(and F112-correct: the SELECT supplies every column the gate reads, unlike DW-7);
 (2) keeps `ANTHROPIC_API_KEY` server-side (test/live split mirrors `_stripeClient.js`);
 (3) reads `{messages, systemPrompt, contextBlock, model}` from the request body, maps `model`
 through `MODEL_IDS` (default `haiku`), applies `cache_control: ephemeral` to the system +
 context blocks (prompt caching), and streams. **Trust boundary:** the context block is built
 *client-side* (F113) and POSTed — the server re-gates *access* but does not re-derive the
-context; it trusts the block's content.
+context; it trusts the block's content. **Known gap (F124):** because this one route serves
+every Coach surface on the *same* wide gate, Job Hunt Assistant/Résumé Review's narrower
+client-side `canAccessAiFeatures` gate has no matching server-side enforcement — see F124's own
+note.
 > **IF** the gate's SELECT changes, **THEN** it must keep supplying every column
-> `canAccessAiFeatures` reads (F112 class). **IF** anything security-sensitive is ever driven
-> by the client-supplied `contextBlock` (it is currently display grounding only, sent to the
-> model, never used for authorization), **THEN** that's a new trust-boundary crossing —
+> `canAccessAskCoachGeneral` reads (F112 class). **IF** anything security-sensitive is ever
+> driven by the client-supplied `contextBlock` (it is currently display grounding only, sent to
+> the model, never used for authorization), **THEN** that's a new trust-boundary crossing —
 > re-derive it server-side instead. **IF** the model default or `MODEL_IDS` map changes,
-> **THEN** confirm callers still pass a valid key (`AskCoachPanel` passes `"haiku"`). Check:
-> a non-admin/non-tester request returns 403 before any Anthropic call; the client cannot
+> **THEN** confirm callers still pass a valid key (`AskCoachPanel` passes `"haiku"`,
+> `JobHuntChatPanel`/`ResumeReviewCard` pass `"sonnet"`). Check: a non-admin/non-tester/
+> non-investor/non-entitled request returns 403 before any Anthropic call; the client cannot
 > escalate access by editing the POST body.
 
 **F116 · `coach_chats` persistence layer — now wired (superseded, see F123)** — `db.js:531–620`
@@ -3145,6 +3186,58 @@ scoping holds).
 > after a turn (success and failure paths), chat-id reuse across turns, retention pruning that
 > spares the active chat, resume-from-history, and delete.
 
+**F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `aiContext.js`
+(`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
+`RESUME_REVIEW_SYSTEM_PROMPT`), migration `032_add_resume_profile.sql` — **[L/G]**
+Built 2026-07-25. First real occupants of the "sections 4+" admin/tester/investor-only tier the
+doc comments in `entitlements.js` have described since the Ask Coach/Net Worth gate split — both
+gate **client-side** on `canAccessAiFeatures({isAdmin, isTester, isInvestor})`, the narrow gate
+(`hasPrivilegedAccess`, same day). **Server-side is a different story — see F115's "known gap"**:
+both modes' actual network calls run through `api/coach.js`, which gates on the *wider*
+`canAccessAskCoachGeneral` (shared by every Coach surface), not this narrower function — so the
+UI hides these two modes from a plain trial/paid user, but nothing server-side currently stops
+that same user from reaching the model by crafting a raw request. **Grounding:**
+`buildJobHuntContext()` is a *separate* function from
+`buildCoachContext` (F113), not a branch on it — reads `computeJobLossRunway`/
+`resolvePrimaryRunwayDays`/`sumJobHuntIncome` (same functions `JobLossHomePanel` itself reads,
+never a parallel estimate) plus `config.targetIncomeAnnual`/`jobApplications`/
+`returnToWorkDate` directly. **Deliberate privacy asymmetry, the opposite of F114's goal-name
+rule:** application company/role names are sent in full, not withheld — Job Hunt Assistant's
+whole point is company-specific coaching ("prep me for the Acme interview"), so withholding the
+name would break the feature rather than protect the user the way withholding a goal name does.
+**Rubric-scored** (docs/coach-personality-rubric.md, 2026-07-25): Job Hunt Chat's own
+`JOB_HUNT_ADDENDUM` dials Metaphor Intensity down to 2 ("trace") from the 3 default — an active
+search under runway pressure gets a lighter touch, mirroring the same "urgency/plainness over
+flavor at a vulnerable moment" pattern already established for the Red tier and
+`NetWorthHealthTips.jsx`; Résumé Review stays at the 3 default, no override, since it reads
+closer to Ask Coach's own tactical register. **Storage:** `resume_profile` (one row per user,
+`user_id` itself is the primary key — genuinely 1:1, unlike `coach_chats`'s 1:many) holds only
+the résumé input; the *review* is a `coach_chats` row (`chat_type: 'resume_review'`, added to
+that table's check constraint by the same migration) via the existing `saveCoachChat` path — no
+new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
+scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
+system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+> **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
+> decision (`coach-entry-points.md`, 2026-07-25) is **paid-only for everyone else, not
+> trial-included** — a real post-card-charge subscription (`entitlement.state === "active"`) for
+> accounts outside admin/tester/investor, never bare `canAccessAskCoachGeneral`, which also
+> opens for trial/grace and would silently hand a paid-conversion feature to every trial user.
+> Admin/tester/investor keep bypassing unconditionally regardless — `hasPrivilegedAccess` is
+> layered under the new check, not replaced by it. This needs a new, narrower entitlement
+> function (or an explicit `state === "active"` check ORed with `hasPrivilegedAccess`) plus the
+> same splitting-checklist treatment `coach-entry-points.md` describes for sections 1–2 — never a
+> silent copy-paste of either existing gate function. **IF** `buildJobHuntContext`'s
+> fields are extended, **THEN** they must resolve through the same authoritative function the
+> on-screen Job Loss panels use, per F113's rule — this function is exempt from `buildCoachContext`
+> itself but not from the grounding rule that governs it. **IF** persistence/retention/summary
+> generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
+> entry (or an extension of F123) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
+> and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
+> this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
+> `ResumeReviewCard.test.jsx`, `jobLossFlow.test.jsx`'s gate-verification block (confirms a real
+> trial entitlement, not just admin/tester, is correctly refused).
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeJobLossRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the
@@ -3166,6 +3259,8 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `coach_chats` db functions get a second `chat_type` UI caller (F116/F123) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
 | `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
+| `buildJobHuntContext`'s source functions (F124) — `computeJobLossRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `JobLossHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
+| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral` | `jobLossFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either | D4 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
 

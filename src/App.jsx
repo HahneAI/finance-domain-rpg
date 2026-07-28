@@ -1099,9 +1099,9 @@ export default function App() {
       : [...BOTTOM_NAV];
     // Ask Coach general chat left the admin/tester-only standing constraint
     // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
-    // entitlement, not just isAdmin/isTester. Every OTHER Coach surface stays
-    // on canAccessAiFeatures (docs/TODO.md §18.0 build order).
-    if (canAccessAskCoachGeneral({ isAdmin, isTester, entitlement })) {
+    // entitlement, not just isAdmin/isTester/isInvestor. Every OTHER Coach
+    // surface stays on canAccessAiFeatures (docs/TODO.md §18.0 build order).
+    if (canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement })) {
       items.push({
         key: "__coach__",
         label: "Coach",
@@ -1113,7 +1113,7 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode]);
+  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode, config.isInvestor]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1833,10 +1833,13 @@ export default function App() {
     return <FullScreenLoadingState />;
   }
 
-  // Investors/demo accounts and admins never hit the paywall — they either
-  // aren't real paying customers (investors) or need unrestricted access to
-  // support other users (admins).
-  const paywallBypassed = isAdmin || config.isInvestor;
+  // Investors/demo accounts, admins, and testers never hit the paywall — they
+  // aren't real paying customers (investors), need unrestricted access to
+  // support other users (admins), or are the same "bypasses every paid wall"
+  // tier as the other two by locked decision (2026-07-25, entitlements.js's
+  // hasPrivilegedAccess) — a tester previously only got a long trial window
+  // here, not an unconditional bypass; that asymmetry is now closed.
+  const paywallBypassed = isAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
 
   // Free trial breakdown — shown once ahead of first-run SetupWizard entry,
@@ -3599,7 +3602,7 @@ export default function App() {
 
       {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
-      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement }) && (
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
           isExiting={askCoachExiting}

@@ -10,6 +10,11 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from '../../lib/jobLossRunway.js'
 import { toLocalIso } from '../../lib/finance.js'
 
+// jsdom doesn't implement scrollIntoView — JobHuntChatPanel (§18.E, mounted
+// inside JobLossHomePanel when canAccessAiFeatures is true) calls it on
+// every message-list update to keep the latest turn in view.
+Element.prototype.scrollIntoView ??= () => {}
+
 // CoachNetWorthCard (mounted inside JobLossHomePanel per the DW-8 fix) calls
 // chatWithCoach — mocked here the same way CoachNetWorthCard.test.jsx does,
 // so these tests never touch the network/API key.
@@ -20,6 +25,16 @@ function chunkGenerator(chunks) {
     for (const c of chunks) yield c
   }
 }
+
+// ResumeReviewCard (mounted inside JobLossHomePanel when canAccessAiFeatures
+// is true, §18.E1) reads/writes via lib/db.js — mocked so its effects never
+// touch the real Supabase client, which would otherwise throw at import time
+// in this test environment (no VITE_SUPABASE_URL set).
+vi.mock('../../lib/db.js', () => ({
+  loadResumeProfile: vi.fn().mockResolvedValue(null),
+  saveResumeProfile: vi.fn().mockResolvedValue(true),
+  saveCoachChat: vi.fn().mockResolvedValue('chat-id'),
+}))
 
 const JOB_LOSS_CONFIG = {
   ...DEFAULT_CONFIG,
@@ -669,6 +684,96 @@ describe('JobLossHomePanel', () => {
       )
       expect(screen.queryByText('Coach — Critical')).toBeNull()
       expect(coachMocks.chatWithCoach).not.toHaveBeenCalled()
+    })
+
+    // Locked decision 2026-07-25 — investor accounts bypass this too, even
+    // with no entitlement at all (investor accounts routinely carry none).
+    it('renders the Red tier for an investor account with no entitlement', async () => {
+      coachMocks.chatWithCoach.mockImplementation(chunkGenerator(['Runway is tight — here is what to do.']))
+      render(
+        <JobLossHomePanel
+          config={{ ...RUNWAY_UNDER_30, isInvestor: true }} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits={false} currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: false, state: 'none' }}
+        />
+      )
+      expect(await screen.findByText('Coach — Critical')).toBeTruthy()
+    })
+  })
+
+  // §18 sections 4+ standing constraint — Job Hunt Assistant (§18.E) and
+  // Résumé Review (§18.E1) stay on the narrow canAccessAiFeatures gate
+  // (admin/tester/investor — hasPrivilegedAccess), unlike the Net Worth card
+  // above which left it for a wider trial/paid gate. A real trial
+  // entitlement alone (no admin/tester/investor) must NOT be enough.
+  describe('Job Hunt Assistant + Résumé Review gate (§18 sections 4+)', () => {
+    it('does not render for a non-admin/non-tester account, even with a real trial entitlement', () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+        />
+      )
+      expect(screen.queryByText('Job Hunt Assistant')).toBeNull()
+      expect(screen.queryByText('Résumé Review')).toBeNull()
+    })
+
+    it('renders both for an admin account', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      // ResumeReviewCard loads its profile async on mount before rendering.
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    it('renders both for a manually-flagged tester account', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    // Locked decision 2026-07-25 (entitlements.js's hasPrivilegedAccess):
+    // investor/demo accounts bypass every paid wall too, AI features
+    // included — even with no admin/tester flag and no real subscription
+    // entitlement at all (investor accounts routinely have neither).
+    it('renders both for an investor account, even with no admin/tester flag or entitlement', async () => {
+      render(
+        <JobLossHomePanel
+          config={{ ...JOB_LOSS_CONFIG, isInvestor: true }} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: false, state: 'none' }}
+        />
+      )
+      expect(screen.getByText('Job Hunt Assistant')).toBeTruthy()
+      expect(await screen.findByText('Résumé Review')).toBeTruthy()
+    })
+
+    it('opens the Job Hunt chat panel on tap', async () => {
+      render(
+        <JobLossHomePanel
+          config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin
+        />
+      )
+      await screen.findByText('Résumé Review') // let ResumeReviewCard's mount-load settle first
+      fireEvent.click(screen.getByText('Talk to Coach about the search'))
+      expect(screen.getByLabelText('Close Job Hunt Assistant')).toBeTruthy()
     })
   })
 })

@@ -40,30 +40,7 @@ rate limit or a real Vercel outage. Consolidation candidates if it happens again
 
 ## Git PR Flow
 
-**Three-tier merge pipeline:** Feature work flows through two integration branches before master.
-
-| Tier | Branch | Purpose | Merge from | Merges to |
-|------|--------|---------|-----------|-----------|
-| **Tier 1** | `claude/*` feature branches | Individual feature/fix development | (local/origin) | Version-control |
-| **Tier 2** | `Version-control` | Integration & testing ground | Multiple Tier 1 PRs | master |
-| **Tier 3** | `master` | Production-ready release | Version-control PRs | Vercel deployment |
-
-**Process:**
-1. **Feature development** on `claude/descriptive-name` branches — write code, test locally, push.
-2. **PR to Version-control** — merge feature branch via GitHub PR into `Version-control` branch for integration testing across multiple concurrent features.
-3. **Version-control validation** — run full test suite, verify all features work together, catch cross-branch conflicts early.
-4. **PR to master** — once validated, merge `Version-control` into `master` for production deployment.
-
-**Conflict resolution strategy:**
-- When merging Tier 1 branches into Version-control, conflicts often arise from concurrent section numbering changes (TODO/docs reorganizations).
-- Use **placeholder-based two-pass replacement** for large, systematic updates spanning many files:
-  1. Pass 1: Old reference → unique placeholder (`§15` → `__SECTION_15__`)
-  2. Pass 2: Placeholder → new reference (`__SECTION_15__` → `§1`)
-  - This prevents regex overlap when replacing multiple sections simultaneously.
-- **Document all section mappings** in the commit message so future merges can reference the mapping table.
-- **Test cross-file consistency** after merge: grep for orphaned old section numbers (`§17`, `§42`, etc.) and verify they're either:
-  - Correctly renumbered to new positions, or
-  - Intentionally referencing archived sections (past-TODO-tasks.md)
+**Three-tier pipeline:** `claude/*` feature branches → `Version-control` (integration) → `master` (production). Push to feature branches; user merges to Version-control, then to master. For systematic cross-file updates (e.g. section numbering), use placeholder-based two-pass replacement (`§15` → `__SECTION_15__` → `§1`) to prevent regex overlap when replacing multiple references simultaneously.
 
 ---
 
@@ -101,33 +78,9 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
-## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~2500 lines)
+## SetupWizard (`src/components/SetupWizard.jsx`)
 
-**Full drift map (key functions, IF/THEN checks, path matrix): `docs/drift-app-warden.md` §7 — consult it before changing anything here.**
-
-**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent, isInvestor, isExiting })`
-- `config` — current app config; spread into `formData` on mount; `firstActiveIdx` re-derived from `startDate` on every open
-- `lifeEvent` — `null` (first-run) | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
-- `onComplete(data)` — receives merged config + `taxedWeeks` + `accountCreatedIdx` + `setupComplete: true`
-
-**Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
-| Step ID | Title | Key fields / notes |
-|---------|-------|-------------------|
-| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§1.H) + intro; re-entry: life event picker or structure_change overview |
-| 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
-| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission; tips/commission daily check-in opt-in (No/Tips/Commission + commission-only follow-up, inert today) |
-| 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
-| 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
-| 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
-| 7 | Wrap Up | Live net preview (`estimateWeeklyNet`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in; structure_change adds "What's Changing" diff |
-
-**Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
-
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `isFirstRunJobless`. (`dateToWeekIdx` was promoted to a shared `lib/fiscalWeek.js` export — App.jsx needs the same calendar-date → fiscal-week-idx conversion to tag Tips/Commission daily check-in log entries.)
-
-**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
-
-**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5`), normalizes `paycheckBuffer ?? 50`, runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx` (empty if `taxExemptOptIn`), stamps `accountCreatedIdx`, calls `onComplete`.
+Multi-step onboarding (~2500 lines). Controlled steps with conditional routing based on `lifeEvent` (null/structure_change/lost_job/changed_jobs/commission_job). Covers pay structure, schedule, deductions, tax rates, and wrap-up. Full drift map: `docs/drift-app-warden.md` §7 — consult before changes. See source file for step definitions, helper components, state management, and DHL employer preset overrides.
 
 ---
 
@@ -324,14 +277,6 @@ Reporter is `verbose` — Vitest 4's default misreports suite failures as "no te
 
 ---
 
-## Mobile Checklist
-- [ ] No horizontal scroll at 390px / 375px · All tap targets ≥ 44×44px
-- [ ] Font-size ≥ 16px on all inputs (prevents iOS zoom)
-- [ ] Bottom nav clears `safe-area-inset-bottom` · PWA installs from Safari · Standalone mode active
-- [ ] Dark status bar (black-translucent) · Dynamic Island / notch not obscured
-
----
-
 ## Environment Variables
 ```
 VITE_SUPABASE_URL=...
@@ -344,94 +289,22 @@ ANTHROPIC_API_KEY_TEST=...  # optional — preview/dev builds use this if set, s
 ## Naming Conventions
 Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Database: snake_case
 
-## Known Cleanup
-- `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
-
 ---
 
 ## Account Tiers
 
-Three flags on `user_data`. Each unlocks its own distinct account-tier surface — never treat
-one as implying another for *those* — but as of 2026-07-25 all three share one deliberate
-overlap: none of them ever hits a paid wall.
+Three flags on `user_data`:
 
 | Flag | Unlocks | Set via |
 |------|---------|---------|
-| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan + bypasses every paid wall | Manual SQL |
-| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` + bypasses every paid wall — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
-| `is_investor` | Demo Account Tree + investor code signup path + AI features + bypasses every paid wall | `createInvestorAccount()` via the investor code flow |
+| `is_admin` | Full Admin Toolkit + AI features + Tax Plan + bypasses paywall | Manual SQL |
+| `is_tester` | AI features + Tax Plan + bypasses paywall | Manual SQL; auto-seeds 6-month trial on false→true |
+| `is_investor` | Demo Account Tree + investor signup path + AI features + bypasses paywall | `createInvestorAccount()` |
 
-**Beta testers are NOT investors for account-tier purposes — still a crucial, deliberate
-division.** `is_tester` must never grant Demo Account Tree access or the investor code path,
-and `is_investor` must never grant the beta-tester-specific surfaces (usage tracking, the beta
-report). Full detail: `docs/active-systems.md` §9 (Beta Tester Accounts) and §2 (Investor &
-Demo Accounts).
-
-**Locked decision, 2026-07-25 — supersedes this file's older "is_investor must never grant AI
-features" language:** any feature behind a paid wall (AI features today; any future paid-only
-surface) is free for `is_admin`, `is_tester` (beta-cohort or friends/family — `beta_code_used`
-present or not, doesn't matter here), and `is_investor` — none of the three should ever need a
-real subscription/payment to reach a paid-gated feature. Implemented as
-`hasPrivilegedAccess({ isAdmin, isTester, isInvestor })` in `entitlements.js`, which
-`canAccessAiFeatures` and `canAccessAskCoachGeneral` now build on instead of the narrower
-`hasTesterAccess` (admin/tester only, no investor) that `canAccessTaxPlan` still uses —
-Tax Plan was deliberately left out of this widening. The core app paywall
-(`paywallBypassed` in `App.jsx`) closed the matching gap the same day: it now bypasses for
-`isAdmin || isTester || config.isInvestor`, where testers previously relied only on their long
-trial window rather than an unconditional bypass.
-
-**Two populations both carry `is_tester = true`** — `user_data.beta_code_used` (migration
-`025_add_beta_code_used.sql`, manual SQL, never client-writable) tells them apart: a non-null
-value means the account is part of the tracked 10-week beta cohort (usage-logged to
-`beta_activity_events`, migration `026`, scored via `api/admin-beta-report.js`); a null value
-means an ad hoc friends/family tester, who keeps the standing 6-month trial window but is not
-usage-tracked. Set both fields together for a real beta-cohort account — `is_tester` alone is
-the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester, betaCodeUsed })`
-— deliberately not built on `hasTesterAccess`, since `isAdmin` does not imply beta-cohort tracking.
+All three bypass the paid wall — none should ever need a real subscription. See `docs/active-systems.md` §2 & §9 for full detail on Investor, Demo Accounts, and Beta Testers.
 
 ---
 
 ## Admin Diagnostic Toolkit
 
-**Gate:** `isAdmin` (from `user_data.is_admin`) unlocks all Phase 1 tools.
-`isOwner` (`user_data.is_owner`, not yet built) unlocks Phase 2 destructive tools — never grantable via UI.
-
-**How to use in a session:** ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav), run the relevant tool, and paste or describe the output here.
-
-### Phase 1 — isAdmin (all 9 live ✓)
-
-| Tool | How to invoke | What to ask for |
-|------|--------------|-----------------|
-| **Lock Date** | Tools sheet → Lock Date | Set a date to simulate a different `effectiveToday`. Ask: "set lock date to [date] and tell me what the Live Inspector shows for Effective Today, Week, and Future Weeks." |
-| **Reopen Last Check-In** | Tools sheet → Weekly Check-In | Resets the most recent confirmed pay period and reopens the weekly confirm modal as if it was never finished — a safe way to re-review the modal on demand. Drops that week's `weekConfirmations` record (and any log entry it created); income projections are independent of confirmations, so the model is unaffected. Disabled when no confirmed week is eligible. |
-| **Force Sync** | Tools sheet → Sync | **Push ↑** flushes in-memory state to Supabase immediately (bypasses 800ms debounce). **Pull ↓** reloads from DB into memory. Use before/after a save-related bug. |
-| **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. **§1.I:** when any §1 field carries a value, a "Life Events" header lists just those fields (name + value) above the raw dump — `jobLossMode`, `jobLossDate`, `jobLossCashOnHand`/`jobLossCashOnHandAsOf`, `jobLossPendingCheckAmount`/`Date`, `unemploymentEnabled`/`Weekly`/`DurationWeeks`/`WaitingWeek`, `returnToWorkDate`, and entry counts for `jobApplications`/`jobHuntIncomeLog`. **Session insight:** Revealed the full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration. |
-| **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §3 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. Fetch also surfaces a §2.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap it to expand the 5 most recent titles; ask for it when verifying Ask Coach conversation persistence. **§1.I:** Fetch also surfaces a "Triage: X active · Y paused · Z cancelled" line whenever any expense is paused/cancelled/flagged, reading the same `exp.jobLossStatus`/`autoReactivateOnIncome` fields `JobLossBudgetPanel`'s triage UI writes (F44) — flags any expense with `autoReactivateOnIncome === false` in the count; ask for it when a Job Loss account's Back to Work reactivation looks incomplete. |
-| **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · teal border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
-| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus ((archived Stripe Monetization section).F) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. **§1.I:** the pill itself carries a small amber dot when `config.jobLossMode` is true (visible without opening the card); the expanded card then adds three amber-highlighted rows — `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` — same call Coach and both Job Loss panels use, never a second derivation). Ask: "open Live and paste all values, noting whether the Job Loss dot is showing." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
-| **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. **§1.I:** the Pay section adds an `Unemployment` row whenever `w.unemploymentIncome > 0` (buildYear's per-week benefit annotation — `finance.js`, non-taxed income added to net by `computeNet`); for a week inside the Job Loss window with no benefit paid that week, it instead shows "Job Loss Mode — outside benefit window". Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
-| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §35, `database/beta-offboarding-day71.sql`). |
-
-**Per-entry impact breakdown** (Log panel): tap the ▼ chevron on any log entry (admin-only) to expand an inline breakdown of that entry's exact impact — gross, net, 401k employee + match, PTO hours, bucket deduction, fiscal week idx, past/future classification.
-
-### Phase 2 — isOwner (not yet built — full spec in `docs/admin-toolkit-todo.md`)
-
-| Tool | Purpose | Risk |
-|------|---------|------|
-| **isOwner flag** | Migration + `db.js` + App state — prerequisite for everything below | — |
-| **Lock `firstActiveIdx`** | Makes this nuclear field read-only for isAdmin, editable only for isOwner | Repositions entire fiscal calendar retroactively |
-| **Tax Weeks Grid edit** | Tap a future cell to toggle `config.taxedWeeks` | Corrupts withholding math if misused |
-| **Bulk Week Confirmation Seeding** | Mark all weeks as worked / missed / reset all | Reset permanently deletes confirmation history |
-| **Config Raw JSON Apply** | Edit + apply config JSON directly | Same blast radius as all fields combined |
-| **Config Snapshot / Restore** | Save/restore full account state (config + logs + expenses + goals) | Restore overwrites everything in one tap |
-
-### Diagnostic request templates
-
-When filing a bug or building a feature that touches fiscal math, ask the user to run these and share:
-1. **Config dump** — Config JSON → Copy to Clipboard → paste here
-2. **Drift check** — DB Row → Fetch → report `updated_at` + any drift columns
-3. **Date context** — Live State Inspector → paste Effective Today + Week values
-4. **Tax grid** — Tax Weeks → View ↓ → screenshot or describe red dots + current week position
-5. **Week deep-dive** — tap the suspect week row in Income → describe Pay + Net Lookup + Log Entries sections
-6. **Subscription/billing** — DB Row → Fetch already surfaces every raw column (`select *`, includes `subscription_status`/`trial_ends_at`/`access_ends_at`/`card_on_file`/`current_period_end`/`plan`); Live State Inspector adds the resolved phase on top. Ask for both when the issue involves the paywall gate, trial countdown, or billing state.
-7. **Job Loss state (§15.I)** — Live State Inspector → confirm the amber Job Loss dot on the pill + paste `Job Loss Date`/`Unemployment Wkly`/`Unemployment Wks Left`; DB Row → Fetch → paste the `Triage:` line; Config JSON → View ↓ → paste the "Life Events" header block. Ask for all three when the issue involves runway, benefits, or expense triage during Job Loss Mode. Per-week benefit detail: `buildYear()` annotates every week with `unemploymentIncome` (`finance.js`) — non-zero only inside the eligibility window computed from `jobLossDate`/`unemploymentDurationWeeks`/`unemploymentWaitingWeek`; Week Inspector surfaces it directly (see table above).
+Full reference: `docs/admin-toolkit-reference.md`. **Gate:** `isAdmin` unlocks 9 Phase 1 tools (Lock Date, Reopen Check-In, Force Sync, Config View, DB Viewer, Tax Grid, Live Inspector, Week Inspector, Beta Report); `isOwner` unlocks Phase 2 (not yet built). Diagnostic templates for common issues included in reference file.

@@ -3175,13 +3175,16 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 ---
 
-## 12. Beta Testing Infrastructure & Monitoring — Account Creation, Feedback Flow & Telemetry Validation
+## 12. Beta Program & Testing Infrastructure — 10-Week Cohort Execution & Monitoring
 
-*New workstream (2026-07-28), scoped from active beta program (migrations 025–036, `beta_activity_events`,
-`beta_codes` channel pool). Focused on infrastructure and observability to validate that beta testers' actions
-are being tracked correctly and that we have full visibility into user behavior during the 10-week beta window.*
+*Umbrella workstream (2026-07-28) covering all build, testing, launch, and lifecycle phases of the
+10-week beta program. Scoped from active beta program (migrations 025–036, `beta_activity_events`,
+`beta_codes` channel pool). Subsections cover test infrastructure (A-F), cohort planning & execution
+(G-N), and ongoing observability.*
 
-**The goal.** Set up repeatable, automated test infrastructure to:
+**The goal.** Execute a complete, monitored beta program with full visibility into tester behavior and
+quality validation at every stage:
+- **Phase 1 (A-F):** Set up repeatable, automated test infrastructure to:
 1. Create synthetic beta tester accounts with controlled state (different pay structures, tax elections, expenses)
 2. Execute scripted user flows (income logging, expense entry, weekly confirmations, Coach interactions)
 3. Verify that `beta_activity_events` captures the intended granularity of user actions
@@ -3369,17 +3372,7 @@ scoped to Job Loss Mode only.
   (`coachFeatureGuide.js`'s own description of the Income panel) stays true once a second income
   stream exists.
 
----
-
-## 14. Beta Program — 10-Week Cohort Planning & Execution
-
-*Umbrella workstream (2026-07-24) covering all build, testing, and launch phases of the 10-week beta
-program. Subsections include infrastructure validation, code redemption, feedback collection, attrition
-tracking, offboarding scoring, and motivational touchpoints. Builds directly on the already-shipped
-beta usage-tracking system (migrations 025–036, `entitlements.js` `isTrackedBetaTester`,
-`api/admin-beta-report.js`).*
-
-### A. Per-User Beta Window (Report Scoping)
+### G. Per-User Beta Window (Report Scoping)
 
 *New workstream (2026-07-24), scoped from a codebase status review. Builds directly on the
 already-shipped beta usage-tracking system (migrations `025_add_beta_code_used.sql`,
@@ -3414,7 +3407,7 @@ would quietly distort the actual scoring numbers, not just leave a nice-to-have 
 
 ---
 
-### B. Pre-Launch Dry Run Checklist
+### H. Pre-Launch Dry Run Checklist
 
 *New workstream (2026-07-24). Not a code change — a verification checklist to run once before
 handing out any of the 40 real beta codes, using the infrastructure already shipped in this session.*
@@ -3446,7 +3439,7 @@ same bug caught in five minutes before day 1.
 
 ---
 
-### C. Code Redemption Flow
+### I. Code Redemption Flow
 
 *New workstream (2026-07-24). This is the "orchestrated later" piece explicitly deferred during the
 usage-tracking build — `is_tester`/`beta_code_used` are manual-SQL-only today. Scoped here so it's
@@ -3478,7 +3471,7 @@ in `db.js`) — this app already has a working, tested pattern for "redeem a cod
 
 ---
 
-### D. In-App Feedback Channel
+### J. In-App Feedback Channel
 
 *Shipped 2026-07-24 (built as Option A, upgraded to Option B same day once the beta scoring rubric
 made it non-optional — "Feedback Submitted — 25 pts, frequency + specificity" can't be scored from a
@@ -3498,7 +3491,7 @@ mailto link, which produces zero queryable data).*
 
 ---
 
-### E. Attrition Visibility Mid-Program
+### K. Attrition Visibility Mid-Program
 
 *New workstream (2026-07-24). The smallest addition in this list — purely additive to
 `api/admin-beta-report.js`, no schema change, no new hook points.*
@@ -3520,7 +3513,7 @@ quiet requires eyeballing raw timestamps; nothing calls it out.
 
 ---
 
-### F. Offboarding Decision (End of Week 10)
+### L. Offboarding Decision (End of Week 10)
 
 *Resolved 2026-07-24 — superseded by an actual scoring rubric (100 pts: App Usage 50 w/ 30-pt floor,
 Feedback 25, Call Attendance 15, Longevity 10 → three outcome tiers), not the earlier three
@@ -3550,7 +3543,7 @@ human" premise — no auto-scoring formula was built.
 
 ---
 
-### G. In-App "Beta Tester" Badge
+### M. In-App "Beta Tester" Badge
 
 *New workstream (2026-07-24). Purely cosmetic/motivational — no data flow changes, fully isolated
 from the tracking system itself.*
@@ -3572,7 +3565,7 @@ exactly zero risk, since it touches no finance logic and no persisted data.
 
 ---
 
-### H. Week-5 "Halfway" Nudge Email
+### N. Week-5 "Halfway" Nudge Email
 
 *New workstream (2026-07-24). Reuses existing lifecycle-email infrastructure rather than standing up
 a new send pathway. Depends on §15 (`beta_started_at`) as the anchor date — build that first.*
@@ -3599,7 +3592,7 @@ not a new email system.
 
 ---
 
-## 15. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
+## 14. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
 
 *New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
 
@@ -3783,7 +3776,7 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 ---
 
-## 16. UI Cohesion — Cross-Panel Header/Accent Consistency
+## 15. UI Cohesion — Cross-Panel Header/Accent Consistency
 
 *New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
 making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
@@ -3897,7 +3890,7 @@ audit only, no runtime/visual walkthrough performed):
 
 ---
 
-## 17. Dev Infrastructure — Claude Code on the web headless UI testing
+## 16. Dev Infrastructure — Claude Code on the web headless UI testing
 
 *Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
 `90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
@@ -3928,7 +3921,7 @@ headless-login driver script.*
 
 ---
 
-## 18. Terms of Service / Privacy Policy Consent Capture
+## 17. Terms of Service / Privacy Policy Consent Capture
 
 *Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
 consent gate before signup. The mechanism is real and live for new signups; the legal content it
@@ -3989,7 +3982,7 @@ collected is regulated/high-sensitivity data, and this workstream doesn't change
 - [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
   `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
   was added for it in this pass — worth a look next time either section gets a surgical pass.
-## 19. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+## 18. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
 
 *Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
 a critical bug — linting errors don't prevent the app from running or tests from passing. But

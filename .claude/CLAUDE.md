@@ -38,6 +38,35 @@ rate limit or a real Vercel outage. Consolidation candidates if it happens again
 
 ---
 
+## Git PR Flow
+
+**Three-tier merge pipeline:** Feature work flows through two integration branches before master.
+
+| Tier | Branch | Purpose | Merge from | Merges to |
+|------|--------|---------|-----------|-----------|
+| **Tier 1** | `claude/*` feature branches | Individual feature/fix development | (local/origin) | Version-control |
+| **Tier 2** | `Version-control` | Integration & testing ground | Multiple Tier 1 PRs | master |
+| **Tier 3** | `master` | Production-ready release | Version-control PRs | Vercel deployment |
+
+**Process:**
+1. **Feature development** on `claude/descriptive-name` branches — write code, test locally, push.
+2. **PR to Version-control** — merge feature branch via GitHub PR into `Version-control` branch for integration testing across multiple concurrent features.
+3. **Version-control validation** — run full test suite, verify all features work together, catch cross-branch conflicts early.
+4. **PR to master** — once validated, merge `Version-control` into `master` for production deployment.
+
+**Conflict resolution strategy:**
+- When merging Tier 1 branches into Version-control, conflicts often arise from concurrent section numbering changes (TODO/docs reorganizations).
+- Use **placeholder-based two-pass replacement** for large, systematic updates spanning many files:
+  1. Pass 1: Old reference → unique placeholder (`§15` → `__SECTION_15__`)
+  2. Pass 2: Placeholder → new reference (`__SECTION_15__` → `§1`)
+  - This prevents regex overlap when replacing multiple sections simultaneously.
+- **Document all section mappings** in the commit message so future merges can reference the mapping table.
+- **Test cross-file consistency** after merge: grep for orphaned old section numbers (`§17`, `§42`, etc.) and verify they're either:
+  - Correctly renumbered to new positions, or
+  - Intentionally referencing archived sections (past-TODO-tasks.md)
+
+---
+
 ## File Structure
 ```
 src/

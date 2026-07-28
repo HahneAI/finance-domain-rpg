@@ -296,11 +296,15 @@ Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permis
 `beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
 (beta_activity_events eligibility trigger), 032 (`changelog_entries` — the admin-managed
 "What's New" table, `api/admin-changelog.js`), 033 (`consent_records` — Terms of Service /
-Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate) exist —
-**the next real migration is 034.** Verify against the folder before numbering; this note
-has now gone stale four times (drift-app-warden §14, again across the beta-program migrations,
-again across 031/032, and again across 033 — a fresh BOOKMARK compiling schema state through
-033 is now overdue; the existing `022` snapshot is stale for the same reason).
+Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 034
+(beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
+link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
+chat_type) exist — **the next real migration is 037.** Verify against the folder before
+numbering; this note has now gone stale five times (drift-app-warden §14, across the
+beta-program migrations, across 031–032, again across 033, and again when 032 collided with a
+second, independently-numbered `032_add_resume_profile.sql` on a parallel branch — resolved by
+renumbering the resume_profile migration to 036 on merge — a fresh BOOKMARK compiling schema
+state through 036 is now overdue; the existing `022` snapshot is stale for the same reason).
 
 ---
 
@@ -347,19 +351,34 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Account Tiers
 
-Three independent flags on `user_data`, each unlocking a distinct, non-overlapping surface —
-never treat one as implying another:
+Three flags on `user_data`. Each unlocks its own distinct account-tier surface — never treat
+one as implying another for *those* — but as of 2026-07-25 all three share one deliberate
+overlap: none of them ever hits a paid wall.
 
 | Flag | Unlocks | Set via |
 |------|---------|---------|
-| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan | Manual SQL |
-| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
-| `is_investor` | Demo Account Tree + investor code signup path | `createInvestorAccount()` via the investor code flow |
+| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan + bypasses every paid wall | Manual SQL |
+| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` + bypasses every paid wall — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
+| `is_investor` | Demo Account Tree + investor code signup path + AI features + bypasses every paid wall | `createInvestorAccount()` via the investor code flow |
 
-**Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must
-never grant Demo Account Tree access or the investor code path, and `is_investor` must never
-grant AI features. Full detail: `docs/active-systems.md` §9 (Beta Tester Accounts) and §2
-(Investor & Demo Accounts).
+**Beta testers are NOT investors for account-tier purposes — still a crucial, deliberate
+division.** `is_tester` must never grant Demo Account Tree access or the investor code path,
+and `is_investor` must never grant the beta-tester-specific surfaces (usage tracking, the beta
+report). Full detail: `docs/active-systems.md` §9 (Beta Tester Accounts) and §2 (Investor &
+Demo Accounts).
+
+**Locked decision, 2026-07-25 — supersedes this file's older "is_investor must never grant AI
+features" language:** any feature behind a paid wall (AI features today; any future paid-only
+surface) is free for `is_admin`, `is_tester` (beta-cohort or friends/family — `beta_code_used`
+present or not, doesn't matter here), and `is_investor` — none of the three should ever need a
+real subscription/payment to reach a paid-gated feature. Implemented as
+`hasPrivilegedAccess({ isAdmin, isTester, isInvestor })` in `entitlements.js`, which
+`canAccessAiFeatures` and `canAccessAskCoachGeneral` now build on instead of the narrower
+`hasTesterAccess` (admin/tester only, no investor) that `canAccessTaxPlan` still uses —
+Tax Plan was deliberately left out of this widening. The core app paywall
+(`paywallBypassed` in `App.jsx`) closed the matching gap the same day: it now bypasses for
+`isAdmin || isTester || config.isInvestor`, where testers previously relied only on their long
+trial window rather than an unconditional bypass.
 
 **Two populations both carry `is_tester = true`** — `user_data.beta_code_used` (migration
 `025_add_beta_code_used.sql`, manual SQL, never client-writable) tells them apart: a non-null
@@ -386,12 +405,12 @@ the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester
 | **Lock Date** | Tools sheet → Lock Date | Set a date to simulate a different `effectiveToday`. Ask: "set lock date to [date] and tell me what the Live Inspector shows for Effective Today, Week, and Future Weeks." |
 | **Reopen Last Check-In** | Tools sheet → Weekly Check-In | Resets the most recent confirmed pay period and reopens the weekly confirm modal as if it was never finished — a safe way to re-review the modal on demand. Drops that week's `weekConfirmations` record (and any log entry it created); income projections are independent of confirmations, so the model is unaffected. Disabled when no confirmed week is eligible. |
 | **Force Sync** | Tools sheet → Sync | **Push ↑** flushes in-memory state to Supabase immediately (bypasses 800ms debounce). **Pull ↓** reloads from DB into memory. Use before/after a save-related bug. |
-| **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. **Session insight:** Revealed the full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration. |
-| **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §3 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. Fetch also surfaces a §2.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap it to expand the 5 most recent titles; ask for it when verifying Ask Coach conversation persistence. |
+| **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. **§1.I:** when any §1 field carries a value, a "Life Events" header lists just those fields (name + value) above the raw dump — `jobLossMode`, `jobLossDate`, `jobLossCashOnHand`/`jobLossCashOnHandAsOf`, `jobLossPendingCheckAmount`/`Date`, `unemploymentEnabled`/`Weekly`/`DurationWeeks`/`WaitingWeek`, `returnToWorkDate`, and entry counts for `jobApplications`/`jobHuntIncomeLog`. **Session insight:** Revealed the full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration. |
+| **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §3 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. Fetch also surfaces a §2.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap it to expand the 5 most recent titles; ask for it when verifying Ask Coach conversation persistence. **§1.I:** Fetch also surfaces a "Triage: X active · Y paused · Z cancelled" line whenever any expense is paused/cancelled/flagged, reading the same `exp.jobLossStatus`/`autoReactivateOnIncome` fields `JobLossBudgetPanel`'s triage UI writes (F44) — flags any expense with `autoReactivateOnIncome === false` in the count; ask for it when a Job Loss account's Back to Work reactivation looks incomplete. |
 | **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · teal border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
-| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus (archived Stripe Monetization section) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. Ask: "open Live and paste all 16 values." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
-| **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
-| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §14+, `database/beta-offboarding-day71.sql`). |
+| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus ((archived Stripe Monetization section).F) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. **§1.I:** the pill itself carries a small amber dot when `config.jobLossMode` is true (visible without opening the card); the expanded card then adds three amber-highlighted rows — `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` — same call Coach and both Job Loss panels use, never a second derivation). Ask: "open Live and paste all values, noting whether the Job Loss dot is showing." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
+| **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. **§1.I:** the Pay section adds an `Unemployment` row whenever `w.unemploymentIncome > 0` (buildYear's per-week benefit annotation — `finance.js`, non-taxed income added to net by `computeNet`); for a week inside the Job Loss window with no benefit paid that week, it instead shows "Job Loss Mode — outside benefit window". Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
+| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §35, `database/beta-offboarding-day71.sql`). |
 
 **Per-entry impact breakdown** (Log panel): tap the ▼ chevron on any log entry (admin-only) to expand an inline breakdown of that entry's exact impact — gross, net, 401k employee + match, PTO hours, bucket deduction, fiscal week idx, past/future classification.
 
@@ -415,3 +434,4 @@ When filing a bug or building a feature that touches fiscal math, ask the user t
 4. **Tax grid** — Tax Weeks → View ↓ → screenshot or describe red dots + current week position
 5. **Week deep-dive** — tap the suspect week row in Income → describe Pay + Net Lookup + Log Entries sections
 6. **Subscription/billing** — DB Row → Fetch already surfaces every raw column (`select *`, includes `subscription_status`/`trial_ends_at`/`access_ends_at`/`card_on_file`/`current_period_end`/`plan`); Live State Inspector adds the resolved phase on top. Ask for both when the issue involves the paywall gate, trial countdown, or billing state.
+7. **Job Loss state (§15.I)** — Live State Inspector → confirm the amber Job Loss dot on the pill + paste `Job Loss Date`/`Unemployment Wkly`/`Unemployment Wks Left`; DB Row → Fetch → paste the `Triage:` line; Config JSON → View ↓ → paste the "Life Events" header block. Ask for all three when the issue involves runway, benefits, or expense triage during Job Loss Mode. Per-week benefit detail: `buildYear()` annotates every week with `unemploymentIncome` (`finance.js`) — non-zero only inside the eligibility window computed from `jobLossDate`/`unemploymentDurationWeeks`/`unemploymentWaitingWeek`; Week Inspector surfaces it directly (see table above).

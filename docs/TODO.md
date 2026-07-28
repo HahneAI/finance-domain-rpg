@@ -304,6 +304,15 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires Job Loss Mode (§1.C) to be live first.*
 
+**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
+session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
+gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
+feature is finished, mirroring the precedent Coach's own gate-flip already set
+(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
+entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
+Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
+is happening in another session, so don't duplicate work here without checking in first.
+
 *Job Loss Mode's §1.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
 have to re-derive them or, worse, write a fourth parallel runway calc:*
@@ -323,45 +332,44 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
   today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
   "how long can I be selective" framing (what's actually due before benefits run out).
-- **Known drift to fix before/while building this — worse than originally flagged, re-confirmed
-  during the §1.H14 birdseye review (2026-07-19):** `lib/coachTriggers.js`'s `estimateRunwayDays`
-  (used by `CoachNetWorthCard.jsx` for the §2.C Red-tier trigger) is a **second, independent**
-  runway calc. Its own doc comment says it "assumes $0 extra savings, the conservative floor" —
-  that comment predates `jobLossCashOnHand` existing as a real persisted field (§1.H13); the
-  "additional savings" input it's talking about used to be a session-only draft `JobLossBudgetPanel`
-  owned, which no longer describes the current architecture at all. It also still predates the
-  `trackDuringJobLoss` flag added in §1.H8/H9, so it counts bills the user unchecked from tracking.
-  Two independent sources of drift on the same function now, both confirmed live: it disagrees with
-  Job Loss Home/Budget on both *which bills count* and *how much cash the user actually has*. Either
-  retrofit both (`trackDuringJobLoss` filter + `jobLossCashOnHand`) into it, or (cleaner) have it
-  call `computeJobLossRunway` directly once this feature gives a reason to touch that file. Separate
-  and worth fixing regardless of whether this feature gets built: `App.jsx` never actually passes
-  `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
-  context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
-  `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §1.H14.
-  **Closed, 2026-07-22 (§1.H17):** both paragraphs above are now stale — `coachTriggers.js`'s
-  `estimateRunwayDays` was deleted outright (not retrofitted), and every runway consumer
-  (`CoachNetWorthCard.jsx`, `App.jsx`'s `coachRunwayDays`) now calls `computeJobLossRunway()`
-  directly, so there is no second drifted calc left to reconcile. `runwayDays` is also now wired
-  into Coach's context (`App.jsx` → `buildCoachContext`), not the bare `"Job Loss Mode: active"`
-  string. See `docs/BUG_FIX_TODO.md` DW-8/DW-9 and `drift-app-warden.md` §8 F24 for the fix
-  history — this stale note is left in place (not deleted) as the historical record of the drift
-  this feature would otherwise have needed to fix.
+- **Known drift, corrected 2026-07-25 — the paragraph below is stale, kept for history.** Both
+  items it flags were already fixed by the time this feature got built (`active-systems.md`'s
+  2026-07-24 stale-note correction, `drift-app-warden.md` §8 F24): `estimateRunwayDays` was
+  **deleted outright**, not retrofitted — every runway caller, this feature included, goes
+  through `computeJobLossRunway`/`resolvePrimaryRunwayDays` now. And `runwayDays` **is** wired
+  into `buildCoachContext` (`App.jsx`'s `coachRunwayDays`). Original (now-resolved) text: <details>
+  `lib/coachTriggers.js`'s `estimateRunwayDays` (used by `CoachNetWorthCard.jsx` for the §2.C
+  Red-tier trigger) was a second, independent runway calc that disagreed with Job Loss Home/
+  Budget on both which bills count and how much cash the user actually has; separately,
+  `App.jsx` never passed `runwayDays` into `buildCoachContext` at all, so Coach's Job Loss Mode
+  context was the bare string `"Job Loss Mode: active"`, no numbers.</details>
 
-- [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
-  API) with a system prompt including: current role title, prior income, runway days, target income,
-  state/region, application log summary
-- [ ] **Contextual prompt modes:**
-  - [ ] "Help me with my resume" — structured resume review tied to target roles
-  - [ ] "Write a cover letter for [role]" — drafts from stored job title + experience summary
-  - [ ] "Prep me for [company] interview" — role-specific Q&A from company + job title
-  - [ ] "Salary negotiation coaching" — uses prior income + target income + runway as context
-  - [ ] "How long can I be selective?" — runway-aware guidance on holding out vs. taking a quick offer
-- [ ] **Financial context injection** — every session receives a condensed snapshot (runway, burn
-  rate, target net, current week) so advice is grounded in real numbers
-- [ ] **Prompt caching** — cache the financial context block across the conversation session
+- [x] **Job Hunt Chat panel** — built 2026-07-25 as `JobHuntChatPanel.jsx`, opened via a "Talk to
+  Coach about the search" button in `JobLossHomePanel` (not a Job Loss Dashboard sub-view — no
+  such dashboard exists; this app's Job Loss Mode is `JobLossHomePanel`/`JobLossBudgetPanel`
+  directly). System prompt (`JOB_HUNT_SYSTEM_PROMPT`, `coachPrompts.js`) grounds in runway days,
+  burn rate, target income, and application log summary via the new `buildJobHuntContext()`
+  (`aiContext.js`) — **not** current role title / prior income / state/region, which aren't
+  tracked fields anywhere in this app today; scope this if a real need for them surfaces. Uses
+  Sonnet per §18.G's cost split. v1-scoped like Ask Coach originally was: single-session, no
+  chat-history/retention system yet (that's the natural next pass once this mode proves itself,
+  same as Ask Coach's history list arrived after its own v1).
+- [x] **Contextual prompt modes — supported via open-ended chat, not discrete UI shortcuts.**
+  No per-mode buttons ("Prep me for [company] interview," etc.) — the system prompt instructs
+  Coach to help with all of these when asked in free text, using the real application log for
+  company-specific coaching. **Deliberate exception: "Help me with my resume" is explicitly
+  redirected**, not answered inline — the addendum tells Coach "you're not a resume-writing
+  service... redirect to what you can help with here," keeping this mode and Résumé Review
+  (§18.E1) properly separated rather than overlapping.
+- [x] **Financial context injection** — `buildJobHuntContext()`, grounded in
+  `computeJobLossRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` (never a parallel
+  estimate, per §21 F113's rule) plus `config.targetIncomeAnnual`/`jobApplications`/
+  `returnToWorkDate`. Tested: `aiContext.test.js`.
+- [x] **Prompt caching** — inherited from the shared `api/coach.js` pipeline (system + context
+  blocks already get `cache_control: ephemeral`, multi-turn messages already cache the growing
+  history) — no new work needed since this mode reuses that route rather than a new one.
 
-#### E1. Résumé upload / skill-gap analysis — scoped, 2026-07-22 — SCOPED, nothing started
+#### E1. Résumé upload / skill-gap analysis — v1 built 2026-07-25 (scoped 2026-07-22)
 
 *Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §1.H14
 bullet 6 as "genuinely absent as an idea" — the only prior trace anywhere in this doc was that one
@@ -409,14 +417,35 @@ scope — documentation only, nothing below is implemented.*
   (already a jsonb column, already used for "statement insight keys" — no schema change needed
   beyond the chat_type enum value) alongside a written review in `messages`.
 - **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
-  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
-  the broader AI-features rollout question being resolved first — worth noting again here, not a
-  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+  gate needed. `canAccessAiFeatures` itself widened 2026-07-25 to admin/tester/investor
+  (`hasPrivilegedAccess`, entitlements.js) — see the locked decision below. H14 bullet 5's
+  finding still applies to everyone outside those three tiers: real (non-privileged) users
+  can't reach this without the broader AI-features rollout question being resolved first —
+  worth noting again here, not a blocker to scoping, but a real blocker to shipping this to
+  anyone but admins/testers/investors.
+- **Locked decision (2026-07-25) for when this leaves the admin/tester/investor gate: paid-only
+  for everyone else, not trial-included.** Both this feature and §18.E (Job Hunt Assistant) are
+  a real, post-card-charge subscription only (`entitlement.state === "active"`) for accounts
+  outside the privileged tier — deliberately narrower than `canAccessAskCoachGeneral`'s trial/
+  grace/active check that sections 1–2 use. Admin, tester, and investor accounts keep bypassing
+  unconditionally regardless (same `hasPrivilegedAccess` decision — this doesn't change when the
+  feature splits off, only the requirement for everyone else does). Do not reuse
+  `canAccessAskCoachGeneral` when splitting this off; see `coach-entry-points.md` §5/§6 and
+  `drift-app-warden.md` §21 F124.
 - **Recommended phasing:**
-  - **v1** — `resume_profile` table + RLS; a "Resume" card in `ReemploymentTracker` (or its own
-    section in the Job Loss Dashboard) with a paste-text textarea + "Get skill-gap review" button;
-    `resume_review` chat_type wired through the existing `api/coach.js`; output rendered as a
-    bullet list of gaps + a short written review, saved to `coach_chats`.
+  - [x] **v1 — built 2026-07-25.** `resume_profile` table + RLS (migration `036_add_resume_profile.sql`,
+    `user_id` as the primary key, not a surrogate `id` — genuinely 1:1 per account, unlike
+    `coach_chats`); `loadResumeProfile`/`saveResumeProfile` in `db.js`. `ResumeReviewCard.jsx` —
+    its own section in `JobLossHomePanel` (the "or" option from the original phasing note; no
+    change to `ReemploymentTracker.jsx` itself, exactly as scoped) — with a paste-text textarea +
+    target-role field (defaults from the most recent `jobApplications` entry, free-text override)
+    + "Get Skill-Gap Review" button. One deviation from the spec text above: the review isn't
+    rendered as a literal bullet list — `RESUME_REVIEW_SYSTEM_PROMPT`'s own no-Markdown rule
+    (inherited from `COACH_PERSONA_PROMPT`) rules out literal bullet characters, so it's several
+    short paragraphs instead, each grounded in one résumé line. `resume_review` added to
+    `coach_chats.chat_type`; the review saves there via the existing `api/coach.js`/`saveCoachChat`
+    path, same as the spec intended — no `insights` JSONB populated yet (that's for structured
+    extraction beyond a written review; not needed for v1's plain-text output).
   - **v2 (only if v1 shows real usage)** — file upload (PDF/DOCX) via a new Supabase Storage
     bucket + client-side text extraction feeding the same v1 analysis pipeline unchanged.
   - **Not scoped even for v2:** any auto-apply / auto-tailor-resume-per-listing feature — that's a
@@ -1795,6 +1824,12 @@ how directly each one touches "is the runway number on screen actually correct."
   `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
   proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
   question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
+- **AI-gating question resolved, 2026-07-25 (user directive) — see §18.E header for the full
+  note.** Stays `canAccessAiFeatures` (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then
+  moves to a paid-tier gate (mirrors Coach's own `canAccessAskCoachGeneral` gate-flip,
+  2026-07-24). The Job Hunt Assistant build itself is being tracked in a separate session —
+  checkbox above left unticked as the historical record of what was open at the time of this
+  birdseye pass, not because the question is still live.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 
@@ -1960,22 +1995,29 @@ that decay into the runway instead of the number silently going stale between ma
 
 ---
 
-### I. Admin Toolkit updates for §1 work
+### I. Admin Toolkit updates for §1 work — BUILT 2026-07-25
 
-- [ ] **Live State Inspector — Job Loss Mode pill**
-  - [ ] Amber pill when `config.jobLossMode === true`
-  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
-- [ ] **Week Inspector — unemployment income row**
-  - [ ] When `w.unemploymentIncome > 0`, show "Unemployment" line in Pay section
-  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface "Job Loss Mode — outside benefit window"
-- [ ] **DB Row Viewer — expense triage summary**
-  - [ ] One-liner: "Triage: X active · Y paused · Z cancelled"
-  - [ ] Flag any expense where `autoReactivateOnIncome === false`
-- [ ] **Config Raw View — Life Events header**
-  - [ ] Short header above JSON listing only §1-relevant fields with values
-- [ ] **CLAUDE.md update**
-  - [ ] Append Job Loss state to "Diagnostic request templates"
-  - [ ] Document per-week `unemploymentIncome` annotation on `buildYear` output
+- [x] **Live State Inspector — Job Loss Mode pill**
+  - [x] Amber dot on the pill (top-right corner) when `config.jobLossMode === true`, visible without opening the card
+  - [x] Three amber-highlighted rows in the expanded card: `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` via a shared `jobLossDash` memo — same call Coach's `coachRunwayDays` uses, no second derivation, per F24)
+- [x] **Week Inspector — unemployment income row**
+  - [x] `w.unemploymentIncome > 0` → green "Unemployment" row in the Pay section
+  - [x] Job Loss window with no benefit paid that week → "Unemployment — Job Loss Mode — outside benefit window" (window boundary mirrors buildYear's `inJobLoss` check — `jobLossDate`/`returnToWorkDate` — diagnostic-only, never feeds math, same pattern as `resolveBaseRateForWeek`)
+- [x] **DB Row Viewer — expense triage summary**
+  - [x] "Triage: X active · Y paused · Z cancelled" line (only shown when something's actually paused/cancelled/flagged)
+  - [x] Flags expense count where `autoReactivateOnIncome === false`
+- [x] **Config Raw View — Life Events header**
+  - [x] "Life Events" header above the JSON dump, listing only §1 fields that currently carry a value
+- [x] **CLAUDE.md update**
+  - [x] Appended Job Loss state (§7 in Diagnostic request templates)
+  - [x] Documented per-week `unemploymentIncome` annotation on `buildYear` output (Week Inspector + template §7 entries)
+- All four admin surfaces are duplicated three times in `App.jsx` (desktop sidebar, mobile
+  hamburger drawer, mobile bottom sheet) — pre-existing architecture, not introduced by this
+  pass. Computed once via shared memos (`jobLossDash`, `expenseTriageLine`,
+  `lifeEventsConfigFields`) and rendered into all three so the triplication stays presentation-
+  only, not a fourth parallel calculation. 1231 tests passing (no new tests — pure admin-only
+  diagnostic surface, isAdmin-gated, no math path exercised); lint diff-clean vs. baseline;
+  production build green.
 
 ---
 

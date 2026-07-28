@@ -2,6 +2,7 @@ import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, comput
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./jobLossRunway.js";
 
 // Pairs a fiscal week index with its real calendar date — full month name,
 // never abbreviated — and the period number in the unit this account's pay
@@ -203,6 +204,56 @@ export function buildCoachContext({
   return lines.join("\n");
 }
 
+/**
+ * §18.E — Job Hunt Assistant's dedicated context snapshot. A separate function
+ * from buildCoachContext (not an extra branch on it) because this mode needs
+ * fields — the full application log, target income — that would otherwise
+ * bloat the general Ask Coach/Net Worth prompt's cached prefix for every user
+ * not in this specific mode. Every figure resolves through the same
+ * authoritative functions the on-screen panels use (§21 F113's grounding
+ * rule): computeJobLossRunway/resolvePrimaryRunwayDays (JobLossHomePanel's
+ * own runway tile) and sumJobHuntIncome — never a parallel estimate.
+ *
+ * Unlike the goal-breakdown line above, application company/role names are
+ * deliberately NOT withheld — Job Hunt Assistant's whole point is company-
+ * specific coaching ("prep me for the Acme interview"), so withholding the
+ * name would break the feature, not just protect privacy the way it does
+ * for goals.
+ */
+export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
+  const lines = [];
+  const manualSavings = Math.max(0, config?.jobLossCashOnHand ?? 0);
+  const huntIncome = sumJobHuntIncome(config);
+  const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
+  if (!dash) return "";
+
+  const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);
+  lines.push(`Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
+  if (dash.lifestyleWeeklySpend > 0) {
+    lines.push(`Lifestyle spend still tracked (not counted in runway above): ${fmt$(dash.lifestyleWeeklySpend)}/wk`);
+  }
+  if (huntIncome > 0) lines.push(`Extra job-hunt income logged so far: ${fmt$(huntIncome)}`);
+
+  if (config?.targetIncomeAnnual != null) {
+    lines.push(`Target annual income: ${fmt$(config.targetIncomeAnnual)}`);
+  }
+
+  const apps = Array.isArray(config?.jobApplications) ? config.jobApplications : [];
+  if (apps.length) {
+    const recent = [...apps].sort((a, b) => (b.dateApplied ?? "").localeCompare(a.dateApplied ?? "")).slice(0, 5);
+    const items = recent.map((a) => `${a.company} — ${a.role} (${a.status}, applied ${a.dateApplied})`).join("; ");
+    lines.push(`Applications (${apps.length} total${recent.length < apps.length ? `, ${recent.length} most recent shown` : ""}): ${items}`);
+  } else {
+    lines.push("No applications logged yet.");
+  }
+
+  if (config?.returnToWorkDate) {
+    lines.push(`Expected return-to-work date already set: ${config.returnToWorkDate}`);
+  }
+
+  return lines.join("\n");
+}
+
 // ── Future context extensions ───────────────────────────────────────────
 // None of these fields exist yet — nothing below is built. Listed here so
 // each feature extends buildCoachContext instead of growing its own bespoke
@@ -213,7 +264,6 @@ export function buildCoachContext({
 //                                   bonuses, non-DHL 401k match/vesting) — don't bake in DHL-shaped
 //                                   assumptions before that's settled. See docs/TODO.md §2.B.
 // §2.D Statements AI Insights    — period totals: gross, taxes, goal velocity, biggest expense shift
-// §2.E Job Hunt AI Assistant     — target income, application log summary, state/region
 // §2.J Tax Onboarding Interview  — taxedWeeksFed/State split, taxHistoryReliableFrom, account created_at
 // §8.A Paycheck variance forecaster — confirmed-vs-scheduled variance band (last 6 weeks)
 // §8.A Seasonal pattern memory   — prior-year seasonal deltas (OT spikes, utility swings)

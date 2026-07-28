@@ -1357,10 +1357,13 @@ export function HomePanel({
 
       {/* §2.C — left the admin/tester-only standing constraint; now also
           open to a real trial/paid entitlement (docs/coach-entry-points.md
-          §2). Beta testers are NOT investors — canAccessAskCoachGeneral must
-          never fold in isInvestor. See docs/active-systems.md "Beta Tester
-          Accounts". */}
-      {canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+          §2). Locked decision 2026-07-25: admin/tester/investor all bypass
+          the AI-feature paid wall unconditionally (entitlements.js's
+          hasPrivilegedAccess) — this does NOT reopen the separate, still-true
+          rule that beta testers and investors are otherwise two distinct
+          account tiers with zero overlap (docs/active-systems.md "Beta
+          Tester Accounts"). */}
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
         <CoachNetWorthCard
           config={config}
           setConfig={setConfig}

@@ -630,6 +630,67 @@ export async function deleteCoachChat(id) {
 }
 
 /**
+ * §18.E1 — Résumé Review v1 storage (migration 036). One row per user
+ * (`user_id` is the table's primary key, not a surrogate `id`), so this is a
+ * load-one/upsert-one shape rather than coach_chats' list shape. Returns null
+ * on no session, no saved profile yet, or a missing-table error — same
+ * tolerance pattern as loadCoachChats.
+ */
+export async function loadResumeProfile() {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from("resume_profile")
+    .select("resume_text, target_role, last_reviewed_at, created_at, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Failed to load resume profile:", error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  return {
+    resumeText: data.resume_text ?? "",
+    targetRole: data.target_role ?? "",
+    lastReviewedAt: data.last_reviewed_at,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+/**
+ * Upserts the signed-in user's resume_profile row by `user_id` (the table's
+ * primary key), so this never creates a second row for the same account.
+ * `user_id` always comes from the session, never the caller. Returns true on
+ * success, false on failure or no session.
+ */
+export async function saveResumeProfile(profile) {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const row = {
+    user_id: userId,
+    resume_text: profile.resumeText ?? null,
+    target_role: profile.targetRole ?? null,
+    last_reviewed_at: profile.lastReviewedAt ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("resume_profile")
+    .upsert(row, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("Failed to save resume profile:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Creates a full investor account in three atomic steps:
  *   1. Supabase auth user (email + password)
  *   2. investor_users profile row
@@ -926,14 +987,21 @@ export async function checkRevival() {
  * (type: "beta" — consolidated from the former api/seed-beta.js, api/seed-investor.js,
  * and api/seed-trial.js into one route to stay under Vercel's Hobby-plan
  * 12-function-per-deployment cap). Returns { ok: true } on success,
- * { ok: false, error } otherwise — the caller (ProfilePanel) is responsible
- * for reloading state after success, since is_tester/beta_code_used are
- * read-only fields loadUserData maps in.
+ * { ok: false, error, retryable } otherwise — the caller (ProfilePanel) is
+ * responsible for reloading state after success, since is_tester/beta_code_used
+ * are read-only fields loadUserData maps in.
+ *
+ * `retryable` tells a caller that auto-retries (App.jsx's signup-link handoff)
+ * whether trying the same code again later could plausibly succeed: true for
+ * a missing session or a network/server (5xx) failure — neither says anything
+ * about the code itself — false for a 4xx rejection (missing code, invalid/
+ * inactive/already-claimed code, seat cap full), which will fail identically
+ * on every retry since it's the request itself that's wrong.
  */
 export async function redeemBetaCode(code) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) return { ok: false, error: "Not signed in" };
+  if (!accessToken) return { ok: false, error: "Not signed in", retryable: true };
 
   try {
     const res = await fetch("/api/seed", {
@@ -942,10 +1010,10 @@ export async function redeemBetaCode(code) {
       body: JSON.stringify({ type: "beta", code }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code", retryable: res.status >= 500 };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, retryable: true };
   }
 }
 

@@ -2,8 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { MetricCard, Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { computeJobLossRunway, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
+import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
+import { JobHuntChatPanel } from "./JobHuntChatPanel.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
-import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
+import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlements.js";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 
 /**
@@ -28,7 +30,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
  * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
  * because this panel replaces HomePanel entirely and never rendered the card
  * — same canAccessAskCoachGeneral gate as HomePanel's own mount (isAdmin/
- * isTester or a real trial/paid entitlement — docs/coach-entry-points.md §2),
+ * isTester/isInvestor or a real trial/paid entitlement — docs/coach-entry-points.md §2),
  * same config-backed rate-limit state (DW-9 fix — shared across both mount
  * sites by design, one message per fiscal week per tier per account, durable
  * per-account rather than per-device). Amber/Green tiers still won't fire
@@ -50,6 +52,19 @@ export function JobLossHomePanel({
   const [amountDraft, setAmountDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [cashSheetOpen, setCashSheetOpen] = useState(false);
+
+  // Job Hunt Assistant panel open/exit — same fold-lift-out timing/pattern as
+  // App.jsx's askCoachExiting (180ms), kept local here rather than lifted to
+  // App.jsx since the panel's only mount/trigger point is this component.
+  const [jobHuntOpen, setJobHuntOpen] = useState(false);
+  const [jobHuntExiting, setJobHuntExiting] = useState(false);
+  const closeJobHuntWithAnimation = useCallback(() => {
+    setJobHuntExiting(true);
+    setTimeout(() => {
+      setJobHuntOpen(false);
+      setJobHuntExiting(false);
+    }, 180);
+  }, []);
 
   const huntIncome = sumJobHuntIncome(config);
 
@@ -263,7 +278,48 @@ export function JobLossHomePanel({
 
       {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} saveConfigNow={saveConfigNow} />}
 
-      {canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {/* §18 sections 4+ standing constraint — narrow canAccessAiFeatures gate
+          (admin/tester/investor — hasPrivilegedAccess, 2026-07-25), unlike
+          Ask Coach's wider trial/paid gate above. */}
+      {canAccessAiFeatures({ isAdmin, isTester, isInvestor: config?.isInvestor }) && (
+        <>
+          <SectionHeader sub="Coach-guided help with the search itself — application strategy, interview prep, salary negotiation, or how long your runway lets you hold out">
+            Job Hunt Assistant
+          </SectionHeader>
+          <Pressable
+            onClick={() => setJobHuntOpen(true)}
+            style={{
+              width: "100%",
+              background: "rgba(0,200,150,0.10)",
+              color: "var(--color-teal)",
+              border: "1px solid rgba(0,200,150,0.32)",
+              borderRadius: "10px",
+              padding: "12px",
+              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+              fontWeight: 700, cursor: "pointer",
+              minHeight: "44px",
+              marginBottom: "16px",
+            }}
+          >
+            Talk to Coach about the search
+          </Pressable>
+
+          <ResumeReviewCard config={config} />
+
+          {(jobHuntOpen || jobHuntExiting) && (
+            <JobHuntChatPanel
+              onClose={closeJobHuntWithAnimation}
+              isExiting={jobHuntExiting}
+              config={config}
+              expenses={expenses}
+              effectiveToday={effectiveToday}
+              includeBenefits={includeBenefits}
+            />
+          )}
+        </>
+      )}
+
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
         <CoachNetWorthCard
           config={config}
           setConfig={setConfig}

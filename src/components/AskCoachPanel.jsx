@@ -4,6 +4,7 @@ import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
+import coachAvatar from "../assets/coach-avatar-color.png";
 
 // §2.H — how many past Ask Coach conversations we keep. Matches the standing
 // plan's "save a person's last three conversations" — refreshHistory() below
@@ -409,17 +410,40 @@ export function AskCoachPanel({
                 style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "85%",
-                  background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
-                  border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
-                  borderRadius: "14px",
-                  padding: "10px 14px",
-                  fontSize: "14px",
-                  lineHeight: 1.5,
-                  color: "var(--color-text-primary)",
-                  whiteSpace: "pre-wrap",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "8px",
                 }}
               >
-                {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                {m.role !== "user" && (
+                  <img
+                    src={coachAvatar}
+                    alt="Coach"
+                    style={{
+                      width: "26px",
+                      height: "26px",
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      objectFit: "cover",
+                      background: "var(--color-bg-raised)",
+                      border: "1px solid var(--color-border-subtle)",
+                    }}
+                  />
+                )}
+                <div
+                  style={{
+                    background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
+                    border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
+                    borderRadius: "14px",
+                    padding: "10px 14px",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: "var(--color-text-primary)",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                </div>
               </div>
             ))}
             {errored && (

@@ -830,7 +830,7 @@ export function traceExpenseCalculationSteps({
   futureWeeks,
   showExtra = false,
   extraPerCheck = 0,
-  bufferPerWeek = 0,
+  freedomAllowancePerWeek = 0,
   observedQuarterlySpendByPhase = null,
 } = {}) {
   const logEntries = [];
@@ -853,7 +853,7 @@ export function traceExpenseCalculationSteps({
       futureWeekCount: safeFutureWeeks.length,
       extraPerCheck,
       showExtra,
-      bufferPerWeek,
+      freedomAllowancePerWeek,
     },
     "buildYear(cfg)"
   );
@@ -873,20 +873,20 @@ export function traceExpenseCalculationSteps({
   );
 
   const weeklyNets = activeWeeks.map(w => computeNet(w, safeCfg, extraPerCheck, showExtra));
-  const spendableNets = weeklyNets.map(n => n - bufferPerWeek);
+  const spendableNets = weeklyNets.map(n => n - freedomAllowancePerWeek);
   const projectedAnnualNet = weeklyNets.reduce((sum, n) => sum + n, 0);
   // Divide by the weeks actually active, not a flat 52 (TODO §1, 2026-07-19)
   // — same fix as App.jsx's weeklyIncome, mirrored here so this trace explains
   // the real production formula instead of the diluted one it replaced.
-  const weeklyIncome = activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length - bufferPerWeek : -bufferPerWeek;
+  const weeklyIncome = activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length - freedomAllowancePerWeek : -freedomAllowancePerWeek;
   add(
     "computeNet + weeklyIncome",
     "Transform weekly gross/tax data into spendable weekly income.",
     {
       projectedAnnualNet,
       activeWeekCount: activeWeeks.length,
-      averageNetBeforeBuffer: activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length : 0,
-      bufferPerWeek,
+      averageNetBeforeFreedomAllowance: activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length : 0,
+      freedomAllowancePerWeek,
       spendableWeeklyIncome: weeklyIncome,
       sampledSpendableWeeks: spendableNets.slice(0, 3),
     },
@@ -1389,8 +1389,8 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
 // A specific week's spendable net, with any confirmed log-entry adjustments
 // for that week folded in (missed shifts, etc.) — the same per-week math
 // "This Week's Check" style tiles need, factored out so callers can't drift.
-function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, bufferPerWeek, logs) {
-  const baseNet = computeNet(week, cfg, extraPerCheck, showExtra) - bufferPerWeek;
+function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, freedomAllowancePerWeek, logs) {
+  const baseNet = computeNet(week, cfg, extraPerCheck, showExtra) - freedomAllowancePerWeek;
   const weekAdjustment = (logs ?? [])
     .filter(e => e.weekIdx === week.idx)
     .reduce((sum, e) => {
@@ -1412,11 +1412,11 @@ function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, bufferPe
 // year hasn't started yet. Only falls back to weeklyIncome when there's no
 // active week at all to read (currentWeek null — before firstActiveIdx, or
 // mid-Job-Loss-Mode).
-export function resolvePrevWeekNet({ allWeeks, todayIso, config, extraPerCheck, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek }) {
+export function resolvePrevWeekNet({ allWeeks, todayIso, config, extraPerCheck, showExtra, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek }) {
   const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < todayIso);
   const referenceWeek = pastWeeks.length ? pastWeeks[pastWeeks.length - 1] : (currentWeek?.active ? currentWeek : null);
   if (!referenceWeek) return weeklyIncome;
-  return weekNetWithLogAdjustments(referenceWeek, config, extraPerCheck, showExtra, bufferPerWeek, logs);
+  return weekNetWithLogAdjustments(referenceWeek, config, extraPerCheck, showExtra, freedomAllowancePerWeek, logs);
 }
 
 // ── Net worth health ──────────────────────────────────────────────────────

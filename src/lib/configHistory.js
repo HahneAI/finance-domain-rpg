@@ -36,8 +36,8 @@ export const HISTORY_SENSITIVE_FIELDS = [
   "attendanceTerminateThreshold", "attendanceIncrement", "ptoEnabled",
   "ptoAccrualMethod", "ptoAccrualRate", "ptoCap", "bucketStartBalance",
   "bucketCap", "bucketPayoutRate",
-  // Buffer / risk posture
-  "bufferEnabled", "paycheckBuffer",
+  // Freedom Allowance / risk posture
+  "freedomAllowanceEnabled", "freedomAllowance",
   // Job loss (jobApplications deliberately excluded — already its own log)
   "jobLossMode", "jobLossDate", "unemploymentEnabled", "unemploymentWeekly",
   "unemploymentDurationWeeks", "unemploymentWaitingWeek", "returnToWorkDate",

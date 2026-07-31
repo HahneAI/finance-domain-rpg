@@ -1536,8 +1536,8 @@ export default function App() {
   // to per-paycheck for display.
   const checksPerYear = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
 
-  // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
-  // paycheckBuffer is stored as $/check. Convert to $/week by multiplying by the
+  // ─── Freedom Allowance ───────────────────────────────────────────────────────
+  // freedomAllowance is stored as $/check. Convert to $/week by multiplying by the
   // paycheck frequency ratio (checksPerYear/52), so the weekly deduction is the
   // correct time-averaged amount regardless of pay schedule:
   //   weekly  → $50/check × 52/52 = $50/week
@@ -1545,8 +1545,8 @@ export default function App() {
   //   monthly → $50/check × 12/52 ≈ $11.54/week
   // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
   // it to display real earned income, not the spendable portion.
-  const bufferPerWeek = (config.bufferEnabled ?? true)
-    ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
+  const freedomAllowancePerWeek = (config.freedomAllowanceEnabled ?? true)
+    ? (config.freedomAllowance ?? 50) * (checksPerYear / 52)
     : 0;
   // weeklyIncome is meant to read as "what a typical active week nets you" —
   // dividing by a flat 52 instead of the weeks actually active this fiscal
@@ -1556,7 +1556,7 @@ export default function App() {
   // paycheck (TODO §1 Job Loss Mode investigation, 2026-07-19). For a
   // full-year account (firstActiveIdx 0) this is byte-identical to /52.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
-  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - freedomAllowancePerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
   // Shows the specific prior week's computeNet (high vs low week), not an annual
@@ -1566,15 +1566,15 @@ export default function App() {
   // no past active week yet — see resolvePrevWeekNet's doc comment.
   const prevWeekNet = useMemo(() => resolvePrevWeekNet({
     allWeeks, todayIso: effectiveToday, config, extraPerCheck: taxDerived.extraPerCheck,
-    showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek,
-  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek]);
+    showExtra, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
     const result = {};
     allWeeks.forEach(w => {
       const baseNet = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
-      const spendable = baseNet - bufferPerWeek;
+      const spendable = baseNet - freedomAllowancePerWeek;
       const adjustment = adjustments[w.idx] || 0;
       result[w.idx] = {
         baseNet,
@@ -1585,11 +1585,11 @@ export default function App() {
       };
     });
     return result;
-  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, bufferPerWeek, eventImpact.weeklyNetAdjustments]);
+  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, freedomAllowancePerWeek, eventImpact.weeklyNetAdjustments]);
 
   const futureWeekNetsRaw = useMemo(
-    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek)),
-    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, bufferPerWeek]
+    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - freedomAllowancePerWeek)),
+    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, freedomAllowancePerWeek]
   );
 
   const futureWeekNets = useMemo(
@@ -1950,7 +1950,7 @@ export default function App() {
           userPaySchedule={config.userPaySchedule ?? "weekly"}
           fundedGoalSpend={fundedGoalSpend}
           config={config}
-          bufferPerWeek={bufferPerWeek}
+          freedomAllowancePerWeek={freedomAllowancePerWeek}
           isAdmin={isAdmin}
           taxProjectionsEnabled={taxProjectionsEnabled}
           isTester={isTester}
@@ -3326,7 +3326,7 @@ export default function App() {
                 ["Tax Gap", `$${Math.round(taxDerived.totalGap).toLocaleString()}`, null],
                 ["Taxed Checks", taxDerived.taxedWeekCount, "remaining"],
                 ["Goal Spend", `$${Math.round(fundedGoalSpend).toLocaleString()}`, "funded"],
-                ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
+                ["Freedom Alw / Wk", `$${Math.round(freedomAllowancePerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
                 // §15.I — Job Loss Mode rows, only when active. unemploymentRemainingWeeks

@@ -244,7 +244,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 - [x] **Copy audit — static tips rewrite** — done 2026-07-25. All 6 tips in `NetWorthHealthTips.jsx`
   rewritten to match Coach's voice (first person, direct) and each now names a real in-app lever
   instead of a generic affirmation: Budget (trim a Lifestyle expense), Home (reorder goal
-  priority), Account (paycheck buffer), Log (log a change immediately), Home again (Net Worth
+  priority), Account (Freedom Allowance), Log (log a change immediately), Home again (Net Worth
   Trend direction), Income (check next week's net). The "Financial Breakthrough" eyebrow label,
   intro paragraph, and closing support-resource line were rewritten too — deliberately kept at
   near-zero boxing metaphor, mirroring `coachPrompts.js`'s Red-tier restraint, since this fires at
@@ -921,7 +921,7 @@ investor display fields) is noise and must **not** trigger a row:
 - **Attendance / PTO / bucket:** `attendanceBucketEnabled`, `attendanceWarnThreshold`,
   `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`,
   `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`
-- **Buffer / risk posture:** `bufferEnabled`, `paycheckBuffer` — cheap to keep, and a genuine
+- **Freedom Allowance / risk posture:** `freedomAllowanceEnabled`, `freedomAllowance` — cheap to keep, and a genuine
   risk-tolerance signal for Coach
 - **Job loss (fields already live in `DEFAULT_CONFIG` today):** `jobLossMode`, `jobLossDate`,
   `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`,
@@ -1037,7 +1037,7 @@ The Problem: when you edit a field in June, `buildYear()` recalculates *all* wee
 | **Tax** | `fedRateLow/High`, `stateRateLow/High`, `taxRatesEstimated`, `ficaRate`, `fedStdDeduction`, `filingStatus`, `userState`, `targetOwedAtFiling`, `taxedWeeks`, `taxExemptOptIn` | 10 | Tax rates apply to all weeks; mid-year change retroactively rewrites annual tax liability |
 | **Deductions / benefits** | `selectedBenefits` + 9 per-check premiums (`healthPremium`, `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`, `lifePremium`, `hsaWeekly`, `fsaWeekly`) + `otherDeductions`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate` | 16 | Benefit changes retroactively recalculate 401k/insurance deductions for all weeks |
 | **Attendance / PTO / bucket** | `attendanceBucketEnabled`, `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`, `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate` | 11 | Accrual policy changes retroactively recalculate balances |
-| **Buffer / risk** | `bufferEnabled`, `paycheckBuffer` | 2 | Buffer changes affect all weeks' surplus calculations |
+| **Freedom Allowance / risk** | `freedomAllowanceEnabled`, `freedomAllowance` | 2 | Freedom Allowance changes affect all weeks' surplus calculations |
 | **Job loss** | `jobLossMode`, `jobLossDate`, `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`, `targetIncomeAnnual`, `startedUnemployed` | 7 | Already point-in-time-aware for earned-income zeroing (inJobLoss boolean); deductions/benefits within loss window not yet |
 
 **Implementation Pattern (generalize from baseRate):**
@@ -1557,7 +1557,7 @@ nearly every real account.*
   `App.jsx` **and** `DemoAccountTree.jsx` (same bug, same copy-pasted logic, would've hit demo/
   investor accounts too).
 - [x] **Root cause #2 — `weeklyIncome` itself divides by a flat 52.** Broader and more serious than
-  the tile bug: `weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek` assumes the account was
+  the tile bug: `weeklyIncome = projectedAnnualNet / 52 - freedomAllowancePerWeek` assumes the account was
   active the whole fiscal year. `HomePanel.jsx`'s "Net Worth Trend" tile already tried to correct
   for this on the *annual savings* side — `annualSavings = avgWeeklySurplus * activeWeeksThisYear`
   — but `avgWeeklySurplus` is built from the still-diluted `weeklyIncome`, so the two didn't agree:
@@ -2229,8 +2229,8 @@ with it — projections learn from confirmed actuals instead of trusting the sch
   with no note explaining why the numbers moved.
 - [ ] **Cash-flow crunch early warning** — walk projected weeks forward and flag the lowest
   upcoming spendable point ("Week 34 is your tightest week — $61 after bills") weeks before it
-  arrives, with one suggested lever to pull. Example lever: "shift $25/wk into the buffer for
-  the next 4 weeks and Week 34 clears with $161 instead" — always one lever, never a list.
+  arrives, with one suggested lever to pull. Example lever: "shift $25/wk into your Freedom
+  Allowance for the next 4 weeks and Week 34 clears with $161 instead" — always one lever, never a list.
 - [ ] **Overtime ROI calculator** — the marginal, *after-tax, after-401k* value of one more OT
   hour this week, so "is Saturday worth it?" gets a real number. Cheap to build — the engine
   already computes every input. Vision: a one-line chip in the Week Inspector and the weekly
@@ -2444,7 +2444,7 @@ here as a second currency the app helps the user stop hemorrhaging.*
 - [ ] **The Domain Map** — the repo name cashes its check: the user's financial year rendered
   as a living territory. Loans are **sieges** slowly being broken (payoff progress = siege
   lines receding), goals are **expeditions** with provision lines (funding rate), the
-  emergency buffer is the **keep wall**, income is the **harvest road**, and the fog itself
+  Freedom Allowance is the **keep wall**, income is the **harvest road**, and the fog itself
   is literal fog-of-war that rolls back as weeks get confirmed and unknowns become knowns.
   One glance answers "how is my kingdom?" — every element deep-links to the real panel
   underneath. Rendered in the Flow palette, calm and painterly — Ghibli, not Vegas.

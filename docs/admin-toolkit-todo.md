@@ -82,7 +82,7 @@ in real time — everything you'd normally need devtools to see.
 - `taxDerived.extraPerCheck`, `taxDerived.totalGap`, `taxDerived.taxedWeekCount`
 - `fundedGoalSpend`
 - `unconfirmedCount`
-- `bufferPerWeek`, `weeklyIncome`
+- `freedomAllowancePerWeek`, `weeklyIncome`
 - `projectedAnnualNet`
 
 Values update live as state changes. Overlay stays on top of all panels.

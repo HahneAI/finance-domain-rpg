@@ -17,7 +17,7 @@ describe('HISTORY_SENSITIVE_FIELDS', () => {
   })
 
   it('deliberately excludes noise fields and jobApplications', () => {
-    for (const f of ['setupComplete', 'goalTimelineEpochIdx', 'isInvestor', 'jobApplications', 'bufferOverrideAck']) {
+    for (const f of ['setupComplete', 'goalTimelineEpochIdx', 'isInvestor', 'jobApplications', 'freedomAllowanceOverrideAck']) {
       expect(HISTORY_SENSITIVE_FIELDS).not.toContain(f)
     }
   })

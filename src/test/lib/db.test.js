@@ -115,7 +115,7 @@ describe('loadUserData — config merge', () => {
     const oldConfig = {
       baseRate: 22.00,
       shiftHours: 12,
-      // Missing: setupComplete, taxExemptOptIn, paycheckBuffer, employerPreset, etc.
+      // Missing: setupComplete, taxExemptOptIn, freedomAllowance, employerPreset, etc.
     }
     setupLoadMock(makeRow({ config: oldConfig, is_employer_dhl: false }))
 
@@ -123,7 +123,7 @@ describe('loadUserData — config merge', () => {
 
     // Wizard fields should come from DEFAULT_CONFIG
     expect(result.config.setupComplete).toBeDefined()
-    expect(result.config.paycheckBuffer).toBe(DEFAULT_CONFIG.paycheckBuffer)
+    expect(result.config.freedomAllowance).toBe(DEFAULT_CONFIG.freedomAllowance)
     expect(result.config.ficaRate).toBe(DEFAULT_CONFIG.ficaRate)
     // User's own field preserved
     expect(result.config.baseRate).toBe(22.00)
@@ -136,6 +136,25 @@ describe('loadUserData — config merge', () => {
     const result = await loadUserData()
     expect(result.config.baseRate).toBe(25.00)
     expect(result.config.k401Rate).toBe(0.10)
+  })
+
+  it('migrates legacy paycheckBuffer/bufferEnabled/bufferOverrideAck keys to Freedom Allowance names', async () => {
+    const oldConfig = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      bufferEnabled: false,
+      paycheckBuffer: 75,
+      bufferOverrideAck: true,
+    }
+    setupLoadMock(makeRow({ config: oldConfig }))
+
+    const result = await loadUserData()
+    expect(result.config.freedomAllowanceEnabled).toBe(false)
+    expect(result.config.freedomAllowance).toBe(75)
+    expect(result.config.freedomAllowanceOverrideAck).toBe(true)
+    expect(result.config.bufferEnabled).toBeUndefined()
+    expect(result.config.paycheckBuffer).toBeUndefined()
+    expect(result.config.bufferOverrideAck).toBeUndefined()
   })
 })
 

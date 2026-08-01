@@ -16,9 +16,9 @@ expenses/goals, the home dashboard displayed:
 
 **Root cause (confirmed via Step 0 audit):** `weeklyIncome` in App.jsx is computed as:
 ```
-weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek
+weeklyIncome = projectedAnnualNet / 52 - freedomAllowancePerWeek
 ```
-`bufferPerWeek = 50` by default (DEFAULT_CONFIG: `bufferEnabled: true`, `paycheckBuffer: 50`).
+`freedomAllowancePerWeek = 50` by default (DEFAULT_CONFIG: `freedomAllowanceEnabled: true`, `freedomAllowance: 50`).
 If `projectedAnnualNet = 0`, `weeklyIncome` is exactly **−$50**. `projectedAnnualNet = 0` occurs
 when `allWeeks.filter(w => w.active)` is empty — i.e., no weeks are active. This happens when
 `cfg.firstActiveIdx` exceeds the last week index in the fiscal year (max idx ≈ 52). A user who
@@ -188,7 +188,7 @@ event logging — income is based on total weekly hours set in the next step."
 
 **Known bug (pre-flagged):** `startDate` is not validated against fiscal year bounds. A date beyond
 the fiscal year end produces `firstActiveIdx > max week index`, resulting in zero active weeks,
-`projectedAnnualNet = 0`, and `weeklyIncome = −$50` (buffer only). Fix: clamp or validate date.
+`projectedAnnualNet = 0`, and `weeklyIncome = −$50` (Freedom Allowance only). Fix: clamp or validate date.
 
 ---
 
@@ -374,15 +374,15 @@ and correctable via Sharpen Rates post-setup. No blocking issues.
 
 **UI shown (non-DHL and DHL — no path difference):**
 1. Live net estimate — breakdown card: Gross, Fed Tax, State Tax, FICA, 401k, Benefits, Other Deductions, Net
-2. Paycheck Buffer — On/Off pills + amount input (default $50, max $200, clamped on save)
+2. Freedom Allowance — On/Off pills + amount input (default $50, max $200, clamped on save)
 3. Tax-Exempt Gate — disclaimer + "Unlock projections" button (non-blocking placeholder)
 
-**Fields written to formData:** `bufferEnabled`, `paycheckBuffer`, `taxExemptOptIn`
+**Fields written to formData:** `freedomAllowanceEnabled`, `freedomAllowance`, `taxExemptOptIn`
 
 **`isValid`:** `() => true` — always passes, non-blocking.
 
 **`showIf`:** `(_, ev) => ev === null || ev === "changed_jobs"` — step is skipped for the "lost_job"
-life event (buffer and tax-exempt state preserved in config but not re-prompted).
+life event (Freedom Allowance and tax-exempt state preserved in config but not re-prompted).
 
 **DHL vs non-DHL difference:** None. Both see the same Wrap Up step.
 
@@ -404,9 +404,9 @@ in code as "Phase 5." `taxExemptOptIn` is saved to config but nothing in `App.js
 reads it to gate or change any display. The opt-in UI is correct and the disclaimer copy is solid —
 the backend wire-up is just deferred. No action needed until Phase 5.
 
-**[CONFIRMED OK] Buffer $200 max is enforced in both wizard and ProfilePanel**
-`SetupWizard` clamps inline via `Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX)`.
-`ProfilePanel` clamps on save via `Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200))`.
+**[CONFIRMED OK] Freedom Allowance $200 max is enforced in both wizard and ProfilePanel**
+`SetupWizard` clamps inline via `Math.min(parseFloat(e.target.value) || 0, FREEDOM_ALLOWANCE_MAX)`.
+`ProfilePanel` clamps on save via `Math.max(0, Math.min(Number(freedomAllowance) || 0, 200))`.
 Consistent — no bypass path found.
 
 **[CONFIRMED OK] Salary users' gross estimate is correct**

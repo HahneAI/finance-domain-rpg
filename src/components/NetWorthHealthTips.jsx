@@ -16,7 +16,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 // Copy rewritten 2026-07-25 (docs/TODO.md §2.C's copy-audit note) to sound like
 // Coach instead of a generic self-help placeholder: first person, direct, and —
 // per the rewrite's own instruction — every tip below names a real lever inside
-// the app (Budget, Home's goal order, Account's paycheck buffer, Log, Income),
+// the app (Budget, Home's goal order, Account's Freedom Allowance, Log, Income),
 // not a generic affirmation. Deliberately near-zero boxing metaphor here, the
 // same restraint coachPrompts.js's Red tier uses — this fires at exactly the
 // kind of thin-cushion moment where plainness should outrank flavor.
@@ -34,8 +34,8 @@ const TIPS = [
     body: "Goals fund in the order you rank them on Home — drag your smallest one to the top so it finishes first and gives you something real to point to.",
   },
   {
-    title: "Check your buffer, not just your balance",
-    body: "Your paycheck buffer in Account is there to absorb a rough week — if it's set low or off, that's worth a second look before you need it.",
+    title: "Check your Freedom Allowance, not just your balance",
+    body: "Your Freedom Allowance in Account is there to absorb a rough week — if it's set low or off, that's worth a second look before you need it.",
   },
   {
     title: "Log it the moment it happens",

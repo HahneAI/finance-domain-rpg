@@ -86,10 +86,10 @@ export const DEMO_ACCOUNT_2 = {
     pastWeekTaxStatusOverrides: {},
     taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
 
-    // Paycheck buffer
-    bufferEnabled: true,
-    paycheckBuffer: 75,
-    bufferOverrideAck: false,
+    // Freedom Allowance
+    freedomAllowanceEnabled: true,
+    freedomAllowance: 75,
+    freedomAllowanceOverrideAck: false,
   },
 
   expenses: [

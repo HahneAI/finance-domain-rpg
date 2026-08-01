@@ -380,15 +380,15 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     shiftHours: 10,
     nightDiffEnabled: false,
     diffRate: 0,
-    bufferEnabled: true,
-    paycheckBuffer: 50,
+    freedomAllowanceEnabled: true,
+    freedomAllowance: 50,
   }
-  const BUFFER = 50
+  const FREEDOM_ALLOWANCE = 50
 
   function setup(cfg, todayIso) {
     const allWeeks = buildYear(cfg)
     const currentWeek = getCurrentFiscalWeek(allWeeks, todayIso)
-    const weeklyIncome = allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, cfg, 0, true), 0) / 52 - BUFFER
+    const weeklyIncome = allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, cfg, 0, true), 0) / 52 - FREEDOM_ALLOWANCE
     return { allWeeks, currentWeek, weeklyIncome }
   }
 
@@ -400,9 +400,9 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     const { allWeeks, currentWeek, weeklyIncome } = setup(cfg, todayIso)
     const result = resolvePrevWeekNet({
       allWeeks, todayIso, config: cfg, extraPerCheck: 0, showExtra: true,
-      bufferPerWeek: BUFFER, weeklyIncome, logs: [], currentWeek,
+      freedomAllowancePerWeek: FREEDOM_ALLOWANCE, weeklyIncome, logs: [], currentWeek,
     })
-    const expectedCurrentWeekNet = computeNet(currentWeek, cfg, 0, true) - BUFFER
+    const expectedCurrentWeekNet = computeNet(currentWeek, cfg, 0, true) - FREEDOM_ALLOWANCE
     expect(result).toBeCloseTo(expectedCurrentWeekNet, 5)
     // The bug this replaces: a full fiscal-year average diluted by every
     // inactive week before firstActiveIdx, wildly understating a real check.
@@ -415,11 +415,11 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     const { allWeeks, currentWeek, weeklyIncome } = setup(cfg, todayIso)
     const result = resolvePrevWeekNet({
       allWeeks, todayIso, config: cfg, extraPerCheck: 0, showExtra: true,
-      bufferPerWeek: BUFFER, weeklyIncome, logs: [], currentWeek,
+      freedomAllowancePerWeek: FREEDOM_ALLOWANCE, weeklyIncome, logs: [], currentWeek,
     })
     const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < todayIso)
     const prevWeek = pastWeeks[pastWeeks.length - 1]
-    expect(result).toBeCloseTo(computeNet(prevWeek, cfg, 0, true) - BUFFER, 5)
+    expect(result).toBeCloseTo(computeNet(prevWeek, cfg, 0, true) - FREEDOM_ALLOWANCE, 5)
   })
 
   it('falls back to weeklyIncome only when there is no active week to read at all (indefinite Job Loss Mode through year-end)', () => {
@@ -432,7 +432,7 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     expect(currentWeek).toBeNull()
     const result = resolvePrevWeekNet({
       allWeeks, todayIso, config: cfg, extraPerCheck: 0, showExtra: true,
-      bufferPerWeek: BUFFER, weeklyIncome, logs: [], currentWeek,
+      freedomAllowancePerWeek: FREEDOM_ALLOWANCE, weeklyIncome, logs: [], currentWeek,
     })
     expect(result).toBe(weeklyIncome)
   })
@@ -444,12 +444,12 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     const logs = [{ weekIdx: currentWeek.idx, type: 'missed_unpaid', shiftsLost: 1, missedDays: [] }]
     const result = resolvePrevWeekNet({
       allWeeks, todayIso, config: cfg, extraPerCheck: 0, showExtra: true,
-      bufferPerWeek: BUFFER, weeklyIncome, logs, currentWeek,
+      freedomAllowancePerWeek: FREEDOM_ALLOWANCE, weeklyIncome, logs, currentWeek,
     })
     const impact = calcEventImpact(logs[0], cfg, currentWeek)
-    const expected = (computeNet(currentWeek, cfg, 0, true) - BUFFER) + impact.netGained - impact.netLost
+    const expected = (computeNet(currentWeek, cfg, 0, true) - FREEDOM_ALLOWANCE) + impact.netGained - impact.netLost
     expect(result).toBeCloseTo(expected, 5)
-    expect(result).not.toBeCloseTo(computeNet(currentWeek, cfg, 0, true) - BUFFER, 2)
+    expect(result).not.toBeCloseTo(computeNet(currentWeek, cfg, 0, true) - FREEDOM_ALLOWANCE, 2)
   })
 })
 
@@ -1114,7 +1114,7 @@ describe('traceExpenseCalculationSteps', () => {
       futureWeeks,
       showExtra: true,
       extraPerCheck: 25,
-      bufferPerWeek: 50,
+      freedomAllowancePerWeek: 50,
       observedQuarterlySpendByPhase: [null, 757, 794, 774],
     })
 
@@ -1161,7 +1161,7 @@ describe('traceExpenseCalculationSteps', () => {
       futureWeeks,
       showExtra: true,
       extraPerCheck: 25,
-      bufferPerWeek: 50,
+      freedomAllowancePerWeek: 50,
       observedQuarterlySpendByPhase: [null, 757, 794, 774],
     })
 

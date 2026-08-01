@@ -9,7 +9,7 @@
 //   Step 2  Schedule — job start date, rotation week, pay period close day
 //   Step 3  Deductions — benefits, start date, other deductions, attendance gate (merged from Step 6)
 //   Step 4  Tax Rates — state, paystub calc, rate summary w/ FICA + std deduction (Step 5 absorbed)
-//   Step 7  Wrap Up — live net preview, paycheck buffer, tax exempt gate (Steps 7+8 merged)
+//   Step 7  Wrap Up — live net preview, freedom allowance, tax exempt gate (Steps 7+8 merged)
 //
 // Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
-const BUFFER_MAX = 200;
+const FREEDOM_ALLOWANCE_MAX = 200;
 
 // Wizard label style — promote the dim lS label (text-disabled) to primary white
 // so onboarding labels stay legible (gray-text purge, TODO §16). Mirrors ProfilePanel's lSp.
@@ -1813,11 +1813,12 @@ function Step4({ formData, onChange, attempted }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 7 — Paycheck Buffer (estimateWeeklyNet imported from lib/finance.js)
+// STEP 7 — Freedom Allowance (estimateWeeklyNet imported from lib/finance.js)
 //
-// Shows a live net-per-check preview, then lets the user toggle the buffer on/off
-// and set an amount (default $50, max $200). See App.jsx bufferPerWeek comment for
-// how the buffer is excluded from all downstream spendable math at runtime.
+// Shows a live net-per-check preview, then lets the user toggle the Freedom
+// Allowance on/off and set an amount (default $50, max $200). See App.jsx
+// freedomAllowancePerWeek comment for how it's excluded from all downstream
+// spendable math at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1859,7 +1860,7 @@ function TaxExemptPreview() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP WRAPUP — Paycheck Buffer + Tax Exempt Gate (combined, non-blocking)
+// STEP WRAPUP — Freedom Allowance + Tax Exempt Gate (combined, non-blocking)
 // ─────────────────────────────────────────────────────────────────────────────
 // Format helpers for the structure_change diff table
 function fmtDiffValue(field, val) {
@@ -1986,8 +1987,8 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
   const benefitsStart = formData.benefitsStartDate ? new Date(formData.benefitsStartDate) : null;
   const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
 
-  const bufferOn = formData.bufferEnabled ?? true;
-  const buf      = formData.paycheckBuffer ?? 50;
+  const freedomAllowanceOn     = formData.freedomAllowanceEnabled ?? true;
+  const freedomAllowanceAmount = formData.freedomAllowance ?? 50;
   const accepted = formData.taxExemptOptIn === true;
   const fmt = n => `$${Math.abs(n).toFixed(2)}`;
 
@@ -2057,27 +2058,27 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
         )}
       </div>
 
-      {/* ── Paycheck buffer ── */}
+      {/* ── Freedom Allowance ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <label style={lSp}>Paycheck Buffer</label>
+        <label style={lSp}>Freedom Allowance</label>
         <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
           A fixed amount from every check that the app treats as invisible — quietly builds a safety reserve without cluttering your budget.
         </p>
         <div style={{ display: "flex", gap: "8px" }}>
-          <Pill label="On"  active={bufferOn}  onClick={() => onChange({ bufferEnabled: true  })} />
-          <Pill label="Off" active={!bufferOn} onClick={() => onChange({ bufferEnabled: false })} />
+          <Pill label="On"  active={freedomAllowanceOn}  onClick={() => onChange({ freedomAllowanceEnabled: true  })} />
+          <Pill label="Off" active={!freedomAllowanceOn} onClick={() => onChange({ freedomAllowanceEnabled: false })} />
         </div>
-        {bufferOn && (
+        {freedomAllowanceOn && (
           <>
             <input
               style={{ ...iS }}
-              type="number" min="0" max={BUFFER_MAX} step="1"
-              value={buf || ""}
-              onChange={e => onChange({ paycheckBuffer: e.target.value === "" ? null : Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX) })}
+              type="number" min="0" max={FREEDOM_ALLOWANCE_MAX} step="1"
+              value={freedomAllowanceAmount || ""}
+              onChange={e => onChange({ freedomAllowance: e.target.value === "" ? null : Math.min(parseFloat(e.target.value) || 0, FREEDOM_ALLOWANCE_MAX) })}
               placeholder="e.g. 50"
             />
             <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
-              At ${buf}/check — ${(buf * checksPerYear).toLocaleString()} reserved annually.
+              At ${freedomAllowanceAmount}/check — ${(freedomAllowanceAmount * checksPerYear).toLocaleString()} reserved annually.
             </div>
           </>
         )}
@@ -2488,11 +2489,11 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     const finalData = formData.employerPreset === "DHL"
       ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
       : { ...formData };
-    // Commit display defaults: paycheckBuffer shows ?? 50 in the UI but formData can still hold
+    // Commit display defaults: freedomAllowance shows ?? 50 in the UI but formData can still hold
     // null if the field was cleared or never touched. Normalize here so the saved config
     // always carries the real value the user saw.
-    if (finalData.bufferEnabled !== false) {
-      finalData.paycheckBuffer = finalData.paycheckBuffer ?? 50;
+    if (finalData.freedomAllowanceEnabled !== false) {
+      finalData.freedomAllowance = finalData.freedomAllowance ?? 50;
     }
     // Stamp/clear tipsOrCommissionEnabledAt on the false→true / true→false transitions
     // only — bounds the daily check-in backlog to dates on/after opt-in (see

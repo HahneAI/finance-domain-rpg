@@ -76,7 +76,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -438,7 +438,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       return sum + (typeof amt === "number" ? amt : 0);
     }, 0);
     const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
-    const spendable = netPay - bufferPerWeek;
+    const spendable = netPay - freedomAllowancePerWeek;
     const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
       .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const lifestyleSpend = regularExpenses.filter(e => e.category === "Lifestyle")
@@ -456,7 +456,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       otherDeductions: config.otherDeductions ?? [],
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
+  }, [infoRefWeek, config, freedomAllowancePerWeek, expenses, infoMonthKey, infoPhase]);
 
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
@@ -2144,10 +2144,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           {/* Net Pay result */}
           <MathRow op="=" label="Net Pay" val={f2(checkBreakdown.netPay)} valColor="var(--color-green)" large />
 
-          {/* Buffer block */}
-          {bufferPerWeek > 0 && <>
+          {/* Freedom Allowance block */}
+          {freedomAllowancePerWeek > 0 && <>
             <MathDivider />
-            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek * perCheckFactor)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathRow op="−" label="Freedom Allowance" val={f2(freedomAllowancePerWeek * perCheckFactor)} valColor="var(--color-warning)" note="reserved savings" />
             <MathDivider thick />
             <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
           </>}

@@ -73,7 +73,7 @@ describe('NetWorthHealthTips', () => {
     expand()
     expect(screen.getByText('Pick one number, not the whole budget')).toBeTruthy()
     expect(screen.getByText('Put your easiest goal first')).toBeTruthy()
-    expect(screen.getByText('Check your buffer, not just your balance')).toBeTruthy()
+    expect(screen.getByText('Check your Freedom Allowance, not just your balance')).toBeTruthy()
   })
 
   it('rotates the tip window based on the seed', () => {

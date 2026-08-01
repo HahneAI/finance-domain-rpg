@@ -13,7 +13,7 @@ const cfg = {
   taxedWeeks: [7,8,17,18,19,20,21,22,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,52],
   firstActiveIdx: 7, startingWeekIsLong: false,
   dhlCustomSchedule: true, dhlNightShift: true,
-  employerPreset: "DHL", bufferEnabled: false, paycheckBuffer: 50,
+  employerPreset: "DHL", freedomAllowanceEnabled: false, freedomAllowance: 50,
   userPaySchedule: "weekly", otherDeductions: [],
 };
 
@@ -52,7 +52,7 @@ function dhlEmployerMatchRate(k401Rate) {
 
 // Benefits: ltd=2, all others 0
 const benefitsDeduction = cfg.ltd;
-const bufferPerWeek = 0; // bufferEnabled: false
+const freedomAllowancePerWeek = 0; // freedomAllowanceEnabled: false
 
 // Gross pay formulas (dhlCustomSchedule=true, dhlNightShift=true)
 // Long (6-Day): Tue/Wed/Thu/Fri/Sat/Sun = 72h
@@ -104,7 +104,7 @@ console.log("=== STAGE 0 — CONFIG ===");
 console.log(`baseRate: $${cfg.baseRate}  nightDiffRate: $${cfg.nightDiffRate}  diffRate: $${cfg.diffRate}`);
 console.log(`shiftHours: ${cfg.shiftHours}  otThreshold: ${cfg.otThreshold}  otMultiplier: ${cfg.otMultiplier}`);
 console.log(`benefitsDeduction/wk: $${benefitsDeduction} (LTD only, stdWeekly=0)`);
-console.log(`bufferPerWeek: $${bufferPerWeek} (bufferEnabled=false)`);
+console.log(`freedomAllowancePerWeek: $${freedomAllowancePerWeek} (freedomAllowanceEnabled=false)`);
 console.log(`taxedWeeks: ${cfg.taxedWeeks.length} weeks`);
 console.log(`active weeks: ${activeWeeks.length} (idx 7–52)`);
 const firstK401Week = activeWeeks.find(w => w.has401k);
@@ -180,7 +180,7 @@ console.log(`extraPerCheck:     $${extraPerCheck.toFixed(2)}`);
 // Final projectedAnnualNet (with extraPerCheck, showExtra=true)
 const finalNets = activeWeeks.map(w => computeNet(w, extraPerCheck, true));
 const projectedAnnualNet = finalNets.reduce((a,b) => a+b, 0);
-const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+const weeklyIncome = projectedAnnualNet / 52 - freedomAllowancePerWeek;
 console.log(`\nprojectedAnnualNet (final): $${projectedAnnualNet.toFixed(2)}`);
 console.log(`weeklyIncome (final):       $${weeklyIncome.toFixed(2)}`);
 

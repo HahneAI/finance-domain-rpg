@@ -621,6 +621,26 @@ describe('NewJobSeasonHomePanel', () => {
     })
   })
 
+  describe('Extra income caption on the Cash On Hand card', () => {
+    it('shows a caption confirming logged extra income is counted in the runway, not this balance', () => {
+      const cfg = {
+        ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000,
+        jobHuntIncomeLog: [{ id: 'jhi_1', amount: 150, note: null, loggedAt: '2026-06-10T00:00:00.000Z' }],
+      }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      // Cash On Hand card itself stays the raw persisted figure — extra income
+      // is never merged into it, only into the runway math (newJobSeasonRunway.test.js).
+      expect(screen.getByText('$1,000')).toBeTruthy()
+      expect(screen.getByText(/\$150 extra income logged below/)).toBeTruthy()
+    })
+
+    it('hides the caption when nothing has been logged yet', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000 }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.queryByText(/extra income logged below/)).toBeNull()
+    })
+  })
+
   // DW-8 (docs/BUG_FIX_TODO.md) — CoachNetWorthCard's Red tier ("New Job Season
   // Mode, runway under 30 days") was structurally unreachable because this
   // panel replaces HomePanel entirely and never mounted the card at all.

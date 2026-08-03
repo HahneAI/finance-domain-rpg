@@ -1286,6 +1286,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 // right where a pay/job change would prompt someone to look for it.
 function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }) {
   const isEmployerDHL = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
 
   return (
     <>

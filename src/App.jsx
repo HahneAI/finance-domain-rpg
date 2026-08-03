@@ -324,6 +324,8 @@ export default function App() {
   // Incremented after investor account creation to force a second loadUserData
   // call once all DB writes (investor_users + user_data) have settled.
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  // Investor profile fetched from investor_users on login — null for non-investors.
+  const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
     const stored = localStorage.getItem("admin_temp_lock_date");
     return stored && Date.parse(stored) > 0 ? stored : null;
@@ -692,6 +694,7 @@ export default function App() {
       setPtoGoal(data.ptoGoal);
       setSubscription(data.subscription);
       if (data.isInvestor) {
+        setInvestorProfile(data.investorProfile ?? null);
         setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
       }
       // Investors reach the wizard via account 3 selection — not on login.

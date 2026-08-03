@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
 import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
 import { Card, iS, lS, SmBtn, Pressable, useFoldTransition, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";

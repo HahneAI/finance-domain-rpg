@@ -14,7 +14,7 @@
 // Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
@@ -799,6 +799,7 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function Step2({ formData, onChange, attempted }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isBiweekly = isBaseUser && (formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary");
   const biweeklyParityVisible = isBiweekly && Number.isInteger(formData.payPeriodEndDay);
   const todayWeekIdx = (() => {
@@ -1144,6 +1145,7 @@ function DetailsDisclosure({ title, sub, defaultExpanded, children }) {
 function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
   const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const others   = formData.otherDeductions ?? [];
   const attendErr = attempted && isBaseUser && formData.attendanceBucketEnabled === null;
 
@@ -1583,7 +1585,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 }
 
 function Step4({ formData, onChange, attempted }) {
-  const isEmployerDHL      = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax    = stateConfig?.model === "NONE";

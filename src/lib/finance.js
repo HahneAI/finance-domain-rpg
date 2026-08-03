@@ -284,11 +284,6 @@ function dhlWeekendHoursPerDayName(dayName, shiftHours) {
   return 0;
 }
 
-function dhlTotalWeekendHours(isWeek2, shiftHours) {
-  const friday = shiftHours / 2;
-  return isWeek2 ? (friday + 2 * shiftHours) : friday;
-}
-
 function dhlWeekendHoursFromDays(dayNames, shiftHours) {
   if (!Array.isArray(dayNames) || dayNames.length === 0) return 0;
   return dayNames.reduce((sum, day) => sum + dhlWeekendHoursPerDayName(day, shiftHours), 0);

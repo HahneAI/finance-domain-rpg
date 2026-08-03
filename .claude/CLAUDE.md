@@ -58,6 +58,7 @@ src/
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── TipsCommissionCheckIn.jsx — small daily check-in card (tips/commission opt-in, skinned bonus-log mechanism)
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
+│   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
@@ -81,6 +82,25 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 ## SetupWizard (`src/components/SetupWizard.jsx`)
 
 Multi-step onboarding (~2500 lines). Controlled steps with conditional routing based on `lifeEvent` (null/structure_change/lost_job/changed_jobs/commission_job). Covers pay structure, schedule, deductions, tax rates, and wrap-up. Full drift map: `docs/drift-app-warden.md` §7 — consult before changes. See source file for step definitions, helper components, state management, and DHL employer preset overrides.
+
+`initialStepId` (optional prop, default `null`) opens the wizard on a specific `STEP_DEFS` id
+instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off into the real
+wizard after its own pilot pages are answered. No effect on any existing call site that omits it.
+
+**`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
+reimagining of the wizard's first two steps (Welcome + Pay Structure) as one big sentence per page
+with inline `<select>`/`<input>` blanks, instead of stacked form fields — pilot for a friendlier
+onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both
+mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real
+signup** — `isAdmin` gates the trigger button, and the component itself has no other entry point.
+Reuses the exact same config fields and DHL-preset defaults as real Step0/Step1 (see
+`pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two experiences
+on the fields they share. Once its 2 pages are answered, `onHandoff(mergedFormData, initialStepId)`
+closes the preview and reopens the real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at
+Schedule (id 2) or the jobless mini-flow (id 10) for the remaining steps — a real, completable
+wizard run, not a throwaway mockup; completing it saves for real exactly like any other wizard
+entry. Only 2 of 6 steps are ad-libbed today — expanding to the rest, or promoting this to a real
+user-facing A/B split, is a future decision pending how the pilot feels in practice.
 
 ---
 

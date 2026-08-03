@@ -19,13 +19,14 @@ const BASE_CONFIG = {
   bufferEnabled: true,
 }
 
-function renderWizard({ lifeEvent = null, config = BASE_CONFIG } = {}) {
+function renderWizard({ lifeEvent = null, config = BASE_CONFIG, initialStepId = null } = {}) {
   const onComplete = vi.fn()
   render(
     <SetupWizard
       config={config}
       onComplete={onComplete}
       lifeEvent={lifeEvent}
+      initialStepId={initialStepId}
     />,
   )
   return { onComplete }
@@ -420,6 +421,29 @@ describe('SetupWizard — step titles', () => {
       if (!btn) break
       fireEvent.click(btn)
     }
+  })
+})
+
+describe('SetupWizard — initialStepId (Ad-Lib Wizard preview hand-off)', () => {
+  it('opens at the requested step instead of Welcome when initialStepId is set', () => {
+    renderWizard({ initialStepId: 2 })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    expect(getStepCounter()).toContain('3 of 6') // Schedule is the 3rd active step (index 2)
+  })
+
+  it('opens at the jobless mini-flow step id (10) when the seeded config is unemployed', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true }, initialStepId: 10 })
+    expect(screen.getByText('Unemployment Benefits')).toBeTruthy()
+  })
+
+  it('falls back to step 0 when initialStepId does not match any active step', () => {
+    renderWizard({ initialStepId: 999 })
+    expect(screen.getByText('Welcome')).toBeTruthy()
+  })
+
+  it('defaults to step 0 when initialStepId is omitted (no behavior change for normal entry)', () => {
+    renderWizard()
+    expect(screen.getByText('Welcome')).toBeTruthy()
   })
 })
 

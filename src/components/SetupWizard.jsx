@@ -2414,8 +2414,16 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false }) {
-  const [stepIdx,   setStepIdx]   = useState(0);
+// initialStepId: optional STEP_DEFS id to open on instead of step 0 — used by the
+// Ad-Lib Wizard preview (SetupWizardAdlib.jsx) to hand off into the remaining
+// real steps after its own pilot pages (Welcome + Pay Structure) are answered.
+// null/omitted preserves normal behavior (always opens at step 0).
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false, initialStepId = null }) {
+  const [stepIdx,   setStepIdx]   = useState(() => {
+    if (initialStepId == null) return 0;
+    const idx = STEP_DEFS.filter(s => s.showIf(config, initialLifeEvent)).findIndex(s => s.id === initialStepId);
+    return idx >= 0 ? idx : 0;
+  });
   // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
   const [stepDir,   setStepDir]   = useState(1);
   const [formData,  setFormData]  = useState(() => {

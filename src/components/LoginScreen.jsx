@@ -25,7 +25,7 @@
  *
  * Animation: mode crossfades (signin ↔ signup ↔ forgot ↔ revive, etc) via opacity fade.
  */
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase, validateInvestorCode } from "../lib/supabase.js";
 import { recordConsent } from "../lib/db.js";
 import { CURRENT_LEGAL_VERSION, TERMS_OF_SERVICE_MARKDOWN, PRIVACY_POLICY_MARKDOWN } from "../constants/legalDocuments.js";
@@ -43,16 +43,15 @@ export const PENDING_CONSENT_STORAGE_KEY = "pendingConsentVersion";
 // ── Mode crossfade wrapper — smooth opacity transitions between login modes ───
 // For form modes (signin/signup/forgot/revive/info/recovery), fade new mode in
 // without keeping prev mode in the DOM (which would confuse testing/accessibility).
-function ModeFade({ modeKey, children, ms = 200 }) {
-  const [cur, setCur] = useState({ key: modeKey, node: children });
+function ModeFade({ modeKey, children }) {
+  const [prev, setPrev] = useState({ key: modeKey, node: children });
+  const cur = (modeKey !== prev.key || children !== prev.node)
+    ? { key: modeKey, node: children }
+    : prev;
 
-  useEffect(() => {
-    if (modeKey !== cur.key) {
-      setCur({ key: modeKey, node: children });
-    } else if (children !== cur.node) {
-      setCur({ key: modeKey, node: children });
-    }
-  }, [modeKey, children]);
+  if (cur !== prev) {
+    setPrev(cur);
+  }
 
   return (
     <div key={cur.key} className="login-fade-in">
@@ -150,8 +149,10 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   // Google sign-in redirected back here without completing — explain it instead of
   // silently showing a blank form (see App.jsx's oauthCallbackFailed detection).
   useEffect(() => {
-    if (oauthCallbackFailed) setError("Google sign-in didn't finish — please tap Continue with Google again.");
-  }, [oauthCallbackFailed]);
+    if (oauthCallbackFailed && !error) {
+      setError("Google sign-in didn't finish — please tap Continue with Google again.");
+    }
+  }, [oauthCallbackFailed, error]);
 
   // ── Investor code section ─────────────────────────────────────────────────
   const [investorCode, setInvestorCode]       = useState("");

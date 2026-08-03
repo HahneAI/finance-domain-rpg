@@ -470,10 +470,11 @@ export function HomePanel({
     setEditGoalId(null);
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_updated" });
   };
-  const addGoal = () => {
+  const addGoal = useCallback(() => {
     if (!setGoals) return;
+    const id = `g_${Date.now()}`;
     const next = [...goals, {
-      id: `g_${Date.now()}`,
+      id,
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
       color: GOAL_SYSTEM_COLOR,
@@ -485,7 +486,7 @@ export function HomePanel({
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  };
+  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed]);
   const deleteGoal = (id) => {
     if (!setGoals) return;
     const next = goals.filter((g) => g.id !== id);

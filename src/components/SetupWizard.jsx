@@ -2436,9 +2436,9 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const [attempted, setAttempted] = useState(false);
 
   // Snapshot of config at wizard open, used by structure_change to render a
-  // "what's changing" diff in Wrap Up. Frozen by the ref so edits to formData
+  // "what's changing" diff in Wrap Up. Frozen so edits to formData
   // don't pollute the comparison baseline.
-  const originalConfigRef = useRef(config);
+  const originalConfig = useMemo(() => config, []);
   // Ref to the card div so we can apply the validation shake animation
   const cardRef = useRef(null);
 
@@ -2589,7 +2589,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
                   onLifeEventChange={setLifeEvent}
                   attempted={attempted}
                   isInvestor={isInvestor}
-                  originalConfig={originalConfigRef.current}
+                  originalConfig={originalConfig}
                 />
               : <StepStub title={current?.title} sprint={current?.sprint} />
             }

@@ -6,7 +6,7 @@ import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
@@ -92,7 +92,6 @@ export function HomePanel({
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
   const monthlyTakehome = (adjustedTakeHome ?? 0) / 12;
-  const projectedWeeklyLeft = (futureWeekNets?.[0] ?? weeklyIncome) - avgWeeklySpend;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
@@ -138,7 +137,6 @@ export function HomePanel({
         : dayNum === 3 || dayNum === 23 ? "rd" : "th")
     : null;
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
-  const weeksLeftCount = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
   const periodLabel = weekNumber != null
     ? formatPayPeriodLabel({ num: weekNumber, total: FISCAL_WEEKS_PER_YEAR }, checksPerYear)
     : null;

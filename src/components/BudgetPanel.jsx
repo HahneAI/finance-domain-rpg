@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
-import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
+import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
@@ -132,7 +132,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const [editVals, setEditVals] = useState({});
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
-  const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [showCheckInfo, setShowCheckInfo] = useState(false);
   const checkInfoFold = useFoldTransition(showCheckInfo, { ms: 340 });
@@ -265,8 +264,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     }
     return null;
   };
-  const shortMonth = (iso) =>
-    ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
   // Annual cost for the breakdown tab. Roots each expense on its monthly cost the
   // way bills are charged (monthly × 12), summing all 12 months so monthlyOverrides
   // still flow through. See breakdownMonthlyEquiv for the per-type factor.
@@ -775,7 +772,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       }
       return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
     }));
-    setPendingDelete(null);
   };
 
   // ── Edit scope helpers ────────────────────────────────────────────────────────
@@ -900,7 +896,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     const prevValue = target?.monthlyOverrides?.[monthKey] ?? null;
     applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
     setUndoDelete({ expId, monthKey, prevValue });
-    setPendingDelete(null);
   };
 
   const deleteMonthForward = (expId) => {
@@ -909,7 +904,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     const startKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
     applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
     setUndoDelete(null);
-    setPendingDelete(null);
   };
 
   const executeUndo = () => {
@@ -930,7 +924,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
   const deleteQuarterOnly = (expId) => {
     applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearQuarterMonths(e, ap)));
-    setPendingDelete(null);
   };
 
   // Quarter-to-month mapping used by restore scope helpers.
@@ -2178,7 +2171,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
     {/* ── Restore Deleted Expenses bottom sheet ── */}
     {restoreSheetCat && (() => {
-      const fy = FISCAL_YEAR_START.slice(0, 4);
       const sheetExps = regularExpenses.filter(exp => {
         if (exp.category !== restoreSheetCat) return false;
         const amt = displayEffective(exp, ap);

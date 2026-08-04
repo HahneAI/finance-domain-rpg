@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
+import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
@@ -607,38 +607,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       cycle,
     });
   };
-  const saveEditExp = (id) => {
-    const cycle = normalizeCycle(editVals.cycle ?? "every30days");
-    const amount = parseFloat(editVals.amount) || 0;
-    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    applyExpenseUpdate(prev => prev.map(e => {
-      if (e.id !== id) return e;
-      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = latestPastEntry(existing);
-      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
-      const byPhase = {
-        ...(e.billingMeta?.byPhase ?? {}),
-        [ap]: { amount, cycle, effectiveFrom: TODAY_ISO },
-      };
-      const newWeekly = buildCascadedWeekly(ap, perPaycheck, baseWeekly, e.billingMeta?.byPhase);
-      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO, byPhase };
-      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
-      if (daysDiff <= 3) {
-        return {
-          ...e,
-          history: existing.map(entry =>
-            entry.effectiveFrom === latest.effectiveFrom
-              ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
-              : entry
-          ),
-          billingMeta
-        };
-      }
-      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }], billingMeta };
-    }));
-    setEditId(null);
-  };
-
   const saveAdvancedEdit = ({ patches = [], additions = [] }) => {
     applyExpenseUpdate(prev => {
       // Group patches by expId so multiple patches per expense are all applied
@@ -749,29 +717,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       history: [{ effectiveFrom: qStartIso, weekly }],
     }]);
     _closeAddForm();
-  };
-
-  const deleteExp = (id) => {
-    applyExpenseUpdate(prev => prev.map(e => {
-      if (e.id !== id) return e;
-      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = latestPastEntry(existing);
-      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
-      // Zero out active phase and forward; preserve phases before the active one
-      const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : 0);
-      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
-      if (daysDiff <= 3) {
-        return {
-          ...e,
-          history: existing.map(entry =>
-            entry.effectiveFrom === latest.effectiveFrom
-              ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
-              : entry
-          ),
-        };
-      }
-      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
-    }));
   };
 
   // ── Edit scope helpers ────────────────────────────────────────────────────────
@@ -903,22 +848,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     // In quarter mode activeMonth is null, so fall back to the first month of the active quarter.
     const startKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
     applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
-    setUndoDelete(null);
-  };
-
-  const executeUndo = () => {
-    if (!undoDelete) return;
-    const { expId, monthKey, prevValue } = undoDelete;
-    applyExpenseUpdate(prev => prev.map(e => {
-      if (e.id !== expId) return e;
-      const overrides = { ...(e.monthlyOverrides ?? {}) };
-      if (prevValue === null) {
-        delete overrides[monthKey];
-      } else {
-        overrides[monthKey] = prevValue;
-      }
-      return { ...e, monthlyOverrides: overrides };
-    }));
     setUndoDelete(null);
   };
 

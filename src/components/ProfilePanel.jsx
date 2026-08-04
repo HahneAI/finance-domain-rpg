@@ -1286,7 +1286,6 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 // right where a pay/job change would prompt someone to look for it.
 function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }) {
   const isEmployerDHL = config.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
 
   return (
     <>
@@ -1316,8 +1315,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
 }
 
 function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isEmployerDHL     = config.employerPreset === "DHL";
-  const has401k   = config.k401Rate > 0;
+  const isEmployerDHL = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
+  const has401k = config.k401Rate > 0;
   const matchRate = isEmployerDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
   const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);

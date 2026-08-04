@@ -366,7 +366,8 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
       : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
   );
 
-  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
 
   function setDHL(yes) {
@@ -1585,7 +1586,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 }
 
 function Step4({ formData, onChange, attempted }) {
-  const isBaseUser = !isEmployerDHL;
+  const isEmployerDHL = formData.employerPreset === "DHL";
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax    = stateConfig?.model === "NONE";

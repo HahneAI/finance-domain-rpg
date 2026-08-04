@@ -4,7 +4,7 @@ import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { buildNetWorthSystemPrompt } from "../lib/coachPrompts.js";
 import { resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
-import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "../lib/jobLossRunway.js";
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 
 const TIER_COLOR = {
   amber: "var(--color-warning)",
@@ -28,7 +28,7 @@ const DEFAULT_SIGNAL_STATE = {
 
 /**
  * §2.C — Net Worth Trend Mental Health Trigger. Admin-gated at the call site
- * in HomePanel.jsx/JobLossHomePanel.jsx (docs/TODO.md §2 standing constraint
+ * in HomePanel.jsx/NewJobSeasonHomePanel.jsx (docs/TODO.md §2 standing constraint
  * — every AI feature stays isAdmin/isTester-only for now). Rate-limits to one
  * Coach message per fiscal week per signal tier, and caches the message text
  * so a reload within the same week/tier replays it instead of re-calling the
@@ -68,18 +68,18 @@ export function CoachNetWorthCard({
     saveConfigNow?.(next);
   };
 
-  // Real runway, not the old independent estimate — computeJobLossRunway()
+  // Real runway, not the old independent estimate — computeNewJobSeasonRunway()
   // is the same function the Job Loss panels use, so this can't understate
   // runway vs. what those panels show (drift-app-warden §8 F24). Raw
-  // jobLossCashOnHand is read internally by computeJobLossRunway now (and
+  // jobLossCashOnHand is read internally by computeNewJobSeasonRunway now (and
   // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
-  // Now that this card also mounts inside JobLossHomePanel (DW-8 fix),
+  // Now that this card also mounts inside NewJobSeasonHomePanel (DW-8 fix),
   // includeBenefits is threaded through as a real prop instead of hardcoded —
   // the default stays true only for the plain HomePanel call site, which has
-  // no toggle of its own and where computeJobLossRunway() returns null
+  // no toggle of its own and where computeNewJobSeasonRunway() returns null
   // anyway (config.jobLossMode is false there).
   const runwayDays = useMemo(() => {
-    const dash = computeJobLossRunway({ config, expenses, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
+    const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
     return resolvePrimaryRunwayDays(dash, config, includeBenefits);
   }, [config, expenses, today, includeBenefits]);
   const weekIdx = currentWeek?.idx ?? null;

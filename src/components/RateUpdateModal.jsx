@@ -9,7 +9,7 @@ import { estimateWeeklyNet } from "../lib/finance.js";
  *
  * `onActivate({ baseRate, effectiveFrom })` — App.jsx applies `baseRate` to config
  * and tags the account_history snapshot (TODO §3) with `effectiveFrom` as the
- * change's `source: "life_event:rate_update"` date, the same pattern JobLossEntry
+ * change's `source: "life_event:rate_update"` date, the same pattern NewJobSeasonEntry
  * uses for `jobLossDate`.
  */
 export function RateUpdateModal({ open, onClose, config, onActivate }) {

@@ -17,7 +17,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
  * whatever the card is currently displaying — not the stale raw
  * `config.jobLossCashOnHand`, so the prefilled number always matches what
  * the user just saw. `onSave(parsedValue)` is called with a plain number;
- * the caller (JobLossHomePanel/JobLossBudgetPanel) is responsible for
+ * the caller (NewJobSeasonHomePanel/NewJobSeasonBudgetPanel) is responsible for
  * writing both `jobLossCashOnHand` and stamping `jobLossCashOnHandAsOf` to
  * `effectiveToday` via eager save — confirming a value here always resets
  * the decay clock, since the user is telling the app "this is true right now."

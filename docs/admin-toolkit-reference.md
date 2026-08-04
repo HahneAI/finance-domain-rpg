@@ -65,7 +65,7 @@
   - Pay: grossPay, taxableGross, deductions, 401k, live computeNet
   - Net Lookup: baseNet, adjustment, spendable
   - Confirmation record + all log entries for that week with net impact
-- **Job Loss note:** Pay section adds `Unemployment` row when `w.unemploymentIncome > 0`; shows "Job Loss Mode — outside benefit window" if no benefit that week
+- **Job Loss note:** Pay section adds `Unemployment` row when `w.unemploymentIncome > 0`; shows "New Job Season — outside benefit window" if no benefit that week
 - **Ask for:** "tap week [N] and describe the Pay and Net Lookup sections"
 - **Session insight:** Use for specific wrong numbers on paychecks or weeks, or to rule out income math as root cause
 
@@ -106,4 +106,4 @@ When filing a bug or building a feature that touches fiscal math, ask the user t
 4. **Tax grid** — Tax Weeks → View ↓ → screenshot or describe red dots + current week position
 5. **Week deep-dive** — tap the suspect week row in Income → describe Pay + Net Lookup + Log Entries sections
 6. **Subscription/billing** — DB Row → Fetch (surfaces `subscription_status`/`trial_ends_at`/`access_ends_at`/`card_on_file`/`current_period_end`/`plan`) + Live State Inspector (adds resolved phase). Ask for both when issue involves paywall, trial countdown, or billing state.
-7. **Job Loss state (§1.I)** — Live State Inspector (confirm amber Job Loss dot + paste values) + DB Row Fetch (paste Triage line) + Config JSON (paste Life Events header). Ask for all three when issue involves runway, benefits, or expense triage during Job Loss Mode.
+7. **Job Loss state (§1.I)** — Live State Inspector (confirm amber Job Loss dot + paste values) + DB Row Fetch (paste Triage line) + Config JSON (paste Life Events header). Ask for all three when issue involves runway, benefits, or expense triage during New Job Season.

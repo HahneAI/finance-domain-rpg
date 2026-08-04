@@ -2120,7 +2120,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 // JOBLESS SETUP MINI-FLOW (TODO §1.H2) — only shown on first-run when the
 // user answered "Yes" to Step 0's employment-status question. Consolidates
 // H2's five conceptual sub-steps (0a-0e) into three actual wizard screens:
-// unemployment benefits (0a+0b, same fields as JobLossEntry.jsx's existing
+// unemployment benefits (0a+0b, same fields as NewJobSeasonEntry.jsx's existing
 // modal for the same data), job-loss date + optional prior-pay context
 // (0c+0d), and a plain confirm/finish screen (0e) — no live net preview,
 // since there's no pay structure to preview yet.
@@ -2259,7 +2259,7 @@ function StepJoblessWrapUp({ formData }) {
         )}
       </div>
       <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
-        Tap Finish to enter Job Loss Mode. Whenever you're back to work, use Life Events → Pay
+        Tap Finish to start your New Job Season. Whenever you're back to work, use Life Events → Pay
         Structure Changed to fill in your real pay for the first time.
       </p>
     </div>

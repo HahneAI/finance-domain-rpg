@@ -99,7 +99,7 @@ describe('getNextDueDate', () => {
 
 // ─────────────────────────────────────────────────────────────
 // resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §1 Job Loss
-// expense review's payment-date step + JobLossBudgetPanel's add-expense fix
+// expense review's payment-date step + NewJobSeasonBudgetPanel's add-expense fix
 // ─────────────────────────────────────────────────────────────
 
 describe('resolveWeekOfMonthAnchor', () => {

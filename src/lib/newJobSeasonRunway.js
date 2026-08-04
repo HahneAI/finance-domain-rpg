@@ -8,7 +8,7 @@ import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 // toggle that feed them. Pulled out here as the single source of truth
 // rather than let two components duplicate — or subtly drift from — the
 // same formula. Also consolidates firstUnemploymentPaymentDate, which used
-// to be copy-pasted between JobLossDashboard.jsx and ExpenseTriage.jsx.
+// to be copy-pasted between NewJobSeasonDashboard.jsx and ExpenseTriage.jsx.
 
 // First unemployment payment date — null when no benefits are configured.
 // Treats the user's "weekly" payout as landing at the end of each benefit
@@ -39,7 +39,7 @@ export function sumJobHuntIncome(cfg) {
 // of the above modeled this: buildYear() zeroes the whole fiscal week
 // containing jobLossDate (not prorated), and the runway calc only knew about
 // cash-on-hand + gig income, both "already in hand" today. This resolves the
-// two JobLossEntry wizard questions (days worked in the final week; which
+// two NewJobSeasonEntry wizard questions (days worked in the final week; which
 // day-of-week checks normally arrive) into a concrete estimated amount +
 // date, computed once at Activate time and stored on config — mirrors
 // DueDatePicker's resolve-to-a-concrete-value-at-confirm pattern rather than
@@ -50,8 +50,8 @@ export function sumJobHuntIncome(cfg) {
 // regardless of period length (weekly vs. biweekly both just repeat that same
 // weekday every N weeks), so no separate biweekly branch is needed. Monthly
 // has no "day of week" concept — falls back to the calendar month's last day.
-export function resolveLastPayPeriodEnd(jobLossDateIso, payPeriodEndDay, userPaySchedule) {
-  const jobLossDate = new Date(jobLossDateIso + "T00:00:00");
+export function resolveLastPayPeriodEnd(newJobSeasonDateIso, payPeriodEndDay, userPaySchedule) {
+  const jobLossDate = new Date(newJobSeasonDateIso + "T00:00:00");
   if (userPaySchedule === "monthly") {
     return new Date(jobLossDate.getFullYear(), jobLossDate.getMonth() + 1, 0);
   }
@@ -73,7 +73,7 @@ export function resolvePendingCheckArrivalDate(periodEndDate, arrivalDow) {
 // Rough net estimate for the final check — same flat-rate sketch
 // ReemploymentTracker.jsx uses for its target-income preview (gross minus
 // fed/state/FICA/401k rates already on file). Not a full computeNet pass:
-// this is a one-time estimate for a check that predates Job Loss Mode
+// this is a one-time estimate for a check that predates New Job Season
 // zeroing income, not a week buildYear will ever actually compute.
 export function estimatePendingCheckAmount(workedDaysCount, cfg) {
   if (!workedDaysCount) return 0;
@@ -110,7 +110,7 @@ function isTrackedActiveLifestyle(exp) {
 // occurrences between two dates" (the underlying cycle math is a pure
 // advance-forward function, not a closed form) — so this walks one
 // occurrence at a time, advancing the cursor past each hit, same approach
-// JobLossBudgetPanel's upcomingBills list uses for a single occurrence.
+// NewJobSeasonBudgetPanel's upcomingBills list uses for a single occurrence.
 export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso) {
   if (!fromDateExclusiveIso || !throughDateInclusiveIso) return 0;
   const through = new Date(throughDateInclusiveIso + "T12:00:00");
@@ -144,13 +144,13 @@ export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateIncl
  *
  * Returns null when jobLossMode/jobLossDate aren't set (nothing to compute).
  */
-export function computeJobLossRunway({ config, expenses, effectiveToday, extraCash = 0 }) {
+export function computeNewJobSeasonRunway({ config, expenses, effectiveToday, extraCash = 0 }) {
   if (!config?.jobLossMode || !config?.jobLossDate || !effectiveToday) return null;
 
   const todayDate = new Date(effectiveToday + "T12:00:00");
   const phaseIdx = getPhaseIndex(todayDate);
 
-  // Essential = Needs / non-Lifestyle, tracked during Job Loss Mode (the
+  // Essential = Needs / non-Lifestyle, tracked during New Job Season (the
   // expense review step's checklist — TODO §1 mode rebuild). Untracked
   // expenses (trackDuringJobLoss === false) are excluded from the runway
   // entirely, same as they're excluded from the Job Loss Budget list — they
@@ -174,8 +174,8 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
     0,
   );
 
-  const jobLossStartMs = new Date(config.jobLossDate + "T00:00:00").getTime();
-  const weeksSinceLoss = Math.max(0, Math.floor((todayDate.getTime() - jobLossStartMs) / (7 * 86400000)));
+  const newJobSeasonStartMs = new Date(config.jobLossDate + "T00:00:00").getTime();
+  const weeksSinceLoss = Math.max(0, Math.floor((todayDate.getTime() - newJobSeasonStartMs) / (7 * 86400000)));
 
   let benefitsRemainingWeeks = 0;
   if (
@@ -197,7 +197,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
   // its own as bills come due instead of silently going stale until the user
   // remembers to re-check their bank balance. Accounts that set cash-on-hand
   // before this field existed have no `jobLossCashOnHandAsOf` — falls back to
-  // `jobLossDate` (Job Loss Mode's own start), the only other timestamp on
+  // `jobLossDate` (New Job Season's own start), the only other timestamp on
   // file that's a reasonable "since when has this figure been true" anchor.
   const rawCashOnHand = Math.max(0, config.jobLossCashOnHand ?? 0);
   const cashAsOf = config.jobLossCashOnHandAsOf ?? config.jobLossDate;
@@ -262,16 +262,16 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, extraCa
 }
 
 /**
- * Selects the single "primary" runway day count from a computeJobLossRunway()
+ * Selects the single "primary" runway day count from a computeNewJobSeasonRunway()
  * result — with or without unemployment benefits folded in — matching the
- * exact `hasBenefits && includeBenefits` selection JobLossHomePanel.jsx and
- * JobLossBudgetPanel.jsx each do inline for their headline tile. Pulled out
+ * exact `hasBenefits && includeBenefits` selection NewJobSeasonHomePanel.jsx and
+ * NewJobSeasonBudgetPanel.jsx each do inline for their headline tile. Pulled out
  * so any *other* consumer (Coach's trigger/context) quoting "the" runway
  * number can't independently drift from what those two panels show (the
  * drift-app-warden §8 F24/quarantine-2 fix). If the two panels' inline
  * selection logic ever changes, update this to match.
  *
- * Returns null when there's no dash (not in Job Loss Mode) or burn is zero
+ * Returns null when there's no dash (not in New Job Season) or burn is zero
  * (infinite runway — nothing meaningful to report as a day count).
  */
 export function resolvePrimaryRunwayDays(dash, config, includeBenefits = true) {

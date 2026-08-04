@@ -15,9 +15,9 @@
 // The Red tier's runway number used to come from a local estimateRunwayDays()
 // here — a simplified, independent formula (drift-app-warden §8 F24) that
 // ignored persisted jobLossCashOnHand and job-hunt income, so it always read
-// as a conservative floor vs. the real computeJobLossRunway() (lib/
-// jobLossRunway.js) the Job Loss panels use. Removed 2026-07-21: callers now
-// pass runwayDays computed via computeJobLossRunway()/resolvePrimaryRunwayDays()
+// as a conservative floor vs. the real computeNewJobSeasonRunway() (lib/
+// newJobSeasonRunway.js) the Job Loss panels use. Removed 2026-07-21: callers now
+// pass runwayDays computed via computeNewJobSeasonRunway()/resolvePrimaryRunwayDays()
 // directly, so every Coach surface quotes the same number as the Job Loss UI.
 
 /**

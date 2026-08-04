@@ -86,7 +86,7 @@ references.
 ## 4. Per-spine guidance (what's already covered vs. what you owe)
 
 **Spine A — Fiscal Math [L]** (`finance.js` 40 exports, `fiscalWeek.js`,
-`rollingTimeline.js`, `expense.js`, `goalFunding.js`, `jobLossRunway.js`,
+`rollingTimeline.js`, `expense.js`, `goalFunding.js`, `newJobSeasonRunway.js`,
 `stateTaxTable.js`). Largest spine. Already covered by surfaces: `dateToWeekIdx`/
 `firstActiveIdx` (F1), `handleComplete`'s buildYear call (F5), preview pair (F6),
 `resolveActiveWeeksThisYear`/`resolvePrevWeekNet` (F13–F15), `taxDerived` (F28), net

@@ -116,7 +116,7 @@ export function HomePanel({
     : null;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   // Net worth health: thin-cushion nudge when projected savings rate < 10%.
-  // Suppressed in Job Loss Mode, which has its own dedicated runway UI.
+  // Suppressed in New Job Season, which has its own dedicated runway UI.
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
   const showBreakthroughTips = netWorthHealth.belowThreshold && !config?.jobLossMode;
   const nextWeekNet = futureWeekNets?.[0] ?? null;

@@ -311,7 +311,7 @@ describe("buildCoachContext", () => {
 
   it("omits the job-loss line when jobLossMode is off", () => {
     const block = buildCoachContext({ weeklyIncome: 800, avgWeeklySpend: 300 });
-    expect(block).not.toContain("Job Loss Mode");
+    expect(block).not.toContain("New Job Season");
   });
 
   it("appends a job-loss line with runway only when jobLossMode is on", () => {
@@ -321,7 +321,7 @@ describe("buildCoachContext", () => {
       avgWeeklySpend: 300,
       runwayDays: 45,
     });
-    expect(block).toContain("Job Loss Mode: active, ~45 days of runway");
+    expect(block).toContain("New Job Season: active, ~45 days of runway");
   });
 
   it("stays deterministic across repeated calls with identical inputs", () => {
@@ -344,8 +344,8 @@ describe("buildCoachContext", () => {
 });
 
 // §18.E — Job Hunt Assistant's dedicated context. Every figure must resolve
-// through computeJobLossRunway/resolvePrimaryRunwayDays/sumJobHuntIncome —
-// the same functions JobLossHomePanel/JobLossBudgetPanel read for their own
+// through computeNewJobSeasonRunway/resolvePrimaryRunwayDays/sumJobHuntIncome —
+// the same functions NewJobSeasonHomePanel/NewJobSeasonBudgetPanel read for their own
 // tiles (drift-app-warden §21's grounding rule) — never a parallel estimate.
 describe("buildJobHuntContext", () => {
   const baseConfig = { jobLossMode: true, jobLossDate: "2026-06-01" };
@@ -354,7 +354,7 @@ describe("buildJobHuntContext", () => {
     history: [{ effectiveFrom: "2026-01-01", weekly: [300, 300, 300, 300] }],
   };
 
-  it("returns an empty string when not in Job Loss Mode (no dash to ground on)", () => {
+  it("returns an empty string when not in New Job Season (no dash to ground on)", () => {
     const block = buildJobHuntContext({ config: { jobLossMode: false }, effectiveToday: "2026-07-07" });
     expect(block).toBe("");
   });

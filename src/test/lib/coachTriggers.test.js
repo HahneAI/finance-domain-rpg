@@ -3,8 +3,8 @@ import { resolveNetWorthSignalTier, shouldFireForTier } from "../../lib/coachTri
 
 // estimateRunwayDays was removed 2026-07-21 (drift-app-warden §8 F24
 // quarantine, closed) — callers now compute runwayDays via
-// computeJobLossRunway()/resolvePrimaryRunwayDays() (jobLossRunway.js,
-// see jobLossRunway.test.js) so every Coach surface quotes the same
+// computeNewJobSeasonRunway()/resolvePrimaryRunwayDays() (newJobSeasonRunway.js,
+// see newJobSeasonRunway.test.js) so every Coach surface quotes the same
 // number as the Job Loss panels.
 
 describe("resolveNetWorthSignalTier", () => {

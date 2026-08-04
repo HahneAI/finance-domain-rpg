@@ -34,15 +34,15 @@ import { BetaSignupNoticeBanner } from "./components/BetaSignupNoticeBanner.jsx"
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
-import { JobLossEntry } from "./components/JobLossEntry.jsx";
+import { NewJobSeasonEntry } from "./components/NewJobSeasonEntry.jsx";
 import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
-import { JobLossHomePanel } from "./components/JobLossHomePanel.jsx";
-import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
+import { NewJobSeasonHomePanel } from "./components/NewJobSeasonHomePanel.jsx";
+import { NewJobSeasonBudgetPanel } from "./components/NewJobSeasonBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
-import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/newJobSeasonRunway.js";
 
 // Website/flyer-QR-code signup funnel — a link shaped like
 // "https://<app>/?beta=<code>" lands a NEW visitor here, often before they've
@@ -380,17 +380,17 @@ export default function App() {
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
   // instead of only a console warning on failure.
   const [betaSignupNotice, setBetaSignupNotice] = useState(null);
-  const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
+  const [newJobSeasonEntryOpen, setNewJobSeasonEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   // TODO §1 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
   // which is now a real persisted config.jobLossCashOnHand field edited
-  // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
+  // directly by NewJobSeasonHomePanel/NewJobSeasonBudgetPanel) stays session-only by
   // design — lifted here so both panels agree without either owning the
   // other's state.
-  const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
+  const [newJobSeasonIncludeBenefits, setNewJobSeasonIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §1.C1 spec ("dismissible but re-shows on reload").
-  const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
+  const [newJobSeasonBannerDismissed, setNewJobSeasonBannerDismissed] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
@@ -437,7 +437,7 @@ export default function App() {
   const currentView = viewStack[viewStack.length - 1];
 
   // TODO §1 nav restructuring — Income/Log are dropped from the nav entirely
-  // in Job Loss Mode (effectiveBottomNav/effectiveNavItems above), but a user
+  // in New Job Season (effectiveBottomNav/effectiveNavItems above), but a user
   // could already be sitting on one of those tabs the instant jobLossMode
   // flips true (Back to Work's counterpart already reuses whatever tab was
   // active, so no redirect needed on exit). Bounce to Home rather than
@@ -1120,7 +1120,7 @@ export default function App() {
     return items;
   }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode, config.isInvestor]);
 
-  // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
+  // Desktop sidebar counterpart to effectiveBottomNav's New Job Season trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
   // BOTTOM_NAV) never includes "home" as one of its entries.
   const effectiveNavItems = useMemo(() => (
@@ -1166,7 +1166,7 @@ export default function App() {
   // §15.I — expense triage summary line for the DB Row viewer, shown next to
   // historyLine/coachChatsLine so triage state (active/paused/cancelled) is
   // visible without expanding the full expenses JSON. Reads exp.jobLossStatus/
-  // autoReactivateOnIncome directly (same fields JobLossBudgetPanel's triage
+  // autoReactivateOnIncome directly (same fields NewJobSeasonBudgetPanel's triage
   // UI writes — F44) rather than deriving a parallel status.
   const expenseTriageLine = useMemo(() => {
     if (!expenses?.length) return null;
@@ -1553,7 +1553,7 @@ export default function App() {
   // year silently diluted it by every inactive week before firstActiveIdx.
   // For a brand-new or just-reactivated (Back to Work) account that's most
   // of the year, so the "typical week" figure came out a fraction of a real
-  // paycheck (TODO §1 Job Loss Mode investigation, 2026-07-19). For a
+  // paycheck (TODO §1 New Job Season investigation, 2026-07-19). For a
   // full-year account (firstActiveIdx 0) this is byte-identical to /52.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
   const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - freedomAllowancePerWeek;
@@ -1597,7 +1597,7 @@ export default function App() {
     [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
-  // ── Job Loss Mode expense triage (TODO §1.C3) ──
+  // ── New Job Season expense triage (TODO §1.C3) ──
   // Paused/cancelled expenses drop out of forward projections while jobLossMode
   // is active. Missing jobLossStatus is treated as "active" so existing rows
   // need no migration.
@@ -1612,23 +1612,23 @@ export default function App() {
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // Real runway for Ask Coach (drift-app-warden §8 quarantine-2 fix) — was
-  // never wired at all before, so a Job Loss Mode user asking Coach about
-  // runway got a bare "Job Loss Mode: active" with no number. Same
-  // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
-  // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
+  // never wired at all before, so a New Job Season user asking Coach about
+  // runway got a bare "New Job Season: active" with no number. Same
+  // computeNewJobSeasonRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
+  // now uses, and the real (not defaulted) newJobSeasonIncludeBenefits toggle, so
   // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
-  // jobLossCashOnHand is read internally by computeJobLossRunway (and
+  // jobLossCashOnHand is read internally by computeNewJobSeasonRunway (and
   // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
   // §1.I — shared dash so the Live State Inspector's Job Loss rows read the
-  // same computeJobLossRunway() result Coach uses, instead of a third call
+  // same computeNewJobSeasonRunway() result Coach uses, instead of a third call
   // site (drift-app-warden §8 F24: never a second/third runway derivation).
-  const jobLossDash = useMemo(() => {
+  const newJobSeasonDash = useMemo(() => {
     if (!config.jobLossMode) return null;
-    return computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
+    return computeNewJobSeasonRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
   }, [config, expenses, effectiveToday]);
   const coachRunwayDays = useMemo(
-    () => resolvePrimaryRunwayDays(jobLossDash, config, jobLossIncludeBenefits),
-    [jobLossDash, config, jobLossIncludeBenefits],
+    () => resolvePrimaryRunwayDays(newJobSeasonDash, config, newJobSeasonIncludeBenefits),
+    [newJobSeasonDash, config, newJobSeasonIncludeBenefits],
   );
 
   // ── Event log cascade ──
@@ -1715,7 +1715,7 @@ export default function App() {
       : mergedConfig;
     setConfig(finalConfig);
     closeWizardWithAnimation();
-    // §1.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
+    // §1.H3: a first-run signup that ended in New Job Season skipped the Deductions/
     // Tax steps entirely and has no real income yet — defer the pinned Food default
     // to the user's first expense-triage pass instead of seeding it unseen. Passed
     // into the save overrides directly (not a separate setExpenses call) so the
@@ -1864,13 +1864,13 @@ export default function App() {
   const activePanel = (
     <>
       {currentView === "home" && (config.jobLossMode ? (
-        <JobLossHomePanel
+        <NewJobSeasonHomePanel
           config={config}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           expenses={expenses}
           effectiveToday={effectiveToday}
-          includeBenefits={jobLossIncludeBenefits}
+          includeBenefits={newJobSeasonIncludeBenefits}
           readOnly={isExpiredReadOnly}
           currentWeek={currentWeek}
           isAdmin={isAdmin}
@@ -1924,7 +1924,7 @@ export default function App() {
         saveConfigNow={saveConfigNow}
       />)}
       {currentView === "budget" && (config.jobLossMode ? (
-        <JobLossBudgetPanel
+        <NewJobSeasonBudgetPanel
           config={config}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
@@ -1932,8 +1932,8 @@ export default function App() {
           setExpenses={setExpenses}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           effectiveToday={effectiveToday}
-          includeBenefits={jobLossIncludeBenefits}
-          setIncludeBenefits={setJobLossIncludeBenefits}
+          includeBenefits={newJobSeasonIncludeBenefits}
+          setIncludeBenefits={setNewJobSeasonIncludeBenefits}
           readOnly={isExpiredReadOnly}
         />
       ) : (
@@ -2647,8 +2647,8 @@ export default function App() {
               onDismiss={() => setBetaSignupNotice(null)}
             />
           )}
-          {/* ── Job Loss Mode banner (TODO §1.C1 + C2) ── */}
-          {config.jobLossMode && !jobLossBannerDismissed && (() => {
+          {/* ── New Job Season banner (TODO §1.C1 + C2) ── */}
+          {config.jobLossMode && !newJobSeasonBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
             // show a "runs out on" cliff warning. Waiting week shifts the start.
             let benefitsEndDate = null;
@@ -2678,13 +2678,13 @@ export default function App() {
               }} />
               <div style={{ flex: 1, minWidth: "180px" }}>
                 <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: 700 }}>
-                  Job Loss Mode
+                  New Job Season
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
                   {/* §1.H5: users who started jobless have no real pay history to compare
                       against — say so plainly instead of implying a job was actually lost. */}
                   {config.startedUnemployed === true ? (
-                    "Started in Job Loss Mode — no prior pay history."
+                    "Started your New Job Season — no prior pay history."
                   ) : (
                     <>
                       Projections show $0 earned income from{" "}
@@ -2707,7 +2707,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {/* TODO §1 mode rebuild — triage now lives inline on Budget
-                    itself (JobLossBudgetPanel), not a separate modal, so this
+                    itself (NewJobSeasonBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
                   onClick={() => navigateDirect("budget")}
@@ -2737,7 +2737,7 @@ export default function App() {
                   Back to Work
                 </Pressable>
                 <Pressable
-                  onClick={() => setJobLossBannerDismissed(true)}
+                  onClick={() => setNewJobSeasonBannerDismissed(true)}
                   aria-label="Dismiss banner"
                   style={{
                     background: "transparent",
@@ -2758,8 +2758,8 @@ export default function App() {
             );
           })()}
           {/* TODO §1 mode rebuild (2026-07-18) — the standalone pinned dashboard
-              card is gone; its content now lives in JobLossHomePanel/
-              JobLossBudgetPanel, which render in place of the normal Home/Budget
+              card is gone; its content now lives in NewJobSeasonHomePanel/
+              NewJobSeasonBudgetPanel, which render in place of the normal Home/Budget
               panels above instead of being layered on top of them. */}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
@@ -3329,13 +3329,13 @@ export default function App() {
                 ["Freedom Alw / Wk", `$${Math.round(freedomAllowancePerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
-                // §15.I — Job Loss Mode rows, only when active. unemploymentRemainingWeeks
-                // reads jobLossDash.benefitsRemainingWeeks (computeJobLossRunway) rather
+                // §15.I — New Job Season rows, only when active. unemploymentRemainingWeeks
+                // reads newJobSeasonDash.benefitsRemainingWeeks (computeNewJobSeasonRunway) rather
                 // than re-deriving the benefit window here (F24: one runway calc only).
                 ...(config.jobLossMode ? [
                   ["Job Loss Date", config.jobLossDate ?? "—", null, true],
                   ["Unemployment Wkly", config.unemploymentWeekly ? `$${config.unemploymentWeekly}` : "—", null, true],
-                  ["Unemployment Wks Left", jobLossDash?.benefitsRemainingWeeks ?? 0, null, true],
+                  ["Unemployment Wks Left", newJobSeasonDash?.benefitsRemainingWeeks ?? 0, null, true],
                 ] : []),
                 // §17.F admin visibility — resolved phase + the raw lifecycle
                 // fields a diagnostic session needs. Access Ends is the hidden
@@ -3379,10 +3379,10 @@ export default function App() {
               transition: "all 0.15s ease",
             }}
           >
-            {/* §15.I — amber dot when the account is in Job Loss Mode, visible without opening the panel */}
+            {/* §15.I — amber dot when the account is in New Job Season, visible without opening the panel */}
             {config.jobLossMode && (
               <span
-                title="Job Loss Mode active"
+                title="New Job Season active"
                 style={{ position: "absolute", top: "-3px", right: "-3px", width: "9px", height: "9px", borderRadius: "50%", background: "var(--color-warning)", border: "1.5px solid var(--color-bg-base)" }}
               />
             )}
@@ -3401,12 +3401,12 @@ export default function App() {
         const wLookup = weekNetLookup[w.idx] ?? null;
         const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
         const weekLogs = logs.filter(e => resolveEventWeekMeta(e, allWeeks).weekIdx === w.idx);
-        // §15.I — mirrors buildYear's inJobLoss window boundary (finance.js) so the
+        // §15.I — mirrors buildYear's inNewJobSeason window boundary (finance.js) so the
         // "outside benefit window" note only fires for weeks actually inside Job
         // Loss Mode, not every pre-firstActiveIdx week. Diagnostic-only (never feeds
         // math), same "mirror the exact algorithm" pattern as resolveBaseRateForWeek.
         const weekEndIso = toLocalIso(w.weekEnd);
-        const inJobLossWindow = config.jobLossMode && config.jobLossDate
+        const inNewJobSeasonWindow = config.jobLossMode && config.jobLossDate
           && weekEndIso >= config.jobLossDate
           && (!config.returnToWorkDate || weekEndIso < config.returnToWorkDate);
         const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3477,8 +3477,8 @@ export default function App() {
               {w.unemploymentIncome > 0 && (
                 <Row label="Unemployment" val={fN(w.unemploymentIncome)} color="var(--color-green)" />
               )}
-              {inJobLossWindow && w.unemploymentIncome === 0 && (
-                <Row label="Unemployment" val="Job Loss Mode — outside benefit window" mono={false} color="var(--color-text-disabled)" />
+              {inNewJobSeasonWindow && w.unemploymentIncome === 0 && (
+                <Row label="Unemployment" val="New Job Season — outside benefit window" mono={false} color="var(--color-text-disabled)" />
               )}
               <Row label="Benefits Deduction" val={fN(w.benefitsDeduction)} color="var(--color-deduction)" />
               <Row label="401k (Employee)" val={fN(w.k401kEmployee)} color="var(--color-deduction)" />
@@ -3637,7 +3637,7 @@ export default function App() {
         open={lifeEventMenu}
         onClose={() => setLifeEventMenu(false)}
         onSelect={(route) => {
-          if (route === "job_loss") setJobLossEntryOpen(true);
+          if (route === "new_job_season") setNewJobSeasonEntryOpen(true);
           else if (route === "rate_update") setRateUpdateOpen(true);
           else setWizardEntry(route);
         }}
@@ -3678,10 +3678,10 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* ── Job Loss Mode entry (TODO §1.C1) ── */}
-      <JobLossEntry
-        open={jobLossEntryOpen}
-        onClose={() => setJobLossEntryOpen(false)}
+      {/* ── New Job Season entry (TODO §1.C1) ── */}
+      <NewJobSeasonEntry
+        open={newJobSeasonEntryOpen}
+        onClose={() => setNewJobSeasonEntryOpen(false)}
         expenses={expenses}
         config={config}
         onActivate={(patch, updatedExpenses) => {
@@ -3705,7 +3705,7 @@ export default function App() {
           const nextConfig = { ...config, baseRate: patch.baseRate };
           setConfig(nextConfig);
           // historySource omitted — configHistoryMetaRef is already set above (mirrors
-          // JobLossEntry's onActivate just above).
+          // NewJobSeasonEntry's onActivate just above).
           savePersistedStateNow({ config: nextConfig });
         }}
       />

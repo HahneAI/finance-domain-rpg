@@ -4,7 +4,7 @@ import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
 import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
-import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
+import { computeNewJobSeasonRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 
 const STATUS_OPTIONS = [
   { v: "active",    label: "Active",    color: "var(--color-green)" },
@@ -15,15 +15,15 @@ const STATUS_OPTIONS = [
 const isFlexibleCategory = (cat) => cat === "Lifestyle";
 
 /**
- * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §1 mode rebuild).
+ * NewJobSeasonBudgetPanel — New Job Season's own Budget view (TODO §1 mode rebuild).
  *
  * Replaces BudgetPanel entirely while `config.jobLossMode` is true. The cash
  * on hand figure (persisted `config.jobLossCashOnHand`, TODO §1.H13,
- * timeline-aware per §1.H17) is editable here AND on JobLossHomePanel via
+ * timeline-aware per §1.H17) is editable here AND on NewJobSeasonHomePanel via
  * the same CashOnHandSheet — both commit to the same config fields via eager
  * save, so there's no single "owner" to drift from; the benefit-scenario
  * toggle (session-only, unrelated) still lives here only, with Home reading
- * it read-only. Both feed the shared runway calc (lib/jobLossRunway.js).
+ * it read-only. Both feed the shared runway calc (lib/newJobSeasonRunway.js).
  * Also owns expense add/remove/triage, all inline in one view rather than a
  * separate modal (the old ExpenseTriage.jsx) plus a jump back to the normal,
  * quarter-scoped BudgetPanel.
@@ -34,7 +34,7 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * budget planning. A flat weekly amount from today forward is the honest fit
  * for this mode, not a lesser version of the normal flow.
  */
-export function JobLossBudgetPanel({
+export function NewJobSeasonBudgetPanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
   effectiveToday, includeBenefits, setIncludeBenefits,
@@ -65,11 +65,11 @@ export function JobLossBudgetPanel({
 
   const huntIncome = sumJobHuntIncome(config);
 
-  const dash = useMemo(() => computeJobLossRunway({
+  const dash = useMemo(() => computeNewJobSeasonRunway({
     config, expenses, effectiveToday, extraCash: huntIncome,
   }), [config, expenses, effectiveToday, huntIncome]);
 
-  // Same shared editor as JobLossHomePanel's Cash On Hand card (TODO
+  // Same shared editor as NewJobSeasonHomePanel's Cash On Hand card (TODO
   // §1.H17) — confirming a value here resets the decay clock the same way,
   // since both surfaces commit to the identical config fields.
   const saveCashOnHand = (parsedValue) => {
@@ -78,7 +78,7 @@ export function JobLossBudgetPanel({
     saveConfigNow?.(next);
   };
 
-  // Only expenses the user chose to track during Job Loss Mode (TODO §1
+  // Only expenses the user chose to track during New Job Season (TODO §1
   // expense review step) show up anywhere on this panel — untracked ones
   // stay untouched for normal-mode Budget, just invisible here.
   const trackedExpenses = useMemo(
@@ -172,7 +172,7 @@ export function JobLossBudgetPanel({
 
   return (
     <div>
-      <PanelHero eyebrow="Job Loss Mode">Budget</PanelHero>
+      <PanelHero eyebrow="New Job Season">Budget</PanelHero>
 
       {/* ── Savings + unemployment scenario ── */}
       <SectionHeader sub="Feeds the runway numbers on Home">Savings & Benefits</SectionHeader>

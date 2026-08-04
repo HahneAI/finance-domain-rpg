@@ -47,7 +47,7 @@ written into the table below.
 | Go the distance | Long-horizon goal (loan payoff, retirement) |
 | Roll with it | Absorbing an unexpected expense |
 | Working the body | Slow, unglamorous progress (steady goal funding) |
-| Tight spot / against the ropes | Job Loss Mode, thin runway |
+| Tight spot / against the ropes | New Job Season, thin runway |
 
 **Deliberately excluded at every score above 1:** knockout, fight to the death, opponent, win/lose
 framing, "champ" or any pet-name calling. The user isn't fighting an opponent.

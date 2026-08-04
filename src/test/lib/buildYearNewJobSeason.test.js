@@ -29,7 +29,7 @@ const JOB_LOSS_CFG = {
 }
 const FIRST_LOSS_IDX = 8
 
-describe('buildYear — Job Loss Mode', () => {
+describe('buildYear — New Job Season', () => {
   it('zeros earned income for weeks on/after jobLossDate', () => {
     const weeks = buildYear(JOB_LOSS_CFG)
     const lost = weeks[FIRST_LOSS_IDX]

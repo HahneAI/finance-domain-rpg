@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { resolvePrimaryRunwayDays, sumBillsDueSince, computeJobLossRunway } from "../../lib/jobLossRunway.js";
+import { resolvePrimaryRunwayDays, sumBillsDueSince, computeNewJobSeasonRunway } from "../../lib/newJobSeasonRunway.js";
 
 // resolvePrimaryRunwayDays is the shared selector introduced to close
 // drift-app-warden §8's F24 quarantine — it must mirror the exact
-// `hasBenefits && includeBenefits` ternary JobLossHomePanel.jsx/
-// JobLossBudgetPanel.jsx each use inline for their headline runway tile, so
+// `hasBenefits && includeBenefits` ternary NewJobSeasonHomePanel.jsx/
+// NewJobSeasonBudgetPanel.jsx each use inline for their headline runway tile, so
 // any other consumer (Coach) quoting "the" runway number can't disagree.
 describe("resolvePrimaryRunwayDays", () => {
-  it("returns null when there's no dash (not in Job Loss Mode)", () => {
+  it("returns null when there's no dash (not in New Job Season)", () => {
     expect(resolvePrimaryRunwayDays(null, { unemploymentEnabled: true }, true)).toBeNull();
   });
 
@@ -99,7 +99,7 @@ describe("sumBillsDueSince", () => {
   });
 });
 
-describe("computeJobLossRunway — timeline-aware cash on hand (§1.H17)", () => {
+describe("computeNewJobSeasonRunway — timeline-aware cash on hand (§1.H17)", () => {
   const baseConfig = {
     jobLossMode: true,
     jobLossDate: "2026-06-01",
@@ -108,14 +108,14 @@ describe("computeJobLossRunway — timeline-aware cash on hand (§1.H17)", () =>
   };
 
   it("subtracts essential bills due since cashAsOf from the raw figure", () => {
-    const dash = computeJobLossRunway({ config: baseConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
+    const dash = computeNewJobSeasonRunway({ config: baseConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
     expect(dash.rawCashOnHand).toBe(2000);
     expect(dash.billsDueSinceAsOf).toBe(1000);
     expect(dash.effectiveCashOnHand).toBe(1000);
   });
 
   it("floors effectiveCashOnHand at 0 rather than going negative", () => {
-    const dash = computeJobLossRunway({
+    const dash = computeNewJobSeasonRunway({
       config: { ...baseConfig, jobLossCashOnHand: 500 }, expenses: [RENT], effectiveToday: "2026-06-15",
     });
     expect(dash.effectiveCashOnHand).toBe(0);
@@ -123,19 +123,19 @@ describe("computeJobLossRunway — timeline-aware cash on hand (§1.H17)", () =>
 
   it("falls back to jobLossDate as the decay anchor when jobLossCashOnHandAsOf is unset (pre-§1.H17 accounts)", () => {
     const legacyConfig = { jobLossMode: true, jobLossDate: "2026-06-01", jobLossCashOnHand: 2000 };
-    const dash = computeJobLossRunway({ config: legacyConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
+    const dash = computeNewJobSeasonRunway({ config: legacyConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
     expect(dash.cashAsOf).toBe("2026-06-01");
     expect(dash.billsDueSinceAsOf).toBe(1000);
   });
 
   it("does not decay when no essential bills have come due since asOf", () => {
-    const dash = computeJobLossRunway({ config: baseConfig, expenses: [GYM], effectiveToday: "2026-06-15" });
+    const dash = computeNewJobSeasonRunway({ config: baseConfig, expenses: [GYM], effectiveToday: "2026-06-15" });
     expect(dash.billsDueSinceAsOf).toBe(0);
     expect(dash.effectiveCashOnHand).toBe(2000);
   });
 
   it("feeds effectiveCashOnHand, not the raw figure, into withoutBenefits.cash — extraCash still adds on top", () => {
-    const dash = computeJobLossRunway({
+    const dash = computeNewJobSeasonRunway({
       config: baseConfig, expenses: [RENT], effectiveToday: "2026-06-15", extraCash: 100,
     });
     expect(dash.withoutBenefits.cash).toBe(1100); // (2000 - 1000) + 100

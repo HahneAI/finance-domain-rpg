@@ -3,7 +3,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
-import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from "../lib/jobLossRunway.js";
+import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from "../lib/newJobSeasonRunway.js";
 import { toLocalIso } from "../lib/finance.js";
 
 // Canonical day ordering — matches WeekConfirmModal/LogPanel's DayPicker so
@@ -12,7 +12,7 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
 
 /**
- * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
+ * NewJobSeasonEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
  *
  * Step 0 (unchanged): captures the job-loss effective date, mandatory
  * cash-on-hand (§1.H13), and the unemployment-benefit setup (§1.C1/C2).
@@ -26,7 +26,7 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * single-select day-of-week pick for "which day checks normally arrive."
  * Resolved once at Activate time (`resolveLastPayPeriodEnd` +
  * `resolvePendingCheckArrivalDate` + `estimatePendingCheckAmount`, all
- * `lib/jobLossRunway.js`) into concrete `jobLossPendingCheckAmount`/
+ * `lib/newJobSeasonRunway.js`) into concrete `jobLossPendingCheckAmount`/
  * `jobLossPendingCheckDate` values — the raw day picks aren't stored, same
  * resolve-to-a-concrete-value pattern as `dueDateAnchor` below. Deliberately
  * scoped to a single 7-day picker regardless of pay schedule — for biweekly/
@@ -66,7 +66,7 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * App.jsx merges configPatch into config and, when present, replaces
  * expenses with updatedExpenses.
  */
-export function JobLossEntry({ open, onClose, onActivate, expenses = [], config = null }) {
+export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], config = null }) {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   // Mandatory — the runway calc's seed cash figure. "" = unanswered (blocks
@@ -271,7 +271,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
             Life Event{hasExpenses ? ` · Step ${step + 1} of 3` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
-            {step === 0 && "Enter Job Loss Mode"}
+            {step === 0 && "Start Your New Job Season"}
             {step === 1 && "Any paycheck still coming?"}
             {step === 2 && "Which bills do you want to track?"}
             {step === 3 && "When are these due?"}
@@ -323,7 +323,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                 )}
                 <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
                   Savings, checking — whatever you could draw on today. Seeds your runway math and
-                  stays editable from Home or Budget once Job Loss Mode is active.
+                  stays editable from Home or Budget once your New Job Season is active.
                 </div>
               </div>
 
@@ -428,7 +428,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                 padding: "10px 12px",
                 fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
               }}>
-                You can exit Job Loss Mode anytime via the <strong style={{ color: "var(--color-warning)" }}>Back to Work</strong> button
+                You can exit your New Job Season anytime via the <strong style={{ color: "var(--color-warning)" }}>Back to Work</strong> button
                 in the app banner — that flow walks you through re-entering your new pay structure.
               </div>
             </>

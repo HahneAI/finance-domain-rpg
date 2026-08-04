@@ -29,7 +29,7 @@ Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
 | 8 | Log Panel — Event Log & Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Setup Wizard | `SetupWizard.jsx` | Live |
-| 10 | Life Events & Job Loss Mode | `LifeEventMenu.jsx`, `JobLossEntry.jsx`, `JobLossHomePanel.jsx`, `JobLossBudgetPanel.jsx`, `jobLossRunway.js` | Live, known gaps |
+| 10 | Life Events & New Job Season | `LifeEventMenu.jsx`, `NewJobSeasonEntry.jsx`, `NewJobSeasonHomePanel.jsx`, `NewJobSeasonBudgetPanel.jsx`, `newJobSeasonRunway.js` | Live, known gaps |
 | 11 | Employer Preset Convention | all panels (architectural rule) | Live |
 | 12 | Biweekly Two-Week Check-In | `WeekConfirmModal.jsx` | Live |
 | 13 | Admin Diagnostic Toolkit | `App.jsx`, `LogPanel.jsx` | Live (Phase 1, 8 tools) |
@@ -207,18 +207,18 @@ Wrap Up):
 
 ---
 
-## 10. Life Events & Job Loss Mode
+## 10. Life Events & New Job Season
 
 Live, not scaffolding — more built than `docs/TODO.md` §1's checkbox state suggests. As of the
-§1.H7 rebuild (2026-07-18), Job Loss Mode is a genuinely distinct app mode, not a card layered on
-the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` **instead of**
-`HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `JobLossDashboard.jsx`/
+§1.H7 rebuild (2026-07-18), New Job Season is a genuinely distinct app mode, not a card layered on
+the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBudgetPanel` **instead of**
+`HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `NewJobSeasonDashboard.jsx`/
 `ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
-  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick Rate
+  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `NewJobSeasonEntry.jsx`; Quick Rate
   Update → `RateUpdateModal.jsx`.
-- **`JobLossEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§1.H13,
+- **`NewJobSeasonEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§1.H13,
   persisted, accepts 0; stamps `jobLossCashOnHandAsOf` alongside it, §1.H17) + unemployment
   benefits; (1) pending/final paycheck (§1.H15) — skippable "any check still coming?" gate, a
   worked-days grid, and an arrival-day picker, resolved once into a concrete
@@ -230,7 +230,7 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   `buildYear()` — **not prorated**: the entire fiscal week containing `jobLossDate` zeroes out,
   including days already worked that week (the pending-check step is the bolt-on fix for that, not
   a general proration).
-- **`lib/jobLossRunway.js`** — `computeJobLossRunway()` is the one authoritative runway/burn
+- **`lib/newJobSeasonRunway.js`** — `computeNewJobSeasonRunway()` is the one authoritative runway/burn
   function; both panels, `CoachNetWorthCard`, and `App.jsx`'s Ask Coach wiring all read it —
   `coachTriggers.js`'s old independent `estimateRunwayDays()` was deleted outright rather than
   patched, closing that drift source for good. `weeklyBurn` only sums **Needs** (and loan)
@@ -244,12 +244,12 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   `sumJobHuntIncome()`, gig income logged via Home's "Log Extra Income" widget) adds on top,
   uncounted by the decay. A pending/final paycheck (§1.H15) is folded in piecewise — it only
   extends the runway once its own arrival date is reached, not lump-summed into today's cash.
-- **`JobLossHomePanel.jsx`** — a pencil-badged Cash On Hand card sits above the runway tiles;
+- **`NewJobSeasonHomePanel.jsx`** — a pencil-badged Cash On Hand card sits above the runway tiles;
   tapping it (or the equivalent row on Budget) opens `CashOnHandSheet.jsx`, a shared bottom-sheet
   editor (up-from-bottom entrance / slide-down exit via the `.fold-sheet` CSS class, index.css) —
   confirming a value there always re-stamps `jobLossCashOnHandAsOf` to reset the decay clock.
   Runway headline, Log Extra Income widget, embeds `ReemploymentTracker` (target income,
-  return-to-work date, application CRUD with 6 statuses). **`JobLossBudgetPanel.jsx`** — the same
+  return-to-work date, application CRUD with 6 statuses). **`NewJobSeasonBudgetPanel.jsx`** — the same
   Cash On Hand row/sheet, benefit-scenario toggle, upcoming-bills countdown, full expense triage
   (active/paused/cancelled) inline, simplified add-expense form. Both eager-save every mutation
   (§1.H10).
@@ -268,12 +268,12 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   same paid-tier gate Coach already has — a resolved decision (`docs/TODO.md` §2.E), not an open
   question. **Earlier stale-note correction (2026-07-24):** this list previously also named
   four gaps that have since closed and should no longer be treated as open — a pending/final
-  paycheck is now modeled in the runway calc (§1.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
+  paycheck is now modeled in the runway calc (§1.H15, `lib/newJobSeasonRunway.js`); Lifestyle spend gets
   an explicit UI callout instead of silently vanishing from `weeklyBurn` (§1.H16); the independent,
   drifted `coachTriggers.js#estimateRunwayDays` was deleted outright, not just fixed — every caller
-  now goes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`; and Coach's Job Loss
+  now goes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`; and Coach's Job Loss
   context line receives a real, computed `runwayDays` from `App.jsx` (`coachRunwayDays`), not a bare
-  `"Job Loss Mode: active"` string. See `docs/BUG_FIX_TODO.md`'s Fixed table (DW-8, DW-9) and
+  `"New Job Season: active"` string. See `docs/BUG_FIX_TODO.md`'s Fixed table (DW-8, DW-9) and
   `drift-app-warden.md` §8 F24 for the fix history.
 
 ---
@@ -313,7 +313,7 @@ pill), Week Inspector (tap any Income week row). **Full tool-by-tool spec lives 
 `netWorthHealthStatus(annualSavings, annualIncome)` (`finance.js`) flags a savings rate
 < 10% (`NET_WORTH_HEALTH_THRESHOLD`). `NetWorthHealthTips.jsx` renders a collapsed teal
 cue on HomePanel, expanding to 3 tips rotated by fiscal week + a forward `aiTip` slot for
-a future Coach-generated insight. Suppressed entirely in Job Loss Mode (owns its own
+a future Coach-generated insight. Suppressed entirely in New Job Season (owns its own
 runway UI).
 
 ---
@@ -357,7 +357,7 @@ Framer Motion.
   Life Events entry at its foot; neither is a standalone row anymore), Retirement &
   Benefits, App Preferences, Tax Plan (gated), Investor Codes (admin), plus Account
   (email/password, link Google, sign out, delete account, §17.F Subscription card).
-  In Job Loss Mode the Work & Pay group is replaced by a single "Back to Work" row.
+  In New Job Season the Work & Pay group is replaced by a single "Back to Work" row.
   Full drift map: `drift-app-warden.md` §12.
 
 ---

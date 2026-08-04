@@ -23,7 +23,7 @@ Two Coach surfaces are **live and open to the full user base**, trial included:
    it, and older conversations beyond the last 3 are pruned automatically (never the one
    currently open). Full detail: `docs/TODO.md` §2.H3–H4, `docs/drift-app-warden.md` §8 F123.
 2. **The Net Worth Check-In card.** A small card on the Home screen (both the normal Home and
-   the separate Job Loss Mode Home) that proactively speaks up about savings trends — a gentle
+   the separate New Job Season Home) that proactively speaks up about savings trends — a gentle
    heads-up, a critical job-loss warning, or a recovery acknowledgment.
 
 Every other Coach idea (statement insights, job hunt assistant, résumé help, application
@@ -167,7 +167,7 @@ generation).
 - `src/components/AskCoachPanel.jsx` — the chat UI
 - `src/components/CoachNetWorthCard.jsx` — the Net Worth trigger card
 - `src/lib/coachTriggers.js` — tier resolution + rate-limit logic for the trigger card
-- `src/lib/jobLossRunway.js` — the one authoritative runway/burn calculation Coach's Job Loss
+- `src/lib/newJobSeasonRunway.js` — the one authoritative runway/burn calculation Coach's Job Loss
   context must always read through (see the drift-warden rule above)
 - `db.js` — `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` (wired into `AskCoachPanel.jsx`
   as of 2026-07-25)

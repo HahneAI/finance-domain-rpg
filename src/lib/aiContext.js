@@ -2,7 +2,7 @@ import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, comput
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
-import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./jobLossRunway.js";
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
 
 // Pairs a fiscal week index with its real calendar date — full month name,
 // never abbreviated — and the period number in the unit this account's pay
@@ -198,7 +198,7 @@ export function buildCoachContext({
   }
 
   if (config?.jobLossMode) {
-    lines.push(`Job Loss Mode: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
+    lines.push(`New Job Season: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
   }
 
   return lines.join("\n");
@@ -211,7 +211,7 @@ export function buildCoachContext({
  * bloat the general Ask Coach/Net Worth prompt's cached prefix for every user
  * not in this specific mode. Every figure resolves through the same
  * authoritative functions the on-screen panels use (§21 F113's grounding
- * rule): computeJobLossRunway/resolvePrimaryRunwayDays (JobLossHomePanel's
+ * rule): computeNewJobSeasonRunway/resolvePrimaryRunwayDays (NewJobSeasonHomePanel's
  * own runway tile) and sumJobHuntIncome — never a parallel estimate.
  *
  * Unlike the goal-breakdown line above, application company/role names are
@@ -224,7 +224,7 @@ export function buildJobHuntContext({ config = null, expenses = [], effectiveTod
   const lines = [];
   const manualSavings = Math.max(0, config?.jobLossCashOnHand ?? 0);
   const huntIncome = sumJobHuntIncome(config);
-  const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
+  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);

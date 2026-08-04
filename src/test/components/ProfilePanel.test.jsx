@@ -62,7 +62,7 @@ describe('ProfilePanel — main Account list renders', () => {
 // all show figures that don't apply without real income; a "Back to Work" row
 // replaces them as a second route into the same structure_change flow the Job
 // Loss banner's button already uses.
-describe('ProfilePanel — Job Loss Mode swaps Work & Pay for Back to Work', () => {
+describe('ProfilePanel — New Job Season swaps Work & Pay for Back to Work', () => {
   it('hides Job & Pay / Retirement & Benefits and shows a Back to Work row instead', () => {
     renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, onBackToWork: () => {} })
     expect(screen.queryByText('Work & Pay')).not.toBeInTheDocument()

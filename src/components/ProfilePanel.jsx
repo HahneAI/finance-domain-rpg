@@ -2375,7 +2375,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid rgba(245,158,11,0.28)", overflow: "hidden", marginBottom: "20px" }}>
             <ListRow
               label="Back to Work"
-              summary="Fill in your new pay structure and exit Job Loss Mode"
+              summary="Fill in your new pay structure and exit your New Job Season"
               onPress={onBackToWork}
               last
             />

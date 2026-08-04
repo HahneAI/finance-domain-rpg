@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable } from "./ui.jsx";
 
 /**
- * ReemploymentTracker — embedded in JobLossDashboard (TODO §1.C6).
+ * ReemploymentTracker — embedded in NewJobSeasonDashboard (TODO §1.C6).
  *
  * Three sections:
  *   1. Target income — annual + estimated weekly net, pre-filled from

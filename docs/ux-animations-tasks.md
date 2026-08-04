@@ -172,10 +172,10 @@ App (authenticated shell)
 │   ├── WeekConfirmModal
 │   ├── LifeEventMenu
 │   ├── NewJobSeasonEntry            (up to 4 steps as of §1.H15)
-│   ├── CashOnHandSheet         (bottom sheet, §1.H17 — shared by Job Loss Home + Budget)
+│   ├── CashOnHandSheet         (bottom sheet, §1.H17 — shared by New Job Season Home + Budget)
 │   ├── SetupWizard            (first-run + life-event re-entry)
 │   ├── PwaInstallModal
-│   └── Job Loss banner (inline, not modal — "Go to Budget" / "Back to Work" / dismiss)
+│   └── New Job Season banner (inline, not modal — "Go to Budget" / "Back to Work" / dismiss)
 ├── Investor / Demo surfaces
 │   ├── DemoAccountTree        (investor accounts 1–2, admin demo edit)
 │   └── Investor account pills (drawer)
@@ -257,7 +257,7 @@ App (authenticated shell)
 | CashOnHandSheet | `CashOnHandSheet.jsx` | draft input, Save, Cancel, backdrop (§1.H17 — bottom sheet, not `fold-modal`) |
 | SetupWizard | `SetupWizard.jsx` | step Next/Back, pills, toggles, benefit cards (~63 sites) |
 | PwaInstallModal | `PwaInstallModal.jsx` | dismiss, platform steps |
-| Job Loss banner | `App.jsx` inline | Go to Budget · Back to Work · dismiss |
+| New Job Season banner | `App.jsx` inline | Go to Budget · Back to Work · dismiss |
 
 ---
 
@@ -497,18 +497,18 @@ Order: the two large ones first, then the two smaller.
 | **Modal open/close** | LifeEventMenu | LifeEventMenu.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
 | **Modal open/close** | RateUpdateModal | RateUpdateModal.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
 | **Sheet open/close** | CashOnHandSheet | CashOnHandSheet.jsx | `fold-sheet` + `fold-backdrop` + `data-fold={fold.fold}` | 320ms enter, 240ms exit | ✅ |
-| **Button press** | All Job Loss modals/sheets | NewJobSeasonEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx, CashOnHandSheet.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
-| **Button press** | All Job Loss panels | NewJobSeasonHomePanel.jsx, NewJobSeasonBudgetPanel.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Button press** | All New Job Season modals/sheets | NewJobSeasonEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx, CashOnHandSheet.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Button press** | All New Job Season panels | NewJobSeasonHomePanel.jsx, NewJobSeasonBudgetPanel.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
 | **Panel enter/exit** | NewJobSeasonHomePanel, NewJobSeasonBudgetPanel | App.jsx (FoldSwitch) | `fold-lift` + fade | 340ms enter, 180ms exit | ✅ |
 
 ### Test coverage
 New Job Season features are exercised in:
 - `SetupWizard` — life-event routing (`lifeEvent="lost_job"` path)
 - `NewJobSeasonEntry` — up to 4-step modal flow, including the §1.H15 pending-check step
-- `NewJobSeasonHomePanel` — panel rendering when `config.jobLossMode === true`, Cash On Hand
+- `NewJobSeasonHomePanel` — panel rendering when `config.newJobSeasonMode === true`, Cash On Hand
   card + sheet (§1.H17), Coach presence (DW-8)
 - `NewJobSeasonBudgetPanel` — alternate budget view in job-loss state, Cash On Hand row + sheet
-- Full suite (all of `jobLossFlow.test.jsx` + `jobLossRunway.test.js`): 100+ New Job Season
+- Full suite (all of `newJobSeasonFlow.test.jsx` + `newJobSeasonRunway.test.js`): 100+ New Job Season
   tests, part of the app-wide 1231/1231 passing as of 2026-07-25 (see full-suite count
   below — this per-feature count is a floor, not the whole file's total).
 

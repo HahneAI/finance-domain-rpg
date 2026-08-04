@@ -67,7 +67,7 @@ function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx, 
 /**
  * §2.G — deterministic compressed financial snapshot for Coach's system
  * prompt. Same line order/shape on every call (job-loss line only appears
- * when config.jobLossMode is set) so the block prompt-caches across a
+ * when config.newJobSeasonMode is set) so the block prompt-caches across a
  * session even as the underlying numbers change.
  */
 export function buildCoachContext({
@@ -109,7 +109,7 @@ export function buildCoachContext({
   const activeGoals = goals.filter((g) => !g.completed);
   const totalActiveGoalsTarget = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   const totalGoalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
-  const activeExpenses = expenses.filter((e) => (e.jobLossStatus ?? "active") === "active");
+  const activeExpenses = expenses.filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const weeksLeft = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
   const mostRecentLog = logs.length
@@ -197,7 +197,7 @@ export function buildCoachContext({
     lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
   }
 
-  if (config?.jobLossMode) {
+  if (config?.newJobSeasonMode) {
     lines.push(`New Job Season: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
   }
 
@@ -222,7 +222,7 @@ export function buildCoachContext({
  */
 export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
   const lines = [];
-  const manualSavings = Math.max(0, config?.jobLossCashOnHand ?? 0);
+  const manualSavings = Math.max(0, config?.newJobSeasonCashOnHand ?? 0);
   const huntIncome = sumJobHuntIncome(config);
   const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
   if (!dash) return "";

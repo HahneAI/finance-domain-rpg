@@ -49,7 +49,7 @@ describe('HomePanel', () => {
   describe('CoachNetWorthCard gate (canAccessAskCoachGeneral)', () => {
     const coachProps = {
       ...baseProps,
-      config: { jobLossMode: false },
+      config: { newJobSeasonMode: false },
       expenses: [],
       goals: [],
       fundedGoalSpend: 0,

@@ -444,15 +444,15 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     expect(getStepCounter()).toContain('of 6')
   })
 
-  it('walks through the jobless step titles: Welcome, Unemployment Benefits, Job Loss Details, Wrap Up', () => {
+  it('walks through the jobless step titles: Welcome, Unemployment Benefits, New Job Season Details, Wrap Up', () => {
     renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default — real entry path
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default — real entry path
     expect(screen.getByText('Welcome')).toBeTruthy()
     clickNext()
     expect(screen.getByText('Unemployment Benefits')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // answer the gate so Next unblocks
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
     clickNext()
     expect(screen.getByText('Wrap Up')).toBeTruthy()
   })
@@ -474,7 +474,7 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
   })
 
   it('Unemployment Benefits: answering No proceeds without requiring amount/duration', () => {
@@ -482,36 +482,36 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
   })
 
-  it('completing the mini-flow calls onComplete with jobLossMode, jobLossDate, and unemployment fields set', async () => {
+  it('completing the mini-flow calls onComplete with newJobSeasonMode, newJobSeasonDate, and unemployment fields set', async () => {
     const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default
     clickNext() // -> Unemployment Benefits
     fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
-    clickNext() // -> Job Loss Details
-    clickNext() // -> Wrap Up (jobLossDate already defaulted at Step 0)
+    clickNext() // -> New Job Season Details
+    clickNext() // -> Wrap Up (newJobSeasonDate already defaulted at Step 0)
     fireEvent.click(screen.getByRole('button', { name: /finish/i }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     const payload = onComplete.mock.calls[0][0]
     expect(payload.setupComplete).toBe(true)
-    expect(payload.jobLossMode).toBe(true)
-    expect(payload.jobLossDate).toBeTruthy()
+    expect(payload.newJobSeasonMode).toBe(true)
+    expect(payload.newJobSeasonDate).toBeTruthy()
     expect(payload.unemploymentEnabled).toBe(true)
     expect(payload.unemploymentWeekly).toBe(350)
     expect(payload.unemploymentDurationWeeks).toBe(20)
   })
 
-  it('Job Loss Details: entering a prior hourly rate sets targetIncomeAnnual (rate × 40 × 52)', async () => {
+  it('New Job Season Details: entering a prior hourly rate sets targetIncomeAnnual (rate × 40 × 52)', async () => {
     const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
-    clickNext() // -> Job Loss Details
+    clickNext() // -> New Job Season Details
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 22\.00/i), { target: { value: '20' } })
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /finish/i }))

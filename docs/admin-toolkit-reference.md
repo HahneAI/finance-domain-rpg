@@ -27,7 +27,7 @@
 ### Config Raw View
 - **Invoke:** Tools sheet → Config JSON → View ↓
 - **Purpose:** Audit any config field; copy button puts it on clipboard
-- **Special fields:** When any §1 field carries a value, a "Life Events" header lists: `jobLossMode`, `jobLossDate`, `jobLossCashOnHand`/`jobLossCashOnHandAsOf`, `jobLossPendingCheckAmount`/`Date`, `unemploymentEnabled`/`Weekly`/`DurationWeeks`/`WaitingWeek`, `returnToWorkDate`, and entry counts for `jobApplications`/`jobHuntIncomeLog`
+- **Special fields:** When any §1 field carries a value, a "Life Events" header lists: `newJobSeasonMode`, `newJobSeasonDate`, `newJobSeasonCashOnHand`/`newJobSeasonCashOnHandAsOf`, `newJobSeasonPendingCheckAmount`/`Date`, `unemploymentEnabled`/`Weekly`/`DurationWeeks`/`WaitingWeek`, `returnToWorkDate`, and entry counts for `jobApplications`/`jobHuntIncomeLog`
 - **Session insight:** Reveals full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration
 
 ### DB Row Viewer
@@ -38,7 +38,7 @@
 - **Also surfaces:**
   - §3 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask when verifying config edits captured in `account_history`
   - §2.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap to expand 5 most recent titles; ask when verifying conversation persistence
-  - §1.I "Triage" line (Job Loss): "X active · Y paused · Z cancelled" — flags any expense with `autoReactivateOnIncome === false`; ask when Job Loss Back to Work reactivation looks incomplete
+  - §1.I "Triage" line (New Job Season): "X active · Y paused · Z cancelled" — flags any expense with `autoReactivateOnIncome === false`; ask when New Job Season Back to Work reactivation looks incomplete
 
 ### Tax Weeks Grid
 - **Invoke:** Tools sheet → Tax Weeks → View ↓
@@ -54,8 +54,8 @@
   - extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, freedomAllowancePerWeek
   - weeklyIncome, projectedAnnualNet
   - Subscription phase (`Sub Phase` — trial/grace/active/expired/none), `Trial Ends`, `Access Ends` (hidden day-21 cutoff), `Period End`, `Card / Dunning`
-- **Job Loss indicator:** Amber dot on pill when `config.jobLossMode` is true; expanded card shows `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left`
-- **Ask for:** "open Live and paste all values, noting whether the Job Loss dot is showing"
+- **New Job Season indicator:** Amber dot on pill when `config.newJobSeasonMode` is true; expanded card shows `New Job Season Date`, `Unemployment Wkly`, `Unemployment Wks Left`
+- **Ask for:** "open Live and paste all values, noting whether the New Job Season dot is showing"
 - **Session insight:** Quick snapshot of all key financial values — use early in any diagnostic about displayed numbers
 
 ### Week Inspector
@@ -65,7 +65,7 @@
   - Pay: grossPay, taxableGross, deductions, 401k, live computeNet
   - Net Lookup: baseNet, adjustment, spendable
   - Confirmation record + all log entries for that week with net impact
-- **Job Loss note:** Pay section adds `Unemployment` row when `w.unemploymentIncome > 0`; shows "New Job Season — outside benefit window" if no benefit that week
+- **New Job Season note:** Pay section adds `Unemployment` row when `w.unemploymentIncome > 0`; shows "New Job Season — outside benefit window" if no benefit that week
 - **Ask for:** "tap week [N] and describe the Pay and Net Lookup sections"
 - **Session insight:** Use for specific wrong numbers on paychecks or weeks, or to rule out income math as root cause
 
@@ -106,4 +106,4 @@ When filing a bug or building a feature that touches fiscal math, ask the user t
 4. **Tax grid** — Tax Weeks → View ↓ → screenshot or describe red dots + current week position
 5. **Week deep-dive** — tap the suspect week row in Income → describe Pay + Net Lookup + Log Entries sections
 6. **Subscription/billing** — DB Row → Fetch (surfaces `subscription_status`/`trial_ends_at`/`access_ends_at`/`card_on_file`/`current_period_end`/`plan`) + Live State Inspector (adds resolved phase). Ask for both when issue involves paywall, trial countdown, or billing state.
-7. **Job Loss state (§1.I)** — Live State Inspector (confirm amber Job Loss dot + paste values) + DB Row Fetch (paste Triage line) + Config JSON (paste Life Events header). Ask for all three when issue involves runway, benefits, or expense triage during New Job Season.
+7. **New Job Season state (§1.I)** — Live State Inspector (confirm amber New Job Season dot + paste values) + DB Row Fetch (paste Triage line) + Config JSON (paste Life Events header). Ask for all three when issue involves runway, benefits, or expense triage during New Job Season.

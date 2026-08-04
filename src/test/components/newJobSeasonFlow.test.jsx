@@ -38,8 +38,8 @@ vi.mock('../../lib/db.js', () => ({
 
 const JOB_LOSS_CONFIG = {
   ...DEFAULT_CONFIG,
-  jobLossMode: true,
-  jobLossDate: '2026-06-01',
+  newJobSeasonMode: true,
+  newJobSeasonDate: '2026-06-01',
   unemploymentEnabled: true,
   unemploymentWeekly: 320,
   unemploymentDurationWeeks: 12,
@@ -123,10 +123,10 @@ describe('NewJobSeasonEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
-      jobLossMode: true,
-      jobLossCashOnHand: 2000,
-      jobLossPendingCheckAmount: null,
-      jobLossPendingCheckDate: null,
+      newJobSeasonMode: true,
+      newJobSeasonCashOnHand: 2000,
+      newJobSeasonPendingCheckAmount: null,
+      newJobSeasonPendingCheckDate: null,
       unemploymentEnabled: false,
       unemploymentWeekly: null,
       unemploymentDurationWeeks: null,
@@ -134,7 +134,7 @@ describe('NewJobSeasonEntry', () => {
     }))
     // TODO §1.H17 — the decay clock starts at the job-loss effective date.
     const activatedPatch = onActivate.mock.calls[0][0]
-    expect(activatedPatch.jobLossCashOnHandAsOf).toBe(activatedPatch.jobLossDate)
+    expect(activatedPatch.newJobSeasonCashOnHandAsOf).toBe(activatedPatch.newJobSeasonDate)
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -153,8 +153,8 @@ describe('NewJobSeasonEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
-      jobLossMode: true,
-      jobLossCashOnHand: 2000,
+      newJobSeasonMode: true,
+      newJobSeasonCashOnHand: 2000,
       unemploymentEnabled: true,
       unemploymentWeekly: 350,
       unemploymentDurationWeeks: 20,
@@ -195,7 +195,7 @@ describe('NewJobSeasonEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1
     fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
-    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 0 }))
+    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonCashOnHand: 0 }))
   })
 
   it('clears the cash-on-hand required error once a valid value is entered after a failed attempt', () => {
@@ -230,8 +230,8 @@ describe('NewJobSeasonEntry', () => {
       fireEvent.click(screen.getByRole('button', { name: 'No' }))
       fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
       expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
-        jobLossPendingCheckAmount: null,
-        jobLossPendingCheckDate: null,
+        newJobSeasonPendingCheckAmount: null,
+        newJobSeasonPendingCheckDate: null,
       }))
     })
 
@@ -250,7 +250,7 @@ describe('NewJobSeasonEntry', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
       fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
       fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
-      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossPendingCheckAmount: 0 }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonPendingCheckAmount: 0 }))
     })
 
     it('computes a concrete amount + date from worked days + arrival day, matching the lib helpers directly', () => {
@@ -269,8 +269,8 @@ describe('NewJobSeasonEntry', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
       expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
-        jobLossPendingCheckAmount: expectedAmount,
-        jobLossPendingCheckDate: toLocalIso(arrivalDate),
+        newJobSeasonPendingCheckAmount: expectedAmount,
+        newJobSeasonPendingCheckDate: toLocalIso(arrivalDate),
       }))
     })
 
@@ -292,7 +292,7 @@ describe('NewJobSeasonEntry', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Worked Mon' })) // toggle back off
       fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
       fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
-      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossPendingCheckAmount: 0 }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonPendingCheckAmount: 0 }))
     })
   })
 
@@ -332,10 +332,10 @@ describe('NewJobSeasonEntry', () => {
 
     expect(onActivate).toHaveBeenCalledTimes(1)
     const [configPatch, updatedExpenses] = onActivate.mock.calls[0]
-    expect(configPatch).toMatchObject({ jobLossMode: true, unemploymentEnabled: false })
-    expect(updatedExpenses.find(e => e.id === 'exp_rent')).toMatchObject({ trackDuringJobLoss: true })
+    expect(configPatch).toMatchObject({ newJobSeasonMode: true, unemploymentEnabled: false })
+    expect(updatedExpenses.find(e => e.id === 'exp_rent')).toMatchObject({ trackDuringNewJobSeason: true })
     expect(updatedExpenses.find(e => e.id === 'exp_rent').dueDateAnchor).toMatch(/-15$/)
-    expect(updatedExpenses.find(e => e.id === 'exp_gym')).toMatchObject({ trackDuringJobLoss: false })
+    expect(updatedExpenses.find(e => e.id === 'exp_gym')).toMatchObject({ trackDuringNewJobSeason: false })
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -384,7 +384,7 @@ describe('NewJobSeasonEntry', () => {
 
     const [, updatedExpenses] = onActivate.mock.calls[0]
     const loanResult = updatedExpenses.find(e => e.id === 'exp_loan1')
-    expect(loanResult).toMatchObject({ trackDuringJobLoss: true, dueDateAnchor: '2026-05-10' })
+    expect(loanResult).toMatchObject({ trackDuringNewJobSeason: true, dueDateAnchor: '2026-05-10' })
   })
 })
 
@@ -492,7 +492,7 @@ describe('NewJobSeasonHomePanel', () => {
     })
 
     it('does not show the caption when the Lifestyle expense is untracked', () => {
-      const untracked = { ...GYM, trackDuringJobLoss: false }
+      const untracked = { ...GYM, trackDuringNewJobSeason: false }
       render(<NewJobSeasonHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[...INITIAL_EXPENSES, untracked]} effectiveToday="2026-06-15" includeBenefits />)
       expect(screen.queryByText(/Lifestyle spend still tracked/i)).toBeNull()
     })
@@ -548,33 +548,33 @@ describe('NewJobSeasonHomePanel', () => {
   // behavior, which gets its own describe block below.
   describe('Cash On Hand card + sheet (TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure on the card', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
       expect(screen.getByText('$1,500')).toBeTruthy()
     })
 
     it('opens the sheet prefilled with the current value when the card is tapped', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       expect(screen.getByText('Update Cash On Hand')).toBeTruthy()
       expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
     })
 
-    it('saves the new value and stamps jobLossCashOnHandAsOf on Save', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+    it('saves the new value and stamps newJobSeasonCashOnHandAsOf on Save', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 500 }
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
       render(<NewJobSeasonHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '3000' } })
       fireEvent.click(screen.getByText('Save'))
-      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
-      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonCashOnHand: 3000, newJobSeasonCashOnHandAsOf: '2026-06-15' }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonCashOnHand: 3000, newJobSeasonCashOnHandAsOf: '2026-06-15' }))
     })
 
     it('closes without saving on Cancel', async () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 500 }
       const setConfig = vi.fn()
       render(<NewJobSeasonHomePanel config={cfg} setConfig={setConfig} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
@@ -589,7 +589,7 @@ describe('NewJobSeasonHomePanel', () => {
     })
 
     it('does not open the sheet when readOnly', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 500 }
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits readOnly />)
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       expect(screen.queryByText('Update Cash On Hand')).toBeNull()
@@ -597,31 +597,31 @@ describe('NewJobSeasonHomePanel', () => {
   })
 
   // TODO §1.H17 — the headline figure decreases automatically as tracked
-  // essential bills come due since jobLossCashOnHandAsOf (falls back to
-  // jobLossDate when unset), instead of silently going stale.
+  // essential bills come due since newJobSeasonCashOnHandAsOf (falls back to
+  // newJobSeasonDate when unset), instead of silently going stale.
   describe('Cash On Hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
-      id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
+      id: 'exp_rent', category: 'Needs', label: 'Rent', newJobSeasonStatus: 'active',
       dueDateAnchor: '2026-06-04',
       billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
     }
 
-    it('shows the decayed figure and a caption once a bill has come due since jobLossDate', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 } // no asOf -> falls back to jobLossDate (2026-06-01)
+    it('shows the decayed figure and a caption once a bill has come due since newJobSeasonDate', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 } // no asOf -> falls back to newJobSeasonDate (2026-06-01)
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-15" includeBenefits />)
       expect(screen.getByText('$1,100')).toBeTruthy() // 1500 - 400
       expect(screen.getByText(/\$400 in bills since you last updated this/)).toBeTruthy()
     })
 
     it('does not decay before the bill has actually come due', () => {
-      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-03" includeBenefits />)
       expect(screen.getByText('$1,500')).toBeTruthy()
       expect(screen.queryByText(/in bills since you last updated this/)).toBeNull()
     })
   })
 
-  // DW-8 (docs/BUG_FIX_TODO.md) — CoachNetWorthCard's Red tier ("Job Loss
+  // DW-8 (docs/BUG_FIX_TODO.md) — CoachNetWorthCard's Red tier ("New Job Season
   // Mode, runway under 30 days") was structurally unreachable because this
   // panel replaces HomePanel entirely and never mounted the card at all.
   describe('Coach presence (DW-8 fix)', () => {
@@ -632,7 +632,7 @@ describe('NewJobSeasonHomePanel', () => {
 
     // Zero cash on hand + real weekly burn from INITIAL_EXPENSES puts runway
     // well under 30 days for this fixture — the Red tier's own condition.
-    const RUNWAY_UNDER_30 = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 0 }
+    const RUNWAY_UNDER_30 = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 0 }
 
     it('does not render the card for a non-admin/non-tester account', () => {
       render(
@@ -836,7 +836,7 @@ describe('NewJobSeasonBudgetPanel', () => {
     expect(setExpenses).toHaveBeenCalled()
     const result = setExpenses.mock.calls[0][0]([])
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs', trackDuringJobLoss: true })
+    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs', trackDuringNewJobSeason: true })
     expect(result[0].billingMeta.amount).toBe(1200)
     expect(result[0].dueDateAnchor).toBe('2026-06-08')
   })
@@ -849,7 +849,7 @@ describe('NewJobSeasonBudgetPanel', () => {
     expect(setExpenses).toHaveBeenCalled()
     expect(onSaveExpensesNow).toHaveBeenCalled()
     const saved = onSaveExpensesNow.mock.calls[0][0]
-    expect(saved.find(e => e.id === INITIAL_EXPENSES[0].id).jobLossStatus).toBe('paused')
+    expect(saved.find(e => e.id === INITIAL_EXPENSES[0].id).newJobSeasonStatus).toBe('paused')
   })
 
   it('removes an expense and eager-saves the result', () => {
@@ -875,32 +875,32 @@ describe('NewJobSeasonBudgetPanel', () => {
   // expenses: [] avoids decay noise (own describe block below covers that).
   describe('Cash on hand / current savings (persisted, TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure in the row', () => {
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }, expenses: [] })
       expect(screen.getByText('$1,500')).toBeTruthy()
     })
 
     it('opens the sheet prefilled with the current value when the row is tapped', () => {
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }, expenses: [] })
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       expect(screen.getByText('Update Cash On Hand')).toBeTruthy()
       expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
     })
 
-    it('saves the new value and stamps jobLossCashOnHandAsOf on Save', () => {
+    it('saves the new value and stamps newJobSeasonCashOnHandAsOf on Save', () => {
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow })
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow })
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '3000' } })
       fireEvent.click(screen.getByText('Save'))
-      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
-      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonCashOnHand: 3000, newJobSeasonCashOnHandAsOf: '2026-06-15' }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ newJobSeasonCashOnHand: 3000, newJobSeasonCashOnHandAsOf: '2026-06-15' }))
     })
 
     it('shadows setConfig/saveConfigNow and does not open the sheet when readOnly', () => {
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow, readOnly: true })
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow, readOnly: true })
       fireEvent.click(screen.getByLabelText('Update cash on hand'))
       expect(screen.queryByText('Update Cash On Hand')).toBeNull()
       expect(setConfig).not.toHaveBeenCalled()
@@ -911,13 +911,13 @@ describe('NewJobSeasonBudgetPanel', () => {
   // TODO §1.H17 — same decay math as Home, same describe convention.
   describe('Cash on hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
-      id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
+      id: 'exp_rent', category: 'Needs', label: 'Rent', newJobSeasonStatus: 'active',
       dueDateAnchor: '2026-06-04',
       billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
     }
 
-    it('shows the decayed figure once a bill has come due since jobLossDate', () => {
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [RENT] })
+    it('shows the decayed figure once a bill has come due since newJobSeasonDate', () => {
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1500 }, expenses: [RENT] })
       expect(screen.getByText('$1,100')).toBeTruthy() // 1500 - 400
     })
   })

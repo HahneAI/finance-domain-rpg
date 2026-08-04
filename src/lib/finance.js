@@ -482,13 +482,13 @@ export function buildYear(cfg, baseRateHistory = null) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
-  // New Job Season (TODO §1.C): when active, weeks on/after jobLossDate have
+  // New Job Season (TODO §1.C): when active, weeks on/after newJobSeasonDate have
   // earned income forced to $0. Benefits/401k naturally fall to $0 too because
-  // grossPay drives them. Historical weeks before jobLossDate are untouched.
+  // grossPay drives them. Historical weeks before newJobSeasonDate are untouched.
   // §1.C6: returnToWorkDate, when set, ends New Job Season at that boundary —
   // weeks on/after returnToWorkDate resume normal earned-income math.
-  const newJobSeasonStart = cfg.jobLossMode ? parseIsoDate(cfg.jobLossDate) : null;
-  const returnToWork = cfg.jobLossMode ? parseIsoDate(cfg.returnToWorkDate) : null;
+  const newJobSeasonStart = cfg.newJobSeasonMode ? parseIsoDate(cfg.newJobSeasonDate) : null;
+  const returnToWork = cfg.newJobSeasonMode ? parseIsoDate(cfg.returnToWorkDate) : null;
   // Biweekly/salary: parity determines which idx%2 value marks a pay week.
   // Falls back to firstActiveIdx%2 when the user hasn't answered the wizard question.
   const isBiweeklyOrSalary = cfg.userPaySchedule === "biweekly" || cfg.userPaySchedule === "salary";

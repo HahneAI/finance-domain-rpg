@@ -167,7 +167,7 @@ generation).
 - `src/components/AskCoachPanel.jsx` — the chat UI
 - `src/components/CoachNetWorthCard.jsx` — the Net Worth trigger card
 - `src/lib/coachTriggers.js` — tier resolution + rate-limit logic for the trigger card
-- `src/lib/newJobSeasonRunway.js` — the one authoritative runway/burn calculation Coach's Job Loss
+- `src/lib/newJobSeasonRunway.js` — the one authoritative runway/burn calculation Coach's New Job Season
   context must always read through (see the drift-warden rule above)
 - `db.js` — `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` (wired into `AskCoachPanel.jsx`
   as of 2026-07-25)

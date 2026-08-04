@@ -5,7 +5,7 @@ import { resolveNetWorthSignalTier, shouldFireForTier } from "../../lib/coachTri
 // quarantine, closed) — callers now compute runwayDays via
 // computeNewJobSeasonRunway()/resolvePrimaryRunwayDays() (newJobSeasonRunway.js,
 // see newJobSeasonRunway.test.js) so every Coach surface quotes the same
-// number as the Job Loss panels.
+// number as the New Job Season panels.
 
 describe("resolveNetWorthSignalTier", () => {
   it("returns red when runway is under 30 days, regardless of savings health", () => {

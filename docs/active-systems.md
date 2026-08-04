@@ -212,22 +212,22 @@ Wrap Up):
 Live, not scaffolding — more built than `docs/TODO.md` §1's checkbox state suggests. As of the
 §1.H7 rebuild (2026-07-18), New Job Season is a genuinely distinct app mode, not a card layered on
 the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBudgetPanel` **instead of**
-`HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `NewJobSeasonDashboard.jsx`/
+`HomePanel`/`BudgetPanel` while `config.newJobSeasonMode` is true. `NewJobSeasonDashboard.jsx`/
 `ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
   `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `NewJobSeasonEntry.jsx`; Quick Rate
   Update → `RateUpdateModal.jsx`.
-- **`NewJobSeasonEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§1.H13,
-  persisted, accepts 0; stamps `jobLossCashOnHandAsOf` alongside it, §1.H17) + unemployment
+- **`NewJobSeasonEntry.jsx`** — up to 4-step modal: (0) date + mandatory `newJobSeasonCashOnHand` (§1.H13,
+  persisted, accepts 0; stamps `newJobSeasonCashOnHandAsOf` alongside it, §1.H17) + unemployment
   benefits; (1) pending/final paycheck (§1.H15) — skippable "any check still coming?" gate, a
   worked-days grid, and an arrival-day picker, resolved once into a concrete
-  `jobLossPendingCheckAmount`/`jobLossPendingCheckDate`; (2) expense review checklist, all bills
-  checked by default, unchecking sets `trackDuringJobLoss: false` without touching anything else
+  `newJobSeasonPendingCheckAmount`/`newJobSeasonPendingCheckDate`; (2) expense review checklist, all bills
+  checked by default, unchecking sets `trackDuringNewJobSeason: false` without touching anything else
   about the expense; (3) due-date assignment (`DueDatePicker`) for kept non-loan bills — loans
   auto-attach `loanMeta.firstPaymentDate`. Step 1 always runs; steps 2–3 skip entirely when there
-  are no expenses. `config.jobLossMode` zeroes earned income from `jobLossDate` forward in
-  `buildYear()` — **not prorated**: the entire fiscal week containing `jobLossDate` zeroes out,
+  are no expenses. `config.newJobSeasonMode` zeroes earned income from `newJobSeasonDate` forward in
+  `buildYear()` — **not prorated**: the entire fiscal week containing `newJobSeasonDate` zeroes out,
   including days already worked that week (the pending-check step is the bolt-on fix for that, not
   a general proration).
 - **`lib/newJobSeasonRunway.js`** — `computeNewJobSeasonRunway()` is the one authoritative runway/burn
@@ -237,8 +237,8 @@ the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBud
   expenses — Lifestyle-category bills are tracked and shown but
   deliberately excluded from the burn number, surfaced instead as a separate `lifestyleWeeklySpend`
   caption on Home (§1.H16). Cash is timeline-aware (§1.H17): `effectiveCashOnHand` = the
-  persisted `jobLossCashOnHand` snapshot minus every essential bill's due-date occurrence that has
-  landed since `jobLossCashOnHandAsOf` (`sumBillsDueSince()`, falls back to `jobLossDate` for
+  persisted `newJobSeasonCashOnHand` snapshot minus every essential bill's due-date occurrence that has
+  landed since `newJobSeasonCashOnHandAsOf` (`sumBillsDueSince()`, falls back to `newJobSeasonDate` for
   accounts predating this field) — the displayed figure decreases on its own as bills come due
   instead of going stale until the user re-checks their balance. `extraCash` (just
   `sumJobHuntIncome()`, gig income logged via Home's "Log Extra Income" widget) adds on top,
@@ -247,13 +247,13 @@ the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBud
 - **`NewJobSeasonHomePanel.jsx`** — a pencil-badged Cash On Hand card sits above the runway tiles;
   tapping it (or the equivalent row on Budget) opens `CashOnHandSheet.jsx`, a shared bottom-sheet
   editor (up-from-bottom entrance / slide-down exit via the `.fold-sheet` CSS class, index.css) —
-  confirming a value there always re-stamps `jobLossCashOnHandAsOf` to reset the decay clock.
+  confirming a value there always re-stamps `newJobSeasonCashOnHandAsOf` to reset the decay clock.
   Runway headline, Log Extra Income widget, embeds `ReemploymentTracker` (target income,
   return-to-work date, application CRUD with 6 statuses). **`NewJobSeasonBudgetPanel.jsx`** — the same
   Cash On Hand row/sheet, benefit-scenario toggle, upcoming-bills countdown, full expense triage
   (active/paused/cancelled) inline, simplified add-expense form. Both eager-save every mutation
   (§1.H10).
-- **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work" re-enters the
+- **App shell:** persistent amber banner while `newJobSeasonMode` is true; "Back to Work" re-enters the
   wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
   first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
   `LifeEventMenu`).
@@ -271,7 +271,7 @@ the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBud
   paycheck is now modeled in the runway calc (§1.H15, `lib/newJobSeasonRunway.js`); Lifestyle spend gets
   an explicit UI callout instead of silently vanishing from `weeklyBurn` (§1.H16); the independent,
   drifted `coachTriggers.js#estimateRunwayDays` was deleted outright, not just fixed — every caller
-  now goes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`; and Coach's Job Loss
+  now goes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`; and Coach's New Job Season
   context line receives a real, computed `runwayDays` from `App.jsx` (`coachRunwayDays`), not a bare
   `"New Job Season: active"` string. See `docs/BUG_FIX_TODO.md`'s Fixed table (DW-8, DW-9) and
   `drift-app-warden.md` §8 F24 for the fix history.

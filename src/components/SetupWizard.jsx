@@ -69,13 +69,13 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
                     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
                     onChange({
                       startedUnemployed: true,
-                      jobLossMode: true,
-                      jobLossDate: formData?.jobLossDate ?? todayIso,
+                      newJobSeasonMode: true,
+                      newJobSeasonDate: formData?.newJobSeasonDate ?? todayIso,
                       startDate: todayIso,
                       firstActiveIdx: dateToWeekIdx(todayIso),
                     });
                   } else {
-                    onChange({ startedUnemployed: false, jobLossMode: false, jobLossDate: null });
+                    onChange({ startedUnemployed: false, newJobSeasonMode: false, newJobSeasonDate: null });
                   }
                 }}
               />
@@ -86,7 +86,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
             color: "var(--color-text-primary)", marginBottom: 0,
           }}>
             {startedUnemployed === true
-              ? "You'll skip straight to a short unemployment setup and land in the Job Loss Dashboard — no pay structure needed until you're back to work."
+              ? "You'll skip straight to a short unemployment setup and land in your New Job Season — no pay structure needed until you're back to work."
               : "Either answer continues to pay setup for now."}
           </p>
         </div>
@@ -2200,8 +2200,8 @@ function StepJoblessDetails({ formData, onChange }) {
         <input
           type="date"
           style={iS}
-          value={formData.jobLossDate ?? ""}
-          onChange={e => onChange({ jobLossDate: e.target.value })}
+          value={formData.newJobSeasonDate ?? ""}
+          onChange={e => onChange({ newJobSeasonDate: e.target.value })}
         />
       </Field>
       <div>
@@ -2241,7 +2241,7 @@ function StepJoblessWrapUp({ formData }) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-secondary)" }}>Job loss date</span>
-          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{formData.jobLossDate ?? "—"}</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{formData.newJobSeasonDate ?? "—"}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-secondary)" }}>Unemployment benefits</span>
@@ -2307,9 +2307,9 @@ const STEP_DEFS = [
     component: StepJoblessBenefits,
   },
   {
-    id: 11, title: "Job Loss Details",
+    id: 11, title: "New Job Season Details",
     showIf: (d, ev) => isFirstRunJobless(d, ev),
-    isValid: (d) => !!d.jobLossDate,
+    isValid: (d) => !!d.newJobSeasonDate,
     component: StepJoblessDetails,
   },
   {

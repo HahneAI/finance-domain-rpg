@@ -41,7 +41,7 @@ const LOAN_FREQUENCY_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
 // there's nothing to anchor on. Used by §1.C5 countdown tiles.
 //
 // Anchor resolution for regular expenses: prefers `expense.dueDateAnchor` (a
-// real bill due-date, set explicitly via the Job Loss expense review flow or
+// real bill due-date, set explicitly via the New Job Season expense review flow or
 // the DueDatePicker) over `billingMeta.effectiveFrom`, which is really an
 // "amount last edited" timestamp (BudgetPanel stamps it to today on every
 // edit) — using it as a due-date anchor made every recently-touched bill
@@ -49,7 +49,7 @@ const LOAN_FREQUENCY_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
 // dueDateAnchor so old data keeps working.
 //
 // Loans use `loanMeta.firstPaymentDate` directly (or `dueDateAnchor` if the
-// Job Loss review flow explicitly attached it) — there's already a real
+// New Job Season review flow explicitly attached it) — there's already a real
 // payment date on file, so there's nothing to fall back to or re-derive.
 export function getNextDueDate(expense, todayDate) {
   if (expense?.type === "loan") {
@@ -74,7 +74,7 @@ export function getExpenseDisplayAmount(expense) {
   return expense?.billingMeta?.amount ?? 0;
 }
 
-// ─── Job Loss due-date assignment (TODO §1 expense review) ─────────────────
+// ─── New Job Season due-date assignment (TODO §1 expense review) ─────────────────
 // Quick "week of month" presets for the payment-date step, plus a resolver
 // that turns a pick into a concrete anchor date. The day picks (1/8/15/22)
 // split the month into four roughly-even chunks. getNextDueDate's cycle math

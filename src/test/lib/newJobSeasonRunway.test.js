@@ -42,21 +42,21 @@ describe("resolvePrimaryRunwayDays", () => {
   });
 });
 
-// Timeline-aware cash on hand (TODO §1.H17) — jobLossCashOnHand is a
+// Timeline-aware cash on hand (TODO §1.H17) — newJobSeasonCashOnHand is a
 // point-in-time snapshot; essential bills whose due date passes since it was
-// last confirmed (jobLossCashOnHandAsOf) get subtracted automatically.
+// last confirmed (newJobSeasonCashOnHandAsOf) get subtracted automatically.
 const RENT = {
-  id: "exp_rent", category: "Needs", label: "Rent", jobLossStatus: "active",
+  id: "exp_rent", category: "Needs", label: "Rent", newJobSeasonStatus: "active",
   dueDateAnchor: "2026-06-10",
   billingMeta: { amount: 1000, cycle: "every30days", effectiveFrom: "2026-01-01" },
 };
 const GYM = {
-  id: "exp_gym", category: "Lifestyle", label: "Gym", jobLossStatus: "active",
+  id: "exp_gym", category: "Lifestyle", label: "Gym", newJobSeasonStatus: "active",
   dueDateAnchor: "2026-06-05",
   billingMeta: { amount: 50, cycle: "weekly", effectiveFrom: "2026-01-01" },
 };
 const LOAN = {
-  id: "exp_loan", type: "loan", category: "Loans", label: "Car Note", jobLossStatus: "active",
+  id: "exp_loan", type: "loan", category: "Loans", label: "Car Note", newJobSeasonStatus: "active",
   loanMeta: { paymentAmount: 300, paymentFrequency: "monthly", firstPaymentDate: "2026-06-12" },
 };
 
@@ -76,11 +76,11 @@ describe("sumBillsDueSince", () => {
   });
 
   it("excludes paused bills", () => {
-    expect(sumBillsDueSince([{ ...RENT, jobLossStatus: "paused" }], "2026-06-01", "2026-06-15")).toBe(0);
+    expect(sumBillsDueSince([{ ...RENT, newJobSeasonStatus: "paused" }], "2026-06-01", "2026-06-15")).toBe(0);
   });
 
   it("excludes untracked bills", () => {
-    expect(sumBillsDueSince([{ ...RENT, trackDuringJobLoss: false }], "2026-06-01", "2026-06-15")).toBe(0);
+    expect(sumBillsDueSince([{ ...RENT, trackDuringNewJobSeason: false }], "2026-06-01", "2026-06-15")).toBe(0);
   });
 
   it("includes loan payments — category is Loans, not Lifestyle", () => {
@@ -101,10 +101,10 @@ describe("sumBillsDueSince", () => {
 
 describe("computeNewJobSeasonRunway — timeline-aware cash on hand (§1.H17)", () => {
   const baseConfig = {
-    jobLossMode: true,
-    jobLossDate: "2026-06-01",
-    jobLossCashOnHand: 2000,
-    jobLossCashOnHandAsOf: "2026-06-01",
+    newJobSeasonMode: true,
+    newJobSeasonDate: "2026-06-01",
+    newJobSeasonCashOnHand: 2000,
+    newJobSeasonCashOnHandAsOf: "2026-06-01",
   };
 
   it("subtracts essential bills due since cashAsOf from the raw figure", () => {
@@ -116,13 +116,13 @@ describe("computeNewJobSeasonRunway — timeline-aware cash on hand (§1.H17)", 
 
   it("floors effectiveCashOnHand at 0 rather than going negative", () => {
     const dash = computeNewJobSeasonRunway({
-      config: { ...baseConfig, jobLossCashOnHand: 500 }, expenses: [RENT], effectiveToday: "2026-06-15",
+      config: { ...baseConfig, newJobSeasonCashOnHand: 500 }, expenses: [RENT], effectiveToday: "2026-06-15",
     });
     expect(dash.effectiveCashOnHand).toBe(0);
   });
 
-  it("falls back to jobLossDate as the decay anchor when jobLossCashOnHandAsOf is unset (pre-§1.H17 accounts)", () => {
-    const legacyConfig = { jobLossMode: true, jobLossDate: "2026-06-01", jobLossCashOnHand: 2000 };
+  it("falls back to newJobSeasonDate as the decay anchor when newJobSeasonCashOnHandAsOf is unset (pre-§1.H17 accounts)", () => {
+    const legacyConfig = { newJobSeasonMode: true, newJobSeasonDate: "2026-06-01", newJobSeasonCashOnHand: 2000 };
     const dash = computeNewJobSeasonRunway({ config: legacyConfig, expenses: [RENT], effectiveToday: "2026-06-15" });
     expect(dash.cashAsOf).toBe("2026-06-01");
     expect(dash.billsDueSinceAsOf).toBe(1000);

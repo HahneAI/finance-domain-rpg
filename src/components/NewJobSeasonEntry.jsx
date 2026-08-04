@@ -26,8 +26,8 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * single-select day-of-week pick for "which day checks normally arrive."
  * Resolved once at Activate time (`resolveLastPayPeriodEnd` +
  * `resolvePendingCheckArrivalDate` + `estimatePendingCheckAmount`, all
- * `lib/newJobSeasonRunway.js`) into concrete `jobLossPendingCheckAmount`/
- * `jobLossPendingCheckDate` values — the raw day picks aren't stored, same
+ * `lib/newJobSeasonRunway.js`) into concrete `newJobSeasonPendingCheckAmount`/
+ * `newJobSeasonPendingCheckDate` values — the raw day picks aren't stored, same
  * resolve-to-a-concrete-value pattern as `dueDateAnchor` below. Deliberately
  * scoped to a single 7-day picker regardless of pay schedule — for biweekly/
  * salary users this covers only the final week, not the full period; flagged
@@ -36,8 +36,8 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * Step 2 (was Step 1 — TODO §1 expense review): a multi-select checklist of
  * the user's current expenses, all checked by default, letting them uncheck
  * anything they don't want tracked while job hunting. Unchecking never
- * deletes or edits the expense — it only sets `trackDuringJobLoss: false`,
- * which the Job Loss Budget/Home views (and the shared runway calc) filter
+ * deletes or edits the expense — it only sets `trackDuringNewJobSeason: false`,
+ * which the New Job Season Budget/Home views (and the shared runway calc) filter
  * on. Normal-mode Budget ignores the flag entirely, so nothing here is lost
  * or altered for when the user goes Back to Work.
  *
@@ -58,8 +58,8 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * On confirm, `onActivate(configPatch, updatedExpenses?)` is called —
  * `updatedExpenses` is only passed when there were expenses to review.
  *   configPatch: {
- *     jobLossMode: true, jobLossDate, jobLossCashOnHand, jobLossCashOnHandAsOf,
- *     jobLossPendingCheckAmount, jobLossPendingCheckDate,
+ *     newJobSeasonMode: true, newJobSeasonDate, newJobSeasonCashOnHand, newJobSeasonCashOnHandAsOf,
+ *     newJobSeasonPendingCheckAmount, newJobSeasonPendingCheckDate,
  *     unemploymentEnabled, unemploymentWeekly, unemploymentDurationWeeks,
  *     unemploymentWaitingWeek,
  *   }
@@ -160,12 +160,12 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   });
 
   const buildConfigPatch = () => ({
-    jobLossMode: true,
-    jobLossDate: date,
-    jobLossCashOnHand: cashOnHandVal ?? 0,
-    jobLossCashOnHandAsOf: date,
-    jobLossPendingCheckAmount: hasPendingCheck ? Math.round(pendingAmountEstimate) : null,
-    jobLossPendingCheckDate: hasPendingCheck && pendingArrivalDate ? toLocalIso(pendingArrivalDate) : null,
+    newJobSeasonMode: true,
+    newJobSeasonDate: date,
+    newJobSeasonCashOnHand: cashOnHandVal ?? 0,
+    newJobSeasonCashOnHandAsOf: date,
+    newJobSeasonPendingCheckAmount: hasPendingCheck ? Math.round(pendingAmountEstimate) : null,
+    newJobSeasonPendingCheckDate: hasPendingCheck && pendingArrivalDate ? toLocalIso(pendingArrivalDate) : null,
     unemploymentEnabled: hasUnemployment,
     unemploymentWeekly: hasUnemployment ? weeklyVal : null,
     unemploymentDurationWeeks: hasUnemployment ? durationVal : null,
@@ -181,13 +181,13 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     }
     if (!dueDatesValid) { setAttempted(true); return; }
     const updatedExpenses = expenses.map(exp => {
-      if (!trackedIds.has(exp.id)) return { ...exp, trackDuringJobLoss: false };
+      if (!trackedIds.has(exp.id)) return { ...exp, trackDuringNewJobSeason: false };
       if (exp.type === "loan") {
         // Attach the loan's own known payment date rather than asking again.
-        return { ...exp, trackDuringJobLoss: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
+        return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
       }
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
-      return { ...exp, trackDuringJobLoss: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
+      return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
     });
     onActivate(buildConfigPatch(), updatedExpenses);
     onClose();

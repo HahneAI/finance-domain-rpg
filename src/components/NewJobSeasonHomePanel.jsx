@@ -11,12 +11,12 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 /**
  * NewJobSeasonHomePanel — New Job Season's own Home view (TODO §1 mode rebuild).
  *
- * Replaces HomePanel entirely while `config.jobLossMode` is true, rather than
+ * Replaces HomePanel entirely while `config.newJobSeasonMode` is true, rather than
  * layering job-loss content on top of (or hiding tiles from) the normal Home —
  * this is meant to read as a genuinely different mode the app enters, not the
  * regular dashboard with things moved around.
  *
- * Shows: a Cash On Hand card (persisted config.jobLossCashOnHand — mandatory
+ * Shows: a Cash On Hand card (persisted config.newJobSeasonCashOnHand — mandatory
  * at NewJobSeasonEntry, editable here AND on NewJobSeasonBudgetPanel via the shared
  * CashOnHandSheet, both committing to the same field so neither can drift;
  * timeline-aware per §1.H17 — see lib/newJobSeasonRunway.js's effectiveCashOnHand),
@@ -74,11 +74,11 @@ export function NewJobSeasonHomePanel({
 
   // Confirming a value in the sheet is the discrete "I checked my balance,
   // this is true right now" moment — resets the decay clock by stamping
-  // jobLossCashOnHandAsOf alongside the new figure (TODO §1.H17). Eager-save
+  // newJobSeasonCashOnHandAsOf alongside the new figure (TODO §1.H17). Eager-save
   // pattern (docs/TODO.md): computed synchronously, passed to both setState
   // and saveConfigNow.
   const saveCashOnHand = (parsedValue) => {
-    const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
+    const next = { ...config, newJobSeasonCashOnHand: parsedValue, newJobSeasonCashOnHandAsOf: effectiveToday };
     setConfig(next);
     saveConfigNow?.(next);
   };

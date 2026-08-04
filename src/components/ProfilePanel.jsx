@@ -2367,9 +2367,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           both show figures (rate, 401k contribution/match) that are either
           stale or actively misleading while there's no real income to speak
           of. Swapped for a single "Back to Work" entry point instead — the
-          same structure_change flow the Job Loss banner's button already
+          same structure_change flow the New Job Season banner's button already
           uses (§1.H4) — as a second route to it beyond the banner. */}
-      {config?.jobLossMode ? (
+      {config?.newJobSeasonMode ? (
         <>
           <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Job Search</div>
           <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid rgba(245,158,11,0.28)", overflow: "hidden", marginBottom: "20px" }}>
@@ -2417,11 +2417,11 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           label="App Preferences"
           summary={`${config.freedomAllowanceEnabled ? `Freedom Allowance $${config.freedomAllowance}/check` : "Freedom Allowance off"} · ${canSeeTaxPlan && config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
           onPress={() => setActiveSection("preferences")}
-          last={!(canSeeTaxPlan && !config?.jobLossMode) && !isAdmin}
+          last={!(canSeeTaxPlan && !config?.newJobSeasonMode) && !isAdmin}
         />
         {/* Tax Plan assumes real withholding against real pay — nothing to plan
-            around while jobLossMode is true. */}
-        {canSeeTaxPlan && !config?.jobLossMode && (
+            around while newJobSeasonMode is true. */}
+        {canSeeTaxPlan && !config?.newJobSeasonMode && (
           <ListRow
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}

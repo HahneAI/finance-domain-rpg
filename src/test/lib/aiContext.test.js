@@ -24,8 +24,8 @@ describe("buildCoachContext", () => {
       avgWeeklySpend: 400,
       goals: [{ completed: true, target: 500 }, { completed: false, target: 1000 }],
       expenses: [
-        { label: "Food", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }], jobLossStatus: "active" },
-        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], jobLossStatus: "paused" },
+        { label: "Food", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }], newJobSeasonStatus: "active" },
+        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], newJobSeasonStatus: "paused" },
       ],
       fundedGoalSpend: 500,
       currentWeek: { idx: 27 },
@@ -210,9 +210,9 @@ describe("buildCoachContext", () => {
       avgWeeklySpend: 300,
       today: "2026-07-07",
       expenses: [
-        { label: "Rent", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [280, 280, 280, 280] }], jobLossStatus: "active" },
-        { label: "Netflix", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [4, 4, 4, 4] }], jobLossStatus: "active" },
-        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], jobLossStatus: "paused" },
+        { label: "Rent", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [280, 280, 280, 280] }], newJobSeasonStatus: "active" },
+        { label: "Netflix", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [4, 4, 4, 4] }], newJobSeasonStatus: "active" },
+        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], newJobSeasonStatus: "paused" },
       ],
     });
     expect(block).toContain("Expense breakdown: Rent (Needs): ~$280/wk; Netflix (Lifestyle): ~$4/wk");
@@ -235,7 +235,7 @@ describe("buildCoachContext", () => {
         category: "Needs",
         billingMeta: { amount: 400, cycle: "every30days" }, // naive amount/days*7 ≈ $93 — wrong
         history: [{ effectiveFrom: "2026-01-01", weekly: [100, 100, 100, 100] }], // real, authoritative
-        jobLossStatus: "active",
+        newJobSeasonStatus: "active",
       }],
     });
     expect(block).toContain("Food (Needs): ~$100/wk");
@@ -252,7 +252,7 @@ describe("buildCoachContext", () => {
         category: "Needs",
         history: [{ effectiveFrom: "2026-01-01", weekly: [100, 100, 100, 100] }],
         monthlyOverrides: { "2026-07": { perPaycheck: 150 } },
-        jobLossStatus: "active",
+        newJobSeasonStatus: "active",
       }],
     });
     expect(block).toContain("Utilities (Needs): ~$150/wk");
@@ -262,7 +262,7 @@ describe("buildCoachContext", () => {
     const block = buildCoachContext({
       weeklyIncome: 800,
       avgWeeklySpend: 300,
-      expenses: [{ label: "Netflix", category: "Lifestyle", billingMeta: { amount: 15, cycle: "every30days" }, jobLossStatus: "active" }],
+      expenses: [{ label: "Netflix", category: "Lifestyle", billingMeta: { amount: 15, cycle: "every30days" }, newJobSeasonStatus: "active" }],
     });
     expect(block).toContain("Netflix (Lifestyle): ~$4/wk");
   });
@@ -272,7 +272,7 @@ describe("buildCoachContext", () => {
       weeklyIncome: 800,
       avgWeeklySpend: 300,
       today: "2026-07-07",
-      expenses: [{ label: "Car Loan", type: "loan", history: [{ effectiveFrom: "2026-01-01", weekly: [300, 300, 300, 300] }], jobLossStatus: "active" }],
+      expenses: [{ label: "Car Loan", type: "loan", history: [{ effectiveFrom: "2026-01-01", weekly: [300, 300, 300, 300] }], newJobSeasonStatus: "active" }],
     });
     expect(block).toContain("Car Loan (Loan): ~$300/wk");
   });
@@ -309,14 +309,14 @@ describe("buildCoachContext", () => {
     expect(block).toContain(`most recent: mystery_event (week ending ${fmtFullDate("2026-01-01")})`);
   });
 
-  it("omits the job-loss line when jobLossMode is off", () => {
+  it("omits the job-loss line when newJobSeasonMode is off", () => {
     const block = buildCoachContext({ weeklyIncome: 800, avgWeeklySpend: 300 });
     expect(block).not.toContain("New Job Season");
   });
 
-  it("appends a job-loss line with runway only when jobLossMode is on", () => {
+  it("appends a job-loss line with runway only when newJobSeasonMode is on", () => {
     const block = buildCoachContext({
-      config: { jobLossMode: true },
+      config: { newJobSeasonMode: true },
       weeklyIncome: 800,
       avgWeeklySpend: 300,
       runwayDays: 45,
@@ -348,20 +348,20 @@ describe("buildCoachContext", () => {
 // the same functions NewJobSeasonHomePanel/NewJobSeasonBudgetPanel read for their own
 // tiles (drift-app-warden §21's grounding rule) — never a parallel estimate.
 describe("buildJobHuntContext", () => {
-  const baseConfig = { jobLossMode: true, jobLossDate: "2026-06-01" };
+  const baseConfig = { newJobSeasonMode: true, newJobSeasonDate: "2026-06-01" };
   const essentialExpense = {
-    label: "Rent", category: "Needs", jobLossStatus: "active",
+    label: "Rent", category: "Needs", newJobSeasonStatus: "active",
     history: [{ effectiveFrom: "2026-01-01", weekly: [300, 300, 300, 300] }],
   };
 
   it("returns an empty string when not in New Job Season (no dash to ground on)", () => {
-    const block = buildJobHuntContext({ config: { jobLossMode: false }, effectiveToday: "2026-07-07" });
+    const block = buildJobHuntContext({ config: { newJobSeasonMode: false }, effectiveToday: "2026-07-07" });
     expect(block).toBe("");
   });
 
   it("states runway, weekly essential burn, and essential expense count", () => {
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -370,7 +370,7 @@ describe("buildJobHuntContext", () => {
 
   it("omits the lifestyle line when there's no active lifestyle spend", () => {
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -379,11 +379,11 @@ describe("buildJobHuntContext", () => {
 
   it("surfaces lifestyle spend separately when present, matching the runway calc's own split", () => {
     const lifestyleExpense = {
-      label: "Streaming", category: "Lifestyle", jobLossStatus: "active",
+      label: "Streaming", category: "Lifestyle", newJobSeasonStatus: "active",
       history: [{ effectiveFrom: "2026-01-01", weekly: [20, 20, 20, 20] }],
     };
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
       expenses: [essentialExpense, lifestyleExpense],
       effectiveToday: "2026-07-07",
     });
@@ -392,14 +392,14 @@ describe("buildJobHuntContext", () => {
 
   it("includes job-hunt income only when the user has logged any", () => {
     const withoutIncome = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
     expect(withoutIncome).not.toContain("job-hunt income");
 
     const withIncome = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000, jobHuntIncomeLog: [{ id: "1", amount: 150, loggedAt: "2026-07-01T00:00:00Z" }] },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobHuntIncomeLog: [{ id: "1", amount: 150, loggedAt: "2026-07-01T00:00:00Z" }] },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -408,7 +408,7 @@ describe("buildJobHuntContext", () => {
 
   it("includes target income only when set", () => {
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000, targetIncomeAnnual: 58000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, targetIncomeAnnual: 58000 },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -417,7 +417,7 @@ describe("buildJobHuntContext", () => {
 
   it("reports no applications logged plainly rather than omitting the line", () => {
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000 },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -427,7 +427,7 @@ describe("buildJobHuntContext", () => {
   it("lists applications by real company/role name — not withheld the way goal names are", () => {
     const block = buildJobHuntContext({
       config: {
-        ...baseConfig, jobLossCashOnHand: 3000,
+        ...baseConfig, newJobSeasonCashOnHand: 3000,
         jobApplications: [
           { id: "a1", company: "Acme Logistics", role: "Warehouse Lead", status: "interview", dateApplied: "2026-06-20" },
         ],
@@ -444,7 +444,7 @@ describe("buildJobHuntContext", () => {
       dateApplied: `2026-06-${String(10 + i).padStart(2, "0")}`,
     }));
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000, jobApplications: apps },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobApplications: apps },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -455,7 +455,7 @@ describe("buildJobHuntContext", () => {
 
   it("includes the return-to-work date only when already set", () => {
     const block = buildJobHuntContext({
-      config: { ...baseConfig, jobLossCashOnHand: 3000, returnToWorkDate: "2026-09-01" },
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, returnToWorkDate: "2026-09-01" },
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
@@ -464,7 +464,7 @@ describe("buildJobHuntContext", () => {
 
   it("matches resolvePrimaryRunwayDays' own includeBenefits selection, same as the on-screen tile", () => {
     const config = {
-      ...baseConfig, jobLossCashOnHand: 0,
+      ...baseConfig, newJobSeasonCashOnHand: 0,
       unemploymentEnabled: true, unemploymentWeekly: 400, unemploymentDurationWeeks: 20, unemploymentWaitingWeek: false,
     };
     const withBenefits = buildJobHuntContext({ config, expenses: [essentialExpense], effectiveToday: "2026-07-07", includeBenefits: true });

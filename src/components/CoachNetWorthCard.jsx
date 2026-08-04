@@ -69,15 +69,15 @@ export function CoachNetWorthCard({
   };
 
   // Real runway, not the old independent estimate — computeNewJobSeasonRunway()
-  // is the same function the Job Loss panels use, so this can't understate
+  // is the same function the New Job Season panels use, so this can't understate
   // runway vs. what those panels show (drift-app-warden §8 F24). Raw
-  // jobLossCashOnHand is read internally by computeNewJobSeasonRunway now (and
+  // newJobSeasonCashOnHand is read internally by computeNewJobSeasonRunway now (and
   // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
   // Now that this card also mounts inside NewJobSeasonHomePanel (DW-8 fix),
   // includeBenefits is threaded through as a real prop instead of hardcoded —
   // the default stays true only for the plain HomePanel call site, which has
   // no toggle of its own and where computeNewJobSeasonRunway() returns null
-  // anyway (config.jobLossMode is false there).
+  // anyway (config.newJobSeasonMode is false there).
   const runwayDays = useMemo(() => {
     const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
     return resolvePrimaryRunwayDays(dash, config, includeBenefits);

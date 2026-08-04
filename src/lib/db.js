@@ -74,6 +74,25 @@ const normalizeExpenseFoodFlags = (expense) => {
   };
 };
 
+// One-time jobLossStatus/trackDuringJobLoss → newJobSeasonStatus/trackDuringNewJobSeason
+// rename (2026-08-04, New Job Season rebrand pass 2). These live on individual expense
+// objects (not on config), so they ride the expense migration pipeline below rather than
+// the config-key block above. Safe to run every load — old keys won't exist after first
+// save with new names.
+const migrateExpenseJobLossFields = (expense) => {
+  if (!expense || typeof expense !== "object") return expense;
+  let next = expense;
+  if ("jobLossStatus" in next) {
+    const { jobLossStatus, ...rest } = next;
+    next = { ...rest, newJobSeasonStatus: jobLossStatus };
+  }
+  if ("trackDuringJobLoss" in next) {
+    const { trackDuringJobLoss, ...rest } = next;
+    next = { ...rest, trackDuringNewJobSeason: trackDuringJobLoss };
+  }
+  return next;
+};
+
 const createDefaultFoodExpense = () => ({
   id: "exp_default_food",
   category: "Needs",
@@ -206,7 +225,8 @@ export async function loadUserData() {
   // Migrate and normalize all expenses on load
   const PROJECT_START = FISCAL_YEAR_START;
   const rawExpenses = Array.isArray(data.expenses) ? data.expenses : [];
-  const migratedExpenses = rawExpenses.map(exp => {
+  const migratedExpenses = rawExpenses.map(rawExp => {
+    const exp = migrateExpenseJobLossFields(rawExp);
     // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh
     if (exp.type === "loan" && exp.loanMeta) {
       return { ...exp, history: buildLoanHistory(exp.loanMeta) };
@@ -295,6 +315,37 @@ export async function loadUserData() {
   if ("bufferOverrideAck" in mergedConfig) {
     mergedConfig.freedomAllowanceOverrideAck = mergedConfig.bufferOverrideAck;
     delete mergedConfig.bufferOverrideAck;
+  }
+
+  // ── One-time jobLoss* → newJobSeason* rebrand ────────────────────────────────
+  // Config keys renamed 2026-08-04 (Job Loss Mode → New Job Season rebrand, pass 2).
+  // Safe to run every load — old keys won't exist after first save with new names.
+  // Sibling per-expense fields (jobLossStatus/trackDuringJobLoss) are migrated
+  // separately below, in the expenses map — they live on each expense object,
+  // not on config.
+  if ("jobLossMode" in mergedConfig) {
+    mergedConfig.newJobSeasonMode = mergedConfig.jobLossMode;
+    delete mergedConfig.jobLossMode;
+  }
+  if ("jobLossDate" in mergedConfig) {
+    mergedConfig.newJobSeasonDate = mergedConfig.jobLossDate;
+    delete mergedConfig.jobLossDate;
+  }
+  if ("jobLossCashOnHand" in mergedConfig) {
+    mergedConfig.newJobSeasonCashOnHand = mergedConfig.jobLossCashOnHand;
+    delete mergedConfig.jobLossCashOnHand;
+  }
+  if ("jobLossCashOnHandAsOf" in mergedConfig) {
+    mergedConfig.newJobSeasonCashOnHandAsOf = mergedConfig.jobLossCashOnHandAsOf;
+    delete mergedConfig.jobLossCashOnHandAsOf;
+  }
+  if ("jobLossPendingCheckAmount" in mergedConfig) {
+    mergedConfig.newJobSeasonPendingCheckAmount = mergedConfig.jobLossPendingCheckAmount;
+    delete mergedConfig.jobLossPendingCheckAmount;
+  }
+  if ("jobLossPendingCheckDate" in mergedConfig) {
+    mergedConfig.newJobSeasonPendingCheckDate = mergedConfig.jobLossPendingCheckDate;
+    delete mergedConfig.jobLossPendingCheckDate;
   }
 
   // ── One-time rotation correction ─────────────────────────────────────────────

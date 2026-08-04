@@ -33,7 +33,7 @@ function chunkGenerator(chunks) {
 
 function baseProps(overrides = {}) {
   return {
-    config: { jobLossMode: false },
+    config: { newJobSeasonMode: false },
     setConfig: vi.fn(),
     saveConfigNow: vi.fn(),
     expenses: [],
@@ -121,9 +121,9 @@ describe("CoachNetWorthCard", () => {
     rerender(
       <CoachNetWorthCard
         {...baseProps({
-          config: { jobLossMode: true, jobLossDate: "2026-06-01" },
+          config: { newJobSeasonMode: true, newJobSeasonDate: "2026-06-01" },
           netWorthHealth: { belowThreshold: false },
-          expenses: [{ category: "Needs", jobLossStatus: "active", weekly: [500, 500, 500, 500] }],
+          expenses: [{ category: "Needs", newJobSeasonStatus: "active", weekly: [500, 500, 500, 500] }],
         })}
       />
     );

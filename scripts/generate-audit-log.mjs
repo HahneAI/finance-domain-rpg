@@ -43,7 +43,7 @@ const audit = traceExpenseCalculationSteps({
   futureWeeks,
   showExtra: true,
   extraPerCheck: 30,
-  bufferPerWeek: 50,
+  freedomAllowancePerWeek: 50,
   // From provided screenshots: Q2/Q3/Q4 Weekly Spend values.
   // Q1 omitted because it was not included in the screenshot set.
   observedQuarterlySpendByPhase: [null, 757, 794, 774],

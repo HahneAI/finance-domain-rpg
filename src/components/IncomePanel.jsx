@@ -74,7 +74,6 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
   const firstActiveIdx = config?.firstActiveIdx ?? 0;
   const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
-  const isWeekly = checksPerYear === 52;
   const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
   const isMonthlyPay = userPaySchedule === "monthly";
   // For biweekly users: even-offset weeks from firstActiveIdx are paycheck weeks

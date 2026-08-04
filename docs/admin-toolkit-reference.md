@@ -51,7 +51,7 @@
 - **Purpose:** Real-time status card showing:
   - `effectiveToday` (amber if lock-offset)
   - week idx + label, futureWeeks.length, unconfirmedCount
-  - extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek
+  - extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, freedomAllowancePerWeek
   - weeklyIncome, projectedAnnualNet
   - Subscription phase (`Sub Phase` — trial/grace/active/expired/none), `Trial Ends`, `Access Ends` (hidden day-21 cutoff), `Period End`, `Card / Dunning`
 - **Job Loss indicator:** Amber dot on pill when `config.jobLossMode` is true; expanded card shows `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left`

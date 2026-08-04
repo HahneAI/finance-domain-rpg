@@ -352,8 +352,8 @@ today), `startDate: today`, `firstActiveIdx`. Answering "No" reverses the first 
 **F5 · `handleComplete()`** — `SetupWizard.jsx:2316–2338` — **[L]**
 The single commit point for every wizard path (all six routes in §7.3 end here). Ordered
 effects: (1) DHL enforced overrides — `payPeriodEndDay: 0`, `otThreshold: 40`,
-`otMultiplier: 1.5` (`:2317–2319`); (2) buffer normalize — `paycheckBuffer ?? 50` whenever
-`bufferEnabled !== false` (`:2323–2325`); (3) `taxedWeeks` derivation — `[]` if
+`otMultiplier: 1.5` (`:2317–2319`); (2) Freedom Allowance normalize — `freedomAllowance ?? 50` whenever
+`freedomAllowanceEnabled !== false` (`:2323–2325`); (3) `taxedWeeks` derivation — `[]` if
 `taxExemptOptIn`, else every `buildYear()` week with `idx >= firstActiveIdx` (`:2329–2331`);
 (4) `accountCreatedIdx` stamp — preserved if already set, else today's week (`:2336`);
 (5) `setupComplete: true`.
@@ -470,7 +470,7 @@ the one with no pay structure.
 
 | Path (lifeEvent · seed) | Steps shown | Wrap Up? | Path-specific invariants |
 |---|---|---|---|
-| First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `onCancel` undefined (non-investor) — no escape; buffer + tax-exempt offered here only |
+| First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `onCancel` undefined (non-investor) — no escape; Freedom Allowance + tax-exempt offered here only |
 | First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | No pay structure at `buildYear` call; `jobLossMode: true`; Food seed skipped (F8); lands in Job Loss panels |
 | `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | Pre-filled; frozen `originalConfigRef` baseline; clears `startedUnemployed` on completion (F8); Food restored if jobless-started |
 | `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `JobLossEntry` modal (F12), not this |
@@ -545,10 +545,10 @@ share it so they *can't* re-drift.
 > consumer count only ever grows; `fiscalWeek.test.js` + `aiContext.test.js` cover it.
 
 **F14 · `weeklyIncome` derivation** — `App.jsx:1193–1204` — **[L]**
-`(projectedAnnualNet / activeWeeksThisYear) − bufferPerWeek`. The single "typical active
+`(projectedAnnualNet / activeWeeksThisYear) − freedomAllowancePerWeek`. The single "typical active
 week nets you" number threaded into HomePanel, Coach context, Live State Inspector, and
-Job Loss surfaces. `bufferPerWeek` scales `paycheckBuffer` by `checksPerYear / 52`.
-> **IF** `weeklyIncome`'s formula or its `bufferPerWeek` subtraction changes, **THEN**
+Job Loss surfaces. `freedomAllowancePerWeek` scales `freedomAllowance` by `checksPerYear / 52`.
+> **IF** `weeklyIncome`'s formula or its `freedomAllowancePerWeek` subtraction changes, **THEN**
 > every downstream "left this week / surplus / savings rate" number shifts together —
 > check HomePanel tiles (F16), `annualSavings` (F17), goal timeline surplus sequencing
 > (`computeGoalTimeline` consumes `weeklyNets`), and Coach context lines. Procedure: Live
@@ -717,7 +717,7 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 | A new mutation prop threaded into Home/JobLossHome | F20 shadow lists | Prop appears in the shadow block; expired-account test: mutation is a no-op end-to-end | D4 |
 | `netWorthHealthStatus` / threshold | F23 cue **and** F24 amber tier | Both fire on the same account state | D1 |
 | `computeJobLossRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `jobLossCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24), admin Live State Inspector's Job Loss rows (§15.I, via the same `jobLossDash` memo as Ask Coach — no separate call) | `jobLossFlow.test.jsx`, `jobLossRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
-| `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `bufferPerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
+| `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `freedomAllowancePerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
 
 ### 8.3 Block 3 — Gate matrix
 
@@ -844,7 +844,7 @@ minus `targetOwedAtFiling` — across remaining taxed checks as `extraPerCheck`.
 **F29 · Net derivation tiers** — `projectedAnnualNet` `App.jsx:1173–1175`,
 `weekNetLookup` `:1217–1233`, `futureWeekNetsRaw`/`futureWeekNets` `:1235–1242` — **[L]**
 Three deliberate tiers off one `computeNet` core: `projectedAnnualNet` (all active weeks,
-no buffer), `futureWeekNetsRaw` (spendable = net − buffer; feeds goal *timeline* display),
+no Freedom Allowance deducted), `futureWeekNetsRaw` (spendable = net − Freedom Allowance; feeds goal *timeline* display),
 `futureWeekNets` (adjusted-spendable including per-week event adjustments; feeds goal
 *funding* simulation). `weekNetLookup` is the per-week record (baseNet / adjustment /
 spendable) the admin Week Inspector's "Net Lookup" section displays verbatim.
@@ -1321,14 +1321,14 @@ diverging it from §7 F5's wizard derivation is user intent, not drift.
 > survive (separate field) — any change to that survivorship split is a product
 > decision, surface it.
 
-**F51 · `PreferencesDetail`** — `:1494–1567`; buffer save `:1503–1509` — **[G/L]**
-Buffer editor (On/Off + amount, clamped 0–200 — same `BUFFER_MAX` cap as the wizard's
+**F51 · `PreferencesDetail`** — `:1494–1567`; Freedom Allowance save `:1503–1509` — **[G/L]**
+Freedom Allowance editor (On/Off + amount, clamped 0–200 — same `FREEDOM_ALLOWANCE_MAX` cap as the wizard's
 Wrap Up, §7 F5's `?? 50` default) and the Tax Exempt display row (lock icon when the
 tax feature is locked, `d6bfecf`; label deliberately says "Standard withholding" for
 everyone locked, since `taxExemptOptIn` without the unlock is ignored by the math).
-> **IF** the buffer cap/default changes here or in the wizard, **THEN** both editors
-> and `bufferPerWeek` (§8 F14) move together — three sites, one number. Check: set
-> $200 here, Wrap Up shows $200; Live Inspector `bufferPerWeek` matches schedule
+> **IF** the Freedom Allowance cap/default changes here or in the wizard, **THEN** both editors
+> and `freedomAllowancePerWeek` (§8 F14) move together — three sites, one number. Check: set
+> $200 here, Wrap Up shows $200; Live Inspector `freedomAllowancePerWeek` matches schedule
 > scaling.
 
 **F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
@@ -1369,7 +1369,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `canAccessTaxPlan` inputs or unlock flags (Spine C) | F45's `taxplan` route gate + BudgetPanel's F43 consumer + PreferencesDetail's lock icon — all three surfaces | Tester/admin/`taxProjectionsEnabled`/plain matrix across all three | D4 |
 | `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
 | Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
-| Buffer cap/default | F51 + wizard Wrap Up (§7 F5) + `bufferPerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
+| Freedom Allowance cap/default | F51 + wizard Wrap Up (§7 F5) + `freedomAllowancePerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
 | `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §8's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
@@ -2509,7 +2509,7 @@ instead of calling the named function is a D1 finding by definition (§3 cardina
 | Per-week gross / hours / rotation | `buildYear` week object (F96/F97) | Income rows (F33), Week Inspector (Spine F) |
 | Per-week net take-home | `computeNet` (F98) | Income `gN` (F33), F29 tiers, `resolvePrevWeekNet` (F15), Week Inspector |
 | "This Week's Check" | `resolvePrevWeekNet` (F15) | Home tile (F16), DemoAccountTree |
-| "Typical weekly income" | `weeklyIncome` = `projectedAnnualNet / activeWeeksThisYear − bufferPerWeek` (F14, App.jsx) | Home (F16), Coach (Spine D), Live Inspector, Job Loss panels |
+| "Typical weekly income" | `weeklyIncome` = `projectedAnnualNet / activeWeeksThisYear − freedomAllowancePerWeek` (F14, App.jsx) | Home (F16), Coach (Spine D), Live Inspector, Job Loss panels |
 | Projected annual net | `projectedAnnualNet` (App.jsx, sums `computeNet` over active weeks) (F29) | Home Year-End (F17), Income Year Summary (F33) |
 | Active weeks this year | `resolveActiveWeeksThisYear` (`fiscalWeek.js`, F13) | `weeklyIncome` (F14), `annualSavings` (F16), Coach, DemoAccountTree |
 | Adjusted take-home (event-folded) | `logTotals.adjustedTakeHome` from App `eventImpact` memo (F17/F33) — **one value** | Home Year-End (F17), Income Year Summary (F33), Log summary (F54, threaded down directly since the DW-5 fix) |
@@ -2665,7 +2665,7 @@ drive-by deletion during a documentation sweep.
 
 **F108 · `configHistory.js` — whitelist + `diffSensitiveFields`** — `configHistory.js:14–63` — **[L]**
 The pure half of the config-history watcher (F9 owns the App.jsx effect). `HISTORY_SENSITIVE_FIELDS`
-(70 fields across pay/schedule/employer/tax/benefits/attendance/buffer/job-loss) is the
+(70 fields across pay/schedule/employer/tax/benefits/attendance/freedom-allowance/job-loss) is the
 whitelist; `diffSensitiveFields` returns changed whitelisted fields with two deliberate
 semantics: `undefined`/`null` compare **equal** (`a ?? null` — so `DEFAULT_CONFIG` spreading a
 new field onto an old row never fabricates a snapshot) and arrays/objects compare
@@ -3529,7 +3529,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
 | **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F123) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F123 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
-| **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
+| **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `freedomAllowancePerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`freedomAllowancePerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
 | **Per-entry breakdown** (LogPanel chevron) | per-event `calcEventImpact` output, via `resolveEventWeekMeta` | F57/F62 (**DW-5 fixed**: matches the hero-card aggregates) |
 

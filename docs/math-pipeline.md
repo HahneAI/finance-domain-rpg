@@ -72,12 +72,12 @@ All downstream math is deterministic from these fields. Source of truth: `src/co
 | 401k employer match rate | DHL tiered formula | 5% (100% up to 4%, 50¢/$1 from 4%→6%) |
 | Other deductions ($/wk total) | `otherPostTaxDeductions(cfg)` | $0 |
 
-### Buffer
+### Freedom Allowance
 | Field | Variable | Current Value |
 |-------|----------|---------------|
-| Buffer enabled | `config.bufferEnabled` | **false** |
-| Buffer amount ($/wk) | `config.paycheckBuffer` | $50 (inactive) |
-| Effective buffer per week | `bufferPerWeek` | **$0** |
+| Freedom Allowance enabled | `config.freedomAllowanceEnabled` | **false** |
+| Freedom Allowance amount ($/wk) | `config.freedomAllowance` | $50 (inactive) |
+| Effective Freedom Allowance per week | `freedomAllowancePerWeek` | **$0** |
 
 ---
 
@@ -232,19 +232,19 @@ extraPerCheck        = targetExtraTotal / taxedWeekCount
 
 ### weeklyIncome (spendable average)
 ```
-weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek
+weeklyIncome = projectedAnnualNet / 52 - freedomAllowancePerWeek
              = 53341.19 / 52 - 0
 ```
 | | Value |
 |-|-------|
 | projectedAnnualNet / 52 | **$1,025.79** |
-| bufferPerWeek | **$0** (bufferEnabled=false) |
+| freedomAllowancePerWeek | **$0** (freedomAllowanceEnabled=false) |
 | **weeklyIncome** | **$1,025.79** |
 
 ### prevWeekNet (most recent confirmed paycheck)
 > As of 2026-04-14, most recent past week = idx 14 (weekEnd 2026-04-13, 6-Day, non-taxed, no 401k)
 ```
-prevWeekNet = computeNet(w14) - bufferPerWeek + weekEventAdjustment
+prevWeekNet = computeNet(w14) - freedomAllowancePerWeek + weekEventAdjustment
 ```
 | | Value |
 |-|-------|
@@ -445,11 +445,11 @@ Run these after any math change to catch regressions.
 
 ## Known Gotchas
 
-- `weeklyIncome` is **spendable average** (annual net ÷ 52 − buffer). Not gross, not a specific paycheck.
+- `weeklyIncome` is **spendable average** (annual net ÷ 52 − Freedom Allowance). Not gross, not a specific paycheck.
 - `incomingWeekNet` (next paycheck) is a **single rotation week** — using it for annual projections inflates results on high weeks. Always use `weeklyIncome` for year-scale math.
 - Non-taxed weeks (idx NOT in `config.taxedWeeks`) skip fed/state withholding. Their net is higher but does not represent a tax-free week — the gap is accounted for via `extraPerCheck` on taxed weeks.
 - `fundedGoalSpend` is subtracted from `adjustedTakeHome` and from `annualSavings`. It represents money already absorbed by completed goals — not future spend.
-- `bufferPerWeek` is **$0** for Anthony (bufferEnabled=false). The $50 paycheckBuffer field is inactive.
+- `freedomAllowancePerWeek` is **$0** for Anthony (freedomAllowanceEnabled=false). The $50 freedomAllowance field is inactive.
 - DHL employer 401k match is **tiered**, not flat: 100% up to 4%, then 50¢/$1 from 4%→6%, capped at 5% match.
 - **401k starts idx 19** (weekEnd 2026-05-18, first week ≥ 2026-05-15 start date). Weeks 7–18 have zero 401k deduction — those 12 weeks have higher net pay.
 - **Labtop + Airpods loans end 2026-09-30** — Phase 3 weekly spend drops by $50.50/wk ($33 + $17.50).

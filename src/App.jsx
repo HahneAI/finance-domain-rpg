@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
@@ -325,8 +325,6 @@ export default function App() {
   // Incremented after investor account creation to force a second loadUserData
   // call once all DB writes (investor_users + user_data) have settled.
   const [reloadTrigger, setReloadTrigger] = useState(0);
-  // Investor profile fetched from investor_users on login — null for non-investors.
-  const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
     const stored = localStorage.getItem("admin_temp_lock_date");
     return stored && Date.parse(stored) > 0 ? stored : null;
@@ -658,7 +656,6 @@ export default function App() {
   useEffect(() => {
     if (!authedUser) return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
 
     const applyLoadedData = (data) => {
@@ -695,7 +692,6 @@ export default function App() {
       setPtoGoal(data.ptoGoal);
       setSubscription(data.subscription);
       if (data.isInvestor) {
-        setInvestorProfile(data.investorProfile ?? null);
         setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
       }
       // Investors reach the wizard via account 3 selection — not on login.
@@ -739,7 +735,6 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const checkout = params.get("checkout");
     if (checkout !== "success" && checkout !== "cancel") return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCheckoutReturn(checkout);
     params.delete("checkout");
     const rest = params.toString();
@@ -756,7 +751,6 @@ export default function App() {
     setRevivalInfo(null);
     setWizardEntry(null);
     setReloadTrigger((n) => n + 1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revivalInfo, subscription?.status]);
 
   // On a successful return, the webhook may not have landed yet — poll-refetch
@@ -1113,7 +1107,7 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode, config.isInvestor]);
+  }, [isAdmin, isTester, entitlement, config.jobLossMode, config.isInvestor]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1284,7 +1278,6 @@ export default function App() {
         autoConfirmed: true,
       };
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
   }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]);
 
@@ -1308,7 +1301,7 @@ export default function App() {
     allWeeks.filter(w =>
       w.active && w.isPayWeek && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
     ),
-    [allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]
+    [allWeeks, isPayPeriodPast, accountCreatedIdx]
   );
 
   // ── Week confirmation modal trigger ──
@@ -1531,8 +1524,8 @@ export default function App() {
   // to per-paycheck for display.
   const checksPerYear = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
 
-  // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
-  // paycheckBuffer is stored as $/check. Convert to $/week by multiplying by the
+  // ─── Freedom Allowance ───────────────────────────────────────────────────────
+  // freedomAllowance is stored as $/check. Convert to $/week by multiplying by the
   // paycheck frequency ratio (checksPerYear/52), so the weekly deduction is the
   // correct time-averaged amount regardless of pay schedule:
   //   weekly  → $50/check × 52/52 = $50/week
@@ -1540,8 +1533,8 @@ export default function App() {
   //   monthly → $50/check × 12/52 ≈ $11.54/week
   // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
   // it to display real earned income, not the spendable portion.
-  const bufferPerWeek = (config.bufferEnabled ?? true)
-    ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
+  const freedomAllowancePerWeek = (config.freedomAllowanceEnabled ?? true)
+    ? (config.freedomAllowance ?? 50) * (checksPerYear / 52)
     : 0;
   // weeklyIncome is meant to read as "what a typical active week nets you" —
   // dividing by a flat 52 instead of the weeks actually active this fiscal
@@ -1551,7 +1544,7 @@ export default function App() {
   // paycheck (TODO §1 Job Loss Mode investigation, 2026-07-19). For a
   // full-year account (firstActiveIdx 0) this is byte-identical to /52.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
-  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - freedomAllowancePerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
   // Shows the specific prior week's computeNet (high vs low week), not an annual
@@ -1561,15 +1554,15 @@ export default function App() {
   // no past active week yet — see resolvePrevWeekNet's doc comment.
   const prevWeekNet = useMemo(() => resolvePrevWeekNet({
     allWeeks, todayIso: effectiveToday, config, extraPerCheck: taxDerived.extraPerCheck,
-    showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek,
-  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek]);
+    showExtra, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
     const result = {};
     allWeeks.forEach(w => {
       const baseNet = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
-      const spendable = baseNet - bufferPerWeek;
+      const spendable = baseNet - freedomAllowancePerWeek;
       const adjustment = adjustments[w.idx] || 0;
       result[w.idx] = {
         baseNet,
@@ -1580,11 +1573,11 @@ export default function App() {
       };
     });
     return result;
-  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, bufferPerWeek, eventImpact.weeklyNetAdjustments]);
+  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, freedomAllowancePerWeek, eventImpact.weeklyNetAdjustments]);
 
   const futureWeekNetsRaw = useMemo(
-    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek)),
-    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, bufferPerWeek]
+    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - freedomAllowancePerWeek)),
+    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, freedomAllowancePerWeek]
   );
 
   const futureWeekNets = useMemo(
@@ -1945,7 +1938,7 @@ export default function App() {
           userPaySchedule={config.userPaySchedule ?? "weekly"}
           fundedGoalSpend={fundedGoalSpend}
           config={config}
-          bufferPerWeek={bufferPerWeek}
+          freedomAllowancePerWeek={freedomAllowancePerWeek}
           isAdmin={isAdmin}
           taxProjectionsEnabled={taxProjectionsEnabled}
           isTester={isTester}
@@ -2813,7 +2806,7 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <Pressable
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); }}
               style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3321,7 +3314,7 @@ export default function App() {
                 ["Tax Gap", `$${Math.round(taxDerived.totalGap).toLocaleString()}`, null],
                 ["Taxed Checks", taxDerived.taxedWeekCount, "remaining"],
                 ["Goal Spend", `$${Math.round(fundedGoalSpend).toLocaleString()}`, "funded"],
-                ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
+                ["Freedom Alw / Wk", `$${Math.round(freedomAllowancePerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
                 // §15.I — Job Loss Mode rows, only when active. unemploymentRemainingWeeks

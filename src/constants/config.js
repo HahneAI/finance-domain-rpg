@@ -13,9 +13,9 @@ export const DEFAULT_CONFIG = {
   // the full branched onboarding path is parked in TODO §1.H.
   startedUnemployed: null,
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
-  bufferEnabled: true,         // when true, paycheckBuffer is excluded from all spendable math
-  paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200
-  bufferOverrideAck: false,    // legacy — kept for backward compat with existing saved data
+  freedomAllowanceEnabled: true,     // when true, freedomAllowance is excluded from all spendable math
+  freedomAllowance: 50,               // $/week excluded per check (freedomAllowanceEnabled must be true); max $200
+  freedomAllowanceOverrideAck: false, // legacy — kept for backward compat with existing saved data
 
   // ── Investor account ────────────────────────────────────────
   isInvestor: false,           // true for accounts created via investor access code

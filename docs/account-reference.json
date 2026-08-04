@@ -12,6 +12,7 @@
       "3_ui_assertions": "What each panel should display. Compare against live app or component snapshots."
     },
     "source": "Live Supabase row provided by account owner on 2026-04-26; expenses updated 2026-04-27 by migrations 007+009 (expense history cleanup).",
+    "rebrand_note_2026-07-31": "Paycheck Buffer renamed to Freedom Allowance in code (db.js auto-migrates on next load). The db_record tier below still shows the raw pre-rename key names as captured (bufferEnabled/paycheckBuffer/bufferOverrideAck) since this is a historical snapshot, not the live row — after Anthony's next login+save those keys will read as freedomAllowanceEnabled/freedomAllowance/freedomAllowanceOverrideAck. Update this snapshot's tier-1 keys next time db_record is refreshed from a live pull.",
     "schema_reference": {
       "columns": [
         "user_id",

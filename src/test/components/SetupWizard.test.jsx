@@ -15,8 +15,8 @@ const BASE_CONFIG = {
   maxWeeklyHours: 40,
   hoursUnderstood: true, // satisfies Step 2 (Schedule) base-user confirmation gate
   attendanceBucketEnabled: false,
-  paycheckBuffer: 50,
-  bufferEnabled: true,
+  freedomAllowance: 50,
+  freedomAllowanceEnabled: true,
 }
 
 function renderWizard({ lifeEvent = null, config = BASE_CONFIG } = {}) {

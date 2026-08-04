@@ -1315,9 +1315,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
 }
 
 function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isEmployerDHL     = config.employerPreset === "DHL";
+  const isEmployerDHL = config.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
-  const has401k   = config.k401Rate > 0;
+  const has401k = config.k401Rate > 0;
   const matchRate = isEmployerDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
   const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
@@ -1534,54 +1534,54 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
   // is ignored by the withholding math, so for everyone else "Standard withholding"
   // is both the safe and the accurate label (avoids implying an exemption isn't real).
   const showTaxExempt = taxFeatureUnlocked && config.taxExemptOptIn;
-  const [editingBuffer, setEditingBuffer] = useState(false);
-  const [bufferEnabled, setBufferEnabled] = useState(config.bufferEnabled ?? true);
-  const [paycheckBuffer, setPaycheckBuffer] = useState(config.paycheckBuffer ?? 50);
+  const [editingFreedomAllowance, setEditingFreedomAllowance] = useState(false);
+  const [freedomAllowanceEnabled, setFreedomAllowanceEnabled] = useState(config.freedomAllowanceEnabled ?? true);
+  const [freedomAllowance, setFreedomAllowance] = useState(config.freedomAllowance ?? 50);
 
-  const handleSaveBuffer = () => {
-    const clampedBuffer = Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200));
-    const newConfig = { ...config, bufferEnabled, paycheckBuffer: clampedBuffer };
+  const handleSaveFreedomAllowance = () => {
+    const clampedAllowance = Math.max(0, Math.min(Number(freedomAllowance) || 0, 200));
+    const newConfig = { ...config, freedomAllowanceEnabled, freedomAllowance: clampedAllowance };
     setConfig(newConfig);
     onSaveConfig?.(newConfig);
-    setEditingBuffer(false);
+    setEditingFreedomAllowance(false);
   };
 
   return (
     <>
       <BackBar onBack={onBack} title="App Preferences" />
       <DetailCard>
-        {!editingBuffer ? (
+        {!editingFreedomAllowance ? (
           <Pressable
-            onClick={() => setEditingBuffer(true)}
+            onClick={() => setEditingFreedomAllowance(true)}
             style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
           >
             <DetailRow
-              label="Paycheck Buffer"
-              value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
-              valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
+              label="Freedom Allowance"
+              value={config.freedomAllowanceEnabled ? `On — $${config.freedomAllowance}/check` : "Off"}
+              valueColor={config.freedomAllowanceEnabled ? undefined : "var(--color-text-disabled)"}
             />
           </Pressable>
         ) : (
           <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
-            <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "10px" }}>Paycheck Buffer</div>
+            <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "10px" }}>Freedom Allowance</div>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-              <Pressable onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</Pressable>
-              <Pressable onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</Pressable>
+              <Pressable onClick={() => setFreedomAllowanceEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</Pressable>
+              <Pressable onClick={() => setFreedomAllowanceEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</Pressable>
             </div>
-            <label style={lSp}>Buffer Amount ($ / check)</label>
+            <label style={lSp}>Freedom Allowance Amount ($ / check)</label>
             <input
               type="number"
               min="0"
               max="200"
               step="1"
-              value={paycheckBuffer}
-              onChange={e => setPaycheckBuffer(e.target.value)}
-              style={{ ...iS, marginTop: "6px", marginBottom: "12px", opacity: bufferEnabled ? 1 : 0.65 }}
-              disabled={!bufferEnabled}
+              value={freedomAllowance}
+              onChange={e => setFreedomAllowance(e.target.value)}
+              style={{ ...iS, marginTop: "6px", marginBottom: "12px", opacity: freedomAllowanceEnabled ? 1 : 0.65 }}
+              disabled={!freedomAllowanceEnabled}
             />
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
+              <Pressable onClick={() => { setEditingFreedomAllowance(false); setFreedomAllowanceEnabled(config.freedomAllowanceEnabled ?? true); setFreedomAllowance(config.freedomAllowance ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleSaveFreedomAllowance} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
           </div>
         )}
@@ -1598,7 +1598,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
-        Buffer and tax settings can also be updated from setup flows and Life Events.
+        Freedom Allowance and tax settings can also be updated from setup flows and Life Events.
       </div>
     </>
   );
@@ -2308,7 +2308,6 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
   const isEmployerDHL     = config.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
   const employer  = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
   const has401k   = config.k401Rate > 0;
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
@@ -2415,7 +2414,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         />
         <ListRow
           label="App Preferences"
-          summary={`${config.bufferEnabled ? `Buffer $${config.paycheckBuffer}/check` : "Buffer off"} · ${canSeeTaxPlan && config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
+          summary={`${config.freedomAllowanceEnabled ? `Freedom Allowance $${config.freedomAllowance}/check` : "Freedom Allowance off"} · ${canSeeTaxPlan && config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
           onPress={() => setActiveSection("preferences")}
           last={!(canSeeTaxPlan && !config?.jobLossMode) && !isAdmin}
         />

@@ -281,6 +281,22 @@ export async function loadUserData() {
     delete mergedConfig.startingWeekIsHeavy;
   }
 
+  // ── One-time paycheckBuffer → freedomAllowance rebrand ──────────────────────
+  // Config keys renamed 2026-07-31 (Paycheck Buffer → Freedom Allowance rebrand).
+  // Safe to run every load — old keys won't exist after first save with new names.
+  if ("paycheckBuffer" in mergedConfig) {
+    mergedConfig.freedomAllowance = mergedConfig.paycheckBuffer;
+    delete mergedConfig.paycheckBuffer;
+  }
+  if ("bufferEnabled" in mergedConfig) {
+    mergedConfig.freedomAllowanceEnabled = mergedConfig.bufferEnabled;
+    delete mergedConfig.bufferEnabled;
+  }
+  if ("bufferOverrideAck" in mergedConfig) {
+    mergedConfig.freedomAllowanceOverrideAck = mergedConfig.bufferOverrideAck;
+    delete mergedConfig.bufferOverrideAck;
+  }
+
   // ── One-time rotation correction ─────────────────────────────────────────────
   // The initial migration set startingWeekIsLong: true. The intended follow-up
   // correction (checking dhlTeam === "B") never fired because dhlTeam was still
@@ -299,7 +315,6 @@ export async function loadUserData() {
   // convert it to customWeeklyHours:60 and clear the flag. This is the Phase 4 migration
   // window guard — safe to remove after Anthony's live Supabase row is cleaned (Phase 7).
   if (mergedConfig.dhlCustomSchedule === true) {
-    // eslint-disable-next-line no-console
     console.warn("[db] dhlCustomSchedule migration: setting customWeeklyHours=60, dhlCustomSchedule=false");
     mergedConfig.customWeeklyHours = 60;
     mergedConfig.dhlCustomSchedule = false;

@@ -123,7 +123,7 @@ export function getPayPeriodBounds(weekIdx, allWeeks) {
 // Weekly users (checksPerYear===52) return null — every week is a pay week, no indicator needed.
 // For biweekly/salary: driven by w.isPayWeek from buildYear.
 // For monthly: driven by the last-week-of-month isPayWeek flag set in buildYear.
-export function getNextPayWeek(allWeeks, todayIso, checksPerYear = 52) {
+export function getNextPayWeek(allWeeks, todayIso) {
   if (!allWeeks?.length) return null;
   return allWeeks.find(w => w.active && w.isPayWeek && w.payPeriodEndDate && toLocalIso(w.payPeriodEndDate) >= todayIso) ?? null;
 }

@@ -272,24 +272,24 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
     [allWeeks, config, taxDerived]
   );
 
-  const bufferPerWeek = config.bufferEnabled ? (config.paycheckBuffer ?? 50) : 0;
+  const freedomAllowancePerWeek = config.freedomAllowanceEnabled ? (config.freedomAllowance ?? 50) : 0;
   // Mirrors App.jsx's weeklyIncome fix (TODO §1, 2026-07-19) — divide by the
   // weeks actually active this fiscal year, not a flat 52, so a mid-year-start
   // demo config doesn't dilute "a typical week" down to a fraction of itself.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
-  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - freedomAllowancePerWeek;
 
   const prevWeekNet = useMemo(() => resolvePrevWeekNet({
     allWeeks, todayIso: today, config, extraPerCheck: taxDerived.extraPerCheck,
-    showExtra: true, bufferPerWeek, weeklyIncome, logs, currentWeek,
-  }), [allWeeks, today, config, taxDerived, bufferPerWeek, weeklyIncome, logs, currentWeek]);
+    showExtra: true, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, today, config, taxDerived, freedomAllowancePerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
     const result = {};
     allWeeks.forEach(w => {
       const baseNet = computeNet(w, config, taxDerived.extraPerCheck, true);
-      const spendable = baseNet - bufferPerWeek;
+      const spendable = baseNet - freedomAllowancePerWeek;
       const adjustment = adjustments[w.idx] || 0;
       result[w.idx] = {
         baseNet,
@@ -300,14 +300,14 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
       };
     });
     return result;
-  }, [allWeeks, config, taxDerived.extraPerCheck, bufferPerWeek, eventImpact.weeklyNetAdjustments]);
+  }, [allWeeks, config, taxDerived.extraPerCheck, freedomAllowancePerWeek, eventImpact.weeklyNetAdjustments]);
 
   const futureWeekNetsRaw = useMemo(
     () => futureWeeks.map(w =>
       weekNetLookup[w.idx]?.spendable ??
-      (computeNet(w, config, taxDerived.extraPerCheck, true) - bufferPerWeek)
+      (computeNet(w, config, taxDerived.extraPerCheck, true) - freedomAllowancePerWeek)
     ),
-    [futureWeeks, weekNetLookup, config, taxDerived, bufferPerWeek]
+    [futureWeeks, weekNetLookup, config, taxDerived, freedomAllowancePerWeek]
   );
 
   const futureWeekNets = useMemo(
@@ -409,7 +409,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             userPaySchedule={config.userPaySchedule ?? "weekly"}
             fundedGoalSpend={fundedGoalSpend}
             config={config}
-            bufferPerWeek={bufferPerWeek}
+            freedomAllowancePerWeek={freedomAllowancePerWeek}
             isAdmin={isAdmin}
           />
         );

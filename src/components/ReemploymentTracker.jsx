@@ -94,7 +94,10 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
   const [draft, setDraft] = useState({ company: "", role: "", dateApplied: "", status: "applied" });
   const [editingId, setEditingId] = useState(null);
 
-  const apps = Array.isArray(config?.jobApplications) ? config.jobApplications : [];
+  const apps = useMemo(
+    () => Array.isArray(config?.jobApplications) ? config.jobApplications : [],
+    [config]
+  );
 
   // Eager-save wrapper (docs/TODO.md "Persistence — Eager Save Pattern") — every
   // mutation below (target income, return-to-work date, application CRUD/status)

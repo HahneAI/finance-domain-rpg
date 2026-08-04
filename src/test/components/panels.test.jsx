@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 // HomePanel and BudgetPanel pull in lib/db.js (logBetaEvent) → the real
@@ -123,7 +123,7 @@ describe('BudgetPanel', () => {
       today={TODAY}
       userPaySchedule="weekly"
       config={CONFIG}
-      bufferPerWeek={0}
+      freedomAllowancePerWeek={0}
       isAdmin={false}
       taxProjectionsEnabled={false}
       isTester={false}

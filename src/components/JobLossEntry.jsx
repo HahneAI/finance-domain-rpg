@@ -215,7 +215,6 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
     confirm();
   };
 
-  const totalSteps = hasExpenses ? 4 : 2;
   const nextLabel = step === 0 ? "Next"
     : step === 1 ? (hasExpenses ? "Next" : "Activate")
     : step === 2 ? (keptPickableExpenses.length > 0 ? "Next" : "Activate")

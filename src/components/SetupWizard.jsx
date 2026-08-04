@@ -2437,6 +2437,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   // Snapshot of config at wizard open, used by structure_change to render a
   // "what's changing" diff in Wrap Up. Frozen so edits to formData
   // don't pollute the comparison baseline.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const originalConfig = useMemo(() => config, []);
   // Ref to the card div so we can apply the validation shake animation
   const cardRef = useRef(null);

@@ -1112,7 +1112,7 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode, config.isInvestor]);
+  }, [isAdmin, isTester, entitlement, config.jobLossMode, config.isInvestor]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1306,7 +1306,7 @@ export default function App() {
     allWeeks.filter(w =>
       w.active && w.isPayWeek && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
     ),
-    [allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]
+    [allWeeks, isPayPeriodPast, accountCreatedIdx]
   );
 
   // ── Week confirmation modal trigger ──

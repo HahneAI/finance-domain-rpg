@@ -150,6 +150,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   // silently showing a blank form (see App.jsx's oauthCallbackFailed detection).
   useEffect(() => {
     if (oauthCallbackFailed && !error) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError("Google sign-in didn't finish — please tap Continue with Google again.");
     }
   }, [oauthCallbackFailed, error]);

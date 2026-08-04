@@ -468,6 +468,7 @@ export function HomePanel({
     setEditGoalId(null);
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_updated" });
   };
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const addGoal = useCallback(() => {
     if (!setGoals) return;
     const id = `g_${Date.now()}`;
@@ -484,7 +485,7 @@ export function HomePanel({
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed]);
+  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/preserve-manual-memoization
   const deleteGoal = (id) => {
     if (!setGoals) return;
     const next = goals.filter((g) => g.id !== id);

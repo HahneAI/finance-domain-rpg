@@ -422,10 +422,10 @@ describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average d
     expect(result).toBeCloseTo(computeNet(prevWeek, cfg, 0, true) - FREEDOM_ALLOWANCE, 5)
   })
 
-  it('falls back to weeklyIncome only when there is no active week to read at all (indefinite Job Loss Mode through year-end)', () => {
+  it('falls back to weeklyIncome only when there is no active week to read at all (indefinite New Job Season through year-end)', () => {
     const cfg = {
-      ...BASE_CONFIG, firstActiveIdx: 10, jobLossMode: true,
-      jobLossDate: '2026-02-01', returnToWorkDate: null,
+      ...BASE_CONFIG, firstActiveIdx: 10, newJobSeasonMode: true,
+      newJobSeasonDate: '2026-02-01', returnToWorkDate: null,
     }
     const todayIso = '2026-07-19'
     const { allWeeks, currentWeek, weeklyIncome } = setup(cfg, todayIso)

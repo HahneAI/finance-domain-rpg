@@ -91,7 +91,7 @@ acknowledgment when things turn around after a rough stretch. It only ever says 
 per week per situation, so it can't nag.
 
 **Status:** 🟢 **Live and open to the full user base** (2026-07-24) — no longer admin/tester
-locked. This card shows up on the regular Home screen and also on the separate Job Loss Mode
+locked. This card shows up on the regular Home screen and also on the separate New Job Season
 Home screen — it previously could only ever say the calm "things turned around" message or the
 gentle heads-up there, never the critical one, because it simply wasn't present on that screen
 at all.
@@ -116,7 +116,7 @@ still blank).*
 `src/lib/coachPrompts.js` — picks one of three short tier-specific prompts (gentle / critical /
 recovery), each built on the same shared Coach voice as the chat above. Gate: same as the chat
 above — `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})`, checked at both mount
-points (`HomePanel.jsx` and `JobLossHomePanel.jsx`).
+points (`HomePanel.jsx` and `NewJobSeasonHomePanel.jsx`).
 
 ---
 
@@ -168,7 +168,7 @@ search itself (application strategy, interview prep, salary negotiation, judging
 hold out for the right offer), not the household numbers Ask Coach covers.
 
 **Status:** 🔒 **Built 2026-07-25, admin/tester/investor-only.** Opens from a "Talk to Coach
-about the search" button on `JobLossHomePanel`. A full-screen chat, grounded in real runway/
+about the search" button on `NewJobSeasonHomePanel`. A full-screen chat, grounded in real runway/
 burn/target-income/application-log data — never a generic pep talk. Single-session for now: no
 chat-history/retention system yet, same stage Ask Coach was in before that landed. "Help me with
 my resume" is deliberately redirected to section 6 below rather than answered inline, keeping
@@ -201,7 +201,7 @@ stress of an active search under runway pressure).*
 **Technical reference:** Same shared route as sections 1–2, `POST /api/coach` · Model:
 **Sonnet** (`claude-sonnet-5`, per §18.G's cost split — Haiku for chat/FAQ/triggers, Sonnet for
 job-hunt drafts) · System prompt: `JOB_HUNT_SYSTEM_PROMPT` in `coachPrompts.js` · Context:
-`buildJobHuntContext()` in `aiContext.js`, grounded in `computeJobLossRunway`/
+`buildJobHuntContext()` in `aiContext.js`, grounded in `computeNewJobSeasonRunway`/
 `resolvePrimaryRunwayDays`/`sumJobHuntIncome` — never a parallel estimate (§21 F113's rule) —
 plus `config.targetIncomeAnnual`/`jobApplications`/`returnToWorkDate`. Gate:
 `canAccessAiFeatures({isAdmin, isTester, isInvestor})`. Component: `JobHuntChatPanel.jsx`.
@@ -216,7 +216,7 @@ target role and suggest improvements.
 **Status:** 🔒 **v1 built 2026-07-25, admin/tester/investor-only.** Paste-text only, not a file upload
 (`docs/TODO.md` §18.E1's storage decision — a pasted résumé and a PDF-extracted one look
 identical to the analysis pipeline, so upload is deferred to a v2 that's only worth building if
-this proves used). Lives as its own section in `JobLossHomePanel`, below the Job Hunt Assistant
+this proves used). Lives as its own section in `NewJobSeasonHomePanel`, below the Job Hunt Assistant
 entry point. A one-shot review, not a back-and-forth chat: paste the résumé, optionally set a
 target role (defaults to the most recent logged job application's role), tap "Get Skill-Gap
 Review." The review is saved automatically, both to the résumé's own profile row and as a

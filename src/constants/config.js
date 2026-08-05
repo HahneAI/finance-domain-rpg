@@ -114,39 +114,39 @@ export const DEFAULT_CONFIG = {
   // surfaces weeks from account creation onward. null = legacy account (no floor).
   accountCreatedIdx: null,
 
-  // ── Job Loss Mode (TODO §1.C) ───────────────────────────────
-  // When jobLossMode is true, buildYear zeros out earned income for every
-  // week on/after jobLossDate. Toggled on by the "Lost My Job" entry flow
+  // ── New Job Season (TODO §1.C) ───────────────────────────────
+  // When newJobSeasonMode is true, buildYear zeros out earned income for every
+  // week on/after newJobSeasonDate. Toggled on by the "Lost My Job" entry flow
   // and cleared by the "Back to Work" exit (which routes into the
   // structure_change wizard).
-  jobLossMode: false,
-  jobLossDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
-  // Accessible cash on hand at Job Loss entry — mandatory in the JobLossEntry
+  newJobSeasonMode: false,
+  newJobSeasonDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
+  // Accessible cash on hand at New Job Season entry — mandatory in the NewJobSeasonEntry
   // wizard (0 is a valid answer; only null means "never actually set," which
   // shouldn't happen post-wizard but is the safe default for pre-existing
-  // accounts). Seeds computeJobLossRunway's savings figure; editable from
-  // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
+  // accounts). Seeds computeNewJobSeasonRunway's savings figure; editable from
+  // both NewJobSeasonHomePanel and NewJobSeasonBudgetPanel, persisted via eager save —
   // NOT session-only like the old draft-only version of this field.
-  jobLossCashOnHand: null,
+  newJobSeasonCashOnHand: null,
   // Timestamp the cash-on-hand figure was last confirmed by the user (TODO
-  // §1.H17) — stamped alongside jobLossCashOnHand every time it's edited
-  // (JobLossEntry Activate, or either panel's CashOnHandSheet). From that
-  // date forward, computeJobLossRunway automatically subtracts every
+  // §1.H17) — stamped alongside newJobSeasonCashOnHand every time it's edited
+  // (NewJobSeasonEntry Activate, or either panel's CashOnHandSheet). From that
+  // date forward, computeNewJobSeasonRunway automatically subtracts every
   // essential bill due date that passes, so the displayed figure decays on
   // its own instead of going stale until the user re-checks their balance.
   // null = never explicitly stamped (pre-§1.H17 accounts) — falls back to
-  // jobLossDate.
-  jobLossCashOnHandAsOf: null,  // "YYYY-MM-DD"
+  // newJobSeasonDate.
+  newJobSeasonCashOnHandAsOf: null,  // "YYYY-MM-DD"
   // Pending/final paycheck still owed from the lost job (TODO §1.H15) —
   // optional, skippable in the wizard (unlike cash on hand). Resolved once at
   // Activate time from "days worked in your final week" + "which day checks
   // normally arrive" into a concrete estimated amount + date, not re-derived
   // later — same resolve-to-a-concrete-value pattern as expense dueDateAnchor.
   // null = no pending check expected (or the step was skipped).
-  jobLossPendingCheckAmount: null,
-  jobLossPendingCheckDate: null,  // "YYYY-MM-DD"
+  newJobSeasonPendingCheckAmount: null,
+  newJobSeasonPendingCheckDate: null,  // "YYYY-MM-DD"
 
-  // Unemployment benefits (TODO §1.C2) — captured in the Job Loss entry flow.
+  // Unemployment benefits (TODO §1.C2) — captured in the New Job Season entry flow.
   // null = unanswered (pre-entry); true/false once the user has set them.
   unemploymentEnabled: null,
   unemploymentWeekly: null,    // $ paid per benefit week
@@ -155,14 +155,14 @@ export const DEFAULT_CONFIG = {
 
   // Re-employment tracker (TODO §1.C6) — null defaults; the dashboard
   // pre-fills targetIncomeAnnual from baseRate × maxWeeklyHours × 52 when
-  // unset. returnToWorkDate, when set, ends Job Loss Mode in buildYear at
+  // unset. returnToWorkDate, when set, ends New Job Season in buildYear at
   // that week boundary so forward projections resume earned income.
   // jobApplications stores the application log inline on config — no schema
   // migration needed; each entry: { id, company, role, dateApplied, status }.
   targetIncomeAnnual: null,
   returnToWorkDate: null,
   jobApplications: [],
-  // Job Loss Home's "log extra income" widget (TODO §1 mode rebuild) — cash
+  // New Job Season Home's "log extra income" widget (TODO §1 mode rebuild) — cash
   // made while job hunting (gig work, odd jobs), stored inline on config same
   // as jobApplications above. Summed into the runway calc's savings side.
   // Each entry: { id, amount, note, loggedAt }.

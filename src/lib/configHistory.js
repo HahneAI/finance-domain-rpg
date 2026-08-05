@@ -39,7 +39,7 @@ export const HISTORY_SENSITIVE_FIELDS = [
   // Freedom Allowance / risk posture
   "freedomAllowanceEnabled", "freedomAllowance",
   // Job loss (jobApplications deliberately excluded — already its own log)
-  "jobLossMode", "jobLossDate", "unemploymentEnabled", "unemploymentWeekly",
+  "newJobSeasonMode", "newJobSeasonDate", "unemploymentEnabled", "unemploymentWeekly",
   "unemploymentDurationWeeks", "unemploymentWaitingWeek", "returnToWorkDate",
   "targetIncomeAnnual", "startedUnemployed",
 ];

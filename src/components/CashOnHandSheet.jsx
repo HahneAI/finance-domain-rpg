@@ -3,7 +3,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
  * CashOnHandSheet — single-line bottom-sheet editor for
- * `config.jobLossCashOnHand`, launched from the pencil-badged Cash On Hand
+ * `config.newJobSeasonCashOnHand`, launched from the pencil-badged Cash On Hand
  * card (TODO §1.H17). Deliberately not the full BudgetPanel expense-detail
  * sheet pattern (view/edit modes, multi-scope save buttons) — this is one
  * number, one Save. Visual language matches that sheet (bg-surface, pull
@@ -15,10 +15,10 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
  *
  * `currentValue` should be the *effective* (timeline-decayed) cash figure —
  * whatever the card is currently displaying — not the stale raw
- * `config.jobLossCashOnHand`, so the prefilled number always matches what
+ * `config.newJobSeasonCashOnHand`, so the prefilled number always matches what
  * the user just saw. `onSave(parsedValue)` is called with a plain number;
- * the caller (JobLossHomePanel/JobLossBudgetPanel) is responsible for
- * writing both `jobLossCashOnHand` and stamping `jobLossCashOnHandAsOf` to
+ * the caller (NewJobSeasonHomePanel/NewJobSeasonBudgetPanel) is responsible for
+ * writing both `newJobSeasonCashOnHand` and stamping `newJobSeasonCashOnHandAsOf` to
  * `effectiveToday` via eager save — confirming a value here always resets
  * the decay clock, since the user is telling the app "this is true right now."
  */

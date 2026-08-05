@@ -19,13 +19,15 @@ const BASE_CONFIG = {
   freedomAllowanceEnabled: true,
 }
 
-function renderWizard({ lifeEvent = null, config = BASE_CONFIG } = {}) {
+function renderWizard({ lifeEvent = null, config = BASE_CONFIG, initialStepId = null, onBackBeforeStart = null } = {}) {
   const onComplete = vi.fn()
   render(
     <SetupWizard
       config={config}
       onComplete={onComplete}
       lifeEvent={lifeEvent}
+      initialStepId={initialStepId}
+      onBackBeforeStart={onBackBeforeStart}
     />,
   )
   return { onComplete }
@@ -423,6 +425,63 @@ describe('SetupWizard — step titles', () => {
   })
 })
 
+describe('SetupWizard — initialStepId (Ad-Lib Wizard preview hand-off)', () => {
+  it('opens at the requested step instead of Welcome when initialStepId is set', () => {
+    renderWizard({ initialStepId: 2 })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    expect(getStepCounter()).toContain('3 of 6') // Schedule is the 3rd active step (index 2)
+  })
+
+  it('opens at the jobless mini-flow step id (10) when the seeded config is unemployed', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true }, initialStepId: 10 })
+    expect(screen.getByText('Unemployment Benefits')).toBeTruthy()
+  })
+
+  it('falls back to step 0 when initialStepId does not match any active step', () => {
+    renderWizard({ initialStepId: 999 })
+    expect(screen.getByText('Welcome')).toBeTruthy()
+  })
+
+  it('defaults to step 0 when initialStepId is omitted (no behavior change for normal entry)', () => {
+    renderWizard()
+    expect(screen.getByText('Welcome')).toBeTruthy()
+  })
+
+  it('Back at the handed-off first step calls onBackBeforeStart instead of falling through to the real Pay Structure step', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    clickBack()
+    expect(onBackBeforeStart).toHaveBeenCalledTimes(1)
+    // Still on Schedule — onBackBeforeStart pre-empted the normal step decrement.
+    expect(screen.getByText('Schedule')).toBeTruthy()
+  })
+
+  it('passes the current formData to onBackBeforeStart so the ad-lib preview can resume with it', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    clickBack()
+    const [formData] = onBackBeforeStart.mock.calls[0]
+    expect(formData.baseRate).toBe(21.15)
+  })
+
+  it('falls back to the normal decrement when onBackBeforeStart is omitted on a handoff', () => {
+    renderWizard({ initialStepId: 2 })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    clickBack()
+    expect(screen.getByText('Pay Structure')).toBeTruthy()
+  })
+
+  it('does not intercept Back on later steps — only fires at the handed-off boundary', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    clickNext() // Schedule -> Deductions
+    clickBack() // Deductions -> Schedule, should NOT call onBackBeforeStart
+    expect(onBackBeforeStart).not.toHaveBeenCalled()
+    expect(screen.getByText('Schedule')).toBeTruthy()
+  })
+})
+
 describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
   it('pre-answering startedUnemployed=true on first-run shows only 4 steps (Welcome + 3 jobless steps)', () => {
     renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
@@ -444,15 +503,15 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     expect(getStepCounter()).toContain('of 6')
   })
 
-  it('walks through the jobless step titles: Welcome, Unemployment Benefits, Job Loss Details, Wrap Up', () => {
+  it('walks through the jobless step titles: Welcome, Unemployment Benefits, New Job Season Details, Wrap Up', () => {
     renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default — real entry path
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default — real entry path
     expect(screen.getByText('Welcome')).toBeTruthy()
     clickNext()
     expect(screen.getByText('Unemployment Benefits')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // answer the gate so Next unblocks
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
     clickNext()
     expect(screen.getByText('Wrap Up')).toBeTruthy()
   })
@@ -474,7 +533,7 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
   })
 
   it('Unemployment Benefits: answering No proceeds without requiring amount/duration', () => {
@@ -482,36 +541,36 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
     clickNext()
-    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    expect(screen.getByText('New Job Season Details')).toBeTruthy()
   })
 
-  it('completing the mini-flow calls onComplete with jobLossMode, jobLossDate, and unemployment fields set', async () => {
+  it('completing the mini-flow calls onComplete with newJobSeasonMode, newJobSeasonDate, and unemployment fields set', async () => {
     const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default
     clickNext() // -> Unemployment Benefits
     fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
-    clickNext() // -> Job Loss Details
-    clickNext() // -> Wrap Up (jobLossDate already defaulted at Step 0)
+    clickNext() // -> New Job Season Details
+    clickNext() // -> Wrap Up (newJobSeasonDate already defaulted at Step 0)
     fireEvent.click(screen.getByRole('button', { name: /finish/i }))
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     const payload = onComplete.mock.calls[0][0]
     expect(payload.setupComplete).toBe(true)
-    expect(payload.jobLossMode).toBe(true)
-    expect(payload.jobLossDate).toBeTruthy()
+    expect(payload.newJobSeasonMode).toBe(true)
+    expect(payload.newJobSeasonDate).toBeTruthy()
     expect(payload.unemploymentEnabled).toBe(true)
     expect(payload.unemploymentWeekly).toBe(350)
     expect(payload.unemploymentDurationWeeks).toBe(20)
   })
 
-  it('Job Loss Details: entering a prior hourly rate sets targetIncomeAnnual (rate × 40 × 52)', async () => {
+  it('New Job Season Details: entering a prior hourly rate sets targetIncomeAnnual (rate × 40 × 52)', async () => {
     const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets newJobSeasonDate default
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
-    clickNext() // -> Job Loss Details
+    clickNext() // -> New Job Season Details
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. 22\.00/i), { target: { value: '20' } })
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /finish/i }))

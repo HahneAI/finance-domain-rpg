@@ -20,7 +20,7 @@ function chunkGenerator(chunks) {
 }
 
 function baseProps(overrides = {}) {
-  return { onClose: vi.fn(), config: { jobLossMode: true }, effectiveToday: "2026-07-07", ...overrides };
+  return { onClose: vi.fn(), config: { newJobSeasonMode: true }, effectiveToday: "2026-07-07", ...overrides };
 }
 
 beforeEach(() => {

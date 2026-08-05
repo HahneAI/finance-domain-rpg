@@ -69,13 +69,13 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
                     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
                     onChange({
                       startedUnemployed: true,
-                      jobLossMode: true,
-                      jobLossDate: formData?.jobLossDate ?? todayIso,
+                      newJobSeasonMode: true,
+                      newJobSeasonDate: formData?.newJobSeasonDate ?? todayIso,
                       startDate: todayIso,
                       firstActiveIdx: dateToWeekIdx(todayIso),
                     });
                   } else {
-                    onChange({ startedUnemployed: false, jobLossMode: false, jobLossDate: null });
+                    onChange({ startedUnemployed: false, newJobSeasonMode: false, newJobSeasonDate: null });
                   }
                 }}
               />
@@ -86,7 +86,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
             color: "var(--color-text-primary)", marginBottom: 0,
           }}>
             {startedUnemployed === true
-              ? "You'll skip straight to a short unemployment setup and land in the Job Loss Dashboard — no pay structure needed until you're back to work."
+              ? "You'll skip straight to a short unemployment setup and land in your New Job Season — no pay structure needed until you're back to work."
               : "Either answer continues to pay setup for now."}
           </p>
         </div>
@@ -2119,7 +2119,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 // JOBLESS SETUP MINI-FLOW (TODO §1.H2) — only shown on first-run when the
 // user answered "Yes" to Step 0's employment-status question. Consolidates
 // H2's five conceptual sub-steps (0a-0e) into three actual wizard screens:
-// unemployment benefits (0a+0b, same fields as JobLossEntry.jsx's existing
+// unemployment benefits (0a+0b, same fields as NewJobSeasonEntry.jsx's existing
 // modal for the same data), job-loss date + optional prior-pay context
 // (0c+0d), and a plain confirm/finish screen (0e) — no live net preview,
 // since there's no pay structure to preview yet.
@@ -2199,8 +2199,8 @@ function StepJoblessDetails({ formData, onChange }) {
         <input
           type="date"
           style={iS}
-          value={formData.jobLossDate ?? ""}
-          onChange={e => onChange({ jobLossDate: e.target.value })}
+          value={formData.newJobSeasonDate ?? ""}
+          onChange={e => onChange({ newJobSeasonDate: e.target.value })}
         />
       </Field>
       <div>
@@ -2240,7 +2240,7 @@ function StepJoblessWrapUp({ formData }) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-secondary)" }}>Job loss date</span>
-          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{formData.jobLossDate ?? "—"}</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{formData.newJobSeasonDate ?? "—"}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "var(--color-text-secondary)" }}>Unemployment benefits</span>
@@ -2258,7 +2258,7 @@ function StepJoblessWrapUp({ formData }) {
         )}
       </div>
       <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
-        Tap Finish to enter Job Loss Mode. Whenever you're back to work, use Life Events → Pay
+        Tap Finish to start your New Job Season. Whenever you're back to work, use Life Events → Pay
         Structure Changed to fill in your real pay for the first time.
       </p>
     </div>
@@ -2306,9 +2306,9 @@ const STEP_DEFS = [
     component: StepJoblessBenefits,
   },
   {
-    id: 11, title: "Job Loss Details",
+    id: 11, title: "New Job Season Details",
     showIf: (d, ev) => isFirstRunJobless(d, ev),
-    isValid: (d) => !!d.jobLossDate,
+    isValid: (d) => !!d.newJobSeasonDate,
     component: StepJoblessDetails,
   },
   {
@@ -2414,8 +2414,26 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false }) {
-  const [stepIdx,   setStepIdx]   = useState(0);
+// initialStepId: optional STEP_DEFS id to open on instead of step 0 — used by the
+// Ad-Lib Wizard preview (SetupWizardAdlib.jsx) to hand off into the remaining
+// real steps after its own pilot pages (Welcome + Pay Structure) are answered.
+// null/omitted preserves normal behavior (always opens at step 0).
+//
+// onBackBeforeStart: optional callback fired instead of the normal Back-decrement when
+// the admin hits Back on the very first step of an initialStepId handoff. Without this,
+// Back would fall through into this component's own Step0/Step1 — the real stacked-field
+// UI for the same two questions SetupWizardAdlib.jsx already asked ad-lib style, which
+// reads as "got kicked out of the preview" rather than a normal Back. Only ever fires at
+// that one boundary; every other Back press behaves exactly as before.
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false, initialStepId = null, onBackBeforeStart = null }) {
+  const initialStepIdxRef = useRef(0);
+  const [stepIdx,   setStepIdx]   = useState(() => {
+    if (initialStepId == null) return 0;
+    const idx = STEP_DEFS.filter(s => s.showIf(config, initialLifeEvent)).findIndex(s => s.id === initialStepId);
+    const resolved = idx >= 0 ? idx : 0;
+    initialStepIdxRef.current = resolved;
+    return resolved;
+  });
   // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
   const [stepDir,   setStepDir]   = useState(1);
   const [formData,  setFormData]  = useState(() => {
@@ -2474,6 +2492,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
 
   function handleBack() {
     setAttempted(false);
+    if (stepIdx === initialStepIdxRef.current && initialStepId != null && onBackBeforeStart) {
+      onBackBeforeStart(formData);
+      return;
+    }
     if (stepIdx > 0) { setStepDir(-1); setStepIdx(i => i - 1); }
   }
 

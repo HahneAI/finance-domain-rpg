@@ -3,7 +3,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
-import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from "../lib/jobLossRunway.js";
+import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from "../lib/newJobSeasonRunway.js";
 import { toLocalIso } from "../lib/finance.js";
 
 // Canonical day ordering — matches WeekConfirmModal/LogPanel's DayPicker so
@@ -12,7 +12,7 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
 
 /**
- * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
+ * NewJobSeasonEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
  *
  * Step 0 (unchanged): captures the job-loss effective date, mandatory
  * cash-on-hand (§1.H13), and the unemployment-benefit setup (§1.C1/C2).
@@ -26,8 +26,8 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * single-select day-of-week pick for "which day checks normally arrive."
  * Resolved once at Activate time (`resolveLastPayPeriodEnd` +
  * `resolvePendingCheckArrivalDate` + `estimatePendingCheckAmount`, all
- * `lib/jobLossRunway.js`) into concrete `jobLossPendingCheckAmount`/
- * `jobLossPendingCheckDate` values — the raw day picks aren't stored, same
+ * `lib/newJobSeasonRunway.js`) into concrete `newJobSeasonPendingCheckAmount`/
+ * `newJobSeasonPendingCheckDate` values — the raw day picks aren't stored, same
  * resolve-to-a-concrete-value pattern as `dueDateAnchor` below. Deliberately
  * scoped to a single 7-day picker regardless of pay schedule — for biweekly/
  * salary users this covers only the final week, not the full period; flagged
@@ -36,8 +36,8 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * Step 2 (was Step 1 — TODO §1 expense review): a multi-select checklist of
  * the user's current expenses, all checked by default, letting them uncheck
  * anything they don't want tracked while job hunting. Unchecking never
- * deletes or edits the expense — it only sets `trackDuringJobLoss: false`,
- * which the Job Loss Budget/Home views (and the shared runway calc) filter
+ * deletes or edits the expense — it only sets `trackDuringNewJobSeason: false`,
+ * which the New Job Season Budget/Home views (and the shared runway calc) filter
  * on. Normal-mode Budget ignores the flag entirely, so nothing here is lost
  * or altered for when the user goes Back to Work.
  *
@@ -58,15 +58,15 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * On confirm, `onActivate(configPatch, updatedExpenses?)` is called —
  * `updatedExpenses` is only passed when there were expenses to review.
  *   configPatch: {
- *     jobLossMode: true, jobLossDate, jobLossCashOnHand, jobLossCashOnHandAsOf,
- *     jobLossPendingCheckAmount, jobLossPendingCheckDate,
+ *     newJobSeasonMode: true, newJobSeasonDate, newJobSeasonCashOnHand, newJobSeasonCashOnHandAsOf,
+ *     newJobSeasonPendingCheckAmount, newJobSeasonPendingCheckDate,
  *     unemploymentEnabled, unemploymentWeekly, unemploymentDurationWeeks,
  *     unemploymentWaitingWeek,
  *   }
  * App.jsx merges configPatch into config and, when present, replaces
  * expenses with updatedExpenses.
  */
-export function JobLossEntry({ open, onClose, onActivate, expenses = [], config = null }) {
+export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], config = null }) {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   // Mandatory — the runway calc's seed cash figure. "" = unanswered (blocks
@@ -160,12 +160,12 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
   });
 
   const buildConfigPatch = () => ({
-    jobLossMode: true,
-    jobLossDate: date,
-    jobLossCashOnHand: cashOnHandVal ?? 0,
-    jobLossCashOnHandAsOf: date,
-    jobLossPendingCheckAmount: hasPendingCheck ? Math.round(pendingAmountEstimate) : null,
-    jobLossPendingCheckDate: hasPendingCheck && pendingArrivalDate ? toLocalIso(pendingArrivalDate) : null,
+    newJobSeasonMode: true,
+    newJobSeasonDate: date,
+    newJobSeasonCashOnHand: cashOnHandVal ?? 0,
+    newJobSeasonCashOnHandAsOf: date,
+    newJobSeasonPendingCheckAmount: hasPendingCheck ? Math.round(pendingAmountEstimate) : null,
+    newJobSeasonPendingCheckDate: hasPendingCheck && pendingArrivalDate ? toLocalIso(pendingArrivalDate) : null,
     unemploymentEnabled: hasUnemployment,
     unemploymentWeekly: hasUnemployment ? weeklyVal : null,
     unemploymentDurationWeeks: hasUnemployment ? durationVal : null,
@@ -181,13 +181,13 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
     }
     if (!dueDatesValid) { setAttempted(true); return; }
     const updatedExpenses = expenses.map(exp => {
-      if (!trackedIds.has(exp.id)) return { ...exp, trackDuringJobLoss: false };
+      if (!trackedIds.has(exp.id)) return { ...exp, trackDuringNewJobSeason: false };
       if (exp.type === "loan") {
         // Attach the loan's own known payment date rather than asking again.
-        return { ...exp, trackDuringJobLoss: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
+        return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
       }
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
-      return { ...exp, trackDuringJobLoss: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
+      return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
     });
     onActivate(buildConfigPatch(), updatedExpenses);
     onClose();
@@ -270,7 +270,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
             Life Event{hasExpenses ? ` · Step ${step + 1} of 3` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
-            {step === 0 && "Enter Job Loss Mode"}
+            {step === 0 && "Start Your New Job Season"}
             {step === 1 && "Any paycheck still coming?"}
             {step === 2 && "Which bills do you want to track?"}
             {step === 3 && "When are these due?"}
@@ -322,7 +322,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                 )}
                 <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
                   Savings, checking — whatever you could draw on today. Seeds your runway math and
-                  stays editable from Home or Budget once Job Loss Mode is active.
+                  stays editable from Home or Budget once your New Job Season is active.
                 </div>
               </div>
 
@@ -427,7 +427,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                 padding: "10px 12px",
                 fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
               }}>
-                You can exit Job Loss Mode anytime via the <strong style={{ color: "var(--color-warning)" }}>Back to Work</strong> button
+                You can exit your New Job Season anytime via the <strong style={{ color: "var(--color-warning)" }}>Back to Work</strong> button
                 in the app banner — that flow walks you through re-entering your new pay structure.
               </div>
             </>

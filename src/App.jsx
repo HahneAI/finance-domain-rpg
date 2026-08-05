@@ -372,6 +372,10 @@ export default function App() {
   // is written/autosaved until the real wizard's own onComplete actually fires.
   const [adlibPreviewOpen, setAdlibPreviewOpen] = useState(false);
   const [adlibHandoff, setAdlibHandoff] = useState(null);
+  // Set only when Back is hit on the real wizard's first handed-off step — reopens
+  // SetupWizardAdlib pre-filled with the in-progress answers instead of blank, so the
+  // admin lands back on the ad-lib page they left, not this component's own view of it.
+  const [adlibResumeData, setAdlibResumeData] = useState(null);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -3740,6 +3744,16 @@ export default function App() {
         <SetupWizard
           config={adlibHandoff?.config ?? config}
           initialStepId={adlibHandoff?.initialStepId ?? null}
+          onBackBeforeStart={
+            adlibHandoff
+              ? (inProgressFormData) => {
+                  setAdlibHandoff(null);
+                  setAdlibResumeData(inProgressFormData);
+                  setAdlibPreviewOpen(true);
+                  closeWizardWithAnimation();
+                }
+              : undefined
+          }
           onComplete={(mergedConfig) => {
             if (adlibHandoff) { setAdlibHandoff(null); closeWizardWithAnimation(); return; }
             handleWizardComplete(mergedConfig);
@@ -3762,13 +3776,19 @@ export default function App() {
         />
       )}
       {/* ── Ad-Lib Wizard preview (admin-only experiment) — fill-in-the-blank pilot
-           for the first two steps; hands off into the real wizard above for the rest. ── */}
+           for the first two steps; hands off into the real wizard above for the rest.
+           adlibResumeData reopens this pre-filled at the last-answered page when the
+           admin hit Back on the real wizard's first handed-off step (see onBackBeforeStart
+           above) — cleared on both Exit Preview and a fresh forward hand-off so the next
+           deliberate "Preview" click always starts blank again. ── */}
       {isAdmin && adlibPreviewOpen && (
         <SetupWizardAdlib
           config={config}
-          onCancel={() => setAdlibPreviewOpen(false)}
+          resumeFormData={adlibResumeData}
+          onCancel={() => { setAdlibPreviewOpen(false); setAdlibResumeData(null); }}
           onHandoff={(mergedFormData, initialStepId) => {
             setAdlibPreviewOpen(false);
+            setAdlibResumeData(null);
             setAdlibHandoff({ config: mergedFormData, initialStepId });
             setWizardEntry(false);
           }}

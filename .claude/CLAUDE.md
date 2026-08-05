@@ -106,6 +106,31 @@ click all the way to Finish with zero risk to real account data. Only 2 of 6 ste
 today — expanding to the rest, or promoting this to a real user-facing A/B split, is a future
 decision pending how the pilot feels in practice.
 
+- **Blank by default, not prefilled from the admin's real config.** `formData` starts as
+  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the two pilot pages
+  ask about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
+  `userPaySchedule`, `annualSalary`, `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`,
+  `payPeriodEndDay`, `scheduleIsVariable`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`,
+  `diffRate`, `startingWeekIsLong`). Without this, an admin whose real account already has these
+  answered (e.g. a DHL-preset admin) would land on both pages fully pre-filled and instantly
+  Next-eligible — silently skipping the pilot's own required-field gating (`PAGES[].isValid`,
+  already correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
+  `InlineSelect` reselecting its blank `(select)` option must resolve to `null` (not a falsy
+  default), or clearing back to blank would misreport as a real answer — see the explicit
+  `v === "" ? null : …` branches in `PayStructurePage`'s `onChange` handlers.
+- **Back at the hand-off boundary returns to this component, not the real Step0/Step1.** Without
+  intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Schedule id 2, or
+  the jobless flow id 10) falls through to that component's own Welcome/Pay Structure — the
+  stacked-field UI for the same two questions this pilot just asked ad-lib style, which reads as
+  "kicked out of the preview." `SetupWizard`'s optional `onBackBeforeStart(formData)` prop fires
+  instead, exactly once, only when `stepIdx` is still at the resolved `initialStepId` index — every
+  other Back press behaves as before. `App.jsx` wires this to reopen `SetupWizardAdlib` via its
+  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `pageIdx` at the last page of the
+  resolved `activePages` (so a resumed jobless answer reopens on Welcome; anything else reopens on
+  Pay Structure) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
+  Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
+  blank again.
+
 ---
 
 ## Employer Preset Naming Convention

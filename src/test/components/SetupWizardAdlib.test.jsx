@@ -104,6 +104,59 @@ describe('SetupWizardAdlib — Pay Structure page (base user)', () => {
   })
 })
 
+describe('SetupWizardAdlib — starts blank even from an already-answered real config', () => {
+  // A DHL admin's real config already has employerPreset/dhlTeam/userPaySchedule/etc.
+  // answered. The preview must not pre-fill from that — every mandatory blank should
+  // still require an explicit choice before Next/Continue Setup enables.
+  const answeredConfig = {
+    ...DEFAULT_CONFIG,
+    startedUnemployed: false,
+    employerPreset: 'DHL',
+    dhlTeam: 'B',
+    dhlNightShift: true,
+    userPaySchedule: 'weekly',
+    baseRate: 22.10,
+    shiftHours: 12,
+  }
+
+  it('does not carry over startedUnemployed — Next stays disabled on Welcome', () => {
+    renderAdlib(answeredConfig)
+    expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled()
+    expect(selects()[0].value).toBe('')
+  })
+
+  it('does not carry over employer/team/pay-schedule on Pay Structure', () => {
+    renderAdlib(answeredConfig)
+    fireEvent.change(selects()[0], { target: { value: 'employed' } })
+    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    expect(selects()[0].value).toBe('')
+    expect(screen.getByRole('button', { name: /continue setup/i })).toBeDisabled()
+  })
+})
+
+describe('SetupWizardAdlib — resumeFormData', () => {
+  it('reopens on the Pay Structure page pre-filled with the in-progress answers', () => {
+    const resumeFormData = {
+      ...DEFAULT_CONFIG,
+      startedUnemployed: false,
+      employerPreset: null,
+      userPaySchedule: 'weekly',
+      baseRate: 21.15,
+      shiftHours: 10,
+    }
+    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
+    expect(screen.getByText(/I work for/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /continue setup/i })).not.toBeDisabled()
+  })
+
+  it('reopens on the single Welcome page for a resumed jobless answer', () => {
+    const resumeFormData = { ...DEFAULT_CONFIG, startedUnemployed: true }
+    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
+    expect(screen.getByText(/right now, i am/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /continue setup/i })).not.toBeDisabled()
+  })
+})
+
 describe('SetupWizardAdlib — Pay Structure page (DHL)', () => {
   function goToPayPage() {
     fireEvent.change(selects()[0], { target: { value: 'employed' } })

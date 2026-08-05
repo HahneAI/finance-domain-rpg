@@ -19,7 +19,7 @@ const BASE_CONFIG = {
   freedomAllowanceEnabled: true,
 }
 
-function renderWizard({ lifeEvent = null, config = BASE_CONFIG, initialStepId = null } = {}) {
+function renderWizard({ lifeEvent = null, config = BASE_CONFIG, initialStepId = null, onBackBeforeStart = null } = {}) {
   const onComplete = vi.fn()
   render(
     <SetupWizard
@@ -27,6 +27,7 @@ function renderWizard({ lifeEvent = null, config = BASE_CONFIG, initialStepId = 
       onComplete={onComplete}
       lifeEvent={lifeEvent}
       initialStepId={initialStepId}
+      onBackBeforeStart={onBackBeforeStart}
     />,
   )
   return { onComplete }
@@ -444,6 +445,40 @@ describe('SetupWizard — initialStepId (Ad-Lib Wizard preview hand-off)', () =>
   it('defaults to step 0 when initialStepId is omitted (no behavior change for normal entry)', () => {
     renderWizard()
     expect(screen.getByText('Welcome')).toBeTruthy()
+  })
+
+  it('Back at the handed-off first step calls onBackBeforeStart instead of falling through to the real Pay Structure step', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    clickBack()
+    expect(onBackBeforeStart).toHaveBeenCalledTimes(1)
+    // Still on Schedule — onBackBeforeStart pre-empted the normal step decrement.
+    expect(screen.getByText('Schedule')).toBeTruthy()
+  })
+
+  it('passes the current formData to onBackBeforeStart so the ad-lib preview can resume with it', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    clickBack()
+    const [formData] = onBackBeforeStart.mock.calls[0]
+    expect(formData.baseRate).toBe(21.15)
+  })
+
+  it('falls back to the normal decrement when onBackBeforeStart is omitted on a handoff', () => {
+    renderWizard({ initialStepId: 2 })
+    expect(screen.getByText('Schedule')).toBeTruthy()
+    clickBack()
+    expect(screen.getByText('Pay Structure')).toBeTruthy()
+  })
+
+  it('does not intercept Back on later steps — only fires at the handed-off boundary', () => {
+    const onBackBeforeStart = vi.fn()
+    renderWizard({ initialStepId: 2, onBackBeforeStart })
+    clickNext() // Schedule -> Deductions
+    clickBack() // Deductions -> Schedule, should NOT call onBackBeforeStart
+    expect(onBackBeforeStart).not.toHaveBeenCalled()
+    expect(screen.getByText('Schedule')).toBeTruthy()
   })
 })
 

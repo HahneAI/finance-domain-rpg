@@ -14,7 +14,7 @@
 // Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
@@ -366,7 +366,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
       : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
   );
 
-  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL = formData.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
 
@@ -1586,8 +1586,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 }
 
 function Step4({ formData, onChange, attempted }) {
-  const isEmployerDHL      = formData.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
+  const isEmployerDHL = formData.employerPreset === "DHL";
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax    = stateConfig?.model === "NONE";
@@ -2436,9 +2435,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const [attempted, setAttempted] = useState(false);
 
   // Snapshot of config at wizard open, used by structure_change to render a
-  // "what's changing" diff in Wrap Up. Frozen by the ref so edits to formData
+  // "what's changing" diff in Wrap Up. Frozen so edits to formData
   // don't pollute the comparison baseline.
-  const originalConfigRef = useRef(config);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const originalConfig = useMemo(() => config, []);
   // Ref to the card div so we can apply the validation shake animation
   const cardRef = useRef(null);
 
@@ -2589,7 +2589,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
                   onLifeEventChange={setLifeEvent}
                   attempted={attempted}
                   isInvestor={isInvestor}
-                  originalConfig={originalConfigRef.current}
+                  originalConfig={originalConfig}
                 />
               : <StepStub title={current?.title} sprint={current?.sprint} />
             }

@@ -130,10 +130,10 @@ export const fromMonthlyCost = (monthly, cycle) => {
 // value is consistent: display * perCheckFactor = per-paycheck amount.
 // For weekly users perCheckFactor=1, so weekly = per-paycheck — no change.
 // For biweekly users perCheckFactor=2, so stored 175/wk × 2 = $350/check.
-export const perPaycheckFromCycle = (amount, cycle, _cpm) =>
+export const perPaycheckFromCycle = (amount, cycle) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / 4);
 
-export const cycleAmountFromPerPaycheck = (perWeek, cycle, _cpm) =>
+export const cycleAmountFromPerPaycheck = (perWeek, cycle) =>
   fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 
 // Breakdown-tab annualization. The breakdown roots every expense on its monthly
@@ -150,7 +150,7 @@ export const breakdownMonthlyEquiv = (reserve, isLoan = false) =>
   isLoan ? reserve * (52 / 12) : reserve * 4;
 
 
-export const monthlyFromPerPaycheck = (perWeek, _cpm) => roundToQuarter(perWeek * 4);
+export const monthlyFromPerPaycheck = (perWeek) => roundToQuarter(perWeek * 4);
 
 /**
  * Builds the weekly[4] array for a new history entry.

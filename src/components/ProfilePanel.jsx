@@ -1315,9 +1315,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
 }
 
 function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isEmployerDHL     = config.employerPreset === "DHL";
+  const isEmployerDHL = config.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
-  const has401k   = config.k401Rate > 0;
+  const has401k = config.k401Rate > 0;
   const matchRate = isEmployerDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
   const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
@@ -2308,7 +2308,6 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
   const isEmployerDHL     = config.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
   const employer  = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
   const has401k   = config.k401Rate > 0;
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];

@@ -226,7 +226,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     if (!requiresOtSelection && otDays.some(d => d !== null)) {
       setOtDays(Array(requiredOtCount).fill(null));
     }
-  }, [requiresOtSelection]);
+  }, [requiresOtSelection, otDays, requiredOtCount]);
 
   // Lock background scroll while the modal is open so the page behind stays put.
   useEffect(() => {

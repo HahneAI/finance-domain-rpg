@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 // HomePanel and BudgetPanel pull in lib/db.js (logBetaEvent) → the real

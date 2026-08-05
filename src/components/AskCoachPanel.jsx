@@ -4,12 +4,27 @@ import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
+import coachAvatar from "../assets/coach-avatar-color.png";
+import coachLineartMono from "../assets/coach-avatar-lineart-mono.png";
 
 // §2.H — how many past Ask Coach conversations we keep. Matches the standing
 // plan's "save a person's last three conversations" — refreshHistory() below
 // prunes anything past this count every time a chat is saved, except the one
 // currently open (never delete out from under an active session).
 const MAX_SAVED_CHATS = 3;
+
+// Blank-background states (empty chat, loading history, no saved chats) all
+// share the same "line-art mark + short message" treatment.
+function EmptyStateArt({ children }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "14px", margin: "auto", padding: "24px 12px" }}>
+      <img src={coachLineartMono} alt="" style={{ width: "120px", height: "120px", opacity: 0.85 }} />
+      <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5, maxWidth: "260px" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function deriveTitle(messages) {
   const firstUser = messages.find((m) => m.role === "user");
@@ -328,13 +343,9 @@ export function AskCoachPanel({
 
       {view === "history" ? (
         <div className="fold-lift" data-fold={bodyFold ?? undefined} style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "18px" }}>
-          {historyLoading && (
-            <div style={{ color: "var(--color-text-secondary)", fontSize: "13px" }}>Loading conversations…</div>
-          )}
+          {historyLoading && <EmptyStateArt>Loading conversations…</EmptyStateArt>}
           {!historyLoading && groupedHistory.length === 0 && (
-            <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5 }}>
-              No saved conversations yet — anything you ask Coach is saved here automatically.
-            </div>
+            <EmptyStateArt>No saved conversations yet — anything you ask Coach is saved here automatically.</EmptyStateArt>
           )}
           {groupedHistory.map((group) => (
             <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -399,9 +410,9 @@ export function AskCoachPanel({
         <div className="fold-lift" data-fold={bodyFold ?? undefined} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
             {messages.length === 0 && (
-              <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5 }}>
+              <EmptyStateArt>
                 Ask me anything about how Authority Finance works — your setup, a metric, a panel, or how to log something.
-              </div>
+              </EmptyStateArt>
             )}
             {messages.map((m, i) => (
               <div
@@ -409,17 +420,40 @@ export function AskCoachPanel({
                 style={{
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "85%",
-                  background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
-                  border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
-                  borderRadius: "14px",
-                  padding: "10px 14px",
-                  fontSize: "14px",
-                  lineHeight: 1.5,
-                  color: "var(--color-text-primary)",
-                  whiteSpace: "pre-wrap",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "8px",
                 }}
               >
-                {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                {m.role !== "user" && (
+                  <img
+                    src={coachAvatar}
+                    alt="Coach"
+                    style={{
+                      width: "26px",
+                      height: "26px",
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      objectFit: "cover",
+                      background: "var(--color-bg-raised)",
+                      border: "1px solid var(--color-border-subtle)",
+                    }}
+                  />
+                )}
+                <div
+                  style={{
+                    background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
+                    border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
+                    borderRadius: "14px",
+                    padding: "10px 14px",
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: "var(--color-text-primary)",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                </div>
               </div>
             ))}
             {errored && (

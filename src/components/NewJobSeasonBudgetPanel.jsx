@@ -86,23 +86,28 @@ export function NewJobSeasonBudgetPanel({
     [expenses],
   );
 
+  const todayDate = useMemo(
+    () => (effectiveToday ? new Date(effectiveToday + "T12:00:00") : null),
+    [effectiveToday],
+  );
+  const firstPaymentDate = useMemo(
+    () => firstUnemploymentPaymentDate(config),
+    [config],
+  );
+
   const needsCoverageIds = useMemo(() => {
     const ids = new Set();
-    const firstPaymentDate = firstUnemploymentPaymentDate(config);
-    if (!firstPaymentDate || !effectiveToday) return ids;
-    const todayDate = new Date(effectiveToday + "T12:00:00");
+    if (!firstPaymentDate || !todayDate) return ids;
     trackedExpenses.forEach(exp => {
       if ((exp.newJobSeasonStatus ?? "active") !== "active") return;
       const due = getNextDueDate(exp, todayDate);
       if (due && due < firstPaymentDate) ids.add(exp.id);
     });
     return ids;
-  }, [trackedExpenses, config, effectiveToday]);
+  }, [trackedExpenses, firstPaymentDate, todayDate]);
 
   const upcomingBills = useMemo(() => {
-    if (!effectiveToday) return [];
-    const todayDate = new Date(effectiveToday + "T12:00:00");
-    const firstPaymentDate = firstUnemploymentPaymentDate(config);
+    if (!todayDate) return [];
     const horizonDays = 35;
     return trackedExpenses
       .filter(exp => (exp.newJobSeasonStatus ?? "active") === "active")
@@ -119,7 +124,7 @@ export function NewJobSeasonBudgetPanel({
       })
       .filter(Boolean)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [trackedExpenses, config, effectiveToday]);
+  }, [trackedExpenses, firstPaymentDate, todayDate]);
 
   const sortedExpenses = useMemo(() => {
     return [...trackedExpenses].sort((a, b) => {

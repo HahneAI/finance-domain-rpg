@@ -366,7 +366,6 @@ export async function loadUserData() {
   // convert it to customWeeklyHours:60 and clear the flag. This is the Phase 4 migration
   // window guard — safe to remove after Anthony's live Supabase row is cleaned (Phase 7).
   if (mergedConfig.dhlCustomSchedule === true) {
-    // eslint-disable-next-line no-console
     console.warn("[db] dhlCustomSchedule migration: setting customWeeklyHours=60, dhlCustomSchedule=false");
     mergedConfig.customWeeklyHours = 60;
     mergedConfig.dhlCustomSchedule = false;

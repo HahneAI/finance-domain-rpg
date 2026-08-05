@@ -18,26 +18,36 @@ function numbers() {
   return screen.getAllByRole('spinbutton')
 }
 
-describe('SetupWizardAdlib — Welcome page', () => {
-  it('disables Next until the employment-status blank is filled', () => {
+function continueBtn() {
+  return screen.getByRole('button', { name: /continue setup/i })
+}
+
+// The employment-status select stays mounted at index 0 for the whole page (it never
+// gets swapped out for a later clause) — every later blank's index below assumes that.
+function chooseEmployed() {
+  fireEvent.change(selects()[0], { target: { value: 'employed' } })
+}
+
+describe('SetupWizardAdlib — merged single-page flow', () => {
+  it('disables Continue Setup until the employment-status blank is filled', () => {
     renderAdlib()
-    expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled()
+    expect(continueBtn()).toBeDisabled()
   })
 
-  it('enables Next once "employed" is chosen and advances to Pay Structure', () => {
+  it('reveals the Pay Structure clause on the same page as soon as "employed" is chosen — no page navigation', () => {
     renderAdlib()
-    fireEvent.change(selects()[0], { target: { value: 'employed' } })
-    expect(screen.getByRole('button', { name: /^next$/i })).not.toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
+    chooseEmployed()
     expect(screen.getByText(/I work for/i)).toBeTruthy()
+    // Still one page: the employment-status select is still present, not swapped out.
+    expect(selects()[0].value).toBe('employed')
   })
 
-  it('collapses to a single page and hands off directly to the jobless flow when "unemployed" is chosen', () => {
+  it('hands off directly to the jobless flow when "unemployed" is chosen, without any Pay Structure clause', () => {
     const { onHandoff } = renderAdlib()
     fireEvent.change(selects()[0], { target: { value: 'unemployed' } })
-    const btn = screen.getByRole('button', { name: /continue setup/i })
-    expect(btn).not.toBeDisabled()
-    fireEvent.click(btn)
+    expect(screen.queryByText(/I work for/i)).toBeNull()
+    expect(continueBtn()).not.toBeDisabled()
+    fireEvent.click(continueBtn())
     expect(onHandoff).toHaveBeenCalledTimes(1)
     const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
     expect(mergedFormData.startedUnemployed).toBe(true)
@@ -49,39 +59,32 @@ describe('SetupWizardAdlib — Welcome page', () => {
     fireEvent.click(screen.getByRole('button', { name: /exit preview/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
+
+  it('has no Back button — everything lives on one page', () => {
+    renderAdlib()
+    chooseEmployed()
+    expect(screen.queryByRole('button', { name: /^back$/i })).toBeNull()
+  })
 })
 
-describe('SetupWizardAdlib — Pay Structure page (base user)', () => {
-  function goToPayPage() {
-    fireEvent.change(selects()[0], { target: { value: 'employed' } })
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
-  }
-
-  it('Back returns to the Welcome page', () => {
-    renderAdlib()
-    goToPayPage()
-    fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
-    expect(screen.getByText(/right now, i am/i)).toBeTruthy()
-  })
-
+describe('SetupWizardAdlib — Pay Structure clause (base user)', () => {
   it('reveals the rate/shift/schedule blanks once "someone else" is chosen', () => {
     renderAdlib()
-    goToPayPage()
-    fireEvent.change(selects()[0], { target: { value: 'OTHER' } })
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
     expect(screen.getByText(/I get paid/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue setup/i })).toBeDisabled()
+    expect(continueBtn()).toBeDisabled()
   })
 
   it('completes the hourly path and hands off to Schedule (step id 2)', () => {
     const { onHandoff } = renderAdlib()
-    goToPayPage()
-    fireEvent.change(selects()[0], { target: { value: 'OTHER' } })
-    fireEvent.change(selects()[1], { target: { value: 'weekly' } })
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'weekly' } })
     fireEvent.change(numbers()[0], { target: { value: '21.15' } })
     fireEvent.change(numbers()[1], { target: { value: '10' } })
-    const btn = screen.getByRole('button', { name: /continue setup/i })
-    expect(btn).not.toBeDisabled()
-    fireEvent.click(btn)
+    expect(continueBtn()).not.toBeDisabled()
+    fireEvent.click(continueBtn())
     expect(onHandoff).toHaveBeenCalledTimes(1)
     const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
     expect(mergedFormData.baseRate).toBe(21.15)
@@ -92,11 +95,11 @@ describe('SetupWizardAdlib — Pay Structure page (base user)', () => {
 
   it('completes the salary path and derives baseRate/shiftHours the same way the real wizard does', () => {
     const { onHandoff } = renderAdlib()
-    goToPayPage()
-    fireEvent.change(selects()[0], { target: { value: 'OTHER' } })
-    fireEvent.change(selects()[1], { target: { value: 'salary' } })
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'salary' } })
     fireEvent.change(numbers()[0], { target: { value: '52000' } })
-    fireEvent.click(screen.getByRole('button', { name: /continue setup/i }))
+    fireEvent.click(continueBtn())
     const [mergedFormData] = onHandoff.mock.calls[0]
     expect(mergedFormData.annualSalary).toBe(52000)
     expect(mergedFormData.baseRate).toBeCloseTo(52000 / 2080)
@@ -107,7 +110,7 @@ describe('SetupWizardAdlib — Pay Structure page (base user)', () => {
 describe('SetupWizardAdlib — starts blank even from an already-answered real config', () => {
   // A DHL admin's real config already has employerPreset/dhlTeam/userPaySchedule/etc.
   // answered. The preview must not pre-fill from that — every mandatory blank should
-  // still require an explicit choice before Next/Continue Setup enables.
+  // still require an explicit choice before Continue Setup enables.
   const answeredConfig = {
     ...DEFAULT_CONFIG,
     startedUnemployed: false,
@@ -119,23 +122,22 @@ describe('SetupWizardAdlib — starts blank even from an already-answered real c
     shiftHours: 12,
   }
 
-  it('does not carry over startedUnemployed — Next stays disabled on Welcome', () => {
+  it('does not carry over startedUnemployed — Continue Setup stays disabled', () => {
     renderAdlib(answeredConfig)
-    expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled()
+    expect(continueBtn()).toBeDisabled()
     expect(selects()[0].value).toBe('')
   })
 
-  it('does not carry over employer/team/pay-schedule on Pay Structure', () => {
+  it('does not carry over employer/team/pay-schedule once employed is chosen', () => {
     renderAdlib(answeredConfig)
-    fireEvent.change(selects()[0], { target: { value: 'employed' } })
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
-    expect(selects()[0].value).toBe('')
-    expect(screen.getByRole('button', { name: /continue setup/i })).toBeDisabled()
+    chooseEmployed()
+    expect(selects()[1].value).toBe('')
+    expect(continueBtn()).toBeDisabled()
   })
 })
 
 describe('SetupWizardAdlib — resumeFormData', () => {
-  it('reopens on the Pay Structure page pre-filled with the in-progress answers', () => {
+  it('reopens with the Pay Structure clause already revealed, pre-filled with the in-progress answers', () => {
     const resumeFormData = {
       ...DEFAULT_CONFIG,
       startedUnemployed: false,
@@ -146,44 +148,39 @@ describe('SetupWizardAdlib — resumeFormData', () => {
     }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
     expect(screen.getByText(/I work for/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue setup/i })).not.toBeDisabled()
+    expect(continueBtn()).not.toBeDisabled()
   })
 
-  it('reopens on the single Welcome page for a resumed jobless answer', () => {
+  it('reopens on just the employment-status clause for a resumed jobless answer', () => {
     const resumeFormData = { ...DEFAULT_CONFIG, startedUnemployed: true }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
     expect(screen.getByText(/right now, i am/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue setup/i })).not.toBeDisabled()
+    expect(screen.queryByText(/I work for/i)).toBeNull()
+    expect(continueBtn()).not.toBeDisabled()
   })
 })
 
-describe('SetupWizardAdlib — Pay Structure page (DHL)', () => {
-  function goToPayPage() {
-    fireEvent.change(selects()[0], { target: { value: 'employed' } })
-    fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
-  }
-
+describe('SetupWizardAdlib — Pay Structure clause (DHL)', () => {
   it('reveals Team, then shift + pay-schedule blanks progressively', () => {
     renderAdlib()
-    goToPayPage()
-    fireEvent.change(selects()[0], { target: { value: 'DHL' } })
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
     expect(screen.getByText(/I'm on Team/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue setup/i })).toBeDisabled()
+    expect(continueBtn()).toBeDisabled()
 
-    fireEvent.change(selects()[1], { target: { value: 'A' } })
+    fireEvent.change(selects()[2], { target: { value: 'A' } })
     expect(screen.getByText(/working the/i)).toBeTruthy()
   })
 
   it('completes the DHL path and hands off to Schedule with DHL defaults applied', () => {
     const { onHandoff } = renderAdlib()
-    goToPayPage()
-    fireEvent.change(selects()[0], { target: { value: 'DHL' } })
-    fireEvent.change(selects()[1], { target: { value: 'B' } })
-    fireEvent.change(selects()[2], { target: { value: 'night' } })
-    fireEvent.change(selects()[3], { target: { value: 'weekly' } })
-    const btn = screen.getByRole('button', { name: /continue setup/i })
-    expect(btn).not.toBeDisabled()
-    fireEvent.click(btn)
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    fireEvent.change(selects()[2], { target: { value: 'B' } })
+    fireEvent.change(selects()[3], { target: { value: 'night' } })
+    fireEvent.change(selects()[4], { target: { value: 'weekly' } })
+    expect(continueBtn()).not.toBeDisabled()
+    fireEvent.click(continueBtn())
     const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
     expect(mergedFormData.employerPreset).toBe('DHL')
     expect(mergedFormData.dhlTeam).toBe('B')

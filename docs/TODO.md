@@ -4172,7 +4172,10 @@ in whether a friendlier, game-like onboarding reduces the setup-wizard friction 
 (`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools panel, both mobile/desktop
 copies). Reuses the exact same config fields/DHL-preset defaults as the real steps, then hands off
 into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for Schedule/Deductions/Tax
-Rates/Wrap Up (or the jobless mini-flow) — a real, completable run, not a mockup.
+Rates/Wrap Up (or the jobless mini-flow) — a real, click-through continuation, not a mockup.
+**Mock only — nothing is ever saved**, including that continuation (`App.jsx`'s `onComplete` skips
+`handleWizardComplete` whenever the run originated from this preview); Cancel also stays available
+the whole way through so admins can bail at any point with zero risk to real account data.
 
 **Open decisions, pending how the pilot feels in practice:**
 - [ ] Expand the ad-lib treatment to the remaining 4 steps (Schedule, Deductions, Tax Rates, Wrap

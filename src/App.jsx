@@ -3730,21 +3730,31 @@ export default function App() {
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ──
            config/initialStepId fall back to adlibHandoff when the Ad-Lib Wizard preview
-           (admin-only) handed off into this same mount — see adlibHandoff's own comment. */}
+           (admin-only) handed off into this same mount — see adlibHandoff's own comment.
+           adlibHandoff being set also means this run is MOCK ONLY: onComplete below skips
+           handleWizardComplete entirely (no setConfig, no savePersistedStateNow) so admins
+           can click all the way through to tune the feel with zero risk to real account
+           data, and onCancel stays available the whole way through instead of the normal
+           first-run "no cancel button" rule. */}
       {(wizardEntry !== null || wizardExiting) && (
         <SetupWizard
           config={adlibHandoff?.config ?? config}
           initialStepId={adlibHandoff?.initialStepId ?? null}
-          onComplete={(mergedConfig) => { setAdlibHandoff(null); handleWizardComplete(mergedConfig); }}
+          onComplete={(mergedConfig) => {
+            if (adlibHandoff) { setAdlibHandoff(null); closeWizardWithAnimation(); return; }
+            handleWizardComplete(mergedConfig);
+          }}
           onCancel={
-            wizardEntry !== false
+            adlibHandoff
               ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); }
-              : config.isInvestor
-                ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); setActiveInvestorAccount(1); }
-                // Regular first-run (non-investor, no ad-lib handoff) must stay
-                // uncancelable — undefined here (not a no-op function) is what
-                // makes SetupWizard omit the Cancel button entirely.
-                : undefined
+              : wizardEntry !== false
+                ? () => closeWizardWithAnimation()
+                : config.isInvestor
+                  ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+                  // Regular first-run (non-investor, no ad-lib handoff) must stay
+                  // uncancelable — undefined here (not a no-op function) is what
+                  // makes SetupWizard omit the Cancel button entirely.
+                  : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}

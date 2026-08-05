@@ -2418,11 +2418,21 @@ function StepStub({ title, sprint }) {
 // Ad-Lib Wizard preview (SetupWizardAdlib.jsx) to hand off into the remaining
 // real steps after its own pilot pages (Welcome + Pay Structure) are answered.
 // null/omitted preserves normal behavior (always opens at step 0).
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false, initialStepId = null }) {
+//
+// onBackBeforeStart: optional callback fired instead of the normal Back-decrement when
+// the admin hits Back on the very first step of an initialStepId handoff. Without this,
+// Back would fall through into this component's own Step0/Step1 — the real stacked-field
+// UI for the same two questions SetupWizardAdlib.jsx already asked ad-lib style, which
+// reads as "got kicked out of the preview" rather than a normal Back. Only ever fires at
+// that one boundary; every other Back press behaves exactly as before.
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false, initialStepId = null, onBackBeforeStart = null }) {
+  const initialStepIdxRef = useRef(0);
   const [stepIdx,   setStepIdx]   = useState(() => {
     if (initialStepId == null) return 0;
     const idx = STEP_DEFS.filter(s => s.showIf(config, initialLifeEvent)).findIndex(s => s.id === initialStepId);
-    return idx >= 0 ? idx : 0;
+    const resolved = idx >= 0 ? idx : 0;
+    initialStepIdxRef.current = resolved;
+    return resolved;
   });
   // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
   const [stepDir,   setStepDir]   = useState(1);
@@ -2481,6 +2491,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
 
   function handleBack() {
     setAttempted(false);
+    if (stepIdx === initialStepIdxRef.current && initialStepId != null && onBackBeforeStart) {
+      onBackBeforeStart(formData);
+      return;
+    }
     if (stepIdx > 0) { setStepDir(-1); setStepIdx(i => i - 1); }
   }
 

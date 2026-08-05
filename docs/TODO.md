@@ -4177,6 +4177,19 @@ Rates/Wrap Up (or the jobless mini-flow) — a real, click-through continuation,
 `handleWizardComplete` whenever the run originated from this preview); Cancel also stays available
 the whole way through so admins can bail at any point with zero risk to real account data.
 
+**Since first ship:** two rounds of feel-test feedback fixed. (1) The two pilot pages now start
+fully blank (`BLANK_PAY_FIELDS`) instead of pre-filling from the admin's own real config — an admin
+with an already-answered account (DHL preset, existing pay schedule) previously landed on both
+pages already Next-eligible with zero interaction, silently defeating the pilot's own
+required-field gating. Blank selects also read `(select)` in italics instead of a bare `___`, and
+the blank option stays choosable after answering (not removed from the list) so a pick can be
+undone back to blank. (2) Hitting Back on the real wizard's first handed-off step no longer falls
+through into that component's own Step0/Step1 (confusingly showing the stacked-field UI for
+the same two questions this pilot just asked ad-lib style) — `SetupWizard`'s new
+`onBackBeforeStart` prop intercepts Back at that exact boundary and `App.jsx` reopens
+`SetupWizardAdlib` via its `resumeFormData` prop, resuming on the last-answered page with the
+in-progress answers intact.
+
 **Open decisions, pending how the pilot feels in practice:**
 - [ ] Expand the ad-lib treatment to the remaining 4 steps (Schedule, Deductions, Tax Rates, Wrap
       Up), or stop at 2 if the feel doesn't hold up over a longer sentence-based flow

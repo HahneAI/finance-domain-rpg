@@ -27,7 +27,7 @@ const BLANK_FONT = {
   color: "var(--color-text-primary)", fontFamily: "var(--font-display)",
 };
 
-function InlineSelect({ value, onChange, options, placeholder = "___" }) {
+function InlineSelect({ value, onChange, options, placeholder = "(select)" }) {
   const hasValue = value != null && value !== "";
   return (
     <select
@@ -39,11 +39,13 @@ function InlineSelect({ value, onChange, options, placeholder = "___" }) {
         border: "none",
         borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
         color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
-        font: "inherit", fontWeight: 700, textAlign: "center",
-        padding: "0 4px", margin: "0 2px", cursor: "pointer",
+        font: "inherit", fontWeight: 700, fontStyle: hasValue ? "normal" : "italic",
+        textAlign: "center", padding: "0 4px", margin: "0 2px", cursor: "pointer",
       }}
     >
-      {!hasValue && <option value="" disabled>{placeholder}</option>}
+      {/* Kept as a real (non-disabled) option, not just a pre-selection placeholder — lets the
+          user explicitly pick back to blank after choosing something, same as any other option. */}
+      <option value="" disabled={false}>{placeholder}</option>
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
@@ -94,7 +96,7 @@ function WelcomePage({ formData, onChange }) {
       Let's set you up. Right now, I am{" "}
       <InlineSelect
         value={formData.startedUnemployed === true ? "unemployed" : formData.startedUnemployed === false ? "employed" : ""}
-        onChange={v => onChange({ startedUnemployed: v === "unemployed" })}
+        onChange={v => onChange({ startedUnemployed: v === "" ? null : v === "unemployed" })}
         options={[{ value: "employed", label: "employed" }, { value: "unemployed", label: "unemployed" }]}
       />.
     </p>
@@ -143,7 +145,7 @@ function PayStructurePage({ formData, onChange }) {
           {" "}I'm on Team{" "}
           <InlineSelect
             value={formData.dhlTeam ?? ""}
-            onChange={t => onChange(pickTeamPatch(t))}
+            onChange={t => onChange(t === "" ? { dhlTeam: null } : pickTeamPatch(t))}
             options={[{ value: "A", label: "A" }, { value: "B", label: "B" }]}
           />
           {formData.dhlTeam && (
@@ -151,12 +153,12 @@ function PayStructurePage({ formData, onChange }) {
               , working the{" "}
               <InlineSelect
                 value={formData.dhlNightShift === false ? "morning" : formData.dhlNightShift === true ? "night" : ""}
-                onChange={v => onChange({ dhlNightShift: v === "night", nightDiffRate: v === "night" ? 1.50 : 0 })}
+                onChange={v => onChange(v === "" ? { dhlNightShift: null, nightDiffRate: null } : { dhlNightShift: v === "night", nightDiffRate: v === "night" ? 1.50 : 0 })}
                 options={[{ value: "night", label: "night" }, { value: "morning", label: "morning" }]}
               />{" "}shift, paid{" "}
               <InlineSelect
                 value={formData.userPaySchedule ?? ""}
-                onChange={v => onChange({ userPaySchedule: v, annualSalary: null })}
+                onChange={v => onChange({ userPaySchedule: v === "" ? null : v, annualSalary: null })}
                 options={[{ value: "weekly", label: "weekly" }, { value: "salary", label: "every two weeks" }]}
               />.
             </>
@@ -168,7 +170,7 @@ function PayStructurePage({ formData, onChange }) {
           {" "}I get paid{" "}
           <InlineSelect
             value={formData.userPaySchedule ?? ""}
-            onChange={v => onChange({ userPaySchedule: v, annualSalary: null })}
+            onChange={v => onChange({ userPaySchedule: v === "" ? null : v, annualSalary: null })}
             options={[
               { value: "weekly", label: "weekly" },
               { value: "biweekly", label: "every two weeks" },
@@ -229,14 +231,38 @@ const PAGES = [
   },
 ];
 
+// Fields these two pilot pages ask about. Blanked on a fresh open (below) rather than
+// carried over from the admin's real config, so the mandatory-field gating on PAGES'
+// isValid actually has something to gate — pre-filling from `config` (which is the
+// admin's own real answers) made every field already "answered" before the admin
+// touched anything, silently bypassing both the blank-look and the required-field check.
+const BLANK_PAY_FIELDS = {
+  startedUnemployed: null, employerPreset: null, dhlTeam: null,
+  dhlNightShift: null, nightDiffRate: null, userPaySchedule: null,
+  annualSalary: null, baseRate: null, shiftHours: null,
+  otThreshold: null, otMultiplier: null, payPeriodEndDay: null,
+  scheduleIsVariable: null, bucketStartBalance: null, bucketCap: null,
+  bucketPayoutRate: null, diffRate: null, startingWeekIsLong: null,
+};
+
 // onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
 // answered. initialStepId targets the real SetupWizard's jobless mini-flow
 // (id 10) when unemployed, else Schedule (id 2) — see SetupWizard.jsx's
 // initialStepId prop.
-export function SetupWizardAdlib({ config, onHandoff, onCancel }) {
-  const [pageIdx, setPageIdx] = useState(0);
+//
+// resumeFormData (optional): when the admin already answered these 2 pages, handed off
+// into the real wizard, and then hit Back at the real wizard's very first step, App.jsx
+// reopens this component with the in-progress answers instead of the blanked defaults,
+// and resumes on the last page instead of page 0 — so Back lands them where they left
+// off in the ad-lib UI, not on the real wizard's stacked-field view of the same steps.
+export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData = null }) {
+  const [formData, setFormData] = useState(() => resumeFormData ?? { ...config, ...BLANK_PAY_FIELDS });
+  const [pageIdx, setPageIdx] = useState(() => {
+    if (!resumeFormData) return 0;
+    const pages = resumeFormData.startedUnemployed === true ? [PAGES[0]] : PAGES;
+    return pages.length - 1;
+  });
   const [stepDir, setStepDir] = useState(1);
-  const [formData, setFormData] = useState({ ...config });
 
   // Skipping straight to a single-page flow once "unemployed" is chosen —
   // Pay Structure is irrelevant for the jobless mini-flow, same as the real

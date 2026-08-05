@@ -4,7 +4,7 @@ import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
 import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
-import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
+import { computeNewJobSeasonRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 
 const STATUS_OPTIONS = [
   { v: "active",    label: "Active",    color: "var(--color-green)" },
@@ -15,15 +15,15 @@ const STATUS_OPTIONS = [
 const isFlexibleCategory = (cat) => cat === "Lifestyle";
 
 /**
- * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §1 mode rebuild).
+ * NewJobSeasonBudgetPanel — New Job Season's own Budget view (TODO §1 mode rebuild).
  *
- * Replaces BudgetPanel entirely while `config.jobLossMode` is true. The cash
- * on hand figure (persisted `config.jobLossCashOnHand`, TODO §1.H13,
- * timeline-aware per §1.H17) is editable here AND on JobLossHomePanel via
+ * Replaces BudgetPanel entirely while `config.newJobSeasonMode` is true. The cash
+ * on hand figure (persisted `config.newJobSeasonCashOnHand`, TODO §1.H13,
+ * timeline-aware per §1.H17) is editable here AND on NewJobSeasonHomePanel via
  * the same CashOnHandSheet — both commit to the same config fields via eager
  * save, so there's no single "owner" to drift from; the benefit-scenario
  * toggle (session-only, unrelated) still lives here only, with Home reading
- * it read-only. Both feed the shared runway calc (lib/jobLossRunway.js).
+ * it read-only. Both feed the shared runway calc (lib/newJobSeasonRunway.js).
  * Also owns expense add/remove/triage, all inline in one view rather than a
  * separate modal (the old ExpenseTriage.jsx) plus a jump back to the normal,
  * quarter-scoped BudgetPanel.
@@ -34,7 +34,7 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * budget planning. A flat weekly amount from today forward is the honest fit
  * for this mode, not a lesser version of the normal flow.
  */
-export function JobLossBudgetPanel({
+export function NewJobSeasonBudgetPanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
   effectiveToday, includeBenefits, setIncludeBenefits,
@@ -65,24 +65,24 @@ export function JobLossBudgetPanel({
 
   const huntIncome = sumJobHuntIncome(config);
 
-  const dash = useMemo(() => computeJobLossRunway({
+  const dash = useMemo(() => computeNewJobSeasonRunway({
     config, expenses, effectiveToday, extraCash: huntIncome,
   }), [config, expenses, effectiveToday, huntIncome]);
 
-  // Same shared editor as JobLossHomePanel's Cash On Hand card (TODO
+  // Same shared editor as NewJobSeasonHomePanel's Cash On Hand card (TODO
   // §1.H17) — confirming a value here resets the decay clock the same way,
   // since both surfaces commit to the identical config fields.
   const saveCashOnHand = (parsedValue) => {
-    const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
+    const next = { ...config, newJobSeasonCashOnHand: parsedValue, newJobSeasonCashOnHandAsOf: effectiveToday };
     setConfig(next);
     saveConfigNow?.(next);
   };
 
-  // Only expenses the user chose to track during Job Loss Mode (TODO §1
+  // Only expenses the user chose to track during New Job Season (TODO §1
   // expense review step) show up anywhere on this panel — untracked ones
   // stay untouched for normal-mode Budget, just invisible here.
   const trackedExpenses = useMemo(
-    () => (expenses ?? []).filter(exp => exp.trackDuringJobLoss !== false),
+    () => (expenses ?? []).filter(exp => exp.trackDuringNewJobSeason !== false),
     [expenses],
   );
 
@@ -99,7 +99,7 @@ export function JobLossBudgetPanel({
     const ids = new Set();
     if (!firstPaymentDate || !todayDate) return ids;
     trackedExpenses.forEach(exp => {
-      if ((exp.jobLossStatus ?? "active") !== "active") return;
+      if ((exp.newJobSeasonStatus ?? "active") !== "active") return;
       const due = getNextDueDate(exp, todayDate);
       if (due && due < firstPaymentDate) ids.add(exp.id);
     });
@@ -110,7 +110,7 @@ export function JobLossBudgetPanel({
     if (!todayDate) return [];
     const horizonDays = 35;
     return trackedExpenses
-      .filter(exp => (exp.jobLossStatus ?? "active") === "active")
+      .filter(exp => (exp.newJobSeasonStatus ?? "active") === "active")
       .map(exp => {
         const nextDue = getNextDueDate(exp, todayDate);
         if (!nextDue) return null;
@@ -137,15 +137,15 @@ export function JobLossBudgetPanel({
   }, [trackedExpenses, needsCoverageIds]);
 
   const flexibleActiveCount = trackedExpenses.filter(exp => (
-    isFlexibleCategory(exp.category) && (exp.jobLossStatus ?? "active") === "active"
+    isFlexibleCategory(exp.category) && (exp.newJobSeasonStatus ?? "active") === "active"
   )).length;
 
-  const setStatus = (id, status) => applyExpenseUpdate(prev => prev.map(e => e.id === id ? { ...e, jobLossStatus: status } : e));
+  const setStatus = (id, status) => applyExpenseUpdate(prev => prev.map(e => e.id === id ? { ...e, newJobSeasonStatus: status } : e));
   const toggleAutoReactivate = (id) => applyExpenseUpdate(prev => prev.map(e => (
     e.id === id ? { ...e, autoReactivateOnIncome: !(e.autoReactivateOnIncome ?? true) } : e
   )));
   const pauseAllFlexible = () => applyExpenseUpdate(prev => prev.map(e => (
-    isFlexibleCategory(e.category) && (e.jobLossStatus ?? "active") === "active" ? { ...e, jobLossStatus: "paused" } : e
+    isFlexibleCategory(e.category) && (e.newJobSeasonStatus ?? "active") === "active" ? { ...e, newJobSeasonStatus: "paused" } : e
   )));
   const removeExpense = (id) => applyExpenseUpdate(prev => prev.filter(e => e.id !== id));
 
@@ -163,7 +163,7 @@ export function JobLossBudgetPanel({
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
-      trackDuringJobLoss: true,
+      trackDuringNewJobSeason: true,
       dueDateAnchor: anchor,
       history: [{ effectiveFrom: effectiveToday ?? FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }],
       billingMeta: { amount, cycle: "every30days", effectiveFrom: effectiveToday ?? FISCAL_YEAR_START },
@@ -177,7 +177,7 @@ export function JobLossBudgetPanel({
 
   return (
     <div>
-      <PanelHero eyebrow="Job Loss Mode">Budget</PanelHero>
+      <PanelHero eyebrow="New Job Season">Budget</PanelHero>
 
       {/* ── Savings + unemployment scenario ── */}
       <SectionHeader sub="Feeds the runway numbers on Home">Savings & Benefits</SectionHeader>
@@ -359,7 +359,7 @@ export function JobLossBudgetPanel({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {sortedExpenses.map(exp => {
-            const status = exp.jobLossStatus ?? "active";
+            const status = exp.newJobSeasonStatus ?? "active";
             const isLoan = exp.type === "loan";
             const flexible = isFlexibleCategory(exp.category);
             const monthly = getExpenseDisplayAmount(exp) || null;

@@ -62,9 +62,9 @@ describe('ProfilePanel — main Account list renders', () => {
 // all show figures that don't apply without real income; a "Back to Work" row
 // replaces them as a second route into the same structure_change flow the Job
 // Loss banner's button already uses.
-describe('ProfilePanel — Job Loss Mode swaps Work & Pay for Back to Work', () => {
+describe('ProfilePanel — New Job Season swaps Work & Pay for Back to Work', () => {
   it('hides Job & Pay / Retirement & Benefits and shows a Back to Work row instead', () => {
-    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, onBackToWork: () => {} })
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, newJobSeasonMode: true }, onBackToWork: () => {} })
     expect(screen.queryByText('Work & Pay')).not.toBeInTheDocument()
     expect(screen.queryByText('Job & Pay')).not.toBeInTheDocument()
     expect(screen.queryByText('Retirement & Benefits')).not.toBeInTheDocument()
@@ -74,18 +74,18 @@ describe('ProfilePanel — Job Loss Mode swaps Work & Pay for Back to Work', () 
 
   it('calls onBackToWork when the row is pressed', () => {
     const onBackToWork = vi.fn()
-    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, onBackToWork })
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, newJobSeasonMode: true }, onBackToWork })
     fireEvent.click(screen.getByText('Back to Work'))
     expect(onBackToWork).toHaveBeenCalled()
   })
 
-  it('hides Tax Plan even for a tax-plan-eligible admin while jobLossMode is true', () => {
-    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, isAdmin: true, onBackToWork: () => {} })
+  it('hides Tax Plan even for a tax-plan-eligible admin while newJobSeasonMode is true', () => {
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, newJobSeasonMode: true }, isAdmin: true, onBackToWork: () => {} })
     expect(screen.queryByText('Tax Plan')).not.toBeInTheDocument()
   })
 
-  it('restores the normal Work & Pay group once jobLossMode is false', () => {
-    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: false } })
+  it('restores the normal Work & Pay group once newJobSeasonMode is false', () => {
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, newJobSeasonMode: false } })
     expect(screen.getByText('Work & Pay')).toBeInTheDocument()
     expect(screen.getByText('Job & Pay')).toBeInTheDocument()
     expect(screen.queryByText('Job Search')).not.toBeInTheDocument()

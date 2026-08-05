@@ -62,7 +62,7 @@ describe('getNextDueDate', () => {
     expect(getNextDueDate(e, new Date())).toBeNull()
   })
 
-  it('prefers dueDateAnchor over billingMeta.effectiveFrom (TODO §1 Job Loss due-date fix)', () => {
+  it('prefers dueDateAnchor over billingMeta.effectiveFrom (TODO §1 New Job Season due-date fix)', () => {
     // effectiveFrom gets stamped to "today" on every BudgetPanel amount edit, so it's
     // an amount-edit timestamp, not a real bill due date — dueDateAnchor is the honest one.
     const e = { dueDateAnchor: '2026-05-20', billingMeta: { amount: 50, cycle: 'every30days', effectiveFrom: '2026-07-01' } }
@@ -98,8 +98,8 @@ describe('getNextDueDate', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §1 Job Loss
-// expense review's payment-date step + JobLossBudgetPanel's add-expense fix
+// resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §1 New Job Season
+// expense review's payment-date step + NewJobSeasonBudgetPanel's add-expense fix
 // ─────────────────────────────────────────────────────────────
 
 describe('resolveWeekOfMonthAnchor', () => {

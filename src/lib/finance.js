@@ -477,13 +477,13 @@ export function buildYear(cfg, baseRateHistory = null) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
-  // Job Loss Mode (TODO §1.C): when active, weeks on/after jobLossDate have
+  // New Job Season (TODO §1.C): when active, weeks on/after newJobSeasonDate have
   // earned income forced to $0. Benefits/401k naturally fall to $0 too because
-  // grossPay drives them. Historical weeks before jobLossDate are untouched.
-  // §1.C6: returnToWorkDate, when set, ends Job Loss Mode at that boundary —
+  // grossPay drives them. Historical weeks before newJobSeasonDate are untouched.
+  // §1.C6: returnToWorkDate, when set, ends New Job Season at that boundary —
   // weeks on/after returnToWorkDate resume normal earned-income math.
-  const jobLossStart = cfg.jobLossMode ? parseIsoDate(cfg.jobLossDate) : null;
-  const returnToWork = cfg.jobLossMode ? parseIsoDate(cfg.returnToWorkDate) : null;
+  const newJobSeasonStart = cfg.newJobSeasonMode ? parseIsoDate(cfg.newJobSeasonDate) : null;
+  const returnToWork = cfg.newJobSeasonMode ? parseIsoDate(cfg.returnToWorkDate) : null;
   // Biweekly/salary: parity determines which idx%2 value marks a pay week.
   // Falls back to firstActiveIdx%2 when the user hasn't answered the wizard question.
   const isBiweeklyOrSalary = cfg.userPaySchedule === "biweekly" || cfg.userPaySchedule === "salary";
@@ -580,14 +580,14 @@ export function buildYear(cfg, baseRateHistory = null) {
              + overtimeHours * (weekBaseRate + nightDiffHr) * cfg.otMultiplier
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
-    // Job Loss Mode boundary: collapse earned-income inputs to zero from the
+    // New Job Season boundary: collapse earned-income inputs to zero from the
     // loss date forward so all downstream math (taxable gross, 401k, benefits
     // deduction, net) cascades naturally. Closes at returnToWorkDate (§1.C6)
     // so projected income resumes from that week onward.
-    const inJobLoss = jobLossStart
-      && weekEnd >= jobLossStart
+    const inNewJobSeason = newJobSeasonStart
+      && weekEnd >= newJobSeasonStart
       && (!returnToWork || weekEnd < returnToWork);
-    if (inJobLoss) {
+    if (inNewJobSeason) {
       totalHours = 0;
       regularHours = 0;
       overtimeHours = 0;
@@ -600,19 +600,19 @@ export function buildYear(cfg, baseRateHistory = null) {
     // window. Treated as non-taxed income — added to net by computeNet.
     let unemploymentIncome = 0;
     if (
-      inJobLoss
+      inNewJobSeason
       && cfg.unemploymentEnabled === true
       && (cfg.unemploymentWeekly ?? 0) > 0
       && (cfg.unemploymentDurationWeeks ?? 0) > 0
     ) {
-      const weeksSinceLoss = Math.floor((weekEnd - jobLossStart) / (7 * 86400000));
+      const weeksSinceLoss = Math.floor((weekEnd - newJobSeasonStart) / (7 * 86400000));
       const offset = cfg.unemploymentWaitingWeek ? 1 : 0;
       if (weeksSinceLoss >= offset && weeksSinceLoss < offset + cfg.unemploymentDurationWeeks) {
         unemploymentIncome = cfg.unemploymentWeekly;
       }
     }
 
-    const active = idx >= cfg.firstActiveIdx && !inJobLoss;
+    const active = idx >= cfg.firstActiveIdx && !inNewJobSeason;
     const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
     const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
     const k401ActivationDate = k401Start ?? benefitsStart;
@@ -1396,7 +1396,7 @@ function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, freedomA
 }
 
 // Resolves the "last finalized paycheck" figure that "This Week's Check" /
-// "Left This Week" style tiles read (TODO §1 Job Loss Mode investigation,
+// "Left This Week" style tiles read (TODO §1 New Job Season investigation,
 // 2026-07-19). Prefers the most recent past active week; when there isn't
 // one yet (a brand-new account, or the very first week after Back to Work —
 // firstActiveIdx pointing at the current week), falls back to the CURRENT

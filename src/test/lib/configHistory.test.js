@@ -39,9 +39,9 @@ describe('diffSensitiveFields', () => {
   })
 
   it('detects multiple changes across groups', () => {
-    const next = { ...DEFAULT_CONFIG, baseRate: 21.15, userState: 'IL', jobLossMode: true }
+    const next = { ...DEFAULT_CONFIG, baseRate: 21.15, userState: 'IL', newJobSeasonMode: true }
     expect(diffSensitiveFields(DEFAULT_CONFIG, next))
-      .toEqual(expect.arrayContaining(['baseRate', 'userState', 'jobLossMode']))
+      .toEqual(expect.arrayContaining(['baseRate', 'userState', 'newJobSeasonMode']))
     expect(diffSensitiveFields(DEFAULT_CONFIG, next)).toHaveLength(3)
   })
 

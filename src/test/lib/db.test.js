@@ -156,6 +156,50 @@ describe('loadUserData — config merge', () => {
     expect(result.config.paycheckBuffer).toBeUndefined()
     expect(result.config.bufferOverrideAck).toBeUndefined()
   })
+
+  it('migrates legacy jobLoss* config keys to New Job Season names', async () => {
+    const oldConfig = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      jobLossMode: true,
+      jobLossDate: '2026-06-01',
+      jobLossCashOnHand: 1200,
+      jobLossCashOnHandAsOf: '2026-06-05',
+      jobLossPendingCheckAmount: 300,
+      jobLossPendingCheckDate: '2026-06-10',
+    }
+    setupLoadMock(makeRow({ config: oldConfig }))
+
+    const result = await loadUserData()
+    expect(result.config.newJobSeasonMode).toBe(true)
+    expect(result.config.newJobSeasonDate).toBe('2026-06-01')
+    expect(result.config.newJobSeasonCashOnHand).toBe(1200)
+    expect(result.config.newJobSeasonCashOnHandAsOf).toBe('2026-06-05')
+    expect(result.config.newJobSeasonPendingCheckAmount).toBe(300)
+    expect(result.config.newJobSeasonPendingCheckDate).toBe('2026-06-10')
+    expect(result.config.jobLossMode).toBeUndefined()
+    expect(result.config.jobLossDate).toBeUndefined()
+    expect(result.config.jobLossCashOnHand).toBeUndefined()
+    expect(result.config.jobLossCashOnHandAsOf).toBeUndefined()
+    expect(result.config.jobLossPendingCheckAmount).toBeUndefined()
+    expect(result.config.jobLossPendingCheckDate).toBeUndefined()
+  })
+
+  it('migrates legacy per-expense jobLossStatus/trackDuringJobLoss keys to New Job Season names', async () => {
+    const expense = {
+      id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'paused',
+      trackDuringJobLoss: false,
+      history: [{ effectiveFrom: '2026-01-01', weekly: [400, 400, 400, 400] }],
+    }
+    setupLoadMock(makeRow({ config: { ...DEFAULT_CONFIG, setupComplete: true }, expenses: [expense] }))
+
+    const result = await loadUserData()
+    const migrated = result.expenses.find(e => e.id === 'exp_rent')
+    expect(migrated.newJobSeasonStatus).toBe('paused')
+    expect(migrated.trackDuringNewJobSeason).toBe(false)
+    expect(migrated.jobLossStatus).toBeUndefined()
+    expect(migrated.trackDuringJobLoss).toBeUndefined()
+  })
 })
 
 describe('loadUserData — loan history regeneration', () => {

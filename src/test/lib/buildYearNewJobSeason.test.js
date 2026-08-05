@@ -21,16 +21,16 @@ const BASE_CFG = {
 }
 
 // Week 0 ends 2026-01-05 (FISCAL_YEAR_START); weekEnd advances 7 days per idx.
-// jobLossDate 2026-03-01 (Sunday) → first affected weekEnd is idx 8 (Mon 2026-03-02).
+// newJobSeasonDate 2026-03-01 (Sunday) → first affected weekEnd is idx 8 (Mon 2026-03-02).
 const JOB_LOSS_CFG = {
   ...BASE_CFG,
-  jobLossMode: true,
-  jobLossDate: '2026-03-01',
+  newJobSeasonMode: true,
+  newJobSeasonDate: '2026-03-01',
 }
 const FIRST_LOSS_IDX = 8
 
-describe('buildYear — Job Loss Mode', () => {
-  it('zeros earned income for weeks on/after jobLossDate', () => {
+describe('buildYear — New Job Season', () => {
+  it('zeros earned income for weeks on/after newJobSeasonDate', () => {
     const weeks = buildYear(JOB_LOSS_CFG)
     const lost = weeks[FIRST_LOSS_IDX]
     expect(lost.grossPay).toBe(0)
@@ -41,15 +41,15 @@ describe('buildYear — Job Loss Mode', () => {
     expect(weeks.slice(FIRST_LOSS_IDX).every(w => w.grossPay === 0 && !w.active)).toBe(true)
   })
 
-  it('leaves historical weeks before jobLossDate untouched', () => {
+  it('leaves historical weeks before newJobSeasonDate untouched', () => {
     const weeks = buildYear(JOB_LOSS_CFG)
     const before = weeks[FIRST_LOSS_IDX - 1]
     expect(before.grossPay).toBeCloseTo(800)
     expect(before.active).toBe(true)
   })
 
-  it('ignores jobLossDate when jobLossMode is off', () => {
-    const weeks = buildYear({ ...JOB_LOSS_CFG, jobLossMode: false })
+  it('ignores newJobSeasonDate when newJobSeasonMode is off', () => {
+    const weeks = buildYear({ ...JOB_LOSS_CFG, newJobSeasonMode: false })
     expect(weeks[FIRST_LOSS_IDX].grossPay).toBeCloseTo(800)
     expect(weeks[FIRST_LOSS_IDX].active).toBe(true)
   })

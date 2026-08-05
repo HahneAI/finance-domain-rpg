@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { MetricCard, Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
-import { computeJobLossRunway, sumJobHuntIncome } from "../lib/jobLossRunway.js";
+import { computeNewJobSeasonRunway, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
 import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { JobHuntChatPanel } from "./JobHuntChatPanel.jsx";
@@ -9,25 +9,25 @@ import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlemen
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 
 /**
- * JobLossHomePanel — Job Loss Mode's own Home view (TODO §1 mode rebuild).
+ * NewJobSeasonHomePanel — New Job Season's own Home view (TODO §1 mode rebuild).
  *
- * Replaces HomePanel entirely while `config.jobLossMode` is true, rather than
+ * Replaces HomePanel entirely while `config.newJobSeasonMode` is true, rather than
  * layering job-loss content on top of (or hiding tiles from) the normal Home —
  * this is meant to read as a genuinely different mode the app enters, not the
  * regular dashboard with things moved around.
  *
- * Shows: a Cash On Hand card (persisted config.jobLossCashOnHand — mandatory
- * at JobLossEntry, editable here AND on JobLossBudgetPanel via the shared
+ * Shows: a Cash On Hand card (persisted config.newJobSeasonCashOnHand — mandatory
+ * at NewJobSeasonEntry, editable here AND on NewJobSeasonBudgetPanel via the shared
  * CashOnHandSheet, both committing to the same field so neither can drift;
- * timeline-aware per §1.H17 — see lib/jobLossRunway.js's effectiveCashOnHand),
+ * timeline-aware per §1.H17 — see lib/newJobSeasonRunway.js's effectiveCashOnHand),
  * the runway headline (days / cliff date / weekly burn), a small "log extra
  * income" widget for cash made while job hunting (gig work, odd jobs — folded
  * straight into the runway's savings side), and the Re-employment Tracker
  * (target income + application log). The benefit-scenario toggle still lives
- * on JobLossBudgetPanel only, passed in here read-only.
+ * on NewJobSeasonBudgetPanel only, passed in here read-only.
  *
  * Also mounts CoachNetWorthCard (DW-8 fix, docs/BUG_FIX_TODO.md): the Red
- * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
+ * tier ("New Job Season, runway under 30 days") was structurally unreachable
  * because this panel replaces HomePanel entirely and never rendered the card
  * — same canAccessAskCoachGeneral gate as HomePanel's own mount (isAdmin/
  * isTester/isInvestor or a real trial/paid entitlement — docs/coach-entry-points.md §2),
@@ -38,7 +38,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
  * not passed through) — only Red is reachable from this panel, which
  * matches what Red actually means.
  */
-export function JobLossHomePanel({
+export function NewJobSeasonHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, effectiveToday, includeBenefits, readOnly = false,
   currentWeek, isAdmin, isTester, entitlement,
@@ -68,17 +68,17 @@ export function JobLossHomePanel({
 
   const huntIncome = sumJobHuntIncome(config);
 
-  const dash = useMemo(() => computeJobLossRunway({
+  const dash = useMemo(() => computeNewJobSeasonRunway({
     config, expenses, effectiveToday, extraCash: huntIncome,
   }), [config, expenses, effectiveToday, huntIncome]);
 
   // Confirming a value in the sheet is the discrete "I checked my balance,
   // this is true right now" moment — resets the decay clock by stamping
-  // jobLossCashOnHandAsOf alongside the new figure (TODO §1.H17). Eager-save
+  // newJobSeasonCashOnHandAsOf alongside the new figure (TODO §1.H17). Eager-save
   // pattern (docs/TODO.md): computed synchronously, passed to both setState
   // and saveConfigNow.
   const saveCashOnHand = (parsedValue) => {
-    const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
+    const next = { ...config, newJobSeasonCashOnHand: parsedValue, newJobSeasonCashOnHandAsOf: effectiveToday };
     setConfig(next);
     saveConfigNow?.(next);
   };
@@ -131,7 +131,7 @@ export function JobLossHomePanel({
 
   return (
     <div>
-      <PanelHero eyebrow="Job Loss Mode">Home</PanelHero>
+      <PanelHero eyebrow="New Job Season">Home</PanelHero>
 
       {/* ── Cash On Hand (TODO §1.H17) — its own card, above Runway; tap
           anywhere (pencil badge signals it) to open the update sheet. ── */}

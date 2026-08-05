@@ -97,10 +97,14 @@ Reuses the exact same config fields and DHL-preset defaults as real Step0/Step1 
 `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two experiences
 on the fields they share. Once its 2 pages are answered, `onHandoff(mergedFormData, initialStepId)`
 closes the preview and reopens the real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at
-Schedule (id 2) or the jobless mini-flow (id 10) for the remaining steps — a real, completable
-wizard run, not a throwaway mockup; completing it saves for real exactly like any other wizard
-entry. Only 2 of 6 steps are ad-libbed today — expanding to the rest, or promoting this to a real
-user-facing A/B split, is a future decision pending how the pilot feels in practice.
+Schedule (id 2) or the jobless mini-flow (id 10) for the remaining steps — a real, click-through
+continuation, not a throwaway mockup. **MOCK ONLY — nothing is ever saved**, including that
+continuation: `App.jsx`'s wizard mount's `onComplete` skips `handleWizardComplete` entirely
+whenever `adlibHandoff` is set (no `setConfig`, no `savePersistedStateNow`), and `onCancel` stays
+available the whole way through instead of first-run's normal "no cancel button" rule — admins can
+click all the way to Finish with zero risk to real account data. Only 2 of 6 steps are ad-libbed
+today — expanding to the rest, or promoting this to a real user-facing A/B split, is a future
+decision pending how the pilot feels in practice.
 
 ---
 

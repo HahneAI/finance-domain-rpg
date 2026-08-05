@@ -14,6 +14,12 @@ import { DHL_PRESET } from "../constants/config.js";
 // (via its initialStepId prop) for the remaining steps with zero drift
 // between the two experiences — same fields, same defaults, just a different
 // skin on the first two.
+//
+// MOCK ONLY — nothing from this preview, including the handed-off real-wizard
+// continuation, is ever saved. App.jsx's onComplete for that hand-off skips
+// handleWizardComplete entirely (no setConfig, no savePersistedStateNow) as
+// long as adlibHandoff is set, so admins can click all the way through to
+// tune the feel with zero risk to real account data.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BLANK_FONT = {
@@ -277,7 +283,7 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel }) {
               Ad-Lib Preview · {pageIdx + 1} of {activePages.length}
             </div>
             <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", padding: "2px 8px" }}>
-              Admin Only
+              Admin Only · Not Saved
             </div>
           </div>
           <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)" }}>

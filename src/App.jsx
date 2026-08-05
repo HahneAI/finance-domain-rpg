@@ -16,6 +16,7 @@ import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
+import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
 import { TrialExplainerScreen } from "./components/TrialExplainerScreen.jsx";
@@ -364,6 +365,13 @@ export default function App() {
   // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
   // Allows the wizard to stay mounted during exit animation, then unmount after.
   const [wizardExiting, setWizardExiting] = useState(false);
+  // Ad-Lib Wizard preview (admin-only, TODO: experimental split-test) — toggled
+  // from the Admin Tools panel, never reachable by a real user. adlibHandoff
+  // carries the pilot's collected answers + which real STEP_DEFS id to resume
+  // at once the ad-lib pages are done; kept separate from `config` so nothing
+  // is written/autosaved until the real wizard's own onComplete actually fires.
+  const [adlibPreviewOpen, setAdlibPreviewOpen] = useState(false);
+  const [adlibHandoff, setAdlibHandoff] = useState(null);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -2276,6 +2284,15 @@ export default function App() {
                 >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
               </div>
 
+              {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
+                <button
+                  onClick={() => setAdlibPreviewOpen(true)}
+                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
+                >Preview Fill-In-The-Blank Pilot</button>
+              </div>
+
               {/* Config Raw View */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
@@ -3007,6 +3024,15 @@ export default function App() {
               >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
             </div>
 
+            {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
+              <button
+                onClick={() => setAdlibPreviewOpen(true)}
+                style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
+              >Preview Fill-In-The-Blank Pilot</button>
+            </div>
+
             {/* Config Raw View */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -3702,21 +3728,40 @@ export default function App() {
           savePersistedStateNow({ config: nextConfig });
         }}
       />
-      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
+      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ──
+           config/initialStepId fall back to adlibHandoff when the Ad-Lib Wizard preview
+           (admin-only) handed off into this same mount — see adlibHandoff's own comment. */}
       {(wizardEntry !== null || wizardExiting) && (
         <SetupWizard
-          config={config}
-          onComplete={handleWizardComplete}
+          config={adlibHandoff?.config ?? config}
+          initialStepId={adlibHandoff?.initialStepId ?? null}
+          onComplete={(mergedConfig) => { setAdlibHandoff(null); handleWizardComplete(mergedConfig); }}
           onCancel={
             wizardEntry !== false
-              ? () => closeWizardWithAnimation()
+              ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); }
               : config.isInvestor
-                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+                ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+                // Regular first-run (non-investor, no ad-lib handoff) must stay
+                // uncancelable — undefined here (not a no-op function) is what
+                // makes SetupWizard omit the Cancel button entirely.
                 : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}
           isExiting={wizardExiting}
+        />
+      )}
+      {/* ── Ad-Lib Wizard preview (admin-only experiment) — fill-in-the-blank pilot
+           for the first two steps; hands off into the real wizard above for the rest. ── */}
+      {isAdmin && adlibPreviewOpen && (
+        <SetupWizardAdlib
+          config={config}
+          onCancel={() => setAdlibPreviewOpen(false)}
+          onHandoff={(mergedFormData, initialStepId) => {
+            setAdlibPreviewOpen(false);
+            setAdlibHandoff({ config: mergedFormData, initialStepId });
+            setWizardEntry(false);
+          }}
         />
       )}
     </div>

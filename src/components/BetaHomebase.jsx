@@ -1,0 +1,239 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Pressable, SH, useFoldTransition } from "./ui.jsx";
+import { ChangelogBody } from "./ChangelogModal.jsx";
+import {
+  fetchBetaChecklistItems,
+  fetchMyChecklistCompletions,
+  toggleBetaChecklistItem,
+  fetchBetaSuggestions,
+  fetchMyBetaScore,
+  fetchPublishedChangelogEntries,
+} from "../lib/db.js";
+
+// Beta Tester Homebase (docs/TODO.md §12, database/migrations/037) — one
+// destination weaving together the scoring rubric, a personal feature
+// checklist, admin-authored suggestion prompts, and a recap of the "What's
+// New" changelog. Opened from the icon next to the notification bell
+// (App.jsx), gated the same way every other tracked-cohort-only surface is
+// (isTrackedBetaTester — the icon itself is hidden for friends/family
+// testers, not just this modal's content).
+//
+// Same portal + fold-motion shell as ChangelogModal/the drawer feedback
+// modal — position:fixed must portal to document.body or iOS Safari
+// hit-tests against the wrong scroll container.
+
+const RUBRIC_CATEGORIES = [
+  { key: "usage_score", label: "App Usage", max: 50 },
+  { key: "feedback_score", label: "Feedback", max: 25 },
+  { key: "calls_score", label: "Call Attendance", max: 15 },
+  { key: "longevity_score", label: "Longevity", max: 10 },
+];
+
+function ScoreRow({ label, value, max }) {
+  const scored = typeof value === "number";
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+      <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>{label}</span>
+      <span style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: scored ? "var(--color-teal)" : "var(--color-text-disabled)" }}>
+        {scored ? `${value} / ${max}` : `Not yet scored (of ${max})`}
+      </span>
+    </div>
+  );
+}
+
+function ScoreSection({ score }) {
+  const total = score
+    ? RUBRIC_CATEGORIES.reduce((sum, c) => sum + (typeof score[c.key] === "number" ? score[c.key] : 0), 0)
+    : null;
+  const anyScored = score && RUBRIC_CATEGORIES.some(c => typeof score[c.key] === "number");
+
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <SH>Your Score</SH>
+      <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "4px 14px" }}>
+        {RUBRIC_CATEGORIES.map(c => (
+          <ScoreRow key={c.key} label={c.label} value={score?.[c.key] ?? null} max={c.max} />
+        ))}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 6px" }}>
+          <span style={{ fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Total</span>
+          <span style={{ fontSize: "15px", fontWeight: "bold", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+            {anyScored ? `${total} / 100` : "Not yet scored"}
+          </span>
+        </div>
+      </div>
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginTop: "10px" }}>
+        Scoring is reviewed by hand at the end of the 10-week program, not calculated live —
+        this is a running reference, not a running total. <strong>70–100</strong> (floor met on
+        Usage) → lifetime access. <strong>60–69</strong> (floor met) → 6 months free.
+        Below that, or floor not met → no perk.
+      </div>
+    </div>
+  );
+}
+
+function ChecklistSection({ items, completedIds, onToggle }) {
+  const completedCount = items.filter(i => completedIds.has(i.id)).length;
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <SH right={items.length > 0 ? `${completedCount} / ${items.length}` : null}>Feature Checklist</SH>
+      {items.length === 0 ? (
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {items.map(item => {
+            const checked = completedIds.has(item.id);
+            return (
+              <label
+                key={item.id}
+                style={{ display: "flex", alignItems: "flex-start", gap: "10px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px", cursor: "pointer" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(item.id, !checked)}
+                  style={{ width: "16px", height: "16px", marginTop: "1px", accentColor: "var(--color-teal)", cursor: "pointer", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: "12px", color: checked ? "var(--color-text-secondary)" : "var(--color-text-primary)", textDecoration: checked ? "line-through" : "none" }}>
+                    {item.title}
+                  </div>
+                  {item.body && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{item.body}</div>}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuggestionsSection({ items }) {
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <SH>Suggestions From The Team</SH>
+      {items.length === 0 ? (
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {items.map(item => (
+            <div key={item.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: item.body ? "6px" : 0 }}>{item.title}</div>
+              {item.body && <ChangelogBody markdown={item.body} />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WhatsNewSection({ entries }) {
+  if (entries.length === 0) return null;
+  return (
+    <div>
+      <SH>What's New</SH>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {entries.map(entry => (
+          <div key={entry.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px", marginBottom: "6px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+              {entry.published_at && (
+                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", flexShrink: 0 }}>
+                  {new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </div>
+              )}
+            </div>
+            <ChangelogBody markdown={entry.body} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function BetaHomebase({ open, onClose, isTester, betaCodeUsed }) {
+  const fold = useFoldTransition(open, { ms: 340 });
+  const [loading, setLoading] = useState(true);
+  const [checklistItems, setChecklistItems] = useState([]);
+  const [completedIds, setCompletedIds] = useState(new Set());
+  const [suggestions, setSuggestions] = useState([]);
+  const [score, setScore] = useState(null);
+  const [changelogEntries, setChangelogEntries] = useState([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetchBetaChecklistItems(),
+      fetchMyChecklistCompletions(),
+      fetchBetaSuggestions(),
+      fetchMyBetaScore(),
+      fetchPublishedChangelogEntries(5),
+    ]).then(([items, completions, suggestionItems, myScore, changelog]) => {
+      if (cancelled) return;
+      setChecklistItems(items);
+      setCompletedIds(new Set(completions));
+      setSuggestions(suggestionItems);
+      setScore(myScore);
+      setChangelogEntries(changelog);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [open]);
+
+  async function handleToggle(itemId, completed) {
+    // Optimistic — flip local state immediately, roll back only if the write fails.
+    setCompletedIds(prev => {
+      const next = new Set(prev);
+      if (completed) next.add(itemId); else next.delete(itemId);
+      return next;
+    });
+    const result = await toggleBetaChecklistItem({ isTester, betaCodeUsed, itemId, completed });
+    if (!result.ok) {
+      setCompletedIds(prev => {
+        const next = new Set(prev);
+        if (completed) next.delete(itemId); else next.add(itemId);
+        return next;
+      });
+    }
+  }
+
+  if (!fold.mounted) return null;
+
+  return createPortal(
+    <div
+      className="fold-backdrop" data-fold={fold.fold}
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+    >
+      <div
+        className="fold-modal" data-fold={fold.fold}
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: "520px", maxHeight: "88vh", overflowY: "auto", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", padding: "22px" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
+          <div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>10-Week Beta</div>
+            <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.3px" }}>Tester Homebase</div>
+          </div>
+          <Pressable onClick={onClose} aria-label="Close" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>✕</Pressable>
+        </div>
+
+        {loading ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Loading…</div>
+        ) : (
+          <>
+            <ScoreSection score={score} />
+            <ChecklistSection items={checklistItems} completedIds={completedIds} onToggle={handleToggle} />
+            <SuggestionsSection items={suggestions} />
+            <WhatsNewSection entries={changelogEntries} />
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}

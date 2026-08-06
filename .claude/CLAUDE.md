@@ -313,7 +313,8 @@ periodic full-schema recaps, not real migrations — never assign one the actual
 number in sequence expecting it to run. They exist purely so a session can read one file instead
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
 make them impossible to mistake for a pending migration. Latest bookmark:
-`022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
+`038_BOOKMARK_schema_snapshot_2026-08-06.sql` (compiled from files through migration 037, but
+**verified live only through 035** — see below).
 Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
 `beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
@@ -324,12 +325,18 @@ Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 0
 link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
 chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
 Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123) exist — **the next real migration
-is 038.** Verify against the folder before numbering; this note has now gone stale five times
+is 039.** Verify against the folder before numbering; this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
-parallel branch — resolved by renumbering the resume_profile migration to 036 on merge — a fresh
-BOOKMARK compiling schema state through 037 is now overdue; the existing `022` snapshot is stale
-for the same reason).
+parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).
+
+**⚠️ 036 and 037 are committed files that have NOT been run against production** — confirmed
+2026-08-06 by reconciling a live Supabase schema export against the migrations folder for the
+038 bookmark: `resume_profile` is absent and `coach_chats.chat_type`'s CHECK constraint still
+lacks `resume_review` (036 never ran), and `beta_content_items`/`beta_checklist_completions`/
+`beta_scores` are all absent (037 never ran). **Practical effect: Résumé Review (§18.E1) and the
+Beta Tester Homebase are both non-functional in production right now** — apply both migrations
+before relying on either feature. Once applied, the next bookmark should extend through 037.
 
 ---
 

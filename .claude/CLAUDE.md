@@ -88,47 +88,63 @@ instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off
 wizard after its own pilot pages are answered. No effect on any existing call site that omits it.
 
 **`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
-reimagining of the wizard's first two steps (Welcome + Pay Structure) as one big sentence per page
-with inline `<select>`/`<input>` blanks, instead of stacked form fields — pilot for a friendlier
-onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both
-mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real
-signup** — `isAdmin` gates the trigger button, and the component itself has no other entry point.
-Reuses the exact same config fields and DHL-preset defaults as real Step0/Step1 (see
-`pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two experiences
-on the fields they share. Once its 2 pages are answered, `onHandoff(mergedFormData, initialStepId)`
-closes the preview and reopens the real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at
-Schedule (id 2) or the jobless mini-flow (id 10) for the remaining steps — a real, click-through
-continuation, not a throwaway mockup. **MOCK ONLY — nothing is ever saved**, including that
-continuation: `App.jsx`'s wizard mount's `onComplete` skips `handleWizardComplete` entirely
-whenever `adlibHandoff` is set (no `setConfig`, no `savePersistedStateNow`), and `onCancel` stays
-available the whole way through instead of first-run's normal "no cancel button" rule — admins can
-click all the way to Finish with zero risk to real account data. Only 2 of 6 steps are ad-libbed
-today — expanding to the rest, or promoting this to a real user-facing A/B split, is a future
-decision pending how the pilot feels in practice.
+reimagining of the wizard's first two steps (Welcome + Pay Structure) as one continuous mad-libs
+sentence with inline `<select>`/`<input>` blanks, instead of stacked form fields or a page-per-step
+flow — pilot for a friendlier onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib
+Wizard" → Preview button, both mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen`
+state; **never reachable by a real signup** — `isAdmin` gates the trigger button, and the
+component itself has no other entry point. Reuses the exact same config fields and DHL-preset
+defaults as real Step0/Step1 (see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero
+drift between the two experiences on the fields they share. Once the sentence is fully answered,
+`onHandoff(mergedFormData, initialStepId)` closes the preview and reopens the real `SetupWizard`
+(via `App.jsx`'s `adlibHandoff` state) at Schedule (id 2) or the jobless mini-flow (id 10) for the
+remaining steps — a real, click-through continuation, not a throwaway mockup. **MOCK ONLY —
+nothing is ever saved**, including that continuation: `App.jsx`'s wizard mount's `onComplete` skips
+`handleWizardComplete` entirely whenever `adlibHandoff` is set (no `setConfig`, no
+`savePersistedStateNow`), and `onCancel` stays available the whole way through instead of
+first-run's normal "no cancel button" rule — admins can click all the way to Finish with zero risk
+to real account data. Only these 2 steps are ad-libbed today — expanding to the rest, or promoting
+this to a real user-facing A/B split, is a future decision pending how the pilot feels in practice.
 
+- **One page, not two — clauses cascade in as each answer unlocks the next.** Welcome + Pay
+  Structure are a single `IntakePage` component and a single sentence; there is no internal
+  Next/Back between them anymore (no `PAGES` array, no `pageIdx`). Each subsequent clause is a
+  plain `formData`-gated conditional (`isEmployed && (…)`, `isEmployerDHL && (…)`, etc.) that mounts
+  the instant its prerequisite answer is given — e.g. picking "employed" reveals "I work for ___"
+  on the same page immediately, no click required. The outer chrome keeps a single "Continue
+  Setup" button gated by `isFormValid()` (mirrors STEP_DEFS id 0 + id 1 combined) and no Back
+  button at all — with everything on one page there's nothing to page back to; undoing an earlier
+  answer is just re-picking that blank directly, still visible above.
+- **Each newly-revealed clause rolls in with a typed reveal, not an instant appear.** `TypedText`
+  runs the clause's static wording through the `adlibType` stepped `clip-path` keyframe
+  (`index.css`) — a "crisp" blocky reveal, not a smooth wipe — combined with the existing
+  `fadeSlideUp` fade+lift in the same `animation` shorthand, so the clause both rolls onto the page
+  and types itself out at once. `FadeIn` then fades the blank in at `delay = typeDuration(precedingText)`,
+  so the select/input appears right as its introducing text finishes typing. All `TypedText` within
+  the same clause use `delay=0` (they mount together the instant the clause becomes eligible, so
+  they can type in parallel — no cumulative per-segment delay bookkeeping needed).
 - **Blank by default, not prefilled from the admin's real config.** `formData` starts as
-  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the two pilot pages
-  ask about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
+  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the sentence asks
+  about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
   `userPaySchedule`, `annualSalary`, `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`,
   `payPeriodEndDay`, `scheduleIsVariable`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`,
   `diffRate`, `startingWeekIsLong`). Without this, an admin whose real account already has these
-  answered (e.g. a DHL-preset admin) would land on both pages fully pre-filled and instantly
-  Next-eligible — silently skipping the pilot's own required-field gating (`PAGES[].isValid`,
-  already correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
+  answered (e.g. a DHL-preset admin) would land on the page fully pre-filled and instantly
+  Continue-Setup-eligible — silently skipping `isFormValid()`'s required-field gating (already
+  correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
   `InlineSelect` reselecting its blank `(select)` option must resolve to `null` (not a falsy
   default), or clearing back to blank would misreport as a real answer — see the explicit
-  `v === "" ? null : …` branches in `PayStructurePage`'s `onChange` handlers.
+  `v === "" ? null : …` branches in `IntakePage`'s `onChange` handlers.
 - **Back at the hand-off boundary returns to this component, not the real Step0/Step1.** Without
   intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Schedule id 2, or
   the jobless flow id 10) falls through to that component's own Welcome/Pay Structure — the
-  stacked-field UI for the same two questions this pilot just asked ad-lib style, which reads as
+  stacked-field UI for the same questions this pilot just asked ad-lib style, which reads as
   "kicked out of the preview." `SetupWizard`'s optional `onBackBeforeStart(formData)` prop fires
   instead, exactly once, only when `stepIdx` is still at the resolved `initialStepId` index — every
   other Back press behaves as before. `App.jsx` wires this to reopen `SetupWizardAdlib` via its
-  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `pageIdx` at the last page of the
-  resolved `activePages` (so a resumed jobless answer reopens on Welcome; anything else reopens on
-  Pay Structure) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
-  Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
+  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `formData` directly from the
+  in-progress answers — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on
+  both Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
   blank again.
 
 ---

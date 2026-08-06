@@ -2093,6 +2093,8 @@ function ChangelogAdminDetail({ onBack }) {
   const [showPreview, setShowPreview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
+  console.log("[ChangelogAdminDetail] Rendered - state:", { entries, loadError, editingId });
+
   // Mount-only fetch, same inline-async-function-inside-the-effect shape
   // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
   // an effect that calls an *externally defined* function containing
@@ -2100,12 +2102,20 @@ function ChangelogAdminDetail({ onBack }) {
   // top-level function. Post-mutation UI updates (below) are optimistic
   // local state edits from the API's own response instead of a re-fetch.
   useEffect(() => {
+    console.log("[ChangelogAdminDetail] Mount effect: Starting load");
     let cancelled = false;
     async function load() {
-      const result = await fetchAllChangelogEntries();
-      if (cancelled) return;
-      if (!result.ok) setLoadError(result.error);
-      else { setLoadError(null); setEntries(result.entries); }
+      try {
+        console.log("[ChangelogAdminDetail] Load: Fetching entries...");
+        const result = await fetchAllChangelogEntries();
+        console.log("[ChangelogAdminDetail] Load: Got result", result);
+        if (cancelled) return;
+        if (!result.ok) setLoadError(result.error);
+        else { setLoadError(null); setEntries(result.entries); }
+      } catch (err) {
+        console.error("[ChangelogAdminDetail] Load exception:", err);
+        if (!cancelled) setLoadError(`Exception: ${err.message}`);
+      }
     }
     load();
     return () => { cancelled = true; };
@@ -2237,22 +2247,23 @@ function ChangelogAdminDetail({ onBack }) {
     );
   }
 
-  return (
-    <>
-      <BackBar onBack={onBack} title="Changelog" />
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
-        Published entries appear as a "What's New" prompt alongside the update-available
-        banner, the next time a user's app detects a new deploy.
-      </div>
-      <Pressable
-        onClick={startNew}
-        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
-      >
-        + New Entry
-      </Pressable>
+  try {
+    return (
+      <>
+        <BackBar onBack={onBack} title="Changelog" />
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+          Published entries appear as a "What's New" prompt alongside the update-available
+          banner, the next time a user's app detects a new deploy.
+        </div>
+        <Pressable
+          onClick={startNew}
+          style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+        >
+          + New Entry
+        </Pressable>
 
-      {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+        {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
+        {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error: {loadError}</div>}
       {entries !== null && !loadError && entries.length === 0 && (
         <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
@@ -2291,7 +2302,19 @@ function ChangelogAdminDetail({ onBack }) {
         })}
       </div>
     </>
-  );
+    );
+  } catch (err) {
+    console.error("[ChangelogAdminDetail] Render error:", err);
+    return (
+      <>
+        <BackBar onBack={onBack} title="Changelog" />
+        <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
+          <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{err?.message || String(err)}</div>
+        </div>
+      </>
+    );
+  }
 }
 
 export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {

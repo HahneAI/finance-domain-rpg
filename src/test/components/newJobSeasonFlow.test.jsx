@@ -459,14 +459,14 @@ describe('NewJobSeasonHomePanel', () => {
         includeBenefits
       />
     )
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
     expect(screen.getByText('Weekly Burn')).toBeTruthy()
   })
 
   it('renders with empty expenses and no unemployment', () => {
     const cfg = { ...JOB_LOSS_CONFIG, unemploymentEnabled: false, unemploymentWeekly: null }
     render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
   })
 
   // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from

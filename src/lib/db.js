@@ -1175,12 +1175,20 @@ export async function fetchAllChangelogEntries() {
   const headers = await changelogAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in", entries: [] };
   try {
+    console.log("[db] Fetching changelog entries with headers:", !!headers);
     const res = await fetch("/api/admin-changelog", { method: "GET", headers });
+    console.log("[db] Changelog fetch response status:", res.status);
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load entries", entries: [] };
+    console.log("[db] Changelog payload:", payload);
+    if (!res.ok) {
+      const errorMsg = payload?.error || "Failed to load entries";
+      console.log("[db] Changelog API error:", res.status, errorMsg);
+      return { ok: false, error: `API ${res.status}: ${errorMsg}`, entries: [] };
+    }
     return { ok: true, entries: payload.entries ?? [] };
   } catch (err) {
-    return { ok: false, error: err.message, entries: [] };
+    console.error("[db] Changelog fetch exception:", err);
+    return { ok: false, error: `Exception: ${err.message}`, entries: [] };
   }
 }
 

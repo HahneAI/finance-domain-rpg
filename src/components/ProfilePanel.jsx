@@ -2092,6 +2092,7 @@ function ChangelogAdminDetail({ onBack }) {
   const [saveError, setSaveError] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [componentError, setComponentError] = useState(null);
 
   // Mount-only fetch, same inline-async-function-inside-the-effect shape
   // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
@@ -2102,14 +2103,34 @@ function ChangelogAdminDetail({ onBack }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await fetchAllChangelogEntries();
-      if (cancelled) return;
-      if (!result.ok) setLoadError(result.error);
-      else { setLoadError(null); setEntries(result.entries); }
+      try {
+        console.log("[ChangelogAdminDetail] Loading entries...");
+        const result = await fetchAllChangelogEntries();
+        console.log("[ChangelogAdminDetail] Load result:", result);
+        if (cancelled) return;
+        if (!result.ok) setLoadError(result.error);
+        else { setLoadError(null); setEntries(result.entries); }
+      } catch (err) {
+        console.error("[ChangelogAdminDetail] Load exception:", err);
+        if (!cancelled) setLoadError(`Exception: ${err.message}`);
+      }
     }
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Catch any rendering errors
+  if (componentError) {
+    return (
+      <>
+        <BackBar onBack={onBack} title="Changelog" />
+        <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
+          <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Component Error</div>
+          <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{componentError}</div>
+        </div>
+      </>
+    );
+  }
 
   function startNew() {
     setDraft({ id: null, versionLabel: "", title: "", body: "", published: false });
@@ -2204,7 +2225,14 @@ function ChangelogAdminDetail({ onBack }) {
               {showPreview ? (
                 <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "160px" }}>
                   {draft.body.trim()
-                    ? <ChangelogBody markdown={draft.body} />
+                    ? (() => {
+                        try {
+                          return <ChangelogBody markdown={draft.body} />;
+                        } catch (err) {
+                          console.error("[ChangelogAdminDetail] ChangelogBody render error:", err);
+                          return <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error rendering preview: {err.message}</div>;
+                        }
+                      })()
                     : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
                 </div>
               ) : (

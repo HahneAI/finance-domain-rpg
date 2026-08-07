@@ -365,7 +365,7 @@ describe("buildJobHuntContext", () => {
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
-    expect(block).toMatch(/Runway: ~\d+ days · weekly essential burn \$300 across 1 tracked expense/);
+    expect(block).toMatch(/Cash Runway: ~\d+ days · weekly essential burn \$300 across 1 tracked expense/);
   });
 
   it("omits the lifestyle line when there's no active lifestyle spend", () => {

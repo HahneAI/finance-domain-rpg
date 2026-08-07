@@ -659,12 +659,12 @@ when the year-end simulation shape omits it — `ec53450`).
 > whose ETA lands next year must subtract only its this-year slice from Outlook.
 
 **F22 · New Job Season home surface** — mode fork `App.jsx:1570` (Home) / `:1630` (Budget);
-`NewJobSeasonHomePanel.jsx`: `dash` runway memo `:56–58` (via `computeNewJobSeasonRunway`,
-`extraCash: huntIncome`), `saveCashOnHand:65–69` (writes `newJobSeasonCashOnHand` +
+`NewJobSeasonHomePanel.jsx`: `dash` runway memo `:71–73` (via `computeNewJobSeasonRunway`,
+`extraCash: huntIncome`), `saveCashOnHand:80–84` (writes `newJobSeasonCashOnHand` +
 `newJobSeasonCashOnHandAsOf`, called from the pencil-badged Cash On Hand card + its shared
-`CashOnHandSheet.jsx` editor — §1.H17), `logIncome:94–105`, `removeEntry:109–113`,
-embedded `ReemploymentTracker:264` with its `applyConfigUpdate` wrapper
-(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:267` (DW-8 fix,
+`CashOnHandSheet.jsx` editor — §1.H17), `logIncome:109–122`, `removeEntry:124–128`,
+embedded `ReemploymentTracker:284` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:328` (DW-8 fix,
 `docs/BUG_FIX_TODO.md`) behind `canAccessAskCoachGeneral` — **[G→L]**
 `config.newJobSeasonMode` *replaces* HomePanel with NewJobSeasonHomePanel (post-§1.H7 architecture
 — the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
@@ -681,8 +681,17 @@ mandatory (§1.H13); `newJobSeasonCashOnHandAsOf` is re-stamped every time it's 
 > `newJobSeasonCashOnHand`/`newJobSeasonCashOnHandAsOf`/`newJobSeasonPendingCheck*` are deliberately
 > **not** in that list today (left stale/unused once `newJobSeasonMode` flips false, since
 > `computeNewJobSeasonRunway` short-circuits on `!config.newJobSeasonMode` before ever reading
-> them) — that's existing precedent, not an oversight to "fix" reflexively. Check:
-> `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
+> them) — that's existing precedent, not an oversight to "fix" reflexively. **IF** the
+> Cash On Hand card's displayed figure or the extra-income caption change, **THEN**
+> remember `dash.effectiveCashOnHand` deliberately never has `huntIncome` merged into
+> it — only `computeNewJobSeasonRunway`'s `withBenefits`/`withoutBenefits.cash` do (verified
+> by `newJobSeasonRunway.test.js`'s "extraCash still adds on top" case). The card's caption
+> ("+ $X extra income logged below — counted in your runway, not shown in this
+> balance", added because a user reported the money looking uncounted) is the fix for
+> that confusion — don't "fix" it the other way by merging `huntIncome` into the
+> displayed balance, which would corrupt the `newJobSeasonCashOnHandAsOf` decay anchor.
+> `NewJobSeasonBudgetPanel.jsx` carries the equivalent caption (F44) — keep both in sync.
+> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
 
 **F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
 threshold const `:1405`), suppression `HomePanel.jsx:117–118`
@@ -1390,6 +1399,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §8's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
+| New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
 
 ### 12.3 Block 3 — Gate matrix
 
@@ -1416,6 +1426,26 @@ the paywall gate; the comment at `:269–277` records it).
   after `betaCodeUsed` was added 2026-07-24) makes it the most prop-fragile component in
   the app — treat any App.jsx wiring change here as crash-risk until rendered once.
 - *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
+- *React Compiler draft-closure crash* (2026-08-07) — `ChangelogAdminDetail`, then (same
+  pass) `BetaContentAdminDetail` and `BetaScoresAdminDetail`, all crashed identically on
+  their very first render, **production build only**: a `cancelEdit()` immediately followed
+  by a `handleSave()` that closes over a shared `draft` state object triggers a confirmed
+  `babel-plugin-react-compiler` miscompilation (wired via `@rolldown/plugin-babel` in
+  `vite.config.js`) — the compiler evaluates a memoization dependency on `draft` before it's
+  ever set, throwing `Cannot read properties of null (reading X)` for whichever field
+  `handleSave` closes over last (`'body'` for the first two, `'adminNotes'` for the third).
+  **Invisible to the entire 1449-test suite** — `vitest.config.js` deliberately omits the
+  compiler plugin (sandbox-safety), so `npm run test:run` passing proves nothing about this
+  bug class. Root-caused by a controlled repro outside Vitest entirely: a real `vite build`
+  with the actual plugin set, served and driven with Playwright, crash location decoded from
+  the emitted source map. Also exposed that **no admin sub-view had a React error
+  boundary anywhere in the app** — the crash silently blanked the whole Account tab with
+  zero on-screen indication, which is what made it read as "the page just goes blank."
+  **Fix, now the required pattern for any new admin CRUD sub-view of this
+  hooks-then-cancelEdit-then-handleSave-closing-over-draft shape:** add `"use no memo";` as
+  the component's first statement, and wrap its `activeSection` render call site in
+  `AdminDetailErrorBoundary` (generalized from the Changelog-only boundary this incident
+  introduced). Trigger-map row added to §12.2 below.
 
 **Standing findings from this pass:** none filed as DW defects. The `investorcodes`
 route-gate asymmetry (F45) is a hardening note, not a live defect — `activeSection` is
@@ -1463,7 +1493,7 @@ until this fix: `adjTH` never subtracted `fundedGoalSpend` even though Income's
 `adjustedTakeHome` does and LogPanel already receives that prop. Fixed by converging on
 one fact per number: `adjustedTakeHome`, `logNetLost`, `logNetGained` are now threaded
 down from `App.jsx`'s `logTotals` (same pattern as the existing `logK401kLost` props) and
-consumed directly — "Adjusted Take-Home," "Total Net Lost," "401k Lost," and "PTO Accrual
+consumed directly — "Adjusted Take-Home," "Cash Left Behind," "401k Lost," and "PTO Accrual
 Lost" all read the authoritative prop, not a local recomputation. Only `grossLost`/
 `grossGained`/`bucketHoursDeducted` (no App-level aggregate exists for these) stay locally
 reduced — but now via `resolveEventWeekMeta(e, allWeeks)` (F57), so they use the event's
@@ -2987,6 +3017,48 @@ entry).
 > covers the JS half; migration 031's own verification block covers the SQL half — no single
 > automated test spans both today.
 
+**F123 · Beta Homebase — three tables, three different write postures, don't blur them** —
+`database/migrations/037_add_beta_homebase.sql`, `api/admin-beta-hub.js`, `db.js`,
+`App.jsx`/`ProfilePanel.jsx`/`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for the
+rubric scores as a source of truth for the tester's own displayed total**
+Introduced with the Beta Tester Homebase (docs/TODO.md §12) — the icon next to the
+notification bell, gated `isTrackedBetaTester` (F122's predicate reused as-is, not
+re-derived). Three new tables, three DIFFERENT write postures — conflating any two of them
+is the drift this entry exists to prevent:
+- **`beta_content_items`** (checklist items + suggestion prompts) — admin-write-only via
+  `api/admin-beta-hub.js`'s service-role client (`entity: "content"`). Tester read is a direct
+  RLS-scoped client select (`published_at IS NOT NULL AND is_tracked_beta_tester(auth.uid())`)
+  — no API round trip, same posture `changelog_entries` (F-adjacent, migration 032) already
+  established for this exact "read is safe direct, write is admin-only" split.
+- **`beta_checklist_completions`** — the ONE tester-writable table in this set. A tester's own
+  checkbox state is a direct client insert/delete (RLS `user_id = auth.uid()` **plus** a
+  SECURITY DEFINER `BEFORE INSERT` trigger re-checking `is_tracked_beta_tester(NEW.user_id)`,
+  mirroring migration 031's `check_beta_activity_event_eligibility` pattern exactly — same
+  reasoning: RLS alone proves "this row is mine," not "I'm actually a tracked beta tester").
+- **`beta_scores`** — admin-write-only via `api/admin-beta-hub.js` (`entity: "score"`).
+  **Deliberately NOT auto-computed** — docs/TODO.md §12.L's "scoring stays manual, reviewed by
+  a human" decision (Call Attendance in particular has zero in-app data source). `admin_notes`
+  on this table must NEVER be selected by a tester-facing query — it's admin's own reasoning,
+  not tester-visible content; the RLS SELECT policy returns the whole row, so any new
+  tester-facing read of this table must explicitly project columns, not `select("*")`.
+- **`is_tracked_beta_tester(uid)`** (new SQL function, `SECURITY DEFINER STABLE`) — the SQL-side
+  twin of `entitlements.js`'s `isTrackedBetaTester`, now reused across three RLS
+  policies/the trigger instead of inlining the same subquery repeatedly. Still "two languages,
+  no shared source" at the JS/SQL boundary (F122's existing warning), but now consolidated to
+  ONE place on the SQL side instead of growing a second/third inline copy.
+> **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
+> three postures above before writing a migration — do not default to "admin route" or
+> "direct client write" out of habit; the posture follows from *who legitimately produces the
+> data* (admin content vs. a tester's own action vs. admin judgment about a tester). **IF**
+> `is_tracked_beta_tester(uid)` or `isTrackedBetaTester` (JS) changes, **THEN** change both
+> (F122's rule, now with a third consumer). **IF** a new field is added to `beta_scores`,
+> **THEN** decide explicitly whether it's tester-visible or admin-only before exposing it
+> through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. Check:
+> `dbBetaHomebase.test.js` (client read/write shape + gating), `adminBetaHub.test.js` (server
+> auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
+> scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
+> no single automated test spans the JS+SQL boundary, same gap F122 already flags.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -3008,6 +3080,8 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | Tester 6-month window semantics (§9, migration 021 trigger) | **Stale as written — corrected 2026-07-25.** Testers no longer "ride the real paywall": `paywallBypassed` now includes `isTester` (same locked decision as F111's `hasPrivilegedAccess`), closing the asymmetry where testers relied only on the trial window. F86 cron exemption (DW-7) is unaffected — still exempts testers from dunning/deletion regardless. | Expired tester: paywall never triggers in-app (bypassed, not just surviving on window math); never dunned/deleted by cron | D4 |
 | A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
+| `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
+| A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

@@ -21,6 +21,11 @@ import { createClient } from "@supabase/supabase-js";
 // per-user aggregates — free text with a possible multiple-per-user count
 // doesn't fit the summary CSV's one-row-per-user shape.
 //
+// GET ?format=json returns the same per-user summary rows as JSON instead of
+// CSV — the Beta Homebase admin scoresheet (db.js's fetchBetaScoreboard)
+// reads this to pre-fill each tester's current usage stats, checklist
+// completion, and existing rubric score before the admin edits it.
+//
 // docs/TODO.md §30 — each user's aggregate is scoped to THEIR OWN 10-week
 // window (beta_started_at .. beta_started_at + 10 weeks, migration
 // 027_add_beta_started_at.sql), not all-time activity. Staggered code
@@ -91,6 +96,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Failed to load beta cohort" });
   }
   if (!betaUsers || betaUsers.length === 0) {
+    if (req.query?.format === "json") return res.status(200).json({ ok: true, rows: [] });
     return res.status(200).json({ ok: true, rows: 0, note: "No tracked beta-cohort accounts found." });
   }
 
@@ -111,6 +117,33 @@ export default async function handler(req, res) {
     const { data } = await adminClient.auth.admin.getUserById(id);
     emailById[id] = data?.user?.email ?? "";
   }));
+
+  // docs/TODO.md §12 — Beta Homebase: joins the admin-entered rubric score
+  // (database/migrations/037_add_beta_homebase.sql's beta_scores, never
+  // auto-computed — see that migration's header) and each tester's checklist
+  // completion count, so this report doubles as the data source the admin
+  // scoresheet UI reads to pre-fill "here's what they've done so far"
+  // alongside the score inputs (fetchBetaScoreboard in db.js, ?format=json below).
+  const { data: scoreRows } = await adminClient
+    .from("beta_scores")
+    .select("user_id, usage_score, feedback_score, calls_score, longevity_score, updated_at")
+    .in("user_id", userIds);
+  const scoreByUser = Object.fromEntries((scoreRows ?? []).map(r => [r.user_id, r]));
+
+  const { count: checklistTotalCount } = await adminClient
+    .from("beta_content_items")
+    .select("id", { count: "exact", head: true })
+    .eq("kind", "checklist")
+    .not("published_at", "is", null);
+
+  const { data: completionRows } = await adminClient
+    .from("beta_checklist_completions")
+    .select("user_id")
+    .in("user_id", userIds);
+  const checklistCompletedByUser = {};
+  for (const row of completionRows ?? []) {
+    checklistCompletedByUser[row.user_id] = (checklistCompletedByUser[row.user_id] ?? 0) + 1;
+  }
 
   const eventsByUser = {};
   for (const row of events ?? []) {
@@ -168,6 +201,8 @@ export default async function handler(req, res) {
       ? Math.round((Date.now() - new Date(lastAt).getTime()) / (24 * 60 * 60 * 1000))
       : "";
 
+    const score = scoreByUser[u.user_id];
+
     return {
       user_id: u.user_id,
       display_name: u.display_name ?? "",
@@ -185,8 +220,21 @@ export default async function handler(req, res) {
       first_event_at: firstAt ?? "",
       last_event_at: lastAt ?? "",
       days_since_last_active: daysSinceLastActive,
+      checklist_completed_count: checklistCompletedByUser[u.user_id] ?? 0,
+      checklist_total_count: checklistTotalCount ?? 0,
+      usage_score: score?.usage_score ?? "",
+      feedback_score: score?.feedback_score ?? "",
+      calls_score: score?.calls_score ?? "",
+      longevity_score: score?.longevity_score ?? "",
+      total_score: score
+        ? (score.usage_score ?? 0) + (score.feedback_score ?? 0) + (score.calls_score ?? 0) + (score.longevity_score ?? 0)
+        : "",
     };
   });
+
+  if (req.query?.format === "json") {
+    return res.status(200).json({ ok: true, rows: summaryRows });
+  }
 
   if (req.query?.format === "feedback") {
     feedbackRows.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
@@ -204,6 +252,8 @@ export default async function handler(req, res) {
     "user_id", "display_name", "email", "beta_code_used", "beta_started_at", "beta_week_number",
     "login_count", "goal_created", "goal_updated", "expense_created", "expense_updated", "feedback_count",
     "active_days", "first_event_at", "last_event_at", "days_since_last_active",
+    "checklist_completed_count", "checklist_total_count",
+    "usage_score", "feedback_score", "calls_score", "longevity_score", "total_score",
   ];
   const csv = [
     header.join(","),

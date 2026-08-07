@@ -23,6 +23,7 @@ import { TrialExplainerScreen } from "./components/TrialExplainerScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel, BetaFeedbackDetail } from "./components/ProfilePanel.jsx";
+import { BetaHomebase } from "./components/BetaHomebase.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
@@ -386,6 +387,10 @@ export default function App() {
   // its own copy via ProfilePanel's sub-view router) — tracked beta testers only.
   const [drawerFeedbackOpen, setDrawerFeedbackOpen] = useState(false);
   const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
+  // Beta Tester Homebase (docs/TODO.md §12) — icon next to the notification
+  // bell, tracked beta testers only. BetaHomebase.jsx owns its own portal +
+  // fold motion, so this is just an open/closed flag.
+  const [betaHomebaseOpen, setBetaHomebaseOpen] = useState(false);
   // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
   // { status: "success" | "error", message } | null. Shown once via
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
@@ -2532,6 +2537,34 @@ export default function App() {
             </div>
           </div>
 
+          {/* ── Beta Tester Homebase — tracked beta testers only, sits directly
+              next to the notification bell (docs/TODO.md §12). isTrackedBetaTester,
+              not bare isTester — friends/family testers never see this, same
+              distinction every other tracked-cohort-only surface makes. ── */}
+          {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
+            <Pressable
+              onClick={() => setBetaHomebaseOpen(true)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--color-text-primary)",
+                cursor: "pointer",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+              aria-label="Beta Tester Homebase"
+            >
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            </Pressable>
+          )}
+
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
           <Pressable
             onClick={() => setConfirmDismissed(false)}
@@ -3696,6 +3729,13 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* ── Beta Tester Homebase (docs/TODO.md §12) — owns its own portal + fold motion. ── */}
+      <BetaHomebase
+        open={betaHomebaseOpen}
+        onClose={() => setBetaHomebaseOpen(false)}
+        isTester={isTester}
+        betaCodeUsed={betaCodeUsed}
+      />
       {/* ── New Job Season entry (TODO §1.C1) ── */}
       <NewJobSeasonEntry
         open={newJobSeasonEntryOpen}

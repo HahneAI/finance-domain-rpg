@@ -18,14 +18,15 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No standalone backend server** — but no longer "pure frontend": `api/` holds 11 Vercel
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 12 Vercel
 serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
 subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
-the "What's New" authoring surface, plus `api/seed.js` — a single route dispatched on
-`body.type` ("beta" | "investor" | "trial") that consolidates what used to be three separate
-seed-beta/seed-investor/seed-trial functions). All privileged writes (tier flags, subscription
-columns, changelog entries) go through these service-role routes — the client never writes them
-(RLS migration 019).
+the "What's New" authoring surface, `admin-beta-hub.js` for the Beta Homebase's checklist/
+suggestion content + rubric scores (dispatched on `entity`: "content" | "score"), plus
+`api/seed.js` — a single route dispatched on `body.type` ("beta" | "investor" | "trial") that
+consolidates what used to be three separate seed-beta/seed-investor/seed-trial functions). All
+privileged writes (tier flags, subscription columns, changelog entries, beta content/scores) go
+through these service-role routes — the client never writes them (RLS migration 019).
 
 **Vercel Hobby-plan function cap:** a deployment can include **at most 12 Serverless Functions**
 (one per non-`_`-prefixed file in `api/`) on the free Hobby plan — exceeding it fails the build
@@ -33,8 +34,11 @@ outright ("No more than 12 Serverless Functions can be added to a Deployment on 
 This repo hit 13 once (adding `admin-changelog.js` tipped it over) and was brought back under the
 cap by merging seed-beta/seed-investor/seed-trial into the one `api/seed.js` above — same fix to
 reach for again if a future route addition trips this same failure, rather than assuming it's a
-rate limit or a real Vercel outage. Consolidation candidates if it happens again: the three
-`stripe-*.js` routes are the next most mergeable group (same shape, different Stripe action).
+rate limit or a real Vercel outage. **Currently sitting at 12/12 — zero headroom** (the Beta
+Homebase's `admin-beta-hub.js`, 2026-08-06, spent the last free slot by design — everything
+tester-facing in that feature reads/writes Supabase directly under RLS instead of adding routes).
+Consolidation candidates if another route is needed: the three `stripe-*.js` routes remain the
+next most mergeable group (same shape, different Stripe action).
 
 ---
 
@@ -60,6 +64,7 @@ src/
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
+│   ├── BetaHomebase.jsx     — tracked-beta-tester-only modal: rubric score, feature checklist, suggestion feed, changelog recap
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
 │   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS
@@ -88,47 +93,63 @@ instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off
 wizard after its own pilot pages are answered. No effect on any existing call site that omits it.
 
 **`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
-reimagining of the wizard's first two steps (Welcome + Pay Structure) as one big sentence per page
-with inline `<select>`/`<input>` blanks, instead of stacked form fields — pilot for a friendlier
-onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both
-mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real
-signup** — `isAdmin` gates the trigger button, and the component itself has no other entry point.
-Reuses the exact same config fields and DHL-preset defaults as real Step0/Step1 (see
-`pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two experiences
-on the fields they share. Once its 2 pages are answered, `onHandoff(mergedFormData, initialStepId)`
-closes the preview and reopens the real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at
-Schedule (id 2) or the jobless mini-flow (id 10) for the remaining steps — a real, click-through
-continuation, not a throwaway mockup. **MOCK ONLY — nothing is ever saved**, including that
-continuation: `App.jsx`'s wizard mount's `onComplete` skips `handleWizardComplete` entirely
-whenever `adlibHandoff` is set (no `setConfig`, no `savePersistedStateNow`), and `onCancel` stays
-available the whole way through instead of first-run's normal "no cancel button" rule — admins can
-click all the way to Finish with zero risk to real account data. Only 2 of 6 steps are ad-libbed
-today — expanding to the rest, or promoting this to a real user-facing A/B split, is a future
-decision pending how the pilot feels in practice.
+reimagining of the wizard's first two steps (Welcome + Pay Structure) as one continuous mad-libs
+sentence with inline `<select>`/`<input>` blanks, instead of stacked form fields or a page-per-step
+flow — pilot for a friendlier onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib
+Wizard" → Preview button, both mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen`
+state; **never reachable by a real signup** — `isAdmin` gates the trigger button, and the
+component itself has no other entry point. Reuses the exact same config fields and DHL-preset
+defaults as real Step0/Step1 (see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero
+drift between the two experiences on the fields they share. Once the sentence is fully answered,
+`onHandoff(mergedFormData, initialStepId)` closes the preview and reopens the real `SetupWizard`
+(via `App.jsx`'s `adlibHandoff` state) at Schedule (id 2) or the jobless mini-flow (id 10) for the
+remaining steps — a real, click-through continuation, not a throwaway mockup. **MOCK ONLY —
+nothing is ever saved**, including that continuation: `App.jsx`'s wizard mount's `onComplete` skips
+`handleWizardComplete` entirely whenever `adlibHandoff` is set (no `setConfig`, no
+`savePersistedStateNow`), and `onCancel` stays available the whole way through instead of
+first-run's normal "no cancel button" rule — admins can click all the way to Finish with zero risk
+to real account data. Only these 2 steps are ad-libbed today — expanding to the rest, or promoting
+this to a real user-facing A/B split, is a future decision pending how the pilot feels in practice.
 
+- **One page, not two — clauses cascade in as each answer unlocks the next.** Welcome + Pay
+  Structure are a single `IntakePage` component and a single sentence; there is no internal
+  Next/Back between them anymore (no `PAGES` array, no `pageIdx`). Each subsequent clause is a
+  plain `formData`-gated conditional (`isEmployed && (…)`, `isEmployerDHL && (…)`, etc.) that mounts
+  the instant its prerequisite answer is given — e.g. picking "employed" reveals "I work for ___"
+  on the same page immediately, no click required. The outer chrome keeps a single "Continue
+  Setup" button gated by `isFormValid()` (mirrors STEP_DEFS id 0 + id 1 combined) and no Back
+  button at all — with everything on one page there's nothing to page back to; undoing an earlier
+  answer is just re-picking that blank directly, still visible above.
+- **Each newly-revealed clause rolls in with a typed reveal, not an instant appear.** `TypedText`
+  runs the clause's static wording through the `adlibType` stepped `clip-path` keyframe
+  (`index.css`) — a "crisp" blocky reveal, not a smooth wipe — combined with the existing
+  `fadeSlideUp` fade+lift in the same `animation` shorthand, so the clause both rolls onto the page
+  and types itself out at once. `FadeIn` then fades the blank in at `delay = typeDuration(precedingText)`,
+  so the select/input appears right as its introducing text finishes typing. All `TypedText` within
+  the same clause use `delay=0` (they mount together the instant the clause becomes eligible, so
+  they can type in parallel — no cumulative per-segment delay bookkeeping needed).
 - **Blank by default, not prefilled from the admin's real config.** `formData` starts as
-  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the two pilot pages
-  ask about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
+  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the sentence asks
+  about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
   `userPaySchedule`, `annualSalary`, `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`,
   `payPeriodEndDay`, `scheduleIsVariable`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`,
   `diffRate`, `startingWeekIsLong`). Without this, an admin whose real account already has these
-  answered (e.g. a DHL-preset admin) would land on both pages fully pre-filled and instantly
-  Next-eligible — silently skipping the pilot's own required-field gating (`PAGES[].isValid`,
-  already correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
+  answered (e.g. a DHL-preset admin) would land on the page fully pre-filled and instantly
+  Continue-Setup-eligible — silently skipping `isFormValid()`'s required-field gating (already
+  correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
   `InlineSelect` reselecting its blank `(select)` option must resolve to `null` (not a falsy
   default), or clearing back to blank would misreport as a real answer — see the explicit
-  `v === "" ? null : …` branches in `PayStructurePage`'s `onChange` handlers.
+  `v === "" ? null : …` branches in `IntakePage`'s `onChange` handlers.
 - **Back at the hand-off boundary returns to this component, not the real Step0/Step1.** Without
   intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Schedule id 2, or
   the jobless flow id 10) falls through to that component's own Welcome/Pay Structure — the
-  stacked-field UI for the same two questions this pilot just asked ad-lib style, which reads as
+  stacked-field UI for the same questions this pilot just asked ad-lib style, which reads as
   "kicked out of the preview." `SetupWizard`'s optional `onBackBeforeStart(formData)` prop fires
   instead, exactly once, only when `stepIdx` is still at the resolved `initialStepId` index — every
   other Back press behaves as before. `App.jsx` wires this to reopen `SetupWizardAdlib` via its
-  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `pageIdx` at the last page of the
-  resolved `activePages` (so a resumed jobless answer reopens on Welcome; anything else reopens on
-  Pay Structure) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
-  Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
+  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `formData` directly from the
+  in-progress answers — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on
+  both Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
   blank again.
 
 ---
@@ -255,8 +276,9 @@ For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s
 function, pattern, and AI-context point it answers *"I am changing X — what Y must I check
 before X counts as done?"* It exists because the app's dominant failure mode is no longer
 locally-wrong code but **drift** — a locally-correct change that silently invalidates a
-distant system (five documented real incidents are catalogued there as case law: parallel
-formulas, retroactive recompute, lost saves, gate bypass, stale docs).
+distant system (six documented real incidents are catalogued there as case law: parallel
+formulas, retroactive recompute, lost saves, gate bypass, stale docs, and a React-Compiler
+miscompilation invisible to the entire test suite — §12.4).
 
 - **Before changing** anything under a mapped section (Setup Wizard, the 5 panels —
   Home, Income, Budget, Log, Account — Auth, Login, Paywall, UI-UX, or the shared
@@ -292,7 +314,8 @@ periodic full-schema recaps, not real migrations — never assign one the actual
 number in sequence expecting it to run. They exist purely so a session can read one file instead
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
 make them impossible to mistake for a pending migration. Latest bookmark:
-`022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
+`038_BOOKMARK_schema_snapshot_2026-08-06.sql` (compiled from files through migration 037, but
+**verified live only through 035** — see below).
 Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
 `beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
@@ -301,12 +324,20 @@ Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permis
 Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 034
 (beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
 link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
-chat_type) exist — **the next real migration is 037.** Verify against the folder before
-numbering; this note has now gone stale five times (drift-app-warden §14, across the
-beta-program migrations, across 031–032, again across 033, and again when 032 collided with a
-second, independently-numbered `032_add_resume_profile.sql` on a parallel branch — resolved by
-renumbering the resume_profile migration to 036 on merge — a fresh BOOKMARK compiling schema
-state through 036 is now overdue; the existing `022` snapshot is stale for the same reason).
+chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
+Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123) exist — **the next real migration
+is 039.** Verify against the folder before numbering; this note has now gone stale five times
+(drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
+again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
+parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).
+
+**⚠️ 036 and 037 are committed files that have NOT been run against production** — confirmed
+2026-08-06 by reconciling a live Supabase schema export against the migrations folder for the
+038 bookmark: `resume_profile` is absent and `coach_chats.chat_type`'s CHECK constraint still
+lacks `resume_review` (036 never ran), and `beta_content_items`/`beta_checklist_completions`/
+`beta_scores` are all absent (037 never ran). **Practical effect: Résumé Review (§18.E1) and the
+Beta Tester Homebase are both non-functional in production right now** — apply both migrations
+before relying on either feature. Once applied, the next bookmark should extend through 037.
 
 ---
 
@@ -323,6 +354,17 @@ npm test              # watch mode
 npx vitest run -u     # update snapshots after DEFAULT_CONFIG changes
 ```
 Reporter is `verbose` — Vitest 4's default misreports suite failures as "no tests." Do not use `-- --runInBand` (Jest flag, ignored by Vitest).
+
+**Blind spot: omitting `@rolldown/plugin-babel` means Vitest never exercises the React
+Compiler** — a real production-only miscompilation (drift-app-warden §12.4) crashed 3 admin
+panels on their first render with zero test failures. A `useState`-heavy component whose
+`cancelEdit`/`handleSave`-shaped handlers close over a shared `draft` object is the known
+trigger; the fix is `"use no memo";` as the component's first statement (see
+`ChangelogAdminDetail`/`BetaContentAdminDetail`/`BetaScoresAdminDetail` in
+`ProfilePanel.jsx`) plus wrapping its render site in `AdminDetailErrorBoundary` — the app has
+no top-level error boundary, so an uncaught render crash anywhere blanks the whole page.
+`npm run test:run` passing is **not sufficient evidence** this class of bug is absent; a real
+`vite build` + browser render is the only way to catch it.
 
 ---
 

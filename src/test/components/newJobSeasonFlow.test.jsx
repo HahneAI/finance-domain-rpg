@@ -459,14 +459,14 @@ describe('NewJobSeasonHomePanel', () => {
         includeBenefits
       />
     )
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
     expect(screen.getByText('Weekly Burn')).toBeTruthy()
   })
 
   it('renders with empty expenses and no unemployment', () => {
     const cfg = { ...JOB_LOSS_CONFIG, unemploymentEnabled: false, unemploymentWeekly: null }
     render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
   })
 
   // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from
@@ -618,6 +618,26 @@ describe('NewJobSeasonHomePanel', () => {
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-03" includeBenefits />)
       expect(screen.getByText('$1,500')).toBeTruthy()
       expect(screen.queryByText(/in bills since you last updated this/)).toBeNull()
+    })
+  })
+
+  describe('Extra income caption on the Cash On Hand card', () => {
+    it('shows a caption confirming logged extra income is counted in the runway, not this balance', () => {
+      const cfg = {
+        ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000,
+        jobHuntIncomeLog: [{ id: 'jhi_1', amount: 150, note: null, loggedAt: '2026-06-10T00:00:00.000Z' }],
+      }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      // Cash On Hand card itself stays the raw persisted figure — extra income
+      // is never merged into it, only into the runway math (newJobSeasonRunway.test.js).
+      expect(screen.getByText('$1,000')).toBeTruthy()
+      expect(screen.getByText(/\$150 extra income logged below/)).toBeTruthy()
+    })
+
+    it('hides the caption when nothing has been logged yet', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000 }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.queryByText(/extra income logged below/)).toBeNull()
     })
   })
 

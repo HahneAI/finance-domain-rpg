@@ -170,6 +170,11 @@ export function NewJobSeasonHomePanel({
             − ${billsCaptionValue.toLocaleString()} in bills since you last updated this
           </div>
         )}
+        {huntIncome > 0 && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-green)" }}>
+            + ${Math.round(huntIncome).toLocaleString()} extra income logged below — counted in your runway, not shown in this balance
+          </div>
+        )}
         {dash.pendingCheck && (
           <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
             Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
@@ -186,7 +191,7 @@ export function NewJobSeasonHomePanel({
       />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
+        <MetricCard label="Cash Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
         <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="teal" centered />
         <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "teal"} centered />
       </div>

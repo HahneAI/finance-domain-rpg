@@ -1922,7 +1922,7 @@ runway math itself.*
 #### H17. Cash On Hand card + timeline-aware decay, 2026-07-22 — DONE
 
 *User ask, not from the H14 list: the plain Cash On Hand input "looks lame and crappy" — wanted
-its own prominent card above the Runway tile, a visible pencil icon signaling it's editable, a
+its own prominent card above the Cash Runway tile, a visible pencil icon signaling it's editable, a
 bottom-sheet editor matching the expense editor's up-from-bottom/slide-down animation, and —
 separately — for the displayed figure to decrease automatically as Needs bills come due, feeding
 that decay into the runway instead of the number silently going stale between manual updates.*
@@ -1934,7 +1934,7 @@ that decay into the runway instead of the number silently going stale between ma
   the first bottom sheet in the app with a real symmetric enter (up-from-bottom, matching that
   sheet's existing curve) / exit (slide back down, `--ease-fold-exit`, no bounce) pair.
 - [x] **`components/NewJobSeasonHomePanel.jsx`** — the plain input + `SectionHeader` replaced with a
-  full-width pressable card *above* the Runway/Weekly Burn/Extra Income grid: big tabular-nums
+  full-width pressable card *above* the Cash Runway/Weekly Burn/Extra Income grid: big tabular-nums
   dollar figure, a visible circular pencil badge (top-right, same edit-icon glyph as
   `ReemploymentTracker`'s Edit button), tap-anywhere-on-card to open the sheet (`scale(0.97)` press
   feedback, `disabled` when `readOnly` — native `disabled` blocks the click entirely, no separate
@@ -3592,6 +3592,40 @@ not a new email system.
 
 ---
 
+### O. Beta Tester Homebase — Rubric, Checklist, Suggestions, Changelog Recap
+
+*Shipped 2026-08-06. Weaves §L's scoring rubric, a personal feature checklist, admin-authored
+suggestion prompts, and a recap of the changelog into one tester-facing destination — the icon
+next to the notification bell, tracked beta testers only. `database/migrations/037_add_beta_homebase.sql`,
+`api/admin-beta-hub.js`, `src/components/BetaHomebase.jsx`, drift-app-warden §20 F123.*
+
+- [x] **Rubric made tester-visible, still admin-scored** — §L's "reviewed by a human, no
+  auto-scoring formula" decision stands; `beta_scores` is admin-entered via a new "Beta Scores"
+  admin-toolkit page (`BetaScoresAdminDetail`, `ProfilePanel.jsx`), read live by the tester in
+  Homebase. The admin scoresheet reads `api/admin-beta-report.js`'s existing usage aggregation
+  (`?format=json`, extended with score + checklist-completion joins) as reference alongside the
+  four score inputs — no separate "look up their stats" step.
+- [x] **Feature Checklist, personal per-tester completion** — admin authors items ("Beta
+  Checklist" admin page, same table shape as changelog entries — `kind='checklist'` on the new
+  `beta_content_items`); each tester's own checkmarks persist to `beta_checklist_completions`
+  (row existence = checked, direct client insert/delete under RLS + a
+  migration-031-style eligibility trigger).
+- [x] **Suggestions, admin-authored prompts feed** — `kind='suggestion'` on the same
+  `beta_content_items` table ("Beta Suggestions" admin page); read-only for testers, no
+  tester-submission path (that's the existing "Send Feedback" channel, §17 — deliberately kept
+  separate, different purpose).
+- [x] **Interconnected with the changelog** — Homebase's "What's New" section reads the last 5
+  published `changelog_entries` directly (`fetchPublishedChangelogEntries`, same RLS-scoped read
+  `ChangelogModal`'s single-latest-entry check already used) — no new authoring surface, no
+  schema change to that table.
+- [x] **Stayed inside the Vercel Hobby 12-function cap** — one new route
+  (`api/admin-beta-hub.js`), dispatched by `entity` (content vs. score) the same way `api/seed.js`
+  dispatches by `type`; every tester-facing read/write is direct-to-Supabase via RLS, no route
+  needed. **This spends the last free slot — 12/12.** The next addition needs to consolidate
+  something first; the three `stripe-*.js` routes remain the flagged candidate (CLAUDE.md).
+
+---
+
 ## 14. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
 
 *New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
@@ -4166,36 +4200,44 @@ shipping or merging.
 *Status: live admin-only preview, awaiting a real feel-test before any further decision. Not
 user-facing — see `.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
 
-**What shipped:** the first two SetupWizard steps (Welcome + Pay Structure) reimagined as one big
-mad-libs-style sentence per page with inline blanks, instead of stacked form fields — an experiment
-in whether a friendlier, game-like onboarding reduces the setup-wizard friction point. Admin-only
-(`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools panel, both mobile/desktop
-copies). Reuses the exact same config fields/DHL-preset defaults as the real steps, then hands off
-into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for Schedule/Deductions/Tax
-Rates/Wrap Up (or the jobless mini-flow) — a real, click-through continuation, not a mockup.
-**Mock only — nothing is ever saved**, including that continuation (`App.jsx`'s `onComplete` skips
-`handleWizardComplete` whenever the run originated from this preview); Cancel also stays available
-the whole way through so admins can bail at any point with zero risk to real account data.
+**What shipped:** the first two SetupWizard steps (Welcome + Pay Structure) reimagined as one
+continuous mad-libs-style sentence on a single page with inline blanks, instead of stacked form
+fields — an experiment in whether a friendlier, game-like onboarding reduces the setup-wizard
+friction point. Admin-only (`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools
+panel, both mobile/desktop copies). Reuses the exact same config fields/DHL-preset defaults as the
+real steps, then hands off into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for
+Schedule/Deductions/Tax Rates/Wrap Up (or the jobless mini-flow) — a real, click-through
+continuation, not a mockup. **Mock only — nothing is ever saved**, including that continuation
+(`App.jsx`'s `onComplete` skips `handleWizardComplete` whenever the run originated from this
+preview); Cancel also stays available the whole way through so admins can bail at any point with
+zero risk to real account data.
 
-**Since first ship:** two rounds of feel-test feedback fixed. (1) The two pilot pages now start
+**Since first ship:** three rounds of feel-test feedback fixed. (1) The pilot page now starts
 fully blank (`BLANK_PAY_FIELDS`) instead of pre-filling from the admin's own real config — an admin
-with an already-answered account (DHL preset, existing pay schedule) previously landed on both
-pages already Next-eligible with zero interaction, silently defeating the pilot's own
-required-field gating. Blank selects also read `(select)` in italics instead of a bare `___`, and
-the blank option stays choosable after answering (not removed from the list) so a pick can be
-undone back to blank. (2) Hitting Back on the real wizard's first handed-off step no longer falls
-through into that component's own Step0/Step1 (confusingly showing the stacked-field UI for
-the same two questions this pilot just asked ad-lib style) — `SetupWizard`'s new
-`onBackBeforeStart` prop intercepts Back at that exact boundary and `App.jsx` reopens
-`SetupWizardAdlib` via its `resumeFormData` prop, resuming on the last-answered page with the
-in-progress answers intact.
+with an already-answered account (DHL preset, existing pay schedule) previously landed already
+Continue-Setup-eligible with zero interaction, silently defeating the pilot's own required-field
+gating. Blank selects also read `(select)` in italics instead of a bare `___`, and the blank option
+stays choosable after answering (not removed from the list) so a pick can be undone back to blank.
+(2) Hitting Back on the real wizard's first handed-off step no longer falls through into that
+component's own Step0/Step1 (confusingly showing the stacked-field UI for the same questions this
+pilot just asked ad-lib style) — `SetupWizard`'s new `onBackBeforeStart` prop intercepts Back at
+that exact boundary and `App.jsx` reopens `SetupWizardAdlib` via its `resumeFormData` prop,
+resuming with the in-progress answers intact. (3) Welcome and Pay Structure were merged from two
+separate pages into one continuous page — each clause (employment status, then employer, then
+team/shift/pay-schedule) now cascades onto the same page the instant its prerequisite answer is
+given, instead of requiring a Next click between them. Each newly-revealed clause plays a crisp
+stepped typewriter reveal (`TypedText` + the `adlibType` keyframe in `index.css`) combined with the
+existing `fadeSlideUp` fade+lift, so it both rolls onto the page and types itself out; the blank
+that follows fades in right as its introducing text finishes. The old per-page Next/Back is gone
+entirely — one "Continue Setup" button gated by `isFormValid()`, no internal Back (nothing to page
+back to on a single page; undoing an earlier answer is just re-picking that blank directly).
 
 **Open decisions, pending how the pilot feels in practice:**
 - [ ] Expand the ad-lib treatment to the remaining 4 steps (Schedule, Deductions, Tax Rates, Wrap
-      Up), or stop at 2 if the feel doesn't hold up over a longer sentence-based flow
+      Up), or stop here if the feel doesn't hold up over a longer sentence-based flow
 - [ ] Decide the eventual split-test mechanism: stay admin-only-preview forever, promote to a real
       user-facing A/B split (needs signup volume to be meaningful), or just replace the real wizard
       outright if the pilot feels clearly better
-- [ ] If kept long-term, consider whether `PayStructurePage`'s local `employerChoice` UI state
-      (see its own code comment) needs a more robust remount-safe derivation, or whether that rough
-      edge is acceptable indefinitely for an admin-only tool
+- [ ] If kept long-term, consider whether `IntakePage`'s local `employerChoice` UI state (see its
+      own code comment) needs a more robust remount-safe derivation, or whether that rough edge is
+      acceptable indefinitely for an admin-only tool

@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore } from "../lib/db.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
@@ -2073,6 +2073,46 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
   );
 }
 
+// Real React error boundary (class component — no hook equivalent exists),
+// shared by every admin authoring sub-view below (Changelog, Beta Checklist/
+// Suggestions, Beta Scores). A plain try/catch around JSX construction (what
+// ChangelogAdminDetail's first draft used) cannot catch errors thrown during
+// a child component's own render/commit — react-hooks/error-boundaries flags
+// this ("Avoid constructing JSX within try/catch") for exactly that reason.
+// Before this existed, ANY render error under these subtrees — anywhere in
+// the app, since there was no boundary at all — unmounted the whole React
+// tree with zero on-screen indication. That's also how the "cancelEdit then
+// handleSave (closing over draft)" React Compiler miscompilation (see the
+// "use no memo" comment on ChangelogAdminDetail below) surfaced identically
+// in BetaContentAdminDetail and BetaScoresAdminDetail — same shape, same
+// bug, confirmed by the same production-build + decoded-source-map repro.
+class AdminDetailErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error(`[${this.props.title}] Caught render error:`, error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <>
+          <BackBar onBack={this.props.onBack} title={this.props.title} />
+          <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
+            <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{this.state.error?.message || String(this.state.error)}</div>
+          </div>
+        </>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Admin authoring surface for changelog_entries (database/migrations/032) —
 // the write side of the "What's New" feature. UpdateAvailableBanner +
 // ChangelogModal (App.jsx) are the read side: a published entry here is what
@@ -2081,6 +2121,26 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
 function ChangelogAdminDetail({ onBack }) {
+  // "use no memo" opts this component OUT of React Compiler auto-memoization
+  // (babel-plugin-react-compiler, wired via @rolldown/plugin-babel in
+  // vite.config.js). This works around a confirmed compiler miscompilation:
+  // in the PRODUCTION build only (react-dom-client.production.js — never
+  // reproduces under Vitest, which deliberately omits the compiler plugin —
+  // see vitest.config.js's comment), the very first render (entries/draft
+  // all still null, before the mount effect's fetch resolves) threw
+  // "Cannot read properties of null (reading 'body')" with no application
+  // code path that could produce it — draft.body/entry.body are only ever
+  // read inside the editingId!==null branch or the save/edit handlers, none
+  // of which run on that first render. The crash's source-mapped token name
+  // was literally 'body', collapsed onto the boundary between cancelEdit and
+  // handleSave (handleSave closes over draft.body) — consistent with the
+  // compiler incorrectly hoisting/evaluating a memoization dependency for a
+  // value that only exists once a later branch is reached. Confirmed by a
+  // controlled repro (real prod build, real react-dom-client.production.js,
+  // Playwright + decoded source map): the crash reproduces with the compiler
+  // on and disappears completely with this directive. Safe to remove once
+  // the underlying compiler bug is fixed upstream and verified.
+  "use no memo";
   // null = initial load in progress (distinct from [] = loaded, zero entries) —
   // avoids a synchronous setState(true) at the top of load(), which is what
   // react-hooks/set-state-in-effect flags when load() is invoked directly
@@ -2102,10 +2162,14 @@ function ChangelogAdminDetail({ onBack }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await fetchAllChangelogEntries();
-      if (cancelled) return;
-      if (!result.ok) setLoadError(result.error);
-      else { setLoadError(null); setEntries(result.entries); }
+      try {
+        const result = await fetchAllChangelogEntries();
+        if (cancelled) return;
+        if (!result.ok) setLoadError(result.error);
+        else { setLoadError(null); setEntries(result.entries); }
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message);
+      }
     }
     load();
     return () => { cancelled = true; };
@@ -2252,7 +2316,7 @@ function ChangelogAdminDetail({ onBack }) {
       </Pressable>
 
       {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error: {loadError}</div>}
       {entries !== null && !loadError && entries.length === 0 && (
         <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
@@ -2285,6 +2349,373 @@ function ChangelogAdminDetail({ onBack }) {
                     <Pressable onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
                   </div>
                 )}
+              </div>
+            </DetailCard>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+const BETA_CONTENT_COPY = {
+  checklist: {
+    title: "Feature Checklist",
+    listBlurb: "Published items appear as checkboxes in every tracked tester's Homebase — each tester's check-off state is personal to them.",
+    bodyLabel: "Description (optional)",
+    bodyPlaceholder: "What should they try?",
+    publishedHint: "Published — visible in the tester Homebase",
+  },
+  suggestion: {
+    title: "Suggestions",
+    listBlurb: "Published prompts appear as a read-only feed in every tracked tester's Homebase.",
+    bodyLabel: "Body (Markdown)",
+    bodyPlaceholder: "Supports **bold**, *italic*, lists, links, and headers.",
+    publishedHint: "Published — visible in the tester Homebase",
+  },
+};
+
+// Admin authoring surface for beta_content_items (database/migrations/037) —
+// the write side of the Beta Homebase's checklist + suggestions sections.
+// Shares one component across both `kind`s rather than two near-duplicate
+// files — checklist items and suggestion prompts are the exact same
+// title/body/published shape ChangelogAdminDetail already establishes for
+// changelog_entries, just a different table and a different tester-facing
+// destination. Writes go through api/admin-beta-hub.js (db.js's
+// fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem) — never
+// a direct client write, per migration 037's RLS posture.
+function BetaContentAdminDetail({ kind, onBack }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above (this component was modeled
+  // directly on it): cancelEdit() immediately followed by handleSave()
+  // (closing over draft.body) triggered an identical "Cannot read properties
+  // of null (reading 'body')" crash on the very first render, production
+  // build only. Reproduced and confirmed fixed via the same harness.
+  "use no memo";
+  const copy = BETA_CONTENT_COPY[kind];
+  const [items, setItems] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else item.id
+  const [draft, setDraft] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchAllBetaContentItems(kind);
+      if (cancelled) return;
+      if (!result.ok) setLoadError(result.error);
+      else { setLoadError(null); setItems(result.items); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [kind]);
+
+  function startNew() {
+    setDraft({ id: null, title: "", body: "", published: false });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId("new");
+  }
+
+  function startEdit(item) {
+    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId(item.id);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    if (!draft.title.trim()) { setSaveError("Title is required."); return; }
+    setSaveError(null);
+    const result = await saveBetaContentItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published });
+    if (!result.ok) { setSaveError(result.error); return; }
+    setItems(prev => {
+      const list = prev ?? [];
+      return draft.id
+        ? list.map(i => i.id === draft.id ? result.item : i)
+        : [result.item, ...list];
+    });
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  async function handleDelete(id) {
+    setConfirmDeleteId(null);
+    const result = await deleteBetaContentItem(id);
+    if (result.ok) setItems(prev => (prev ?? []).filter(i => i.id !== id));
+  }
+
+  if (editingId !== null) {
+    return (
+      <>
+        <BackBar onBack={cancelEdit} title={editingId === "new" ? "New Entry" : "Edit Entry"} />
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <label style={lSp}>Title</label>
+              <input
+                type="text" value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                style={iS}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={{ ...lSp, marginBottom: 0 }}>{copy.bodyLabel}</label>
+                <Pressable
+                  onClick={() => setShowPreview(v => !v)}
+                  style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
+                >
+                  {showPreview ? "Edit" : "Preview"}
+                </Pressable>
+              </div>
+              {showPreview ? (
+                <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "120px" }}>
+                  {draft.body.trim()
+                    ? <ChangelogBody markdown={draft.body} />
+                    : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
+                </div>
+              ) : (
+                <textarea
+                  value={draft.body}
+                  onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
+                  placeholder={copy.bodyPlaceholder}
+                  rows={8}
+                  style={{ ...iS, height: "auto", fontFamily: "var(--font-mono)", resize: "vertical", lineHeight: 1.5 }}
+                />
+              )}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={draft.published}
+                onChange={e => setDraft(d => ({ ...d, published: e.target.checked }))}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                {copy.publishedHint}{draft.published ? "" : " (currently a draft)"}
+              </span>
+            </label>
+            {saveError && (
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
+          </div>
+        </DetailCard>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <BackBar onBack={onBack} title={copy.title} />
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+        {copy.listBlurb}
+      </div>
+      <Pressable
+        onClick={startNew}
+        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+      >
+        + New Entry
+      </Pressable>
+
+      {items === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {items !== null && !loadError && items.length === 0 && (
+        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {(items ?? []).map(item => {
+          const isPublished = item.published_at != null;
+          const confirming = confirmDeleteId === item.id;
+          return (
+            <DetailCard key={item.id} style={{ marginBottom: 0 }}>
+              <div style={{ padding: "13px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{item.title}</div>
+                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                    {isPublished ? "Published" : "Draft"}
+                  </span>
+                </div>
+                {confirming ? (
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>Delete this entry?</span>
+                    <Pressable onClick={() => handleDelete(item.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(null)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <Pressable onClick={() => startEdit(item)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(item.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
+                  </div>
+                )}
+              </div>
+            </DetailCard>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+const RUBRIC_ADMIN_CATEGORIES = [
+  { key: "usageScore", scoreboardKey: "usage_score", label: "App Usage", max: 50 },
+  { key: "feedbackScore", scoreboardKey: "feedback_score", label: "Feedback", max: 25 },
+  { key: "callsScore", scoreboardKey: "calls_score", label: "Call Attendance", max: 15 },
+  { key: "longevityScore", scoreboardKey: "longevity_score", label: "Longevity", max: 10 },
+];
+
+// Admin scoresheet for the beta rubric (database/migrations/037's
+// beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
+// human" decision, given a live tester-visible home instead of only a
+// spreadsheet. Reads api/admin-beta-report.js's ?format=json (db.js's
+// fetchBetaScoreboard) for each tester's current usage/checklist stats as
+// reference alongside the score inputs; writes go through
+// api/admin-beta-hub.js (db.js's saveBetaScore).
+function BetaScoresAdminDetail({ onBack }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above: cancelEdit() immediately
+  // followed by handleSave() (closing over draft) triggered "Cannot read
+  // properties of null (reading 'adminNotes')" on the very first render,
+  // production build only. Reproduced and confirmed fixed via the same
+  // harness.
+  "use no memo";
+  const [rows, setRows] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchBetaScoreboard();
+      if (cancelled) return;
+      if (!result.ok) setLoadError(result.error);
+      else { setLoadError(null); setRows(result.rows); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  function startEdit(row) {
+    setDraft({
+      userId: row.user_id,
+      usageScore: row.usage_score ?? "",
+      feedbackScore: row.feedback_score ?? "",
+      callsScore: row.calls_score ?? "",
+      longevityScore: row.longevity_score ?? "",
+      adminNotes: "",
+    });
+    setSaveError(null);
+    setEditingUserId(row.user_id);
+  }
+
+  function cancelEdit() {
+    setEditingUserId(null);
+    setDraft(null);
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    setSaveError(null);
+    const toNumOrNull = v => (v === "" || v === null || v === undefined ? null : Number(v));
+    const result = await saveBetaScore({
+      userId: draft.userId,
+      usageScore: toNumOrNull(draft.usageScore),
+      feedbackScore: toNumOrNull(draft.feedbackScore),
+      callsScore: toNumOrNull(draft.callsScore),
+      longevityScore: toNumOrNull(draft.longevityScore),
+      adminNotes: draft.adminNotes || null,
+    });
+    if (!result.ok) { setSaveError(result.error); return; }
+    setRows(prev => (prev ?? []).map(r => r.user_id === draft.userId
+      ? { ...r, usage_score: result.score.usage_score, feedback_score: result.score.feedback_score, calls_score: result.score.calls_score, longevity_score: result.score.longevity_score }
+      : r));
+    setEditingUserId(null);
+    setDraft(null);
+  }
+
+  if (editingUserId !== null) {
+    const row = (rows ?? []).find(r => r.user_id === editingUserId);
+    return (
+      <>
+        <BackBar onBack={cancelEdit} title={row?.display_name || row?.email || "Score"} />
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              Reference: {row?.login_count ?? 0} logins · {row?.active_days ?? 0} active days ·{" "}
+              {row?.feedback_count ?? 0} feedback submissions · checklist {row?.checklist_completed_count ?? 0}/{row?.checklist_total_count ?? 0} ·{" "}
+              week {row?.beta_week_number || "—"} of 10.
+            </div>
+            {RUBRIC_ADMIN_CATEGORIES.map(cat => (
+              <div key={cat.key}>
+                <label style={lSp}>{cat.label} (0–{cat.max})</label>
+                <input
+                  type="number" min={0} max={cat.max} value={draft[cat.key]}
+                  onChange={e => setDraft(d => ({ ...d, [cat.key]: e.target.value }))}
+                  style={iS}
+                />
+              </div>
+            ))}
+            <div>
+              <label style={lSp}>Notes (admin-only, never shown to the tester)</label>
+              <textarea
+                value={draft.adminNotes}
+                onChange={e => setDraft(d => ({ ...d, adminNotes: e.target.value }))}
+                rows={3}
+                style={{ ...iS, height: "auto", resize: "vertical" }}
+              />
+            </div>
+            {saveError && (
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
+          </div>
+        </DetailCard>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="Beta Scores" />
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+        Scores are entered by hand — nothing here is auto-computed. A tester sees their own
+        row live in the Homebase the moment it's saved.
+      </div>
+
+      {rows === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {rows !== null && !loadError && rows.length === 0 && (
+        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No tracked beta-cohort accounts found.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {(rows ?? []).map(row => {
+          const anyScored = RUBRIC_ADMIN_CATEGORIES.some(c => row[c.scoreboardKey] !== "" && row[c.scoreboardKey] != null);
+          const total = anyScored ? RUBRIC_ADMIN_CATEGORIES.reduce((sum, c) => sum + (Number(row[c.scoreboardKey]) || 0), 0) : null;
+          return (
+            <DetailCard key={row.user_id} style={{ marginBottom: 0 }}>
+              <div style={{ padding: "13px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{row.display_name || row.email || row.user_id}</div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                    {total !== null ? `${total} / 100` : "Not yet scored"} · week {row.beta_week_number || "—"}
+                  </div>
+                </div>
+                <Pressable onClick={() => startEdit(row)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>
+                  {total !== null ? "Edit" : "Score"}
+                </Pressable>
               </div>
             </DetailCard>
           );
@@ -2348,7 +2779,32 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "changelog") {
-    return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="Changelog" onBack={() => setActiveSection(null)}>
+        <ChangelogAdminDetail onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
+  }
+  if (activeSection === "betachecklistadmin") {
+    return (
+      <AdminDetailErrorBoundary title="Feature Checklist" onBack={() => setActiveSection(null)}>
+        <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
+  }
+  if (activeSection === "betasuggestionadmin") {
+    return (
+      <AdminDetailErrorBoundary title="Suggestions" onBack={() => setActiveSection(null)}>
+        <BetaContentAdminDetail kind="suggestion" onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
+  }
+  if (activeSection === "betascoresadmin") {
+    return (
+      <AdminDetailErrorBoundary title="Beta Scores" onBack={() => setActiveSection(null)}>
+        <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;
@@ -2440,6 +2896,27 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Changelog"
             summary="Author the What's New entries paired with the update banner"
             onPress={() => setActiveSection("changelog")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Beta Checklist"
+            summary="Author the Feature Checklist testers check off in their Homebase"
+            onPress={() => setActiveSection("betachecklistadmin")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Beta Suggestions"
+            summary="Author the suggestion prompts shown in the tester Homebase"
+            onPress={() => setActiveSection("betasuggestionadmin")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Beta Scores"
+            summary="Enter each tracked tester's rubric score (Usage/Feedback/Calls/Longevity)"
+            onPress={() => setActiveSection("betascoresadmin")}
             last
           />
         )}

@@ -2073,16 +2073,20 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
   );
 }
 
-// Real React error boundary (class component — no hook equivalent exists) for
-// ChangelogAdminDetail below. A plain try/catch around JSX construction (what
-// this used to be) cannot catch errors thrown during a child component's own
-// render/commit (e.g. ReactMarkdown blowing up on a malformed entry body) —
-// react-hooks/error-boundaries flags this ("Avoid constructing JSX within
-// try/catch") for exactly that reason. Before this existed, ANY render error
-// under this subtree — anywhere in the app, since there was no boundary at
-// all — unmounted the whole React tree with zero on-screen indication, which
-// is what produced the "blank page" crash report with no visible error.
-class ChangelogErrorBoundary extends Component {
+// Real React error boundary (class component — no hook equivalent exists),
+// shared by every admin authoring sub-view below (Changelog, Beta Checklist/
+// Suggestions, Beta Scores). A plain try/catch around JSX construction (what
+// ChangelogAdminDetail's first draft used) cannot catch errors thrown during
+// a child component's own render/commit — react-hooks/error-boundaries flags
+// this ("Avoid constructing JSX within try/catch") for exactly that reason.
+// Before this existed, ANY render error under these subtrees — anywhere in
+// the app, since there was no boundary at all — unmounted the whole React
+// tree with zero on-screen indication. That's also how the "cancelEdit then
+// handleSave (closing over draft)" React Compiler miscompilation (see the
+// "use no memo" comment on ChangelogAdminDetail below) surfaced identically
+// in BetaContentAdminDetail and BetaScoresAdminDetail — same shape, same
+// bug, confirmed by the same production-build + decoded-source-map repro.
+class AdminDetailErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { error: null };
@@ -2091,13 +2095,13 @@ class ChangelogErrorBoundary extends Component {
     return { error };
   }
   componentDidCatch(error, info) {
-    console.error("[ChangelogAdminDetail] Caught render error:", error, info);
+    console.error(`[${this.props.title}] Caught render error:`, error, info);
   }
   render() {
     if (this.state.error) {
       return (
         <>
-          <BackBar onBack={this.props.onBack} title="Changelog" />
+          <BackBar onBack={this.props.onBack} title={this.props.title} />
           <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
             <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
             <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{this.state.error?.message || String(this.state.error)}</div>
@@ -2381,6 +2385,13 @@ const BETA_CONTENT_COPY = {
 // fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem) — never
 // a direct client write, per migration 037's RLS posture.
 function BetaContentAdminDetail({ kind, onBack }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above (this component was modeled
+  // directly on it): cancelEdit() immediately followed by handleSave()
+  // (closing over draft.body) triggered an identical "Cannot read properties
+  // of null (reading 'body')" crash on the very first render, production
+  // build only. Reproduced and confirmed fixed via the same harness.
+  "use no memo";
   const copy = BETA_CONTENT_COPY[kind];
   const [items, setItems] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -2571,6 +2582,13 @@ const RUBRIC_ADMIN_CATEGORIES = [
 // reference alongside the score inputs; writes go through
 // api/admin-beta-hub.js (db.js's saveBetaScore).
 function BetaScoresAdminDetail({ onBack }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above: cancelEdit() immediately
+  // followed by handleSave() (closing over draft) triggered "Cannot read
+  // properties of null (reading 'adminNotes')" on the very first render,
+  // production build only. Reproduced and confirmed fixed via the same
+  // harness.
+  "use no memo";
   const [rows, setRows] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingUserId, setEditingUserId] = useState(null);
@@ -2762,19 +2780,31 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "changelog") {
     return (
-      <ChangelogErrorBoundary onBack={() => setActiveSection(null)}>
+      <AdminDetailErrorBoundary title="Changelog" onBack={() => setActiveSection(null)}>
         <ChangelogAdminDetail onBack={() => setActiveSection(null)} />
-      </ChangelogErrorBoundary>
+      </AdminDetailErrorBoundary>
     );
   }
   if (activeSection === "betachecklistadmin") {
-    return <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="Feature Checklist" onBack={() => setActiveSection(null)}>
+        <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betasuggestionadmin") {
-    return <BetaContentAdminDetail kind="suggestion" onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="Suggestions" onBack={() => setActiveSection(null)}>
+        <BetaContentAdminDetail kind="suggestion" onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betascoresadmin") {
-    return <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="Beta Scores" onBack={() => setActiveSection(null)}>
+        <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;

@@ -1399,6 +1399,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §8's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
+| New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
 
 ### 12.3 Block 3 — Gate matrix
 
@@ -1425,6 +1426,26 @@ the paywall gate; the comment at `:269–277` records it).
   after `betaCodeUsed` was added 2026-07-24) makes it the most prop-fragile component in
   the app — treat any App.jsx wiring change here as crash-risk until rendered once.
 - *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
+- *React Compiler draft-closure crash* (2026-08-07) — `ChangelogAdminDetail`, then (same
+  pass) `BetaContentAdminDetail` and `BetaScoresAdminDetail`, all crashed identically on
+  their very first render, **production build only**: a `cancelEdit()` immediately followed
+  by a `handleSave()` that closes over a shared `draft` state object triggers a confirmed
+  `babel-plugin-react-compiler` miscompilation (wired via `@rolldown/plugin-babel` in
+  `vite.config.js`) — the compiler evaluates a memoization dependency on `draft` before it's
+  ever set, throwing `Cannot read properties of null (reading X)` for whichever field
+  `handleSave` closes over last (`'body'` for the first two, `'adminNotes'` for the third).
+  **Invisible to the entire 1449-test suite** — `vitest.config.js` deliberately omits the
+  compiler plugin (sandbox-safety), so `npm run test:run` passing proves nothing about this
+  bug class. Root-caused by a controlled repro outside Vitest entirely: a real `vite build`
+  with the actual plugin set, served and driven with Playwright, crash location decoded from
+  the emitted source map. Also exposed that **no admin sub-view had a React error
+  boundary anywhere in the app** — the crash silently blanked the whole Account tab with
+  zero on-screen indication, which is what made it read as "the page just goes blank."
+  **Fix, now the required pattern for any new admin CRUD sub-view of this
+  hooks-then-cancelEdit-then-handleSave-closing-over-draft shape:** add `"use no memo";` as
+  the component's first statement, and wrap its `activeSection` render call site in
+  `AdminDetailErrorBoundary` (generalized from the Changelog-only boundary this incident
+  introduced). Trigger-map row added to §12.2 below.
 
 **Standing findings from this pass:** none filed as DW defects. The `investorcodes`
 route-gate asymmetry (F45) is a hardening note, not a live defect — `activeSection` is

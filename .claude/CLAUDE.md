@@ -276,8 +276,9 @@ For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s
 function, pattern, and AI-context point it answers *"I am changing X — what Y must I check
 before X counts as done?"* It exists because the app's dominant failure mode is no longer
 locally-wrong code but **drift** — a locally-correct change that silently invalidates a
-distant system (five documented real incidents are catalogued there as case law: parallel
-formulas, retroactive recompute, lost saves, gate bypass, stale docs).
+distant system (six documented real incidents are catalogued there as case law: parallel
+formulas, retroactive recompute, lost saves, gate bypass, stale docs, and a React-Compiler
+miscompilation invisible to the entire test suite — §12.4).
 
 - **Before changing** anything under a mapped section (Setup Wizard, the 5 panels —
   Home, Income, Budget, Log, Account — Auth, Login, Paywall, UI-UX, or the shared
@@ -353,6 +354,17 @@ npm test              # watch mode
 npx vitest run -u     # update snapshots after DEFAULT_CONFIG changes
 ```
 Reporter is `verbose` — Vitest 4's default misreports suite failures as "no tests." Do not use `-- --runInBand` (Jest flag, ignored by Vitest).
+
+**Blind spot: omitting `@rolldown/plugin-babel` means Vitest never exercises the React
+Compiler** — a real production-only miscompilation (drift-app-warden §12.4) crashed 3 admin
+panels on their first render with zero test failures. A `useState`-heavy component whose
+`cancelEdit`/`handleSave`-shaped handlers close over a shared `draft` object is the known
+trigger; the fix is `"use no memo";` as the component's first statement (see
+`ChangelogAdminDetail`/`BetaContentAdminDetail`/`BetaScoresAdminDetail` in
+`ProfilePanel.jsx`) plus wrapping its render site in `AdminDetailErrorBoundary` — the app has
+no top-level error boundary, so an uncaught render crash anywhere blanks the whole page.
+`npm run test:run` passing is **not sufficient evidence** this class of bug is absent; a real
+`vite build` + browser render is the only way to catch it.
 
 ---
 

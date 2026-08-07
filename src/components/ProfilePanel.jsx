@@ -2503,6 +2503,30 @@ const RUBRIC_ADMIN_CATEGORIES = [
   { key: "longevityScore", scoreboardKey: "longevity_score", label: "Longevity", max: 10 },
 ];
 
+// App Usage rubric category (0-50, 30-pt floor) reference board — every field
+// here already comes off api/admin-beta-report.js's per-user aggregate
+// (db.js's fetchBetaScoreboard), scoped to the tester's own 10-week window
+// (docs/TODO.md §30). Purely informational — the admin still hand-enters the
+// score itself below; this just replaces the old one-line text summary with
+// the same tiles the rest of the app uses for at-a-glance metrics.
+function BetaUsageBoard({ row }) {
+  const daysSince = row?.days_since_last_active;
+  const hasActivity = daysSince !== "" && daysSince != null;
+  const lastActiveStatus = !hasActivity ? "red" : daysSince <= 3 ? "green" : daysSince <= 13 ? "teal" : "red";
+  const lastActiveSub = !hasActivity ? "no activity yet" : daysSince === 0 ? "today" : daysSince === 1 ? "1 day ago" : `${daysSince} days ago`;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      <Card label="Logins" rawVal={row?.login_count ?? 0} status="teal" entranceIndex={0} />
+      <Card label="Active Days" rawVal={row?.active_days ?? 0} sub="distinct days" status="teal" entranceIndex={1} />
+      <Card label="Goals Logged" rawVal={row?.goal_created ?? 0} sub={`${row?.goal_updated ?? 0} updates`} status="teal" entranceIndex={2} />
+      <Card label="Expenses Logged" rawVal={row?.expense_created ?? 0} sub={`${row?.expense_updated ?? 0} updates`} status="teal" entranceIndex={3} />
+      <Card label="Checklist" val={`${row?.checklist_completed_count ?? 0}/${row?.checklist_total_count ?? 0}`} sub="items completed" status="teal" entranceIndex={4} />
+      <Card label="Last Active" val={hasActivity ? String(daysSince) : "—"} sub={lastActiveSub} status={lastActiveStatus} entranceIndex={5} />
+    </div>
+  );
+}
+
 // Admin scoresheet for the beta rubric (database/migrations/037's
 // beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
 // human" decision, given a live tester-visible home instead of only a
@@ -2574,10 +2598,12 @@ function BetaScoresAdminDetail({ onBack }) {
         <BackBar onBack={cancelEdit} title={row?.display_name || row?.email || "Score"} />
         <DetailCard>
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <SH color="var(--color-teal)" right={`week ${row?.beta_week_number || "—"} of 10`}>App Usage</SH>
+              <BetaUsageBoard row={row} />
+            </div>
             <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              Reference: {row?.login_count ?? 0} logins · {row?.active_days ?? 0} active days ·{" "}
-              {row?.feedback_count ?? 0} feedback submissions · checklist {row?.checklist_completed_count ?? 0}/{row?.checklist_total_count ?? 0} ·{" "}
-              week {row?.beta_week_number || "—"} of 10.
+              Feedback: {row?.feedback_count ?? 0} submissions.
             </div>
             {RUBRIC_ADMIN_CATEGORIES.map(cat => (
               <div key={cat.key}>

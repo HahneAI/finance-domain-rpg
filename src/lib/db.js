@@ -1183,12 +1183,12 @@ export async function fetchAllChangelogEntries() {
     if (!res.ok) {
       const errorMsg = payload?.error || "Failed to load entries";
       console.log("[db] Changelog API error:", res.status, errorMsg);
-      return { ok: false, error: `API ${res.status}: ${errorMsg}`, entries: [] };
+      return { ok: false, error: errorMsg, entries: [] };
     }
     return { ok: true, entries: payload.entries ?? [] };
   } catch (err) {
     console.error("[db] Changelog fetch exception:", err);
-    return { ok: false, error: `Exception: ${err.message}`, entries: [] };
+    return { ok: false, error: err.message, entries: [] };
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore } from "../lib/db.js";
@@ -2073,6 +2073,42 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
   );
 }
 
+// Real React error boundary (class component — no hook equivalent exists) for
+// ChangelogAdminDetail below. A plain try/catch around JSX construction (what
+// this used to be) cannot catch errors thrown during a child component's own
+// render/commit (e.g. ReactMarkdown blowing up on a malformed entry body) —
+// react-hooks/error-boundaries flags this ("Avoid constructing JSX within
+// try/catch") for exactly that reason. Before this existed, ANY render error
+// under this subtree — anywhere in the app, since there was no boundary at
+// all — unmounted the whole React tree with zero on-screen indication, which
+// is what produced the "blank page" crash report with no visible error.
+class ChangelogErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("[ChangelogAdminDetail] Caught render error:", error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <>
+          <BackBar onBack={this.props.onBack} title="Changelog" />
+          <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
+            <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{this.state.error?.message || String(this.state.error)}</div>
+          </div>
+        </>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Admin authoring surface for changelog_entries (database/migrations/032) —
 // the write side of the "What's New" feature. UpdateAvailableBanner +
 // ChangelogModal (App.jsx) are the read side: a published entry here is what
@@ -2092,7 +2128,8 @@ function ChangelogAdminDetail({ onBack }) {
   const [saveError, setSaveError] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [componentError, setComponentError] = useState(null);
+
+  console.log("[ChangelogAdminDetail] Rendered - state:", { entries, loadError, editingId });
 
   // Mount-only fetch, same inline-async-function-inside-the-effect shape
   // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
@@ -2101,12 +2138,13 @@ function ChangelogAdminDetail({ onBack }) {
   // top-level function. Post-mutation UI updates (below) are optimistic
   // local state edits from the API's own response instead of a re-fetch.
   useEffect(() => {
+    console.log("[ChangelogAdminDetail] Mount effect: Starting load");
     let cancelled = false;
     async function load() {
       try {
-        console.log("[ChangelogAdminDetail] Loading entries...");
+        console.log("[ChangelogAdminDetail] Load: Fetching entries...");
         const result = await fetchAllChangelogEntries();
-        console.log("[ChangelogAdminDetail] Load result:", result);
+        console.log("[ChangelogAdminDetail] Load: Got result", result);
         if (cancelled) return;
         if (!result.ok) setLoadError(result.error);
         else { setLoadError(null); setEntries(result.entries); }
@@ -2118,19 +2156,6 @@ function ChangelogAdminDetail({ onBack }) {
     load();
     return () => { cancelled = true; };
   }, []);
-
-  // Catch any rendering errors
-  if (componentError) {
-    return (
-      <>
-        <BackBar onBack={onBack} title="Changelog" />
-        <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}>
-          <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Component Error</div>
-          <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{componentError}</div>
-        </div>
-      </>
-    );
-  }
 
   function startNew() {
     setDraft({ id: null, versionLabel: "", title: "", body: "", published: false });
@@ -2225,14 +2250,7 @@ function ChangelogAdminDetail({ onBack }) {
               {showPreview ? (
                 <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "160px" }}>
                   {draft.body.trim()
-                    ? (() => {
-                        try {
-                          return <ChangelogBody markdown={draft.body} />;
-                        } catch (err) {
-                          console.error("[ChangelogAdminDetail] ChangelogBody render error:", err);
-                          return <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error rendering preview: {err.message}</div>;
-                        }
-                      })()
+                    ? <ChangelogBody markdown={draft.body} />
                     : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
                 </div>
               ) : (
@@ -2280,7 +2298,7 @@ function ChangelogAdminDetail({ onBack }) {
       </Pressable>
 
       {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error: {loadError}</div>}
       {entries !== null && !loadError && entries.length === 0 && (
         <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
@@ -2729,7 +2747,11 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "changelog") {
-    return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
+    return (
+      <ChangelogErrorBoundary onBack={() => setActiveSection(null)}>
+        <ChangelogAdminDetail onBack={() => setActiveSection(null)} />
+      </ChangelogErrorBoundary>
+    );
   }
   if (activeSection === "betachecklistadmin") {
     return <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />;

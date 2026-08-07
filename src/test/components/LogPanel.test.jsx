@@ -435,7 +435,7 @@ describe('PTO Goal — eager save', () => {
 // not a locally-recomputed value that could disagree with what Income/Home show
 // for the same account. Rendering with an empty `logs` array but non-zero prop
 // values proves the tiles can no longer be driven by a local recomputation —
-// before the fix, "Adjusted Take-Home"/"Total Net Lost"/"401k Lost"/"PTO Accrual
+// before the fix, "Adjusted Take-Home"/"Cash Left Behind"/"401k Lost"/"PTO Accrual
 // Lost" all derived from a local `logs.reduce`, so this exact scenario would have
 // shown $0 / 0h regardless of what the props said.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -454,7 +454,7 @@ describe('Log Effect Summary — reads authoritative props, not local recomputat
     adjustedTakeHome: 39876,
   }
 
-  // "Total Net Lost" is a MetricCard with rawVal, which counts up from 0 via
+  // "Cash Left Behind" is a MetricCard with rawVal, which counts up from 0 via
   // requestAnimationFrame (CLAUDE.md's countup rule) instead of rendering the
   // final value on mount — jsdom doesn't drive rAF forward, so that specific
   // tile isn't asserted here. It reads the same `logNetLost` prop (`val={f(logNetLost)}

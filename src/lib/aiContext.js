@@ -228,7 +228,7 @@ export function buildJobHuntContext({ config = null, expenses = [], effectiveTod
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);
-  lines.push(`Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
+  lines.push(`Cash Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
   if (dash.lifestyleWeeklySpend > 0) {
     lines.push(`Lifestyle spend still tracked (not counted in runway above): ${fmt$(dash.lifestyleWeeklySpend)}/wk`);
   }

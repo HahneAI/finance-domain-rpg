@@ -1463,7 +1463,7 @@ until this fix: `adjTH` never subtracted `fundedGoalSpend` even though Income's
 `adjustedTakeHome` does and LogPanel already receives that prop. Fixed by converging on
 one fact per number: `adjustedTakeHome`, `logNetLost`, `logNetGained` are now threaded
 down from `App.jsx`'s `logTotals` (same pattern as the existing `logK401kLost` props) and
-consumed directly — "Adjusted Take-Home," "Total Net Lost," "401k Lost," and "PTO Accrual
+consumed directly — "Adjusted Take-Home," "Cash Left Behind," "401k Lost," and "PTO Accrual
 Lost" all read the authoritative prop, not a local recomputation. Only `grossLost`/
 `grossGained`/`bucketHoursDeducted` (no App-level aggregate exists for these) stay locally
 reduced — but now via `resolveEventWeekMeta(e, allWeeks)` (F57), so they use the event's

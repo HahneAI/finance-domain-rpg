@@ -2117,6 +2117,26 @@ class ChangelogErrorBoundary extends Component {
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
 function ChangelogAdminDetail({ onBack }) {
+  // "use no memo" opts this component OUT of React Compiler auto-memoization
+  // (babel-plugin-react-compiler, wired via @rolldown/plugin-babel in
+  // vite.config.js). This works around a confirmed compiler miscompilation:
+  // in the PRODUCTION build only (react-dom-client.production.js — never
+  // reproduces under Vitest, which deliberately omits the compiler plugin —
+  // see vitest.config.js's comment), the very first render (entries/draft
+  // all still null, before the mount effect's fetch resolves) threw
+  // "Cannot read properties of null (reading 'body')" with no application
+  // code path that could produce it — draft.body/entry.body are only ever
+  // read inside the editingId!==null branch or the save/edit handlers, none
+  // of which run on that first render. The crash's source-mapped token name
+  // was literally 'body', collapsed onto the boundary between cancelEdit and
+  // handleSave (handleSave closes over draft.body) — consistent with the
+  // compiler incorrectly hoisting/evaluating a memoization dependency for a
+  // value that only exists once a later branch is reached. Confirmed by a
+  // controlled repro (real prod build, real react-dom-client.production.js,
+  // Playwright + decoded source map): the crash reproduces with the compiler
+  // on and disappears completely with this directive. Safe to remove once
+  // the underlying compiler bug is fixed upstream and verified.
+  "use no memo";
   // null = initial load in progress (distinct from [] = loaded, zero entries) —
   // avoids a synchronous setState(true) at the top of load(), which is what
   // react-hooks/set-state-in-effect flags when load() is invoked directly
@@ -2129,8 +2149,6 @@ function ChangelogAdminDetail({ onBack }) {
   const [showPreview, setShowPreview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  console.log("[ChangelogAdminDetail] Rendered - state:", { entries, loadError, editingId });
-
   // Mount-only fetch, same inline-async-function-inside-the-effect shape
   // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
   // an effect that calls an *externally defined* function containing
@@ -2138,19 +2156,15 @@ function ChangelogAdminDetail({ onBack }) {
   // top-level function. Post-mutation UI updates (below) are optimistic
   // local state edits from the API's own response instead of a re-fetch.
   useEffect(() => {
-    console.log("[ChangelogAdminDetail] Mount effect: Starting load");
     let cancelled = false;
     async function load() {
       try {
-        console.log("[ChangelogAdminDetail] Load: Fetching entries...");
         const result = await fetchAllChangelogEntries();
-        console.log("[ChangelogAdminDetail] Load: Got result", result);
         if (cancelled) return;
         if (!result.ok) setLoadError(result.error);
         else { setLoadError(null); setEntries(result.entries); }
       } catch (err) {
-        console.error("[ChangelogAdminDetail] Load exception:", err);
-        if (!cancelled) setLoadError(`Exception: ${err.message}`);
+        if (!cancelled) setLoadError(err.message);
       }
     }
     load();

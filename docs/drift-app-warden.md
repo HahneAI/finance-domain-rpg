@@ -2987,6 +2987,48 @@ entry).
 > covers the JS half; migration 031's own verification block covers the SQL half — no single
 > automated test spans both today.
 
+**F123 · Beta Homebase — three tables, three different write postures, don't blur them** —
+`database/migrations/037_add_beta_homebase.sql`, `api/admin-beta-hub.js`, `db.js`,
+`App.jsx`/`ProfilePanel.jsx`/`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for the
+rubric scores as a source of truth for the tester's own displayed total**
+Introduced with the Beta Tester Homebase (docs/TODO.md §12) — the icon next to the
+notification bell, gated `isTrackedBetaTester` (F122's predicate reused as-is, not
+re-derived). Three new tables, three DIFFERENT write postures — conflating any two of them
+is the drift this entry exists to prevent:
+- **`beta_content_items`** (checklist items + suggestion prompts) — admin-write-only via
+  `api/admin-beta-hub.js`'s service-role client (`entity: "content"`). Tester read is a direct
+  RLS-scoped client select (`published_at IS NOT NULL AND is_tracked_beta_tester(auth.uid())`)
+  — no API round trip, same posture `changelog_entries` (F-adjacent, migration 032) already
+  established for this exact "read is safe direct, write is admin-only" split.
+- **`beta_checklist_completions`** — the ONE tester-writable table in this set. A tester's own
+  checkbox state is a direct client insert/delete (RLS `user_id = auth.uid()` **plus** a
+  SECURITY DEFINER `BEFORE INSERT` trigger re-checking `is_tracked_beta_tester(NEW.user_id)`,
+  mirroring migration 031's `check_beta_activity_event_eligibility` pattern exactly — same
+  reasoning: RLS alone proves "this row is mine," not "I'm actually a tracked beta tester").
+- **`beta_scores`** — admin-write-only via `api/admin-beta-hub.js` (`entity: "score"`).
+  **Deliberately NOT auto-computed** — docs/TODO.md §12.L's "scoring stays manual, reviewed by
+  a human" decision (Call Attendance in particular has zero in-app data source). `admin_notes`
+  on this table must NEVER be selected by a tester-facing query — it's admin's own reasoning,
+  not tester-visible content; the RLS SELECT policy returns the whole row, so any new
+  tester-facing read of this table must explicitly project columns, not `select("*")`.
+- **`is_tracked_beta_tester(uid)`** (new SQL function, `SECURITY DEFINER STABLE`) — the SQL-side
+  twin of `entitlements.js`'s `isTrackedBetaTester`, now reused across three RLS
+  policies/the trigger instead of inlining the same subquery repeatedly. Still "two languages,
+  no shared source" at the JS/SQL boundary (F122's existing warning), but now consolidated to
+  ONE place on the SQL side instead of growing a second/third inline copy.
+> **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
+> three postures above before writing a migration — do not default to "admin route" or
+> "direct client write" out of habit; the posture follows from *who legitimately produces the
+> data* (admin content vs. a tester's own action vs. admin judgment about a tester). **IF**
+> `is_tracked_beta_tester(uid)` or `isTrackedBetaTester` (JS) changes, **THEN** change both
+> (F122's rule, now with a third consumer). **IF** a new field is added to `beta_scores`,
+> **THEN** decide explicitly whether it's tester-visible or admin-only before exposing it
+> through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. Check:
+> `dbBetaHomebase.test.js` (client read/write shape + gating), `adminBetaHub.test.js` (server
+> auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
+> scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
+> no single automated test spans the JS+SQL boundary, same gap F122 already flags.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -3008,6 +3050,8 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | Tester 6-month window semantics (§9, migration 021 trigger) | **Stale as written — corrected 2026-07-25.** Testers no longer "ride the real paywall": `paywallBypassed` now includes `isTester` (same locked decision as F111's `hasPrivilegedAccess`), closing the asymmetry where testers relied only on the trial window. F86 cron exemption (DW-7) is unaffected — still exempts testers from dunning/deletion regardless. | Expired tester: paywall never triggers in-app (bypassed, not just surviving on window math); never dunned/deleted by cron | D4 |
 | A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
+| `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
+| A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

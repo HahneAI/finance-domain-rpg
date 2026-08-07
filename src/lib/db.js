@@ -1231,6 +1231,211 @@ export async function deleteChangelogEntry(id) {
 }
 
 /**
+ * Short recent-history feed for the Beta Homebase's "What's New" section —
+ * same RLS-scoped published-only read as fetchLatestPublishedChangelog, just
+ * more than one row. Never used for the "is there something new" unseen-check
+ * (that stays on fetchLatestPublishedChangelog / lastSeenChangelogId); this is
+ * purely a read-only recap list.
+ */
+export async function fetchPublishedChangelogEntries(limit = 5) {
+  const { data, error } = await supabase
+    .from("changelog_entries")
+    .select("id, version_label, title, body, published_at")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return data ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Beta Tester Homebase (docs/TODO.md §12, database/migrations/037_add_beta_homebase.sql)
+// — weaves the scoring rubric, a personal feature checklist, and admin-
+// authored suggestion prompts into one tester-facing destination. Reads below
+// go direct-to-Supabase via RLS (same posture as beta_activity_events/
+// changelog_entries — no API round trip needed for a gated-but-not-privileged
+// read); writes are split the same way migration 037 splits them: a tester's
+// own checklist completions are a direct client insert/delete (RLS + the
+// eligibility trigger enforce it server-side), while content authoring and
+// score entry are admin-only and go through api/admin-beta-hub.js.
+// ─────────────────────────────────────────────────────────────
+
+/** Published checklist items, in authoring order (oldest first — the order admin added them). */
+export async function fetchBetaChecklistItems() {
+  const { data, error } = await supabase
+    .from("beta_content_items")
+    .select("id, title, body, published_at")
+    .eq("kind", "checklist")
+    .not("published_at", "is", null)
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  return data ?? [];
+}
+
+/** Published suggestion prompts, feed-style (newest first — same convention as the changelog). */
+export async function fetchBetaSuggestions() {
+  const { data, error } = await supabase
+    .from("beta_content_items")
+    .select("id, title, body, published_at")
+    .eq("kind", "suggestion")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false });
+  if (error) return [];
+  return data ?? [];
+}
+
+/** The caller's own checklist completions — RLS already scopes this to `user_id = auth.uid()`. */
+export async function fetchMyChecklistCompletions() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("beta_checklist_completions")
+    .select("checklist_item_id")
+    .eq("user_id", userId);
+  if (error) return [];
+  return (data ?? []).map(row => row.checklist_item_id);
+}
+
+/**
+ * Toggles a single checklist item's completion for the caller. Row existence
+ * IS the "checked" state — `completed: true` inserts, `completed: false`
+ * deletes; there's nothing else on the row worth keeping once unchecked.
+ * Gated the same way logBetaEvent/logBetaFeedback are (isTrackedBetaTester),
+ * mirrored server-side by migration 037's eligibility trigger on insert.
+ */
+export async function toggleBetaChecklistItem({ isTester, betaCodeUsed, itemId, completed }) {
+  if (!isTrackedBetaTester({ isTester, betaCodeUsed })) return { ok: false, error: "Not part of the tracked beta cohort" };
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, error: "Not signed in" };
+
+  if (completed) {
+    const { error } = await supabase
+      .from("beta_checklist_completions")
+      .insert({ checklist_item_id: itemId, user_id: userId });
+    // A duplicate insert (already checked, e.g. a second tap before the UI
+    // re-rendered) trips the table's unique(checklist_item_id, user_id)
+    // constraint — that's not a real failure, the end state is identical to
+    // success, so it's treated as one.
+    if (error && error.code !== "23505") return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  const { error } = await supabase
+    .from("beta_checklist_completions")
+    .delete()
+    .eq("checklist_item_id", itemId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** The caller's own rubric score — null if not yet scored (or not a tracked tester, per RLS). */
+export async function fetchMyBetaScore() {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from("beta_scores")
+    .select("usage_score, feedback_score, calls_score, longevity_score, updated_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+async function betaHubAuthHeaders() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return null;
+  return { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
+}
+
+/** Admin authoring list for one content kind — drafts included, via api/admin-beta-hub.js's service-role GET. */
+export async function fetchAllBetaContentItems(kind) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in", items: [] };
+  try {
+    const res = await fetch(`/api/admin-beta-hub?entity=content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load items", items: [] };
+    return { ok: true, items: payload.items ?? [] };
+  } catch (err) {
+    return { ok: false, error: err.message, items: [] };
+  }
+}
+
+/** Create (no id) or update (id present) a checklist item or suggestion prompt. */
+export async function saveBetaContentItem({ id, kind, title, body, published }) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch("/api/admin-beta-hub", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ entity: "content", id, kind, title, body, published }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to save item" };
+    return { ok: true, item: payload.item };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function deleteBetaContentItem(id) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch(`/api/admin-beta-hub?entity=content&id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers,
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to delete item" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Every tracked beta tester with their current usage stats (reusing
+ * api/admin-beta-report.js's existing aggregation — ?format=json is
+ * additive, same data the CSV export already computes) plus their current
+ * rubric score, if any — the data set the admin scoresheet UI needs to show
+ * "here's what they've done" alongside the inputs to score them.
+ */
+export async function fetchBetaScoreboard() {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in", rows: [] };
+  try {
+    const res = await fetch("/api/admin-beta-report?format=json", { method: "GET", headers });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load scoreboard", rows: [] };
+    return { ok: true, rows: payload.rows ?? [] };
+  } catch (err) {
+    return { ok: false, error: err.message, rows: [] };
+  }
+}
+
+/** Upserts one tester's rubric score. `null` for any category leaves it unscored (shown as "Not yet scored"). */
+export async function saveBetaScore({ userId, usageScore, feedbackScore, callsScore, longevityScore, adminNotes }) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch("/api/admin-beta-hub", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ entity: "score", userId, usageScore, feedbackScore, callsScore, longevityScore, adminNotes }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to save score" };
+    return { ok: true, score: payload.score };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Terms of Service / Privacy Policy consent (database/migrations/033_add_consent_records.sql).
  * Direct client insert (not routed through an API route like the changelog
  * admin writes) — RLS restricts this to the caller's own user_id, and the

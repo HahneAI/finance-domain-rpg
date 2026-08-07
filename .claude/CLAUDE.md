@@ -18,14 +18,15 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No standalone backend server** — but no longer "pure frontend": `api/` holds 11 Vercel
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 12 Vercel
 serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
 subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
-the "What's New" authoring surface, plus `api/seed.js` — a single route dispatched on
-`body.type` ("beta" | "investor" | "trial") that consolidates what used to be three separate
-seed-beta/seed-investor/seed-trial functions). All privileged writes (tier flags, subscription
-columns, changelog entries) go through these service-role routes — the client never writes them
-(RLS migration 019).
+the "What's New" authoring surface, `admin-beta-hub.js` for the Beta Homebase's checklist/
+suggestion content + rubric scores (dispatched on `entity`: "content" | "score"), plus
+`api/seed.js` — a single route dispatched on `body.type` ("beta" | "investor" | "trial") that
+consolidates what used to be three separate seed-beta/seed-investor/seed-trial functions). All
+privileged writes (tier flags, subscription columns, changelog entries, beta content/scores) go
+through these service-role routes — the client never writes them (RLS migration 019).
 
 **Vercel Hobby-plan function cap:** a deployment can include **at most 12 Serverless Functions**
 (one per non-`_`-prefixed file in `api/`) on the free Hobby plan — exceeding it fails the build
@@ -33,8 +34,11 @@ outright ("No more than 12 Serverless Functions can be added to a Deployment on 
 This repo hit 13 once (adding `admin-changelog.js` tipped it over) and was brought back under the
 cap by merging seed-beta/seed-investor/seed-trial into the one `api/seed.js` above — same fix to
 reach for again if a future route addition trips this same failure, rather than assuming it's a
-rate limit or a real Vercel outage. Consolidation candidates if it happens again: the three
-`stripe-*.js` routes are the next most mergeable group (same shape, different Stripe action).
+rate limit or a real Vercel outage. **Currently sitting at 12/12 — zero headroom** (the Beta
+Homebase's `admin-beta-hub.js`, 2026-08-06, spent the last free slot by design — everything
+tester-facing in that feature reads/writes Supabase directly under RLS instead of adding routes).
+Consolidation candidates if another route is needed: the three `stripe-*.js` routes remain the
+next most mergeable group (same shape, different Stripe action).
 
 ---
 
@@ -60,6 +64,7 @@ src/
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
+│   ├── BetaHomebase.jsx     — tracked-beta-tester-only modal: rubric score, feature checklist, suggestion feed, changelog recap
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
 │   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS
@@ -308,7 +313,8 @@ periodic full-schema recaps, not real migrations — never assign one the actual
 number in sequence expecting it to run. They exist purely so a session can read one file instead
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
 make them impossible to mistake for a pending migration. Latest bookmark:
-`022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
+`038_BOOKMARK_schema_snapshot_2026-08-06.sql` (compiled from files through migration 037, but
+**verified live only through 035** — see below).
 Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
 `beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
@@ -317,12 +323,20 @@ Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permis
 Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 034
 (beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
 link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
-chat_type) exist — **the next real migration is 037.** Verify against the folder before
-numbering; this note has now gone stale five times (drift-app-warden §14, across the
-beta-program migrations, across 031–032, again across 033, and again when 032 collided with a
-second, independently-numbered `032_add_resume_profile.sql` on a parallel branch — resolved by
-renumbering the resume_profile migration to 036 on merge — a fresh BOOKMARK compiling schema
-state through 036 is now overdue; the existing `022` snapshot is stale for the same reason).
+chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
+Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123) exist — **the next real migration
+is 039.** Verify against the folder before numbering; this note has now gone stale five times
+(drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
+again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
+parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).
+
+**⚠️ 036 and 037 are committed files that have NOT been run against production** — confirmed
+2026-08-06 by reconciling a live Supabase schema export against the migrations folder for the
+038 bookmark: `resume_profile` is absent and `coach_chats.chat_type`'s CHECK constraint still
+lacks `resume_review` (036 never ran), and `beta_content_items`/`beta_checklist_completions`/
+`beta_scores` are all absent (037 never ran). **Practical effect: Résumé Review (§18.E1) and the
+Beta Tester Homebase are both non-functional in production right now** — apply both migrations
+before relying on either feature. Once applied, the next bookmark should extend through 037.
 
 ---
 

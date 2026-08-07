@@ -3592,6 +3592,40 @@ not a new email system.
 
 ---
 
+### O. Beta Tester Homebase — Rubric, Checklist, Suggestions, Changelog Recap
+
+*Shipped 2026-08-06. Weaves §L's scoring rubric, a personal feature checklist, admin-authored
+suggestion prompts, and a recap of the changelog into one tester-facing destination — the icon
+next to the notification bell, tracked beta testers only. `database/migrations/037_add_beta_homebase.sql`,
+`api/admin-beta-hub.js`, `src/components/BetaHomebase.jsx`, drift-app-warden §20 F123.*
+
+- [x] **Rubric made tester-visible, still admin-scored** — §L's "reviewed by a human, no
+  auto-scoring formula" decision stands; `beta_scores` is admin-entered via a new "Beta Scores"
+  admin-toolkit page (`BetaScoresAdminDetail`, `ProfilePanel.jsx`), read live by the tester in
+  Homebase. The admin scoresheet reads `api/admin-beta-report.js`'s existing usage aggregation
+  (`?format=json`, extended with score + checklist-completion joins) as reference alongside the
+  four score inputs — no separate "look up their stats" step.
+- [x] **Feature Checklist, personal per-tester completion** — admin authors items ("Beta
+  Checklist" admin page, same table shape as changelog entries — `kind='checklist'` on the new
+  `beta_content_items`); each tester's own checkmarks persist to `beta_checklist_completions`
+  (row existence = checked, direct client insert/delete under RLS + a
+  migration-031-style eligibility trigger).
+- [x] **Suggestions, admin-authored prompts feed** — `kind='suggestion'` on the same
+  `beta_content_items` table ("Beta Suggestions" admin page); read-only for testers, no
+  tester-submission path (that's the existing "Send Feedback" channel, §17 — deliberately kept
+  separate, different purpose).
+- [x] **Interconnected with the changelog** — Homebase's "What's New" section reads the last 5
+  published `changelog_entries` directly (`fetchPublishedChangelogEntries`, same RLS-scoped read
+  `ChangelogModal`'s single-latest-entry check already used) — no new authoring surface, no
+  schema change to that table.
+- [x] **Stayed inside the Vercel Hobby 12-function cap** — one new route
+  (`api/admin-beta-hub.js`), dispatched by `entity` (content vs. score) the same way `api/seed.js`
+  dispatches by `type`; every tester-facing read/write is direct-to-Supabase via RLS, no route
+  needed. **This spends the last free slot — 12/12.** The next addition needs to consolidate
+  something first; the three `stripe-*.js` routes remain the flagged candidate (CLAUDE.md).
+
+---
+
 ## 14. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
 
 *New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*

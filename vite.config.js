@@ -84,6 +84,14 @@ export default defineConfig({
       },
     }),
   ],
+  // TEMPORARY (docs/TODO.md — remove after the Changelog admin crash is root-
+  // caused): production stack traces are otherwise minified into unreadable
+  // names (yx/ho/oc/...), which made an actual render crash impossible to
+  // diagnose from a mobile-only device with no devtools access. Exposes full
+  // readable source (incl. code comments) via browser devtools until reverted.
+  build: {
+    sourcemap: true,
+  },
   test: {
     environment: 'jsdom',
     globals: true,

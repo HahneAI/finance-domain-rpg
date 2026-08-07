@@ -106,6 +106,27 @@ describe("admin-beta-report — ?format=json", () => {
     expect(row.total_score).toBe(80);
   });
 
+  it("includes each tester's own feedback text, most-recent first", async () => {
+    setupCallerAuth();
+    routeAdminTables({
+      betaUsers: [{ user_id: "u1", display_name: "Ada", beta_code_used: "clarity042", beta_started_at: null }],
+      events: [
+        { user_id: "u1", event_type: "feedback", created_at: "2026-07-01T00:00:00Z", note: "first note" },
+        { user_id: "u1", event_type: "login", created_at: "2026-07-02T00:00:00Z", note: null },
+        { user_id: "u1", event_type: "feedback", created_at: "2026-07-05T00:00:00Z", note: "second note" },
+      ],
+    });
+
+    const res = mkRes();
+    await handler({ method: "GET", headers: { authorization: "Bearer tok" }, query: { format: "json" } }, res);
+
+    const row = res.body.rows[0];
+    expect(row.feedback).toEqual([
+      { created_at: "2026-07-05T00:00:00Z", note: "second note" },
+      { created_at: "2026-07-01T00:00:00Z", note: "first note" },
+    ]);
+  });
+
   it("shows an unscored tester as empty-string score fields and a zero checklist count, not nulls/crashes", async () => {
     setupCallerAuth();
     routeAdminTables({

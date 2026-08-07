@@ -2527,6 +2527,35 @@ function BetaUsageBoard({ row }) {
   );
 }
 
+// Feedback rubric category (0-25) reference — the tester's own submitted
+// text (api/admin-beta-report.js's ?format=json `feedback` array, most-
+// recent first, scoped to their own 10-week window same as the usage
+// board), inline instead of only a count — so "specificity" is judgable
+// right here instead of cross-referencing the separate ?format=feedback CSV.
+function BetaFeedbackList({ feedback }) {
+  if (!feedback || feedback.length === 0) {
+    return (
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+        No feedback submitted yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {feedback.map((entry, i) => (
+        <div key={`${entry.created_at}-${i}`} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "1px", color: "var(--color-text-secondary)", marginBottom: "4px", fontFamily: "var(--font-sans)" }}>
+            {new Date(entry.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </div>
+          <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+            {entry.note || "—"}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Admin scoresheet for the beta rubric (database/migrations/037's
 // beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
 // human" decision, given a live tester-visible home instead of only a
@@ -2602,8 +2631,9 @@ function BetaScoresAdminDetail({ onBack }) {
               <SH color="var(--color-teal)" right={`week ${row?.beta_week_number || "—"} of 10`}>App Usage</SH>
               <BetaUsageBoard row={row} />
             </div>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              Feedback: {row?.feedback_count ?? 0} submissions.
+            <div>
+              <SH color="var(--color-teal)" right={`${row?.feedback_count ?? 0} submissions`}>Feedback</SH>
+              <BetaFeedbackList feedback={row?.feedback} />
             </div>
             {RUBRIC_ADMIN_CATEGORIES.map(cat => (
               <div key={cat.key}>

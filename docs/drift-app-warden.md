@@ -659,12 +659,12 @@ when the year-end simulation shape omits it — `ec53450`).
 > whose ETA lands next year must subtract only its this-year slice from Outlook.
 
 **F22 · New Job Season home surface** — mode fork `App.jsx:1570` (Home) / `:1630` (Budget);
-`NewJobSeasonHomePanel.jsx`: `dash` runway memo `:56–58` (via `computeNewJobSeasonRunway`,
-`extraCash: huntIncome`), `saveCashOnHand:65–69` (writes `newJobSeasonCashOnHand` +
+`NewJobSeasonHomePanel.jsx`: `dash` runway memo `:71–73` (via `computeNewJobSeasonRunway`,
+`extraCash: huntIncome`), `saveCashOnHand:80–84` (writes `newJobSeasonCashOnHand` +
 `newJobSeasonCashOnHandAsOf`, called from the pencil-badged Cash On Hand card + its shared
-`CashOnHandSheet.jsx` editor — §1.H17), `logIncome:94–105`, `removeEntry:109–113`,
-embedded `ReemploymentTracker:264` with its `applyConfigUpdate` wrapper
-(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:267` (DW-8 fix,
+`CashOnHandSheet.jsx` editor — §1.H17), `logIncome:109–122`, `removeEntry:124–128`,
+embedded `ReemploymentTracker:284` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:328` (DW-8 fix,
 `docs/BUG_FIX_TODO.md`) behind `canAccessAskCoachGeneral` — **[G→L]**
 `config.newJobSeasonMode` *replaces* HomePanel with NewJobSeasonHomePanel (post-§1.H7 architecture
 — the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
@@ -681,8 +681,17 @@ mandatory (§1.H13); `newJobSeasonCashOnHandAsOf` is re-stamped every time it's 
 > `newJobSeasonCashOnHand`/`newJobSeasonCashOnHandAsOf`/`newJobSeasonPendingCheck*` are deliberately
 > **not** in that list today (left stale/unused once `newJobSeasonMode` flips false, since
 > `computeNewJobSeasonRunway` short-circuits on `!config.newJobSeasonMode` before ever reading
-> them) — that's existing precedent, not an oversight to "fix" reflexively. Check:
-> `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
+> them) — that's existing precedent, not an oversight to "fix" reflexively. **IF** the
+> Cash On Hand card's displayed figure or the extra-income caption change, **THEN**
+> remember `dash.effectiveCashOnHand` deliberately never has `huntIncome` merged into
+> it — only `computeNewJobSeasonRunway`'s `withBenefits`/`withoutBenefits.cash` do (verified
+> by `newJobSeasonRunway.test.js`'s "extraCash still adds on top" case). The card's caption
+> ("+ $X extra income logged below — counted in your runway, not shown in this
+> balance", added because a user reported the money looking uncounted) is the fix for
+> that confusion — don't "fix" it the other way by merging `huntIncome` into the
+> displayed balance, which would corrupt the `newJobSeasonCashOnHandAsOf` decay anchor.
+> `NewJobSeasonBudgetPanel.jsx` carries the equivalent caption (F44) — keep both in sync.
+> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
 
 **F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
 threshold const `:1405`), suppression `HomePanel.jsx:117–118`

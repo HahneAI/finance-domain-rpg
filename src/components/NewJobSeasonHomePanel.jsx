@@ -170,6 +170,11 @@ export function NewJobSeasonHomePanel({
             − ${billsCaptionValue.toLocaleString()} in bills since you last updated this
           </div>
         )}
+        {huntIncome > 0 && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-green)" }}>
+            + ${Math.round(huntIncome).toLocaleString()} extra income logged below — counted in your runway, not shown in this balance
+          </div>
+        )}
         {dash.pendingCheck && (
           <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
             Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}

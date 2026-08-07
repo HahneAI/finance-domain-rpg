@@ -3,25 +3,34 @@
 -- ═════════════════════════════════════════════════════════════════════════════
 --
 --   File:      038_BOOKMARK_schema_snapshot_2026-08-06.sql
---   Snapshot date: 2026-08-06
+--   Snapshot date: 2026-08-06 (table/column definitions through 035, below,
+--                  verified that day against a live Supabase schema export
+--                  pasted directly by the account owner — RLS/functions/
+--                  triggers for 001-035 are reconstructed from the migration
+--                  files themselves, same as 022's bookmark did).
 --   Compiled from: 001_initial_schema.sql  →  037_add_beta_homebase.sql
 --                  (every migration file in this folder at the time of writing)
---   Verified against: a live Supabase schema export pasted directly by the
---                      account owner on 2026-08-06 (table/column definitions
---                      only — no RLS/functions/triggers in that export format;
---                      those below are reconstructed from the migration files
---                      themselves, same as 022's bookmark did).
+--   036/037 status: Anthony (account owner) confirmed on 2026-08-07 that both
+--                    036_add_resume_profile.sql and 037_add_beta_homebase.sql
+--                    have now been run against production. That confirmation
+--                    is the account owner's word, not a fresh schema-export
+--                    reconciliation like the 2026-08-06 verification above —
+--                    the resume_profile / beta_content_items / etc. table
+--                    defs added below are reconstructed from the 036/037
+--                    migration files themselves. If a future session pastes a
+--                    fresh live export, reconcile it against this section the
+--                    same way 2026-08-06's export was reconciled against
+--                    001-035, and upgrade this note accordingly.
 --
 --   WHAT THIS IS
 --   ────────────
 --   A single, read-in-one-sitting recap of what the `finance-domain-rpg`
---   Supabase database looks like once every migration through 035 has been
---   applied — see the ⚠️ NOT YET LIVE section immediately below for why the
---   cutoff is 035, not 037. It exists so a future session (human or Claude)
---   can understand the full current schema without opening and mentally
---   diffing 30+ files. Same purpose, same conventions, as
---   022_BOOKMARK_schema_snapshot_2026-07-10.sql — read that file's own header
---   for the full rationale; not repeated verbatim here.
+--   Supabase database looks like once every migration through 037 has been
+--   applied. It exists so a future session (human or Claude) can understand
+--   the full current schema without opening and mentally diffing 30+ files.
+--   Same purpose, same conventions, as 022_BOOKMARK_schema_snapshot_2026-07-10.sql
+--   — read that file's own header for the full rationale; not repeated
+--   verbatim here.
 --
 --   WHAT THIS IS NOT
 --   ────────────────
@@ -36,34 +45,14 @@
 --   bookmark; still true, not repeated here as a new finding).
 --
 -- ═════════════════════════════════════════════════════════════════════════════
---   ⚠️  NOT YET LIVE — 036 and 037 are committed migration FILES that have
---       NOT been run against the database this snapshot was taken from.
---       This is a real, actionable finding surfaced by reconciling the pasted
---       live export against the migrations folder, not a stylistic choice:
---
---   • 036_add_resume_profile.sql — the `resume_profile` table is ABSENT from
---     the live export entirely. Additionally, the live `coach_chats.chat_type`
---     CHECK constraint still reads
---       CHECK (chat_type = ANY (ARRAY['ask_coach','job_scout','job_hunt','statement_summary']))
---     — no 'resume_review' — confirming 036's constraint update never ran
---     either. **Practical effect: the Résumé Review feature (§18.E1) is
---     currently non-functional in production** — any save to `resume_profile`
---     or any Coach chat tagged `resume_review` will fail outright until 036 is
---     applied.
---   • 037_add_beta_homebase.sql — `beta_content_items`, `beta_checklist_completions`,
---     and `beta_scores` are all ABSENT from the live export. **The Beta Tester
---     Homebase (icon next to the notification bell, shipped 2026-08-06) will
---     500 on load for every tracked beta tester until 037 is applied** — this
---     was already flagged when that feature shipped; repeated here because
---     this snapshot is independent confirmation from the live schema itself,
---     not just a reminder.
---
---   ACTION: run 036_add_resume_profile.sql and 037_add_beta_homebase.sql
---   against production before relying on either feature. This bookmark
---   intentionally does NOT include their tables in the CREATE TABLE section
---   below — it snapshots verified live reality (through 035), not aspirational
---   file-folder contents. Once both are confirmed applied, the next bookmark
---   should extend through 037.
+--   ✅ 036 AND 037 NOW LIVE — per Anthony's confirmation on 2026-08-07 (see
+--       "036/037 status" in the header above for how that differs from this
+--       file's original 2026-08-06 export-based verification of 001-035).
+--       Résumé Review (§18.E1) and the Beta Tester Homebase should both be
+--       functional in production as of that confirmation. `resume_profile`,
+--       `beta_content_items`, `beta_checklist_completions`, `beta_scores`,
+--       and `is_tracked_beta_tester()` are now included in the sections
+--       below, reconstructed from the 036/037 migration files.
 -- ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -392,21 +381,17 @@ REVOKE UPDATE, DELETE ON account_history FROM anon, authenticated;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- TABLE: coach_chats  (023, TODO §18.H)
+-- TABLE: coach_chats  (023, TODO §18.H; chat_type constraint widened by 036)
 -- Every Coach conversation and every Job Scout search — one row per session,
 -- linked to the user. Full own-row CRUD, unlike account_history's insert-only
 -- posture (a chat title can be renamed, an embarrassing test chat deleted).
---
--- ⚠️ The chat_type CHECK constraint below is LIVE-VERIFIED to still be the
--- 023 original — 036_add_resume_profile.sql's `resume_review` addition has
--- NOT been applied (see the NOT YET LIVE section at the top of this file).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS coach_chats (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID        NOT NULL REFERENCES user_data(user_id) ON DELETE CASCADE,
   chat_type       TEXT        NOT NULL
-                  CHECK (chat_type IN ('ask_coach', 'job_scout', 'job_hunt', 'statement_summary')), -- resume_review NOT yet live — see 036
+                  CHECK (chat_type IN ('ask_coach', 'job_scout', 'job_hunt', 'statement_summary', 'resume_review')), -- resume_review added by 036
   title           TEXT,
   messages        JSONB       NOT NULL DEFAULT '[]', -- [{role, content, timestamp}]
   summary         TEXT,                                -- Coach-generated 1-3 sentence session summary
@@ -577,6 +562,147 @@ CREATE POLICY "users can insert their own consent records"
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- TABLE: resume_profile  (036, §18.E1)
+-- One row per user (user_id is the PK, not a separate id) — 1:1 with an
+-- account, unlike coach_chats. Holds only the résumé input (text + target
+-- role); the review conversation itself lives in coach_chats as a
+-- chat_type='resume_review' row via the existing api/coach.js pipeline.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS resume_profile (
+  user_id           UUID        PRIMARY KEY REFERENCES user_data(user_id) ON DELETE CASCADE,
+  resume_text       TEXT,
+  target_role       TEXT,        -- free-text override; defaults client-side to the most
+                                  -- recent config.jobApplications entry's role when unset
+  last_reviewed_at  TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now() -- client-stamped, no trigger — same as coach_chats
+);
+
+ALTER TABLE resume_profile ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "resume_profile own row select" ON resume_profile;
+CREATE POLICY "resume_profile own row select"
+  ON resume_profile FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "resume_profile own row insert" ON resume_profile;
+CREATE POLICY "resume_profile own row insert"
+  ON resume_profile FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "resume_profile own row update" ON resume_profile;
+CREATE POLICY "resume_profile own row update"
+  ON resume_profile FOR UPDATE TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "resume_profile own row delete" ON resume_profile;
+CREATE POLICY "resume_profile own row delete"
+  ON resume_profile FOR DELETE TO authenticated
+  USING (auth.uid() = user_id);
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- TABLES: beta_content_items, beta_checklist_completions, beta_scores  (037)
+-- The Beta Tester Homebase — scoring rubric display, personal checklist
+-- check-off, admin-authored suggestion prompts. Gated on is_tracked_beta_tester(),
+-- a SQL-side twin of entitlements.js's isTrackedBetaTester() (is_tester = true
+-- AND beta_code_used IS NOT NULL). Writes to beta_content_items/beta_scores
+-- only via api/admin-beta-hub.js's service-role client; beta_checklist_completions
+-- is the one own-row-writable table (a tester's personal check-off state).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION is_tracked_beta_tester(uid UUID)
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM user_data
+    WHERE user_id = uid AND is_tester = true AND beta_code_used IS NOT NULL
+  );
+$$;
+
+CREATE TABLE IF NOT EXISTS beta_content_items (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind          TEXT        NOT NULL CHECK (kind IN ('checklist', 'suggestion')),
+  title         TEXT        NOT NULL,
+  body          TEXT,                                  -- markdown, rendered via ChangelogBody
+  published_at  TIMESTAMPTZ,                            -- NULL = draft, same convention as changelog_entries
+  created_by    UUID        REFERENCES auth.users(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_beta_content_items_kind_published
+  ON beta_content_items (kind, published_at DESC NULLS LAST);
+
+ALTER TABLE beta_content_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "tracked beta testers can read published beta content" ON beta_content_items;
+CREATE POLICY "tracked beta testers can read published beta content"
+  ON beta_content_items FOR SELECT TO authenticated
+  USING (published_at IS NOT NULL AND is_tracked_beta_tester(auth.uid()));
+
+-- No insert/update/delete policy — content authoring only via api/admin-beta-hub.js.
+
+CREATE TABLE IF NOT EXISTS beta_checklist_completions (
+  id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  checklist_item_id  UUID        NOT NULL REFERENCES beta_content_items(id) ON DELETE CASCADE,
+  user_id            UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  completed_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (checklist_item_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_beta_checklist_completions_user
+  ON beta_checklist_completions (user_id);
+
+ALTER TABLE beta_checklist_completions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "testers manage their own checklist completions" ON beta_checklist_completions;
+CREATE POLICY "testers manage their own checklist completions"
+  ON beta_checklist_completions FOR ALL TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Trigger below closes the same gap 031 closed for beta_activity_events: base
+-- RLS proves "this row is mine," not "I'm actually a tracked beta tester."
+CREATE OR REPLACE FUNCTION check_beta_checklist_completion_eligibility()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT is_tracked_beta_tester(NEW.user_id) THEN
+    RAISE EXCEPTION 'beta_checklist_completions insert rejected: % is not a tracked beta tester', NEW.user_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_check_beta_checklist_completion_eligibility ON beta_checklist_completions;
+CREATE TRIGGER trg_check_beta_checklist_completion_eligibility
+  BEFORE INSERT ON beta_checklist_completions
+  FOR EACH ROW EXECUTE FUNCTION check_beta_checklist_completion_eligibility();
+
+CREATE TABLE IF NOT EXISTS beta_scores (
+  user_id          UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  usage_score      INTEGER     CHECK (usage_score BETWEEN 0 AND 50),
+  feedback_score   INTEGER     CHECK (feedback_score BETWEEN 0 AND 25),
+  calls_score      INTEGER     CHECK (calls_score BETWEEN 0 AND 15),
+  longevity_score  INTEGER     CHECK (longevity_score BETWEEN 0 AND 10),
+  admin_notes      TEXT,                                  -- admin's own reasoning, never shown to the tester
+  updated_by       UUID        REFERENCES auth.users(id),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE beta_scores ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "testers can read their own score" ON beta_scores;
+CREATE POLICY "testers can read their own score"
+  ON beta_scores FOR SELECT TO authenticated
+  USING (user_id = auth.uid() AND is_tracked_beta_tester(auth.uid()));
+
+-- No insert/update/delete policy — writes only via api/admin-beta-hub.js's
+-- service-role client (admin_notes must never leak to a non-admin).
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- FUNCTIONS & TRIGGERS — full list (all already shown inline above; repeated
 -- here as a flat index for quick scanning)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -609,9 +735,23 @@ CREATE POLICY "users can insert their own consent records"
 --     raises if the count is already ≥ 40. Closes the TOCTOU race a
 --     JS-side pre-check would have.
 --
+--   is_tracked_beta_tester(uid)               → used by beta_content_items/beta_scores RLS
+--                                                and the trigger below         (037, SECURITY DEFINER)
+--     SQL-side twin of entitlements.js's isTrackedBetaTester() — is_tester =
+--     true AND beta_code_used IS NOT NULL. Factored into one reusable
+--     function rather than inlining the subquery across multiple policies.
+--
+--   check_beta_checklist_completion_eligibility() → trigger
+--     trg_check_beta_checklist_completion_eligibility                        (037, SECURITY DEFINER)
+--     BEFORE INSERT on beta_checklist_completions: rejects the insert unless
+--     is_tracked_beta_tester(NEW.user_id) — same pattern as 031's
+--     beta_activity_events trigger.
+--
 -- ─────────────────────────────────────────────────────────────────────────────
--- END OF SNAPSHOT (verified live through 035) — next brand-new migration FILE
--- should be numbered 039. Apply 036 and 037 against production first (see the
--- ⚠️ NOT YET LIVE section at the top) — once confirmed live, the next
--- bookmark should extend this snapshot through 037.
+-- END OF SNAPSHOT — table/column defs for 001-035 verified live 2026-08-06;
+-- 036 (resume_profile) and 037 (beta_homebase) added above per Anthony's
+-- 2026-08-07 confirmation that both have now been applied (see the header's
+-- "036/037 status" note and the ✅ section above — reconstructed from the
+-- migration files, not re-verified against a fresh export). Next brand-new
+-- migration FILE should be numbered 039.
 -- ─────────────────────────────────────────────────────────────────────────────

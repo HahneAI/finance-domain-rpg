@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem } from "../lib/db.js";
@@ -2073,6 +2073,46 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
   );
 }
 
+// Real React error boundary (class component — no hook equivalent exists),
+// shared by every admin authoring sub-view below (Changelog, Beta Checklist/
+// Suggestions, Beta Scores). A plain try/catch around JSX construction (what
+// ChangelogAdminDetail's first draft used) cannot catch errors thrown during
+// a child component's own render/commit — react-hooks/error-boundaries flags
+// this ("Avoid constructing JSX within try/catch") for exactly that reason.
+// Before this existed, ANY render error under these subtrees — anywhere in
+// the app, since there was no boundary at all — unmounted the whole React
+// tree with zero on-screen indication. That's also how the "cancelEdit then
+// handleSave (closing over draft)" React Compiler miscompilation (see the
+// "use no memo" comment on ChangelogAdminDetail below) surfaced identically
+// in BetaContentAdminDetail and BetaScoresAdminDetail — same shape, same
+// bug, confirmed by the same production-build + decoded-source-map repro.
+class AdminDetailErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error(`[${this.props.title}] Caught render error:`, error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <>
+          <BackBar onBack={this.props.onBack} title={this.props.title} />
+          <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
+            <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{this.state.error?.message || String(this.state.error)}</div>
+          </div>
+        </>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Admin authoring surface for changelog_entries (database/migrations/032) —
 // the write side of the "What's New" feature. UpdateAvailableBanner +
 // ChangelogModal (App.jsx) are the read side: a published entry here is what
@@ -2081,6 +2121,26 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
 function ChangelogAdminDetail({ onBack, embedded = false }) {
+  // "use no memo" opts this component OUT of React Compiler auto-memoization
+  // (babel-plugin-react-compiler, wired via @rolldown/plugin-babel in
+  // vite.config.js). This works around a confirmed compiler miscompilation:
+  // in the PRODUCTION build only (react-dom-client.production.js — never
+  // reproduces under Vitest, which deliberately omits the compiler plugin —
+  // see vitest.config.js's comment), the very first render (entries/draft
+  // all still null, before the mount effect's fetch resolves) threw
+  // "Cannot read properties of null (reading 'body')" with no application
+  // code path that could produce it — draft.body/entry.body are only ever
+  // read inside the editingId!==null branch or the save/edit handlers, none
+  // of which run on that first render. The crash's source-mapped token name
+  // was literally 'body', collapsed onto the boundary between cancelEdit and
+  // handleSave (handleSave closes over draft.body) — consistent with the
+  // compiler incorrectly hoisting/evaluating a memoization dependency for a
+  // value that only exists once a later branch is reached. Confirmed by a
+  // controlled repro (real prod build, real react-dom-client.production.js,
+  // Playwright + decoded source map): the crash reproduces with the compiler
+  // on and disappears completely with this directive. Safe to remove once
+  // the underlying compiler bug is fixed upstream and verified.
+  "use no memo";
   // null = initial load in progress (distinct from [] = loaded, zero entries) —
   // avoids a synchronous setState(true) at the top of load(), which is what
   // react-hooks/set-state-in-effect flags when load() is invoked directly
@@ -2102,10 +2162,14 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await fetchAllChangelogEntries();
-      if (cancelled) return;
-      if (!result.ok) setLoadError(result.error);
-      else { setLoadError(null); setEntries(result.entries); }
+      try {
+        const result = await fetchAllChangelogEntries();
+        if (cancelled) return;
+        if (!result.ok) setLoadError(result.error);
+        else { setLoadError(null); setEntries(result.entries); }
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message);
+      }
     }
     load();
     return () => { cancelled = true; };
@@ -2252,7 +2316,7 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
       </Pressable>
 
       {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error: {loadError}</div>}
       {entries !== null && !loadError && entries.length === 0 && (
         <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
@@ -2345,6 +2409,15 @@ const BASE_CONTENT_COPY = {
 // api/admin-beta-hub.js's service-role client — never a direct client
 // write, per migration 037's/039's RLS posture.
 function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem, embedded = false }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above (this component — formerly
+  // BetaContentAdminDetail, generalized to also serve base_content_items —
+  // was modeled directly on it): cancelEdit() immediately followed by
+  // handleSave() (closing over draft.body) triggered an identical "Cannot
+  // read properties of null (reading 'body')" crash on the very first
+  // render, production build only. Reproduced and confirmed fixed via the
+  // same harness.
+  "use no memo";
   const [items, setItems] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else item.id
@@ -2656,6 +2729,13 @@ function BetaFeedbackList({ feedback }) {
 // reference alongside the score inputs; writes go through
 // api/admin-beta-hub.js (db.js's saveBetaScore).
 function BetaScoresAdminDetail({ onBack }) {
+  // "use no memo" — same confirmed React Compiler miscompilation documented
+  // in detail on ChangelogAdminDetail above: cancelEdit() immediately
+  // followed by handleSave() (closing over draft) triggered "Cannot read
+  // properties of null (reading 'adminNotes')" on the very first render,
+  // production build only. Reproduced and confirmed fixed via the same
+  // harness.
+  "use no memo";
   const [rows, setRows] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingUserId, setEditingUserId] = useState(null);
@@ -2849,10 +2929,18 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "usercomm") {
-    return <UserCommunicationAdminDetail onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="User Communication" onBack={() => setActiveSection(null)}>
+        <UserCommunicationAdminDetail onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betascoresadmin") {
-    return <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />;
+    return (
+      <AdminDetailErrorBoundary title="Beta Scores" onBack={() => setActiveSection(null)}>
+        <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;

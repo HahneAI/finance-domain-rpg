@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { resolvePrimaryRunwayDays, sumBillsDueSince, computeNewJobSeasonRunway } from "../../lib/newJobSeasonRunway.js";
+import { resolvePrimaryRunwayDays, sumBillsDueSince, computeNewJobSeasonRunway, resolveNextWeekdayOnOrAfter } from "../../lib/newJobSeasonRunway.js";
+import { toLocalIso } from "../../lib/finance.js";
+
+// Food special case (TODO §1) — turns a "what day do you shop" pick into a
+// concrete weekly dueDateAnchor for NewJobSeasonEntry's due-date step.
+describe("resolveNextWeekdayOnOrAfter", () => {
+  it("stays on referenceIso itself when it already matches dow", () => {
+    // 2026-06-15 is a Monday (dow 1).
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(1, "2026-06-15"))).toBe("2026-06-15");
+  });
+
+  it("advances to the next occurrence of dow within the same week", () => {
+    // 2026-06-15 (Mon) -> next Wednesday (dow 3) is 2026-06-17.
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(3, "2026-06-15"))).toBe("2026-06-17");
+  });
+
+  it("wraps into the following week when dow already passed this week", () => {
+    // 2026-06-15 (Mon) -> next Sunday (dow 0) is 2026-06-21, not yesterday.
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(0, "2026-06-15"))).toBe("2026-06-21");
+  });
+
+  it("returns null without a dow or referenceIso", () => {
+    expect(resolveNextWeekdayOnOrAfter(null, "2026-06-15")).toBeNull();
+    expect(resolveNextWeekdayOnOrAfter(3, null)).toBeNull();
+  });
+});
 
 // resolvePrimaryRunwayDays is the shared selector introduced to close
 // drift-app-warden §8's F24 quarantine — it must mirror the exact
@@ -139,5 +164,34 @@ describe("computeNewJobSeasonRunway — timeline-aware cash on hand (§1.H17)", 
       config: baseConfig, expenses: [RENT], effectiveToday: "2026-06-15", extraCash: 100,
     });
     expect(dash.withoutBenefits.cash).toBe(1100); // (2000 - 1000) + 100
+  });
+});
+
+// weeklyBurn/lifestyleWeeklySpend previously summed via getEffectiveAmount,
+// which reads expense.history — a shape loans don't natively carry (loanMeta
+// instead). A tracked loan with no synthetic history silently contributed $0
+// to the Runway headline. sumBillsDueSince (above) and the Upcoming Bills
+// list already handled loans correctly via getExpenseDisplayAmount; this
+// closes the one remaining gap.
+describe("computeNewJobSeasonRunway — loan payments count toward weeklyBurn", () => {
+  const baseConfig = {
+    newJobSeasonMode: true,
+    newJobSeasonDate: "2026-06-01",
+    newJobSeasonCashOnHand: 2000,
+    newJobSeasonCashOnHandAsOf: "2026-06-01",
+  };
+
+  it("includes a tracked, active loan's weekly-equivalent payment in weeklyBurn, even with no history array", () => {
+    expect(LOAN.history).toBeUndefined(); // exactly the shape a fresh/in-memory loan carries
+    const dash = computeNewJobSeasonRunway({ config: baseConfig, expenses: [LOAN], effectiveToday: "2026-06-15" });
+    // $300/mo -> loanWeeklyAmount = 300 * 12 / 52 ~= 69.23/wk — not 0.
+    expect(dash.weeklyBurn).toBeCloseTo((300 * 12) / 52, 2);
+  });
+
+  it("excludes a paused loan from weeklyBurn, same as any other paused bill", () => {
+    const dash = computeNewJobSeasonRunway({
+      config: baseConfig, expenses: [{ ...LOAN, newJobSeasonStatus: "paused" }], effectiveToday: "2026-06-15",
+    });
+    expect(dash.weeklyBurn).toBe(0);
   });
 });

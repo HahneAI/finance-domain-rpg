@@ -6,6 +6,7 @@ import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coach
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
 import coachLineartMono from "../assets/coach-avatar-lineart-mono.png";
+import { CoachMonocleIcon } from "./CoachMonocleIcon.jsx";
 
 // §2.H — how many past Ask Coach conversations we keep. Matches the standing
 // plan's "save a person's last three conversations" — refreshHistory() below
@@ -426,19 +427,40 @@ export function AskCoachPanel({
                 }}
               >
                 {m.role !== "user" && (
-                  <img
-                    src={coachAvatar}
-                    alt="Coach"
-                    style={{
-                      width: "26px",
-                      height: "26px",
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      objectFit: "cover",
-                      background: "var(--color-bg-raised)",
-                      border: "1px solid var(--color-border-subtle)",
-                    }}
-                  />
+                  <div style={{ position: "relative", flexShrink: 0, width: "26px", height: "26px" }}>
+                    <img
+                      src={coachAvatar}
+                      alt="Coach"
+                      style={{
+                        width: "26px",
+                        height: "26px",
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        background: "var(--color-bg-raised)",
+                        border: "1px solid var(--color-border-subtle)",
+                      }}
+                    />
+                    {/* Monocle badge — same glyph as the mobile nav Coach tab
+                        (CoachMonocleIcon), marking this bubble as sent by Coach. */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "-2px",
+                        right: "-2px",
+                        width: "14px",
+                        height: "14px",
+                        borderRadius: "50%",
+                        background: "var(--color-bg-base)",
+                        border: "1px solid var(--color-bg-base)",
+                        color: "var(--color-teal)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <CoachMonocleIcon size={10} />
+                    </div>
+                  </div>
                 )}
                 <div
                   style={{

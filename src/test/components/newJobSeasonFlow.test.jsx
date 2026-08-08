@@ -386,6 +386,42 @@ describe('NewJobSeasonEntry', () => {
     const loanResult = updatedExpenses.find(e => e.id === 'exp_loan1')
     expect(loanResult).toMatchObject({ trackDuringNewJobSeason: true, dueDateAnchor: '2026-05-10' })
   })
+
+  // Food isn't a once-a-month bill — the due-date step asks which day the
+  // user shops instead of the generic week-of-month/custom-date picker.
+  const FOOD_EXPENSE = {
+    id: 'exp_food', category: 'Needs', label: 'Food', isFoodPrimary: true,
+    billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
+  }
+
+  it('asks Food which day the user shops instead of the week-of-month picker, and resolves a weekly cycle', () => {
+    const onActivate = vi.fn()
+    render(<NewJobSeasonEntry open onClose={() => {}} onActivate={onActivate} expenses={[FOOD_EXPENSE]} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // skip pending check
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 2
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 3 (due dates), Food stays checked
+
+    expect(screen.getByText(/which day do you usually grocery shop/i)).toBeTruthy()
+    expect(screen.queryByText('3rd week of month')).toBeNull() // not the generic picker
+    expect(screen.queryByText('Custom date')).toBeNull()
+
+    // Activate stays natively disabled until a day is picked — same
+    // pre-existing step-3 gate as the regular DueDatePicker (§1.H15).
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shop Wed' }))
+    expect(screen.getByRole('button', { name: 'Activate' })).not.toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    const [, updatedExpenses] = onActivate.mock.calls[0]
+    const food = updatedExpenses.find(e => e.id === 'exp_food')
+    expect(food.trackDuringNewJobSeason).toBe(true)
+    expect(food.billingMeta.cycle).toBe('weekly') // not the old every30days
+    expect(new Date(food.dueDateAnchor + 'T12:00:00').getDay()).toBe(3) // Wednesday
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -459,14 +495,14 @@ describe('NewJobSeasonHomePanel', () => {
         includeBenefits
       />
     )
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
     expect(screen.getByText('Weekly Burn')).toBeTruthy()
   })
 
   it('renders with empty expenses and no unemployment', () => {
     const cfg = { ...JOB_LOSS_CONFIG, unemploymentEnabled: false, unemploymentWeekly: null }
     render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
-    expect(screen.getByText('Runway')).toBeTruthy()
+    expect(screen.getByText('Cash Runway')).toBeTruthy()
   })
 
   // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from
@@ -618,6 +654,26 @@ describe('NewJobSeasonHomePanel', () => {
       render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-03" includeBenefits />)
       expect(screen.getByText('$1,500')).toBeTruthy()
       expect(screen.queryByText(/in bills since you last updated this/)).toBeNull()
+    })
+  })
+
+  describe('Extra income caption on the Cash On Hand card', () => {
+    it('shows a caption confirming logged extra income is counted in the runway, not this balance', () => {
+      const cfg = {
+        ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000,
+        jobHuntIncomeLog: [{ id: 'jhi_1', amount: 150, note: null, loggedAt: '2026-06-10T00:00:00.000Z' }],
+      }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      // Cash On Hand card itself stays the raw persisted figure — extra income
+      // is never merged into it, only into the runway math (newJobSeasonRunway.test.js).
+      expect(screen.getByText('$1,000')).toBeTruthy()
+      expect(screen.getByText(/\$150 extra income logged below/)).toBeTruthy()
+    })
+
+    it('hides the caption when nothing has been logged yet', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, newJobSeasonCashOnHand: 1000 }
+      render(<NewJobSeasonHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.queryByText(/extra income logged below/)).toBeNull()
     })
   })
 

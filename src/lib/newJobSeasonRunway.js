@@ -1,4 +1,4 @@
-import { getEffectiveAmount, getPhaseIndex } from "./finance.js";
+import { getEffectiveAmount, getPhaseIndex, loanWeeklyAmount } from "./finance.js";
 import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 
 // TODO §1 mode rebuild — New Job Season Home and Budget are now two separate
@@ -70,6 +70,21 @@ export function resolvePendingCheckArrivalDate(periodEndDate, arrivalDow) {
   return d;
 }
 
+// ── Food special case (TODO §1) ──────────────────────────────────────────
+// Food isn't a once-a-month bill like rent or insurance — it's an ongoing
+// weekly grocery spend, so the New Job Season due-date step asks "what day do
+// you usually shop" instead of the generic week-of-month/custom-date
+// DueDatePicker. Next occurrence of dow (0=Sun..6=Sat) on/after referenceIso
+// — unlike resolvePendingCheckArrivalDate (strictly *after* a period end),
+// this stays on referenceIso itself when it already matches dow, since
+// "today" is a perfectly valid answer to "what day do you shop."
+export function resolveNextWeekdayOnOrAfter(dow, referenceIso) {
+  if (dow == null || !referenceIso) return null;
+  const d = new Date(referenceIso + "T00:00:00");
+  d.setDate(d.getDate() + ((dow - d.getDay() + 7) % 7));
+  return d;
+}
+
 // Rough net estimate for the final check — same flat-rate sketch
 // ReemploymentTracker.jsx uses for its target-income preview (gross minus
 // fed/state/FICA/401k rates already on file). Not a full computeNet pass:
@@ -100,6 +115,22 @@ function isTrackedActiveLifestyle(exp) {
   const flexible = exp.category === "Lifestyle";
   const tracked = exp.trackDuringNewJobSeason !== false;
   return status === "active" && flexible && tracked;
+}
+
+// getEffectiveAmount reads expense.history — a shape loans don't natively
+// carry (they use loanMeta instead; db.js/BudgetPanel regenerate a synthetic
+// history for them via buildLoanHistory, but weeklyBurn shouldn't silently
+// depend on that having already happened elsewhere). Without this, a tracked
+// loan contributes $0 to weeklyBurn/lifestyleWeeklySpend below — real
+// payments the user is still on the hook for, missing from the Runway
+// headline with no error, the exact "silent wrong number" drift-app-warden
+// exists to catch. sumBillsDueSince/upcomingBills already dodge this via
+// getExpenseDisplayAmount (a cycle amount, not a weekly one — not reusable
+// here directly), so this is the one remaining getEffectiveAmount call site
+// that needed to be loan-aware.
+function weeklyAmountForBurn(exp, todayDate, phaseIdx) {
+  if (exp.type === "loan") return loanWeeklyAmount(exp.loanMeta ?? {});
+  return getEffectiveAmount(exp, todayDate, phaseIdx);
 }
 
 // Sums every essential (Needs-like, active, tracked) bill's real payment
@@ -159,7 +190,7 @@ export function computeNewJobSeasonRunway({ config, expenses, effectiveToday, ex
   // the runway focuses on survival spend.
   const essentialActive = (expenses ?? []).filter(isTrackedActiveEssential);
   const weeklyBurn = essentialActive.reduce(
-    (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
+    (sum, exp) => sum + weeklyAmountForBurn(exp, todayDate, phaseIdx),
     0,
   );
 
@@ -170,7 +201,7 @@ export function computeNewJobSeasonRunway({ config, expenses, effectiveToday, ex
   // instead of letting the headline number silently omit real spend.
   const lifestyleActive = (expenses ?? []).filter(isTrackedActiveLifestyle);
   const lifestyleWeeklySpend = lifestyleActive.reduce(
-    (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
+    (sum, exp) => sum + weeklyAmountForBurn(exp, todayDate, phaseIdx),
     0,
   );
 

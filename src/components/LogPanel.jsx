@@ -911,7 +911,7 @@ export function LogPanel({
         />
       )}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${1 + (hasPTO ? 1 : 0) + (hasBucket ? 1 : 0)},1fr)`, gap: "12px" }}>
-        <Card label="Total Net Lost" val={f(logNetLost)} rawVal={logNetLost} color="var(--color-deduction)" />
+        <Card label="Cash Left Behind" val={f(logNetLost)} rawVal={logNetLost} color="var(--color-deduction)" />
         {hasPTO && <Card label="PTO Accrual Lost" val={`${(logPTOHoursLost / 20).toFixed(1)} hrs`} sub={`${logPTOHoursLost}h ÷ 20`} color="var(--color-text-primary)" />}
         {hasBucket && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />}
       </div>

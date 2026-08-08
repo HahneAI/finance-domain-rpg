@@ -1922,7 +1922,7 @@ runway math itself.*
 #### H17. Cash On Hand card + timeline-aware decay, 2026-07-22 — DONE
 
 *User ask, not from the H14 list: the plain Cash On Hand input "looks lame and crappy" — wanted
-its own prominent card above the Runway tile, a visible pencil icon signaling it's editable, a
+its own prominent card above the Cash Runway tile, a visible pencil icon signaling it's editable, a
 bottom-sheet editor matching the expense editor's up-from-bottom/slide-down animation, and —
 separately — for the displayed figure to decrease automatically as Needs bills come due, feeding
 that decay into the runway instead of the number silently going stale between manual updates.*
@@ -1934,7 +1934,7 @@ that decay into the runway instead of the number silently going stale between ma
   the first bottom sheet in the app with a real symmetric enter (up-from-bottom, matching that
   sheet's existing curve) / exit (slide back down, `--ease-fold-exit`, no bounce) pair.
 - [x] **`components/NewJobSeasonHomePanel.jsx`** — the plain input + `SectionHeader` replaced with a
-  full-width pressable card *above* the Runway/Weekly Burn/Extra Income grid: big tabular-nums
+  full-width pressable card *above* the Cash Runway/Weekly Burn/Extra Income grid: big tabular-nums
   dollar figure, a visible circular pencil badge (top-right, same edit-icon glyph as
   `ReemploymentTracker`'s Edit button), tap-anywhere-on-card to open the sheet (`scale(0.97)` press
   feedback, `disabled` when `readOnly` — native `disabled` blocks the click entirely, no separate

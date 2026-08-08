@@ -166,3 +166,32 @@ describe("computeNewJobSeasonRunway — timeline-aware cash on hand (§1.H17)", 
     expect(dash.withoutBenefits.cash).toBe(1100); // (2000 - 1000) + 100
   });
 });
+
+// weeklyBurn/lifestyleWeeklySpend previously summed via getEffectiveAmount,
+// which reads expense.history — a shape loans don't natively carry (loanMeta
+// instead). A tracked loan with no synthetic history silently contributed $0
+// to the Runway headline. sumBillsDueSince (above) and the Upcoming Bills
+// list already handled loans correctly via getExpenseDisplayAmount; this
+// closes the one remaining gap.
+describe("computeNewJobSeasonRunway — loan payments count toward weeklyBurn", () => {
+  const baseConfig = {
+    newJobSeasonMode: true,
+    newJobSeasonDate: "2026-06-01",
+    newJobSeasonCashOnHand: 2000,
+    newJobSeasonCashOnHandAsOf: "2026-06-01",
+  };
+
+  it("includes a tracked, active loan's weekly-equivalent payment in weeklyBurn, even with no history array", () => {
+    expect(LOAN.history).toBeUndefined(); // exactly the shape a fresh/in-memory loan carries
+    const dash = computeNewJobSeasonRunway({ config: baseConfig, expenses: [LOAN], effectiveToday: "2026-06-15" });
+    // $300/mo -> loanWeeklyAmount = 300 * 12 / 52 ~= 69.23/wk — not 0.
+    expect(dash.weeklyBurn).toBeCloseTo((300 * 12) / 52, 2);
+  });
+
+  it("excludes a paused loan from weeklyBurn, same as any other paused bill", () => {
+    const dash = computeNewJobSeasonRunway({
+      config: baseConfig, expenses: [{ ...LOAN, newJobSeasonStatus: "paused" }], effectiveToday: "2026-06-15",
+    });
+    expect(dash.weeklyBurn).toBe(0);
+  });
+});

@@ -1392,9 +1392,10 @@ export async function deleteBetaContentItem(id) {
 /**
  * Every tracked beta tester with their current usage stats (reusing
  * api/admin-beta-report.js's existing aggregation — ?format=json is
- * additive, same data the CSV export already computes) plus their current
- * rubric score, if any — the data set the admin scoresheet UI needs to show
- * "here's what they've done" alongside the inputs to score them.
+ * additive, same data the CSV export already computes), their own feedback
+ * text (most-recent first), and their current rubric score, if any — the
+ * data set the admin scoresheet UI needs to show "here's what they've done"
+ * alongside the inputs to score them.
  */
 export async function fetchBetaScoreboard() {
   const headers = await betaHubAuthHeaders();

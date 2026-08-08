@@ -3,7 +3,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
-import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from "../lib/newJobSeasonRunway.js";
+import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount, resolveNextWeekdayOnOrAfter } from "../lib/newJobSeasonRunway.js";
 import { toLocalIso } from "../lib/finance.js";
 
 // Canonical day ordering — matches WeekConfirmModal/LogPanel's DayPicker so
@@ -48,7 +48,14 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * lib/expense.js). Loans (expense.type === "loan") skip this picker
  * entirely — they already carry a real due date in
  * `loanMeta.firstPaymentDate`, which gets attached to `dueDateAnchor`
- * automatically on confirm instead of asking again.
+ * automatically on confirm instead of asking again. Food (`isFoodPrimary`)
+ * gets its own special case for the same reason: it isn't a once-a-month
+ * bill like rent, so instead of the week-of-month/custom-date picker it
+ * asks "what day do you usually grocery shop," resolves that into a
+ * concrete weekly `dueDateAnchor` (`resolveNextWeekdayOnOrAfter`,
+ * lib/newJobSeasonRunway.js), and flips `billingMeta.cycle` to `"weekly"` so
+ * it actually recurs weekly in the Upcoming Bills countdown and runway
+ * instead of showing due once a month again.
  *
  * Steps 2–3 are skipped entirely when there are no expenses to review, so
  * the original flow (and its "Activate" button/behavior) is unchanged for
@@ -88,6 +95,11 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   const [step, setStep] = useState(0);
   const [trackedIds, setTrackedIds] = useState(() => new Set(expenses.map(e => e.id)));
   const [dueDateChoices, setDueDateChoices] = useState({});
+  // Food special case (TODO §1) — not a once-a-month bill, so it skips
+  // DueDatePicker's week-of-month/custom-date UI for a single-select
+  // "what day do you usually shop" pick instead. JS getDay() value (0-6) or
+  // null before answered.
+  const [foodShoppingDow, setFoodShoppingDow] = useState(null);
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
@@ -104,6 +116,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     setStep(0);
     setTrackedIds(new Set(expenses.map(e => e.id)));
     setDueDateChoices({});
+    setFoodShoppingDow(null);
     setAttempted(false);
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -149,6 +162,9 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   // (and only requires a pick for) the non-loan bills that stayed checked.
   const keptPickableExpenses = keptExpenses.filter(e => e.type !== "loan");
   const dueDatesValid = keptPickableExpenses.every(e => {
+    // Food special case (TODO §1) — answered via foodShoppingDow, not the
+    // generic DueDatePicker choices map.
+    if (e.isFoodPrimary) return foodShoppingDow !== null;
     const v = dueDateChoices[e.id];
     return v?.mode === "custom" ? !!v.date : v?.mode === "week" ? !!v.week : false;
   });
@@ -185,6 +201,22 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       if (exp.type === "loan") {
         // Attach the loan's own known payment date rather than asking again.
         return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
+      }
+      if (exp.isFoodPrimary) {
+        // Food special case (TODO §1) — grocery shopping recurs weekly, not
+        // once a month, so the shopping-day pick becomes a real weekly
+        // dueDateAnchor *and* flips billingMeta.cycle to "weekly" (already a
+        // first-class EXPENSE_CYCLE_OPTIONS value — lib/expense.js). Without
+        // the cycle change, getNextDueDate would still advance the anchor by
+        // the old every30days cycle and the bill would look "due" only once
+        // a month again, the exact framing this flow exists to fix.
+        const anchor = toLocalIso(resolveNextWeekdayOnOrAfter(foodShoppingDow, today));
+        return {
+          ...exp,
+          trackDuringNewJobSeason: true,
+          dueDateAnchor: anchor,
+          billingMeta: { ...exp.billingMeta, cycle: "weekly" },
+        };
       }
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
       return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
@@ -614,11 +646,43 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "8px" }}>
                       {exp.label ?? "Untitled"}
                     </div>
-                    <DueDatePicker
-                      value={dueDateChoices[exp.id] ?? null}
-                      onChange={(v) => setDueDateChoices(prev => ({ ...prev, [exp.id]: v }))}
-                      attempted={attempted}
-                    />
+                    {exp.isFoodPrimary ? (
+                      <>
+                        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: 1.5 }}>
+                          Food isn't a once-a-month bill — which day do you usually grocery shop?
+                          We'll track it as a weekly cost instead of a single due date.
+                        </div>
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          {DAY_NAMES.map(day => {
+                            const dow = DAY_TO_DOW[day];
+                            const active = foodShoppingDow === dow;
+                            return (
+                              <Pressable key={day} aria-label={`Shop ${day}`} onClick={() => setFoodShoppingDow(dow)} style={{
+                                padding: "6px 10px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px",
+                                textTransform: "uppercase", cursor: "pointer", fontWeight: active ? "bold" : "normal",
+                                border: `1px solid ${active ? "rgba(0,200,150,0.5)" : "var(--color-border-subtle)"}`,
+                                background: active ? "rgba(0,200,150,0.13)" : "var(--color-bg-surface)",
+                                color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
+                                transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                              }}>
+                                {day}
+                              </Pressable>
+                            );
+                          })}
+                        </div>
+                        {attempted && foodShoppingDow === null && (
+                          <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "6px" }}>
+                            ↑ Pick a shopping day
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <DueDatePicker
+                        value={dueDateChoices[exp.id] ?? null}
+                        onChange={(v) => setDueDateChoices(prev => ({ ...prev, [exp.id]: v }))}
+                        attempted={attempted}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

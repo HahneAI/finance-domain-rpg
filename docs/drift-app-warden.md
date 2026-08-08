@@ -3016,6 +3016,21 @@ is the drift this entry exists to prevent:
   policies/the trigger instead of inlining the same subquery repeatedly. Still "two languages,
   no shared source" at the JS/SQL boundary (F122's existing warning), but now consolidated to
   ONE place on the SQL side instead of growing a second/third inline copy.
+- **Header badge (`App.jsx`'s `loadBetaHomebaseBadge`, added 2026-08-08)** — a SECOND caller of
+  the same read-only tester-facing fetchers `BetaHomebase.jsx` itself uses
+  (`fetchBetaChecklistItems`/`fetchMyChecklistCompletions`/`fetchBetaSuggestions`/
+  `fetchMyBetaScore`/`fetchPublishedChangelogEntries`) — deliberately the SAME functions, not a
+  second query written against the same tables, so this stays "one authoritative read, called
+  twice" rather than a parallel approximation (the distinction `active-systems.md` §6 draws for
+  Coach context grounding applies here too). Unchecked-count math (`items` minus
+  `completedIds`) is done independently in both places since there's no shared component to put
+  it in, but both start from the identical fetched rows. "New since last opened" (changelog/
+  suggestion/score) has NO server-side read-marker — it's a device-local `localStorage` timestamp
+  (`betaHomebaseLastViewedAt:<user_id>`, stamped on open, same pattern as the sitewide changelog
+  bell's `lastSeenChangelogId`), so a tester who reads on one device still sees the badge on
+  another. That's an accepted gap, not an oversight — this app has no other read-receipt/
+  notification-state table, and the checklist half of the badge (the only part with real
+  per-tester DB state) isn't affected by it.
 > **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
 > three postures above before writing a migration — do not default to "admin route" or
 > "direct client write" out of habit; the posture follows from *who legitimately produces the
@@ -3023,7 +3038,10 @@ is the drift this entry exists to prevent:
 > `is_tracked_beta_tester(uid)` or `isTrackedBetaTester` (JS) changes, **THEN** change both
 > (F122's rule, now with a third consumer). **IF** a new field is added to `beta_scores`,
 > **THEN** decide explicitly whether it's tester-visible or admin-only before exposing it
-> through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. Check:
+> through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. **IF** the
+> header badge's "new" definition changes (a new content kind should count, or an existing one
+> shouldn't), **THEN** update `loadBetaHomebaseBadge` in `App.jsx` only — never add a second,
+> differently-shaped fetch for the same data just to feed the badge. Check:
 > `dbBetaHomebase.test.js` (client read/write shape + gating), `adminBetaHub.test.js` (server
 > auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
 > scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —

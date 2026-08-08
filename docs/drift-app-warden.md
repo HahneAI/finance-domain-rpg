@@ -464,7 +464,13 @@ model D3-safe activation.
 > **IF** a new life-event tile is added, **THEN** decide its route class explicitly
 > (wizard string vs. dedicated modal), give it a `life_event:<name>` history source, and
 > follow F12's synchronous-compute + single-eager-save shape. Check: kill the tab within
-> 800ms of activating; reload; the change survived.
+> 800ms of activating; reload; the change survived. **IF** Step 3's due-date
+> assignment loop changes, **THEN** keep the Food special case (`exp.isFoodPrimary`) —
+> it deliberately skips the generic `DueDatePicker` for a weekday picker instead, since
+> Food recurs weekly, not once a month like every other bill this step handles. Don't
+> generalize the weekday picker into `DueDatePicker`/`lib/expense.js`'s shared
+> `resolveDueDateAnchor` — it's a one-off for this one expense, not a new mode other
+> bills should be able to pick.
 
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -479,6 +485,7 @@ model D3-safe activation.
 | `onComplete` payload shape (F5's spread) | F8, `db.js#saveUserData` column mapping, `docs/account-reference.json` expectations | `db.test.js` + DB Row Viewer drift badge after a wizard run | D3 |
 | Wizard cancel wiring (`App.jsx:3414–3420` — `onCancel` is `undefined` for first-run non-investor) | First-run users must not be able to escape setup with `setupComplete: false` but a live session; TrialExplainerScreen gate (`App.jsx:1466`) sequencing | Manual: fresh account, attempt to dismiss the wizard every way the UI offers | D4 |
 | `NewJobSeasonEntry` step contents (cash-on-hand, `trackDuringNewJobSeason`, due dates) | `computeNewJobSeasonRunway()` inputs (T2/T4 surfaces), F11's reset list | `newJobSeasonFlow.test.jsx` + runway headline sanity on a test account | D1 |
+| `isFoodPrimary`/`EXPENSE_CYCLE_OPTIONS` semantics (`db.js`, `lib/expense.js`) | `NewJobSeasonEntry`'s Food special case (§1) — Step 3 skips the week-of-month/custom-date `DueDatePicker` for the Food expense specifically (`exp.isFoodPrimary`) and instead asks which day it's shopped, resolving to a weekly `dueDateAnchor` (`resolveNextWeekdayOnOrAfter`, `lib/newJobSeasonRunway.js`) and flipping `billingMeta.cycle` to `"weekly"` — a *permanent* change to the persisted expense, not scoped to New Job Season only, so it also affects normal-mode Budget's Upcoming Bills/due-date display going forward | `newJobSeasonFlow.test.jsx`'s "asks Food which day..." case; `newJobSeasonRunway.test.js`'s `resolveNextWeekdayOnOrAfter` cases | D1 |
 
 ### 7.3 Block 3 — Gate matrix (the six paths)
 

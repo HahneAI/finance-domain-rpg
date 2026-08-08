@@ -70,6 +70,21 @@ export function resolvePendingCheckArrivalDate(periodEndDate, arrivalDow) {
   return d;
 }
 
+// ── Food special case (TODO §1) ──────────────────────────────────────────
+// Food isn't a once-a-month bill like rent or insurance — it's an ongoing
+// weekly grocery spend, so the New Job Season due-date step asks "what day do
+// you usually shop" instead of the generic week-of-month/custom-date
+// DueDatePicker. Next occurrence of dow (0=Sun..6=Sat) on/after referenceIso
+// — unlike resolvePendingCheckArrivalDate (strictly *after* a period end),
+// this stays on referenceIso itself when it already matches dow, since
+// "today" is a perfectly valid answer to "what day do you shop."
+export function resolveNextWeekdayOnOrAfter(dow, referenceIso) {
+  if (dow == null || !referenceIso) return null;
+  const d = new Date(referenceIso + "T00:00:00");
+  d.setDate(d.getDate() + ((dow - d.getDay() + 7) % 7));
+  return d;
+}
+
 // Rough net estimate for the final check — same flat-rate sketch
 // ReemploymentTracker.jsx uses for its target-income preview (gross minus
 // fed/state/FICA/401k rates already on file). Not a full computeNet pass:

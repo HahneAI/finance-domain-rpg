@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { resolvePrimaryRunwayDays, sumBillsDueSince, computeNewJobSeasonRunway } from "../../lib/newJobSeasonRunway.js";
+import { resolvePrimaryRunwayDays, sumBillsDueSince, computeNewJobSeasonRunway, resolveNextWeekdayOnOrAfter } from "../../lib/newJobSeasonRunway.js";
+import { toLocalIso } from "../../lib/finance.js";
+
+// Food special case (TODO §1) — turns a "what day do you shop" pick into a
+// concrete weekly dueDateAnchor for NewJobSeasonEntry's due-date step.
+describe("resolveNextWeekdayOnOrAfter", () => {
+  it("stays on referenceIso itself when it already matches dow", () => {
+    // 2026-06-15 is a Monday (dow 1).
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(1, "2026-06-15"))).toBe("2026-06-15");
+  });
+
+  it("advances to the next occurrence of dow within the same week", () => {
+    // 2026-06-15 (Mon) -> next Wednesday (dow 3) is 2026-06-17.
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(3, "2026-06-15"))).toBe("2026-06-17");
+  });
+
+  it("wraps into the following week when dow already passed this week", () => {
+    // 2026-06-15 (Mon) -> next Sunday (dow 0) is 2026-06-21, not yesterday.
+    expect(toLocalIso(resolveNextWeekdayOnOrAfter(0, "2026-06-15"))).toBe("2026-06-21");
+  });
+
+  it("returns null without a dow or referenceIso", () => {
+    expect(resolveNextWeekdayOnOrAfter(null, "2026-06-15")).toBeNull();
+    expect(resolveNextWeekdayOnOrAfter(3, null)).toBeNull();
+  });
+});
 
 // resolvePrimaryRunwayDays is the shared selector introduced to close
 // drift-app-warden §8's F24 quarantine — it must mirror the exact

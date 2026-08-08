@@ -386,6 +386,42 @@ describe('NewJobSeasonEntry', () => {
     const loanResult = updatedExpenses.find(e => e.id === 'exp_loan1')
     expect(loanResult).toMatchObject({ trackDuringNewJobSeason: true, dueDateAnchor: '2026-05-10' })
   })
+
+  // Food isn't a once-a-month bill — the due-date step asks which day the
+  // user shops instead of the generic week-of-month/custom-date picker.
+  const FOOD_EXPENSE = {
+    id: 'exp_food', category: 'Needs', label: 'Food', isFoodPrimary: true,
+    billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
+  }
+
+  it('asks Food which day the user shops instead of the week-of-month picker, and resolves a weekly cycle', () => {
+    const onActivate = vi.fn()
+    render(<NewJobSeasonEntry open onClose={() => {}} onActivate={onActivate} expenses={[FOOD_EXPENSE]} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // skip pending check
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 2
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 3 (due dates), Food stays checked
+
+    expect(screen.getByText(/which day do you usually grocery shop/i)).toBeTruthy()
+    expect(screen.queryByText('3rd week of month')).toBeNull() // not the generic picker
+    expect(screen.queryByText('Custom date')).toBeNull()
+
+    // Activate stays natively disabled until a day is picked — same
+    // pre-existing step-3 gate as the regular DueDatePicker (§1.H15).
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shop Wed' }))
+    expect(screen.getByRole('button', { name: 'Activate' })).not.toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    const [, updatedExpenses] = onActivate.mock.calls[0]
+    const food = updatedExpenses.find(e => e.id === 'exp_food')
+    expect(food.trackDuringNewJobSeason).toBe(true)
+    expect(food.billingMeta.cycle).toBe('weekly') // not the old every30days
+    expect(new Date(food.dueDateAnchor + 'T12:00:00').getDay()).toBe(3) // Wednesday
+  })
 })
 
 // ─────────────────────────────────────────────────────────────

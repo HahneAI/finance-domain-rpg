@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { diffSensitiveFields } from "./lib/configHistory.js";
@@ -24,6 +24,7 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel, BetaFeedbackDetail } from "./components/ProfilePanel.jsx";
 import { BetaHomebase } from "./components/BetaHomebase.jsx";
+import { ProductivityHub } from "./components/ProductivityHub.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
@@ -458,6 +459,55 @@ export default function App() {
     // not here.
     loadBetaHomebaseBadge();
   }
+
+  // "Money Moves" — the base-user counterpart (docs: 039_add_base_productivity_hub.sql),
+  // mutually exclusive with the Beta Homebase icon above (a tracked beta
+  // tester sees only their beta-specific homebase). Same green/unchecked-
+  // count-only vs. red/plus-new-updates badge logic, own localStorage key
+  // namespace, no scoring signal to check (base users have none).
+  const [productivityHubOpen, setProductivityHubOpen] = useState(false);
+  const [productivityHubBadge, setProductivityHubBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+
+  const loadProductivityHubBadge = useCallback(async () => {
+    if (isTrackedTester || !authedUser?.id) return;
+    const [items, completions, suggestions, changelog] = await Promise.all([
+      fetchBaseChecklistItems(),
+      fetchMyBaseChecklistCompletions(),
+      fetchBaseSuggestions(),
+      fetchPublishedChangelogEntries(5),
+    ]);
+    const completedIds = new Set(completions);
+    const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+
+    const lastViewedKey = `productivityHubLastViewedAt:${authedUser.id}`;
+    let lastViewedAt = null;
+    try { lastViewedAt = window.localStorage.getItem(lastViewedKey); } catch { /* private mode etc. */ }
+    if (!lastViewedAt) {
+      lastViewedAt = new Date().toISOString();
+      try { window.localStorage.setItem(lastViewedKey, lastViewedAt); } catch { /* ignore */ }
+    }
+
+    const newChangelogCount = changelog.filter(e => e.published_at && e.published_at > lastViewedAt).length;
+    const newSuggestionCount = suggestions.filter(s => s.published_at && s.published_at > lastViewedAt).length;
+
+    setProductivityHubBadge({ uncheckedCount, newCount: newChangelogCount + newSuggestionCount });
+  }, [isTrackedTester, authedUser?.id]);
+
+  useEffect(() => { loadProductivityHubBadge(); }, [loadProductivityHubBadge]);
+
+  function openProductivityHub() {
+    if (authedUser?.id) {
+      try { window.localStorage.setItem(`productivityHubLastViewedAt:${authedUser.id}`, new Date().toISOString()); } catch { /* ignore */ }
+    }
+    setProductivityHubBadge(b => ({ ...b, newCount: 0 }));
+    setProductivityHubOpen(true);
+  }
+
+  function closeProductivityHub() {
+    setProductivityHubOpen(false);
+    loadProductivityHubBadge();
+  }
+
   // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
   // { status: "success" | "error", message } | null. Shown once via
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
@@ -2667,6 +2717,61 @@ export default function App() {
             );
           })()}
 
+          {/* ── Money Moves (Productivity Hub) — every signed-in user who ISN'T
+              a tracked beta tester (docs: 039_add_base_productivity_hub.sql).
+              Mutually exclusive with the Beta Tester Homebase icon above —
+              never both, so a user only ever sees the one that applies to
+              them. Same green/red badge convention, distinct icon (lightning
+              bolt, not the beta checkmark) so the two are never mistaken for
+              each other at a glance. ── */}
+          {!isTrackedTester && (() => {
+            const { uncheckedCount, newCount } = productivityHubBadge;
+            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
+            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+            return (
+              <Pressable
+                onClick={openProductivityHub}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: newCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
+                  cursor: "pointer",
+                  width: "44px",
+                  height: "44px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+                aria-label={badgeCount > 0 ? `Money Moves — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Money Moves"}
+              >
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                {badgeCount > 0 && (
+                  <span style={{
+                    position: "absolute",
+                    top: "6px",
+                    right: "6px",
+                    background: badgeColor,
+                    color: "var(--color-bg-base)",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    fontSize: "9px",
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {badgeCount}
+                  </span>
+                )}
+              </Pressable>
+            );
+          })()}
+
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
           <Pressable
             onClick={() => setConfirmDismissed(false)}
@@ -3837,6 +3942,12 @@ export default function App() {
         onClose={closeBetaHomebase}
         isTester={isTester}
         betaCodeUsed={betaCodeUsed}
+      />
+      {/* ── Money Moves / Productivity Hub (039_add_base_productivity_hub.sql) —
+          owns its own portal + fold motion, same shell as BetaHomebase. ── */}
+      <ProductivityHub
+        open={productivityHubOpen}
+        onClose={closeProductivityHub}
       />
       {/* ── New Job Season entry (TODO §1.C1) ── */}
       <NewJobSeasonEntry

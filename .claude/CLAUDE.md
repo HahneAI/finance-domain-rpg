@@ -65,6 +65,7 @@ src/
 │   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   ├── BetaHomebase.jsx     — tracked-beta-tester-only modal: rubric score, feature checklist, suggestion feed, changelog recap
+│   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
 │   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS
@@ -326,8 +327,12 @@ Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 0
 (beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
 link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
 chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
-Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123) exist — **the next real migration
-is 039.** Verify against the folder before numbering; this note has now gone stale five times
+Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123), 039 (`base_content_items` +
+`base_checklist_completions` + `base_feedback_events` — Money Moves, the base-user counterpart
+to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route via a new
+`entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
+F125) exist — **the next real migration is 040.** Verify against the folder before numbering;
+this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
 parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).

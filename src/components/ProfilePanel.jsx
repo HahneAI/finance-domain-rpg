@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem } from "../lib/db.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
@@ -2311,17 +2311,40 @@ const BETA_CONTENT_COPY = {
   },
 };
 
-// Admin authoring surface for beta_content_items (database/migrations/037) —
-// the write side of the Beta Homebase's checklist + suggestions sections.
-// Shares one component across both `kind`s rather than two near-duplicate
-// files — checklist items and suggestion prompts are the exact same
-// title/body/published shape ChangelogAdminDetail already establishes for
-// changelog_entries, just a different table and a different tester-facing
-// destination. Writes go through api/admin-beta-hub.js (db.js's
-// fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem) — never
-// a direct client write, per migration 037's RLS posture.
-function BetaContentAdminDetail({ kind, onBack }) {
-  const copy = BETA_CONTENT_COPY[kind];
+// Base-user counterpart (database/migrations/039_add_base_productivity_hub.sql,
+// ProductivityHub.jsx's "Money Moves" panel) — same shape, different copy
+// and audience ("every user" rather than "the tracked beta cohort").
+const BASE_CONTENT_COPY = {
+  checklist: {
+    title: "Money Moves Checklist",
+    listBlurb: "Published items appear as checkboxes in every user's Money Moves panel — each user's check-off state is personal to them.",
+    bodyLabel: "Description (optional)",
+    bodyPlaceholder: "What should they try?",
+    publishedHint: "Published — visible in Money Moves",
+  },
+  suggestion: {
+    title: "Money Moves Tips",
+    listBlurb: "Published prompts appear as a read-only feed in every user's Money Moves panel.",
+    bodyLabel: "Body (Markdown)",
+    bodyPlaceholder: "Supports **bold**, *italic*, lists, links, and headers.",
+    publishedHint: "Published — visible in Money Moves",
+  },
+};
+
+// Admin authoring surface for beta_content_items (database/migrations/037)
+// AND, since 039_add_base_productivity_hub.sql, base_content_items too — the
+// write side of the Beta Homebase's and Money Moves' checklist + suggestions
+// sections. One component across both `kind`s AND both audiences rather than
+// four near-duplicate blocks — checklist items and suggestion prompts are
+// the exact same title/body/published shape ChangelogAdminDetail already
+// establishes for changelog_entries either way; `fetchItems`/`saveItem`/
+// `deleteItem` are the audience-specific db.js wrappers
+// (fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem for
+// beta, fetchAllBaseContentItems/saveBaseContentItem/deleteBaseContentItem
+// for base) passed in by each call site below. Writes always go through
+// api/admin-beta-hub.js's service-role client — never a direct client
+// write, per migration 037's/039's RLS posture.
+function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem }) {
   const [items, setItems] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else item.id
@@ -2333,14 +2356,14 @@ function BetaContentAdminDetail({ kind, onBack }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await fetchAllBetaContentItems(kind);
+      const result = await fetchItems(kind);
       if (cancelled) return;
       if (!result.ok) setLoadError(result.error);
       else { setLoadError(null); setItems(result.items); }
     }
     load();
     return () => { cancelled = true; };
-  }, [kind]);
+  }, [kind, fetchItems]);
 
   function startNew() {
     setDraft({ id: null, title: "", body: "", published: false });
@@ -2365,7 +2388,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
   async function handleSave() {
     if (!draft.title.trim()) { setSaveError("Title is required."); return; }
     setSaveError(null);
-    const result = await saveBetaContentItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published });
+    const result = await saveItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published });
     if (!result.ok) { setSaveError(result.error); return; }
     setItems(prev => {
       const list = prev ?? [];
@@ -2379,7 +2402,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
 
   async function handleDelete(id) {
     setConfirmDeleteId(null);
-    const result = await deleteBetaContentItem(id);
+    const result = await deleteItem(id);
     if (result.ok) setItems(prev => (prev ?? []).filter(i => i.id !== id));
   }
 
@@ -2760,10 +2783,16 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betachecklistadmin") {
-    return <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />;
+    return <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betasuggestionadmin") {
-    return <BetaContentAdminDetail kind="suggestion" onBack={() => setActiveSection(null)} />;
+    return <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "basechecklistadmin") {
+    return <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "basesuggestionadmin") {
+    return <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betascoresadmin") {
     return <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />;
@@ -2879,6 +2908,20 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Beta Scores"
             summary="Enter each tracked tester's rubric score (Usage/Feedback/Calls/Longevity)"
             onPress={() => setActiveSection("betascoresadmin")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Money Moves Checklist"
+            summary="Author the checklist every user (not just testers) sees in Money Moves"
+            onPress={() => setActiveSection("basechecklistadmin")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Money Moves Tips"
+            summary="Author the tip prompts shown in every user's Money Moves panel"
+            onPress={() => setActiveSection("basesuggestionadmin")}
             last
           />
         )}

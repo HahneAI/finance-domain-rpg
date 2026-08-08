@@ -22,6 +22,13 @@ import {
 // Same portal + fold-motion shell as ChangelogModal/the drawer feedback
 // modal — position:fixed must portal to document.body or iOS Safari
 // hit-tests against the wrong scroll container.
+//
+// ChecklistSection/SuggestionsSection/WhatsNewSection are exported for
+// ProductivityHub.jsx (the base-user "Money Moves" panel,
+// 039_add_base_productivity_hub.sql) to reuse directly — same presentation,
+// different data source, no duplicated JSX. ScoreSection is NOT reused —
+// scoring is deliberately beta-program-specific and has no base-user
+// equivalent.
 
 const RUBRIC_CATEGORIES = [
   { key: "usage_score", label: "App Usage", max: 50 },
@@ -72,11 +79,16 @@ function ScoreSection({ score }) {
   );
 }
 
-function ChecklistSection({ items, completedIds, onToggle }) {
+// Exported (along with SuggestionsSection/WhatsNewSection below) so
+// ProductivityHub.jsx — the base-user "Money Moves" panel,
+// 039_add_base_productivity_hub.sql — can reuse the exact same presentation
+// instead of duplicating it. Neither component has any beta-specific logic
+// inside; `title` lets a caller relabel without touching this file.
+export function ChecklistSection({ items, completedIds, onToggle, title = "Feature Checklist" }) {
   const completedCount = items.filter(i => completedIds.has(i.id)).length;
   return (
     <div style={{ marginBottom: "24px" }}>
-      <SH right={items.length > 0 ? `${completedCount} / ${items.length}` : null}>Feature Checklist</SH>
+      <SH right={items.length > 0 ? `${completedCount} / ${items.length}` : null}>{title}</SH>
       {items.length === 0 ? (
         <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
       ) : (
@@ -109,10 +121,10 @@ function ChecklistSection({ items, completedIds, onToggle }) {
   );
 }
 
-function SuggestionsSection({ items }) {
+export function SuggestionsSection({ items, title = "Suggestions From The Team" }) {
   return (
     <div style={{ marginBottom: "24px" }}>
-      <SH>Suggestions From The Team</SH>
+      <SH>{title}</SH>
       {items.length === 0 ? (
         <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
       ) : (
@@ -129,7 +141,7 @@ function SuggestionsSection({ items }) {
   );
 }
 
-function WhatsNewSection({ entries }) {
+export function WhatsNewSection({ entries }) {
   if (entries.length === 0) return null;
   return (
     <div>

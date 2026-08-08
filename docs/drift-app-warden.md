@@ -3047,6 +3047,71 @@ is the drift this entry exists to prevent:
 > scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
 > no single automated test spans the JS+SQL boundary, same gap F122 already flags.
 
+**F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
+Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,
+`api/admin-beta-hub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
+`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for nothing — there is no
+score/ledger half here, unlike F123**
+Added 2026-08-08 as the base-user counterpart to the Beta Tester Homebase (F123) — same
+checklist/tips/feedback flow, different audience (every signed-in user who ISN'T a tracked
+beta tester, per `!isTrackedBetaTester`) and different purpose (self-service productivity,
+not a scored path to a reward). Three decisions this entry exists to keep from drifting apart
+next time either surface changes:
+- **Separate tables, on purpose (`base_content_items`/`base_checklist_completions`/
+  `base_feedback_events`), not a reuse of the beta_* ones.** `beta_checklist_completions`
+  (037) and `beta_activity_events` (031) both carry `SECURITY DEFINER` triggers that
+  hard-reject any insert from a non-tracked-beta-tester — reusing them for base users would
+  have meant loosening the exact triggers protecting the live cohort's scoring data mid-
+  program. New tables cost nothing against the Vercel Hobby serverless-function cap (that cap
+  is per `api/*.js` FILE, F123 already established this) — no scarcity pressure pushed toward
+  reuse the way there was for the API route below. `base_checklist_completions` therefore has
+  **no eligibility trigger at all** — there's no "tracked cohort" concept for base users, RLS's
+  own `user_id = auth.uid()` check is the whole gate. `base_feedback_events` is its own table
+  rather than a second event_type on `beta_activity_events` (030's pattern) for the same
+  reason F123's `beta_scores.admin_notes` rule protects tester-only data: that table
+  specifically feeds `api/admin-beta-report.js`'s scoring aggregation, and mixing non-cohort
+  rows in would corrupt its "~40 known testers" scope.
+- **Admin route IS shared — `api/admin-beta-hub.js` grew an `entity: "base_content"` branch**
+  instead of a new file, the opposite call from the tables above. `CONTENT_TABLES` maps
+  `content` → `beta_content_items` and `base_content` → `base_content_items`; every handler
+  (`handleContentGet`/`Save`/`Delete`) is parametrized on `table` and shared by both. This
+  repo is at 12/12 Hobby-plan functions (CLAUDE.md) — a second near-identical route would
+  either force consolidating something else first or fail the build outright.
+- **Frontend presentation IS shared too — `ChecklistSection`/`SuggestionsSection`/
+  `WhatsNewSection` are exported from `BetaHomebase.jsx` and imported by
+  `ProductivityHub.jsx`**, not duplicated. Neither component has beta-specific logic inside;
+  `title` props let each caller relabel. `ScoreSection` is explicitly NOT reused/exported —
+  scoring stays beta-program-only, `ProductivityHub.jsx` has no score concept at all.
+- **The header badge is a fourth+fifth consumer of the "one authoritative read, called
+  twice" pattern F123's addendum already established** — `loadProductivityHubBadge` in
+  `App.jsx` calls the exact same base-audience fetchers `ProductivityHub.jsx` itself uses
+  (`fetchBaseChecklistItems`/`fetchMyBaseChecklistCompletions`/`fetchBaseSuggestions`/
+  `fetchPublishedChangelogEntries` — the last one shared verbatim with the BETA badge, since
+  the changelog is global to begin with), own `localStorage` key namespace
+  (`productivityHubLastViewedAt:<user_id>`, separate from `betaHomebaseLastViewedAt:<user_id>`
+  so the two badges' read state never collides for a user who was once a tracked tester and
+  later isn't, or vice versa). Same accepted per-device-only gap as F123's badge — no new
+  read-receipt table added to close it.
+- **The two icons are mutually exclusive in `App.jsx`, gated on the same `isTrackedTester`
+  boolean in opposite directions** (`isTrackedTester &&` for the beta icon, `!isTrackedTester
+  &&` for the Money Moves icon) — a user is never shown both, and never shown neither.
+> **IF** `base_content_items`'s shape diverges from `beta_content_items`'s (a field added to
+> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/admin-beta-hub.js`
+> break silently for whichever entity lacks the field — either add it to both tables or split
+> the handlers, don't patch around a mismatch inline. **IF** a new field is added to
+> `base_content_items`/a new base-only content kind is introduced, **THEN** decide whether
+> `ChecklistSection`/`SuggestionsSection` still fit as-is (they're generic over `items`/
+> `title` today) before extending them — don't fork a near-duplicate component. **IF** the
+> Money Moves badge's "new" definition changes, **THEN** update `loadProductivityHubBadge`
+> only, same rule F123 already states for its beta counterpart. **IF** `isTrackedBetaTester`'s
+> definition changes, **THEN** the icon-exclusivity condition in `App.jsx` (both `isTrackedTester
+> &&` and `!isTrackedTester &&`) picks up the change automatically since both read the same
+> `isTrackedTester` constant — but re-verify a user is still never shown both/neither icons.
+> Check: `dbBaseProductivityHub.test.js` (client read/write shape, no tracked-tester gating),
+> `adminBetaHub.test.js`'s `entity=base_content` block (server dispatch to the right table) —
+> no automated test covers the App.jsx icon-exclusivity/badge wiring, same gap F123 already
+> flags for its own badge.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -3070,6 +3135,8 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 | `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
 | A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
+| `beta_content_items` shape changes (column added/renamed, F125) | `api/admin-beta-hub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
+| `isTrackedBetaTester`'s eligibility condition, again (F125) | `App.jsx`'s Beta Homebase icon (`isTrackedTester &&`) and Money Moves icon (`!isTrackedTester &&`) are two ends of the same boolean — a user must never see both or neither | Toggle a test account's tracked-tester status; confirm exactly one icon renders | D4 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

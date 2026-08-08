@@ -752,6 +752,10 @@ CREATE POLICY "testers can read their own score"
 -- 036 (resume_profile) and 037 (beta_homebase) added above per Anthony's
 -- 2026-08-07 confirmation that both have now been applied (see the header's
 -- "036/037 status" note and the ✅ section above — reconstructed from the
--- migration files, not re-verified against a fresh export). Next brand-new
--- migration FILE should be numbered 039.
+-- migration files, not re-verified against a fresh export). 038 was itself
+-- this bookmark; 039 (base_content_items/base_checklist_completions/
+-- base_feedback_events — Money Moves, drift-app-warden §20 F125) has since
+-- been added as a real migration and is NOT reflected in the CREATE TABLE
+-- section above — this snapshot was not re-taken for it. Next brand-new
+-- migration FILE should be numbered 040.
 -- ─────────────────────────────────────────────────────────────────────────────

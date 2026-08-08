@@ -195,6 +195,52 @@ describe("admin-beta-hub — DELETE entity=content", () => {
   });
 });
 
+describe("admin-beta-hub — entity=base_content (039_add_base_productivity_hub.sql)", () => {
+  it("GET targets base_content_items, not beta_content_items", async () => {
+    setupCallerAuth();
+    const rows = [{ id: "b1", kind: "checklist", title: "Add your first goal" }];
+    const order = vi.fn().mockResolvedValue({ data: rows, error: null });
+    const eq = vi.fn().mockReturnValue({ order });
+    mocks.adminClient.from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const res = mkRes();
+    await handler({ method: "GET", headers: { authorization: "Bearer tok" }, query: { entity: "base_content", kind: "checklist" } }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ items: rows });
+  });
+
+  it("POST create targets base_content_items", async () => {
+    setupCallerAuth({ userId: "admin-7" });
+    const single = vi.fn().mockResolvedValue({ data: { id: "new-1" }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
+    mocks.adminClient.from.mockReturnValue({ insert });
+
+    const res = mkRes();
+    await handler({
+      method: "POST",
+      headers: { authorization: "Bearer tok" },
+      body: { entity: "base_content", kind: "suggestion", title: "Try the Tax Plan", published: true },
+    }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("DELETE targets base_content_items", async () => {
+    setupCallerAuth();
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    mocks.adminClient.from.mockReturnValue({ delete: vi.fn().mockReturnValue({ eq }) });
+
+    const res = mkRes();
+    await handler({ method: "DELETE", headers: { authorization: "Bearer tok" }, query: { entity: "base_content", id: "b1" } }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(200);
+  });
+});
+
 describe("admin-beta-hub — POST entity=score", () => {
   it("400s on a missing userId", async () => {
     setupCallerAuth();

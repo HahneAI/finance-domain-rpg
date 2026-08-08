@@ -163,6 +163,14 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js entity: base_content)
     expect(result).toEqual({ ok: true, item: { id: 'c1' } })
   })
 
+  it('saveBaseContentItem includes employerPreset in the body (040_add_content_employer_targeting.sql)', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ item: { id: 'c1' } }) }))
+    await saveBaseContentItem({ id: null, kind: 'checklist', title: 'DHL Money Move', body: '', published: true, employerPreset: 'DHL' })
+    const sentBody = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(sentBody.employerPreset).toBe('DHL')
+  })
+
   it('deleteBaseContentItem DELETEs with entity=base_content&id', async () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))

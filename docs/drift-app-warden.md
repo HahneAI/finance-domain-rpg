@@ -3112,6 +3112,66 @@ next time either surface changes:
 > no automated test covers the App.jsx icon-exclusivity/badge wiring, same gap F123 already
 > flags for its own badge.
 
+**F126 · Content employer-preset targeting — RLS-enforced, not a client-side filter** —
+`database/migrations/040_add_content_employer_targeting.sql`, `api/admin-beta-hub.js`,
+`db.js`, `ProfilePanel.jsx` (`ContentAdminDetail`'s DHL checkbox, `UserCommunicationAdminDetail`)
+— **[G] — routes admin content to the right employer's users, drift = wrong/no content shown
+to the wrong/right employer**
+Added 2026-08-08. Lets an admin scope a `beta_content_items`/`base_content_items` row to a
+single employer preset ("DHL employees only") instead of always going to every eligible user.
+Two decisions worth keeping straight:
+- **The column is an unconstrained `employer_preset TEXT`, not a boolean** (`is_dhl`-style) —
+  deliberately mirrors `config.employerPreset`'s own "DHL" | null shape (CLAUDE.md's Employer
+  Preset Naming Convention) rather than the older `is_employer_dhl` BOOLEAN column (migration
+  014) pattern. `null` = every eligible user (every pre-040 row defaults to this — the
+  migration changes nothing about what's currently live). A second preset (Amazon, etc.)
+  is a new string value in the same column, not a new column and not a new migration; the
+  admin UI's checkbox becomes a dropdown at that point, the data model doesn't change.
+- **Enforced by RLS, not just the client fetch.** `get_user_employer_preset(uid)` is a THIRD
+  SECURITY DEFINER STABLE function following `is_tracked_beta_tester(uid)`'s exact pattern
+  (F123) — reads `user_data.config->>'employerPreset'` (JSONB extraction; `employerPreset`
+  lives inside `config`, never as its own column — don't confuse it with the separate
+  `is_employer_dhl` BOOLEAN column) on behalf of the calling role. Both tables' SELECT
+  policies now require `employer_preset IS NULL OR employer_preset =
+  get_user_employer_preset(auth.uid())` — a DHL-only row is invisible to a non-DHL user even
+  via a raw Supabase client call, not merely hidden by the tester-facing fetchers choosing not
+  to show it.
+> **IF** a second employer preset is introduced (Amazon etc.), **THEN** `ContentAdminDetail`'s
+> checkbox (`draft.employerPreset === "DHL"`) needs to become a selector over the known preset
+> values — the column and RLS policies need NO change, this is a UI-only edit. **IF**
+> `config.employerPreset`'s storage location or key name ever changes, **THEN**
+> `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction breaks silently
+> (returns null for everyone, which reads as "no targeting" — a DHL-only item would start
+> showing to nobody with a preset set, not fail loudly). **IF** a third content table is added
+> that also wants employer targeting, **THEN** reuse `get_user_employer_preset(uid)` in its RLS
+> policy rather than re-deriving the JSONB extraction inline — same F122/F123 "SQL twin, one
+> shared function" precedent. Check: `adminBetaHub.test.js`'s employer_preset tests (insert/
+> update payload, GET select column) — no automated test can exercise the RLS boundary itself
+> (no live DB in this suite), same gap F122/F123 already flag; verify manually per 040's own
+> verification block before trusting a DHL-only publish in production.
+
+**F127 · User Communication — one admin page fans out to five content methods, each
+component now embedded-only** — `ProfilePanel.jsx` (`UserCommunicationAdminDetail`,
+`ChangelogAdminDetail`, `ContentAdminDetail`) — **[G] — wrong `embedded` wiring means a
+duplicate or missing BackBar, not wrong data**
+Added 2026-08-08. Consolidated five separate Account-tab rows (Changelog, Beta Checklist,
+Beta Tips, Money Moves Checklist, Money Moves Tips) into one "User Communication" row with a
+`VT` toggle switching which method is mounted. `ChangelogAdminDetail` and `ContentAdminDetail`
+both grew an `embedded` prop (default `false`) that suppresses their own list-view `BackBar` —
+their edit-view BackBar ("back to my method's list," `onBack={cancelEdit}`) is untouched and
+still renders either way. Every remaining call site passes `embedded` (there is no longer a
+standalone, non-embedded call site for either component) — Investor Codes and Beta Scores
+were deliberately left OUT of this consolidation (they're not "content pushed for a user to
+read," they don't belong here) and still route+render exactly as before.
+> **IF** a sixth content method is added to this page, **THEN** it must reuse an existing
+> `embedded`-aware component (`ChangelogAdminDetail`/`ContentAdminDetail`) or grow the same
+> `embedded` contract on its own component — a new method rendering its own list-view BackBar
+> inside this page reads as a broken nested-back-button bug, not a new feature. **IF**
+> `ChangelogAdminDetail` or `ContentAdminDetail` ever needs a standalone (non-embedded) call
+> site again, **THEN** `embedded` already defaults to `false` for that — no prop needed, just
+> don't pass `embedded` at that call site. Check: no automated test covers this page's toggle
+> wiring or the embedded/non-embedded BackBar branch — visual-only, verify by hand per method.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -3137,6 +3197,8 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
 | `beta_content_items` shape changes (column added/renamed, F125) | `api/admin-beta-hub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
 | `isTrackedBetaTester`'s eligibility condition, again (F125) | `App.jsx`'s Beta Homebase icon (`isTrackedTester &&`) and Money Moves icon (`!isTrackedTester &&`) are two ends of the same boolean — a user must never see both or neither | Toggle a test account's tracked-tester status; confirm exactly one icon renders | D4 |
+| `config.employerPreset`'s storage key/location (F126) | `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction — silently returns null (reads as "no targeting") rather than erroring | Publish a DHL-only item; confirm it's still invisible to a non-DHL test account and visible to a DHL one | D1 |
+| `ContentAdminDetail`/`ChangelogAdminDetail`'s list-view BackBar (F127) | Both are now embedded-only (mounted exclusively via `UserCommunicationAdminDetail`) — `embedded` must stay `true` at every call site or a stray back button reappears | Grep `ProfilePanel.jsx` for `<ContentAdminDetail`/`<ChangelogAdminDetail` call sites; confirm all pass `embedded` | D1 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

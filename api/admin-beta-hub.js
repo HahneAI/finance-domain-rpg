@@ -18,7 +18,11 @@ import { createClient } from "@supabase/supabase-js";
 //     cohort. Both share handleContentGet/Save/Delete below, parametrized on
 //     table name — same title/body/published shape as changelog_entries,
 //     CRUD mirrors api/admin-changelog.js's GET/POST/DELETE-by-method
-//     pattern exactly.
+//     pattern exactly. Both also carry an optional `employerPreset`
+//     (040_add_content_employer_targeting.sql) — null targets every
+//     eligible user (unchanged default), a value like "DHL" restricts
+//     visibility to users with that `config.employerPreset`, enforced by
+//     RLS via `get_user_employer_preset(uid)`, not just client-side.
 //   entity: "score"        — a tester's rubric score (beta_scores). Upsert
 //     only (no delete — clearing a score back to "not yet scored" is just
 //     saving nulls). Deliberately admin-entered, not computed —
@@ -76,7 +80,7 @@ async function handleContentGet(req, res, adminClient, table) {
   if (!CONTENT_KINDS.includes(kind)) return res.status(400).json({ error: "Missing or invalid kind" });
   const { data, error } = await adminClient
     .from(table)
-    .select("id, kind, title, body, published_at, created_at, updated_at")
+    .select("id, kind, title, body, published_at, employer_preset, created_at, updated_at")
     .eq("kind", kind)
     .order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: "Failed to load items" });
@@ -84,9 +88,12 @@ async function handleContentGet(req, res, adminClient, table) {
 }
 
 async function handleContentSave(req, res, adminClient, adminUserId, table) {
-  const { id, kind, title, body, published } = req.body ?? {};
+  const { id, kind, title, body, published, employerPreset } = req.body ?? {};
   if (!CONTENT_KINDS.includes(kind)) return res.status(400).json({ error: "Missing or invalid kind" });
   if (!title || !String(title).trim()) return res.status(400).json({ error: "Title is required" });
+  // Unconstrained on purpose (migration 040) — "DHL" today, any future
+  // preset string tomorrow, no CHECK to update when a second one is added.
+  const employerPresetValue = employerPreset ? String(employerPreset).trim() || null : null;
 
   if (id) {
     const { data: existing, error: fetchError } = await adminClient
@@ -107,6 +114,7 @@ async function handleContentSave(req, res, adminClient, adminUserId, table) {
         title: String(title).trim(),
         body: body != null ? String(body) : null,
         published_at: publishedAt,
+        employer_preset: employerPresetValue,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -123,6 +131,7 @@ async function handleContentSave(req, res, adminClient, adminUserId, table) {
       title: String(title).trim(),
       body: body != null ? String(body) : null,
       published_at: published ? new Date().toISOString() : null,
+      employer_preset: employerPresetValue,
       created_by: adminUserId,
     })
     .select()

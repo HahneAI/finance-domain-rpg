@@ -1355,15 +1355,15 @@ export async function fetchAllBetaContentItems(kind) {
   }
 }
 
-/** Create (no id) or update (id present) a checklist item or suggestion prompt. */
-export async function saveBetaContentItem({ id, kind, title, body, published }) {
+/** Create (no id) or update (id present) a checklist item or suggestion prompt. `employerPreset` (e.g. "DHL") restricts visibility to users with that employer preset — null/omitted means everyone. */
+export async function saveBetaContentItem({ id, kind, title, body, published, employerPreset }) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
     const res = await fetch("/api/admin-beta-hub", {
       method: "POST",
       headers,
-      body: JSON.stringify({ entity: "content", id, kind, title, body, published }),
+      body: JSON.stringify({ entity: "content", id, kind, title, body, published, employerPreset }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to save item" };
@@ -1537,15 +1537,15 @@ export async function fetchAllBaseContentItems(kind) {
   }
 }
 
-/** Create (no id) or update (id present) a base checklist item or suggestion prompt. */
-export async function saveBaseContentItem({ id, kind, title, body, published }) {
+/** Create (no id) or update (id present) a base checklist item or suggestion prompt. `employerPreset` (e.g. "DHL") restricts visibility to users with that employer preset — null/omitted means everyone. */
+export async function saveBaseContentItem({ id, kind, title, body, published, employerPreset }) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
     const res = await fetch("/api/admin-beta-hub", {
       method: "POST",
       headers,
-      body: JSON.stringify({ entity: "base_content", id, kind, title, body, published }),
+      body: JSON.stringify({ entity: "base_content", id, kind, title, body, published, employerPreset }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to save item" };

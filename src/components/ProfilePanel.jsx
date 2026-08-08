@@ -5,7 +5,7 @@ import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelo
 import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
+import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -2080,7 +2080,7 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
 // a user sees. Writes go through api/admin-changelog.js (db.js's
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
-function ChangelogAdminDetail({ onBack }) {
+function ChangelogAdminDetail({ onBack, embedded = false }) {
   // null = initial load in progress (distinct from [] = loaded, zero entries) —
   // avoids a synchronous setState(true) at the top of load(), which is what
   // react-hooks/set-state-in-effect flags when load() is invoked directly
@@ -2239,7 +2239,7 @@ function ChangelogAdminDetail({ onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Changelog" />
+      {!embedded && <BackBar onBack={onBack} title="Changelog" />}
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         Published entries appear as a "What's New" prompt alongside the update-available
         banner, the next time a user's app detects a new deploy.
@@ -2344,7 +2344,7 @@ const BASE_CONTENT_COPY = {
 // for base) passed in by each call site below. Writes always go through
 // api/admin-beta-hub.js's service-role client — never a direct client
 // write, per migration 037's/039's RLS posture.
-function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem }) {
+function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem, embedded = false }) {
   const [items, setItems] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else item.id
@@ -2366,14 +2366,14 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
   }, [kind, fetchItems]);
 
   function startNew() {
-    setDraft({ id: null, title: "", body: "", published: false });
+    setDraft({ id: null, title: "", body: "", published: false, employerPreset: null });
     setSaveError(null);
     setShowPreview(false);
     setEditingId("new");
   }
 
   function startEdit(item) {
-    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null });
+    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null, employerPreset: item.employer_preset ?? null });
     setSaveError(null);
     setShowPreview(false);
     setEditingId(item.id);
@@ -2388,7 +2388,7 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
   async function handleSave() {
     if (!draft.title.trim()) { setSaveError("Title is required."); return; }
     setSaveError(null);
-    const result = await saveItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published });
+    const result = await saveItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published, employerPreset: draft.employerPreset });
     if (!result.ok) { setSaveError(result.error); return; }
     setItems(prev => {
       const list = prev ?? [];
@@ -2456,6 +2456,21 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 {copy.publishedHint}{draft.published ? "" : " (currently a draft)"}
               </span>
             </label>
+            {/* Employer-preset targeting (migration 040) — unconstrained
+                string underneath (draft.employerPreset is "DHL" or null),
+                a checkbox today since DHL is the only preset that exists.
+                Extending to a second preset (e.g. Amazon) is a dropdown
+                swap here, not a data-model change. */}
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={draft.employerPreset === "DHL"}
+                onChange={e => setDraft(d => ({ ...d, employerPreset: e.target.checked ? "DHL" : null }))}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                DHL Employees Only{draft.employerPreset !== "DHL" ? " (unchecked = every eligible user)" : ""}
+              </span>
+            </label>
             {saveError && (
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
@@ -2468,7 +2483,7 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
 
   return (
     <>
-      <BackBar onBack={onBack} title={copy.title} />
+      {!embedded && <BackBar onBack={onBack} title={copy.title} />}
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         {copy.listBlurb}
       </div>
@@ -2494,9 +2509,16 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
               <div style={{ padding: "13px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
                   <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{item.title}</div>
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
-                    {isPublished ? "Published" : "Draft"}
-                  </span>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    {item.employer_preset && (
+                      <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg-raised)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)" }}>
+                        {item.employer_preset} Only
+                      </span>
+                    )}
+                    <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                      {isPublished ? "Published" : "Draft"}
+                    </span>
+                  </div>
                 </div>
                 {confirming ? (
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -2515,6 +2537,53 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
           );
         })}
       </div>
+    </>
+  );
+}
+
+// One row in the Account tab ("User Communication") fanning out to every
+// user-facing content-authoring flow that used to be five separate rows —
+// Changelog, Beta Checklist, Beta Tips, Money Moves Checklist, Money Moves
+// Tips. A top toggle (VT, same primitive the panels' own view tabs use)
+// switches which method is active; each method is the exact same component
+// used before consolidation (ChangelogAdminDetail/ContentAdminDetail),
+// mounted with `embedded` so it doesn't render its own redundant BackBar —
+// this page owns the single "back to Account" affordance, each method's own
+// edit-view BackBar ("back to this method's list") is untouched. Investor
+// Codes and Beta Scores stay their own separate rows — neither is "content
+// pushed for a user to read," so they don't belong in this consolidation.
+const USER_COMM_METHODS = [
+  { key: "changelog", label: "Changelog" },
+  { key: "beta_checklist", label: "Beta Checklist" },
+  { key: "beta_suggestion", label: "Beta Tips" },
+  { key: "base_checklist", label: "Money Moves Checklist" },
+  { key: "base_suggestion", label: "Money Moves Tips" },
+];
+
+function UserCommunicationAdminDetail({ onBack }) {
+  const [method, setMethod] = useState("changelog");
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="User Communication" />
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px" }}>
+        {USER_COMM_METHODS.map(m => (
+          <VT key={m.key} label={m.label} active={method === m.key} onClick={() => setMethod(m.key)} />
+        ))}
+      </div>
+      {method === "changelog" && <ChangelogAdminDetail embedded />}
+      {method === "beta_checklist" && (
+        <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+      )}
+      {method === "beta_suggestion" && (
+        <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+      )}
+      {method === "base_checklist" && (
+        <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+      )}
+      {method === "base_suggestion" && (
+        <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+      )}
     </>
   );
 }
@@ -2779,20 +2848,8 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "investorcodes") {
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
   }
-  if (activeSection === "changelog") {
-    return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
-  }
-  if (activeSection === "betachecklistadmin") {
-    return <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} onBack={() => setActiveSection(null)} />;
-  }
-  if (activeSection === "betasuggestionadmin") {
-    return <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} onBack={() => setActiveSection(null)} />;
-  }
-  if (activeSection === "basechecklistadmin") {
-    return <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} onBack={() => setActiveSection(null)} />;
-  }
-  if (activeSection === "basesuggestionadmin") {
-    return <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} onBack={() => setActiveSection(null)} />;
+  if (activeSection === "usercomm") {
+    return <UserCommunicationAdminDetail onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betascoresadmin") {
     return <BetaScoresAdminDetail onBack={() => setActiveSection(null)} />;
@@ -2884,23 +2941,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         )}
         {isAdmin && (
           <ListRow
-            label="Changelog"
-            summary="Author the What's New entries paired with the update banner"
-            onPress={() => setActiveSection("changelog")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Beta Checklist"
-            summary="Author the Feature Checklist testers check off in their Homebase"
-            onPress={() => setActiveSection("betachecklistadmin")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Beta Suggestions"
-            summary="Author the suggestion prompts shown in the tester Homebase"
-            onPress={() => setActiveSection("betasuggestionadmin")}
+            label="User Communication"
+            summary="Changelog, Beta Checklist/Tips, Money Moves Checklist/Tips — one page, switch method with the toggle"
+            onPress={() => setActiveSection("usercomm")}
           />
         )}
         {isAdmin && (
@@ -2908,20 +2951,6 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Beta Scores"
             summary="Enter each tracked tester's rubric score (Usage/Feedback/Calls/Longevity)"
             onPress={() => setActiveSection("betascoresadmin")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Money Moves Checklist"
-            summary="Author the checklist every user (not just testers) sees in Money Moves"
-            onPress={() => setActiveSection("basechecklistadmin")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Money Moves Tips"
-            summary="Author the tip prompts shown in every user's Money Moves panel"
-            onPress={() => setActiveSection("basesuggestionadmin")}
             last
           />
         )}

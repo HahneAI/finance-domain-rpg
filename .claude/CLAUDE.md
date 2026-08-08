@@ -331,7 +331,10 @@ Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123), 039 (`base_conte
 `base_checklist_completions` + `base_feedback_events` — Money Moves, the base-user counterpart
 to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route via a new
 `entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
-F125) exist — **the next real migration is 040.** Verify against the folder before numbering;
+F125), 040 (`employer_preset` column on `beta_content_items`/`base_content_items` +
+`get_user_employer_preset(uid)` — lets admin-authored content target a single employer preset,
+e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`) exist —
+**the next real migration is 041.** Verify against the folder before numbering;
 this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a

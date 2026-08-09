@@ -574,7 +574,7 @@ describe('NewJobSeasonHomePanel', () => {
 
   it('embeds the Re-employment Tracker', () => {
     render(<NewJobSeasonHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
-    expect(screen.getByText('Re-employment')).toBeTruthy()
+    expect(screen.getByText('Application Tracker')).toBeTruthy()
     expect(screen.getByText('Target annual')).toBeTruthy()
   })
 

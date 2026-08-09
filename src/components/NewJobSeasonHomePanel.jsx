@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { MetricCard, Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
+import { MetricCard, Pressable, PanelHero, SectionHeader, SH, iS, lS } from "./ui.jsx";
 import { computeNewJobSeasonRunway, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
 import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
@@ -133,6 +133,10 @@ export function NewJobSeasonHomePanel({
     <div>
       <PanelHero eyebrow="New Job Season">Home</PanelHero>
 
+      <SectionHeader sub="What you have, what's due, and how many days it covers">
+        Your Runway
+      </SectionHeader>
+
       {/* ── Cash On Hand (TODO §1.H17) — its own card, above Runway; tap
           anywhere (pencil badge signals it) to open the update sheet. ── */}
       <Pressable
@@ -200,7 +204,7 @@ export function NewJobSeasonHomePanel({
           + ${Math.round(dash.lifestyleWeeklySpend).toLocaleString()}/wk Lifestyle spend still tracked (not counted in runway above)
         </div>
       )}
-      <div style={{ marginBottom: "16px" }} />
+      <div style={{ marginBottom: "28px" }} />
 
       <SectionHeader sub="Cash from gig work or odd jobs — goes straight into your runway savings">
         Log Extra Income
@@ -281,6 +285,13 @@ export function NewJobSeasonHomePanel({
         )}
       </div>
 
+      {/* Job Search — one umbrella section for the tracker + AI-guided help
+          toward the same goal (landing the next job), instead of three
+          separately-headed blocks with no shared framing. */}
+      <SectionHeader sub="Track applications and get AI-guided help toward the next offer">
+        Job Search
+      </SectionHeader>
+
       {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} saveConfigNow={saveConfigNow} />}
 
       {/* §18 sections 4+ standing constraint — narrow canAccessAiFeatures gate
@@ -288,26 +299,29 @@ export function NewJobSeasonHomePanel({
           Ask Coach's wider trial/paid gate above. */}
       {canAccessAiFeatures({ isAdmin, isTester, isInvestor: config?.isInvestor }) && (
         <>
-          <SectionHeader sub="Coach-guided help with the search itself — application strategy, interview prep, salary negotiation, or how long your runway lets you hold out">
-            Job Hunt Assistant
-          </SectionHeader>
-          <Pressable
-            onClick={() => setJobHuntOpen(true)}
-            style={{
-              width: "100%",
-              background: "rgba(0,200,150,0.10)",
-              color: "var(--color-teal)",
-              border: "1px solid rgba(0,200,150,0.32)",
-              borderRadius: "10px",
-              padding: "12px",
-              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
-              fontWeight: 700, cursor: "pointer",
-              minHeight: "44px",
-              marginBottom: "16px",
-            }}
-          >
-            Talk to Coach about the search
-          </Pressable>
+          <div style={{ marginTop: "20px" }}>
+            <SH>Job Hunt Assistant</SH>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: 1.5 }}>
+              Coach-guided help with the search itself — application strategy, interview prep,
+              salary negotiation, or how long your runway lets you hold out.
+            </div>
+            <Pressable
+              onClick={() => setJobHuntOpen(true)}
+              style={{
+                width: "100%",
+                background: "rgba(0,200,150,0.10)",
+                color: "var(--color-teal)",
+                border: "1px solid rgba(0,200,150,0.32)",
+                borderRadius: "10px",
+                padding: "12px",
+                fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+                fontWeight: 700, cursor: "pointer",
+                minHeight: "44px",
+              }}
+            >
+              Talk to Coach about the search
+            </Pressable>
+          </div>
 
           <ResumeReviewCard config={config} />
 
@@ -325,15 +339,22 @@ export function NewJobSeasonHomePanel({
       )}
 
       {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
-        <CoachNetWorthCard
-          config={config}
-          setConfig={setConfig}
-          saveConfigNow={saveConfigNow}
-          expenses={expenses}
-          currentWeek={currentWeek}
-          today={effectiveToday}
-          includeBenefits={includeBenefits}
-        />
+        // No static header — CoachNetWorthCard renders null most of the time
+        // (rate-limited, only fires on a real signal tier), so a permanent
+        // section title would sit above nothing on most page loads. The
+        // margin still reserves the same section-to-section breathing room
+        // for when it does have something to say.
+        <div style={{ marginTop: "28px" }}>
+          <CoachNetWorthCard
+            config={config}
+            setConfig={setConfig}
+            saveConfigNow={saveConfigNow}
+            expenses={expenses}
+            currentWeek={currentWeek}
+            today={effectiveToday}
+            includeBenefits={includeBenefits}
+          />
+        </div>
       )}
     </div>
   );

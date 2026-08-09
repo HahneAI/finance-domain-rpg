@@ -464,7 +464,21 @@ model D3-safe activation.
 > **IF** a new life-event tile is added, **THEN** decide its route class explicitly
 > (wizard string vs. dedicated modal), give it a `life_event:<name>` history source, and
 > follow F12's synchronous-compute + single-eager-save shape. Check: kill the tab within
-> 800ms of activating; reload; the change survived.
+> 800ms of activating; reload; the change survived. **IF** Step 3's due-date
+> assignment loop changes, **THEN** keep the Food special case (`exp.isFoodPrimary`) —
+> it deliberately skips the generic `DueDatePicker` for a weekday picker instead, since
+> Food recurs weekly, not once a month like every other bill this step handles. Don't
+> generalize the weekday picker into `DueDatePicker`/`lib/expense.js`'s shared
+> `resolveDueDateAnchor` — it's a one-off for this one expense, not a new mode other
+> bills should be able to pick. Loans (`exp.type === "loan"`) **do** appear and stay
+> opt-out-able like every other bill: Step 2's checklist lists them (with a "Loan"
+> badge, checkbox included), Step 3 correctly skips asking them for a due date (they
+> already have `loanMeta.firstPaymentDate`), and `NewJobSeasonBudgetPanel`'s ongoing
+> triage list gives them the identical Active/Paused/Cancelled + auto-reactivate
+> controls as any other tracked expense (§10) — confirmed 2026-08, not a gap. The real
+> gap found in the same pass was one level deeper: `weeklyBurn` silently valued a
+> tracked loan at $0 (`weeklyAmountForBurn`, §8/§10) — the UI/opt-out path was never
+> broken, only the dollar amount feeding the Runway headline once a loan was kept.
 
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -480,6 +494,7 @@ model D3-safe activation.
 | `onComplete` payload shape (F5's spread) | F8, `db.js#saveUserData` column mapping, `docs/account-reference.json` expectations | `db.test.js` + DB Row Viewer drift badge after a wizard run | D3 |
 | Wizard cancel wiring (`App.jsx:3414–3420` — `onCancel` is `undefined` for first-run non-investor) | First-run users must not be able to escape setup with `setupComplete: false` but a live session; TrialExplainerScreen gate (`App.jsx:1466`) sequencing | Manual: fresh account, attempt to dismiss the wizard every way the UI offers | D4 |
 | `NewJobSeasonEntry` step contents (cash-on-hand, `trackDuringNewJobSeason`, due dates) | `computeNewJobSeasonRunway()` inputs (T2/T4 surfaces), F11's reset list | `newJobSeasonFlow.test.jsx` + runway headline sanity on a test account | D1 |
+| `isFoodPrimary`/`EXPENSE_CYCLE_OPTIONS` semantics (`db.js`, `lib/expense.js`) | `NewJobSeasonEntry`'s Food special case (§1) — Step 3 skips the week-of-month/custom-date `DueDatePicker` for the Food expense specifically (`exp.isFoodPrimary`) and instead asks which day it's shopped, resolving to a weekly `dueDateAnchor` (`resolveNextWeekdayOnOrAfter`, `lib/newJobSeasonRunway.js`) and flipping `billingMeta.cycle` to `"weekly"` — a *permanent* change to the persisted expense, not scoped to New Job Season only, so it also affects normal-mode Budget's Upcoming Bills/due-date display going forward | `newJobSeasonFlow.test.jsx`'s "asks Food which day..." case; `newJobSeasonRunway.test.js`'s `resolveNextWeekdayOnOrAfter` cases | D1 |
 
 ### 7.3 Block 3 — Gate matrix (the six paths)
 
@@ -744,6 +759,7 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 | A new mutation prop threaded into Home/NewJobSeasonHome | F20 shadow lists | Prop appears in the shadow block; expired-account test: mutation is a no-op end-to-end | D4 |
 | `netWorthHealthStatus` / threshold | F23 cue **and** F24 amber tier | Both fire on the same account state | D1 |
 | `computeNewJobSeasonRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `newJobSeasonCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24), admin Live State Inspector's New Job Season rows (§15.I, via the same `newJobSeasonDash` memo as Ask Coach — no separate call) | `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
+| `weeklyAmountForBurn` (`newJobSeasonRunway.js`) — loan-aware `weeklyBurn`/`lifestyleWeeklySpend` getter, fixed 2026-08 (a tracked loan previously contributed $0 to both via `getEffectiveAmount`, which doesn't understand `loanMeta` without a synthetic `history` already regenerated elsewhere) | Any other `essentialActive`/`lifestyleActive` reduce added to this file must route through it too, not a bare `getEffectiveAmount(exp, ...)` — a loan silently drops back to $0 the moment a new consumer bypasses it | `newJobSeasonRunway.test.js`'s "loan payments count toward weeklyBurn" block; a tracked loan with no `history` array still moves the Runway/Weekly Burn tiles | D1 |
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `freedomAllowancePerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
 
 ### 8.3 Block 3 — Gate matrix
@@ -1148,7 +1164,7 @@ both quote one scenario) — **[G→L]**
 | `getEffectiveAmountForMonth` / `getPhaseIndex` (Spine A) | F36/F38 consumers + `computeRemainingSpend` + budget health month boundary + Coach grounding | One expense with override + history: all surfaces agree | D1 |
 | `monthlyOverrides`/`history` storage shape | F37's five writers + F42 bulk payload + restore sheet + DB `expenses` column shape | `expense.test.js` round-trip case; DB Row drift badge clean after each save scope | D2/D3 |
 | Expense `category` values (Needs/Lifestyle) | F40 cross-lane rewrite, New Job Season `weeklyBurn` (Needs-only), budget-health splits, `pauseAllFlexible`'s flexible-category filter | Move a bill across lanes; runway + health both shift accordingly | D1 |
-| `loanMeta` fields / `buildLoanHistory` regeneration | F41 zone — payoff cards, New Job Season due-date attach (`loanMeta.firstPaymentDate`, §7 F12), quarter-close behavior | `finance.test.js` loan cases; mid-quarter payoff manual check | D2 |
+| `loanMeta` fields / `buildLoanHistory` regeneration | F41 zone — payoff cards, New Job Season due-date attach (`loanMeta.firstPaymentDate`, §7 F12), quarter-close behavior, New Job Season `weeklyAmountForBurn` (§8/§10, `newJobSeasonRunway.js` — reads `loanMeta` directly via `loanWeeklyAmount`, does not depend on `history` being regenerated first) | `finance.test.js` loan cases; mid-quarter payoff manual check | D2 |
 | `newJobSeasonStatus`/`trackDuringNewJobSeason` flags | F44 readers + NewJobSeasonEntry's review step (§7 F12) + Back to Work reactivation (§7 F11) | `newJobSeasonFlow.test.jsx` | D1/D4 |
 | `canAccessTaxPlan` inputs (Spine C) | F43 here + ProfilePanel's Tax Plan section — identical gating | Tester/admin/plain × opt-in matrix | D4 |
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
@@ -2537,7 +2553,7 @@ migrations that touch expense/loan history).
 | `computeNet` deduction ordering / taxed-fork / rate fallbacks (F98) | F6 preview pair, F29 tiers, F33 `gN`, F15 `resolvePrevWeekNet`, F57 `weekNetWithLogAdjustments` | Week Inspector Pay vs Net Lookup agree; row net = inspector net; `finance.test.js` | D1 |
 | `resolveBaseRateForWeek` filter / `baseRateHistory` shape (F96 stage 3) | F10 chain (`extractBaseRateHistory` in `db.js`), past-week rate resolution | A future-dated rate update shows the *old* rate on weeks before its effective date (Week Inspector); `db.test.js` baseRateHistory cases | D2 |
 | DHL helper conventions (F99) — day-index, weekend boundary, hour resolution | F96 real weeks, F57 `calcEventImpact`/`projectedGross`, §7 F5 DHL overrides | `finance.test.js` DHL long/short; base account unaffected; Week Inspector both rotations | D1 |
-| `getEffectiveAmount`/`getEffectiveAmountForMonth`/`getPhaseIndex` resolution (F102/F38) | F38's four consumers + `computeGoalTimeline` per-week spend + `computeNewJobSeasonRunway` burn + Coach grounding | One expense (override + history): all surfaces + goal ETA + runway agree | D1 |
+| `getEffectiveAmount`/`getEffectiveAmountForMonth`/`getPhaseIndex` resolution (F102/F38) | F38's four consumers + `computeGoalTimeline` per-week spend + `computeNewJobSeasonRunway` burn (non-loan expenses only — loans route through `loanWeeklyAmount` via `weeklyAmountForBurn` instead, §8/§10) + Coach grounding | One expense (override + history): all surfaces + goal ETA + runway agree | D1 |
 | `expense.js` conversion factors / `CHECKS_PER_MONTH` (F101) | F36/F37/F42 Budget, F39 food floor, breakdown rows, Coach per-expense lines | `expense.test.js`; monthly-cycle bill same cost on card/breakdown/Coach | D1 |
 | `computeGoalTimeline` epoch handling / return shape (`remainingAtEnd`) | F18 (Home cards + epoch arg), F21 (`yearEndGoalDraw` fallback), Coach goal lines, T4 timeline bar | Grep `computeGoalTimeline(` for epoch-arg parity; next-year-ETA goal subtracts only this-year slice | D1 |
 | `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — now weekMeta-grounded via `resolveEventWeekMeta`, DW-5 fixed), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |

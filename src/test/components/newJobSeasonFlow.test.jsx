@@ -60,14 +60,14 @@ describe('LifeEventMenu', () => {
   it('shows all three life-event tiles when open', () => {
     render(<LifeEventMenu open onClose={() => {}} onSelect={() => {}} />)
     expect(screen.getByText('Pay Structure Changed')).toBeTruthy()
-    expect(screen.getByText('Lost My Job')).toBeTruthy()
+    expect(screen.getByText('Quit My Job')).toBeTruthy()
     expect(screen.getByText('Quick Rate Update')).toBeTruthy()
   })
 
-  it('routes "Lost My Job" to the new_job_season sentinel', () => {
+  it('routes "Quit My Job" to the new_job_season sentinel', () => {
     const onSelect = vi.fn()
     render(<LifeEventMenu open onClose={() => {}} onSelect={onSelect} />)
-    fireEvent.click(screen.getByText('Lost My Job'))
+    fireEvent.click(screen.getByText('Quit My Job'))
     expect(onSelect).toHaveBeenCalledWith('new_job_season')
   })
 

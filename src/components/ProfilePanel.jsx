@@ -637,7 +637,15 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
             <DetailRow label="Job Start" value={fmt(config.startDate)} last={!isEmployerDHL} />
           )}
           {isEmployerDHL && (
-            <DetailRow label="DHL Team" value={config.dhlTeam ? `Team ${config.dhlTeam}` : "—"} last />
+            <DetailRow
+              label="DHL Team"
+              value={config.dhlTeam
+                ? (config.dhlSite === "WAREHOUSE"
+                    ? (DHL_PRESET.warehouseTeams[config.dhlTeam]?.label ?? config.dhlTeam)
+                    : `Team ${config.dhlTeam}`)
+                : "—"}
+              last
+            />
           )}
         </DetailCard>
       ) : (
@@ -661,7 +669,10 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
               <div>
                 <label style={lSp}>DHL Team</label>
                 <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                  {["A", "B"].map(t => (
+                  {(config.dhlSite === "WAREHOUSE"
+                    ? Object.entries(DHL_PRESET.warehouseTeams).map(([t, meta]) => ({ value: t, label: meta.label }))
+                    : ["A", "B"].map(t => ({ value: t, label: `Team ${t}` }))
+                  ).map(({ value: t, label }) => (
                     <Pressable
                       key={t}
                       onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
@@ -673,13 +684,13 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
                         fontWeight: "bold", fontSize: "14px", cursor: "pointer",
                       }}
                     >
-                      Team {t}
+                      {label}
                     </Pressable>
                   ))}
                 </div>
                 {teamDirty && (
                   <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
-                    Rotation will update — save to apply.
+                    {config.dhlSite === "WAREHOUSE" ? "Schedule will update — save to apply." : "Rotation will update — save to apply."}
                   </div>
                 )}
               </div>
@@ -1065,15 +1076,18 @@ function OvertimeCard({ config, setConfig, onSaveConfig }) {
 
 // ── Weekly hours & schedule override (DHL long/short vs base custom/standard) ──
 function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
-  const scheduleLabel = config.customWeeklyHours != null
-    ? (config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null
-        ? `Long ${config.customWeeklyHoursLong}h / Short ${config.customWeeklyHoursShort}h (custom)`
-        : `${config.customWeeklyHours} hrs / week (custom)`)
-    : config.scheduleIsVariable
-      ? "Variable hours"
-      : config.maxWeeklyHours != null
-        ? `${config.maxWeeklyHours} hrs / week (max ceiling)`
-        : `${config.standardWeeklyHours || 40} hrs / week`;
+  const warehouseTeam = config.dhlSite === "WAREHOUSE" ? DHL_PRESET.warehouseTeams[config.dhlTeam] : null;
+  const scheduleLabel = warehouseTeam
+    ? `${warehouseTeam.days.length * (config.shiftHours || 0)} hrs / week (${warehouseTeam.label}, fixed)`
+    : config.customWeeklyHours != null
+      ? (config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null
+          ? `Long ${config.customWeeklyHoursLong}h / Short ${config.customWeeklyHoursShort}h (custom)`
+          : `${config.customWeeklyHours} hrs / week (custom)`)
+      : config.scheduleIsVariable
+        ? "Variable hours"
+        : config.maxWeeklyHours != null
+          ? `${config.maxWeeklyHours} hrs / week (max ceiling)`
+          : `${config.standardWeeklyHours || 40} hrs / week`;
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -1173,7 +1187,11 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
       ) : (
         <DetailCard>
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            {!config.scheduleIsVariable && (
+            {/* Base-user-only field. Previously this was equivalent to "!isEmployerDHL" in
+                practice since Plant always has scheduleIsVariable:true — Warehouse is the
+                first DHL variant with scheduleIsVariable:false, so isEmployerDHL must be
+                excluded explicitly or a Warehouse user would see this base-user field. */}
+            {!config.scheduleIsVariable && !isEmployerDHL && (
               <div>
                 <label style={lSp}>Max Weekly Hours</label>
                 <input
@@ -1187,7 +1205,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
               </div>
             )}
 
-            {isEmployerDHL && (
+            {isEmployerDHL && config.dhlSite !== "WAREHOUSE" && (
               <div>
                 <SH color="var(--color-teal)" right={null}>Schedule Override</SH>
                 <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>

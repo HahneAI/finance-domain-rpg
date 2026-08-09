@@ -5,6 +5,38 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## DHL Warehouse Site (2026-08-09)
+
+- [x] **`dhlSite` field ("WAREHOUSE" | "PLANT" | null)** — Plant is the fallback for anything but
+  `"WAREHOUSE"`, so every existing DHL account (no `dhlSite` key at all) needs no migration and
+  keeps behaving exactly as before
+- [x] **`DHL_PRESET.warehouseTeams`** — Mon–Thu (`MT`) and Wed–Sat (`WS`) teams, fixed 4 days every
+  single week, no long/short rotation (unlike Plant's alternating Team A/B)
+- [x] **Step 1** — "Which DHL site do you work at?" right after the DHL gate; Warehouse branch asks
+  team (Mon–Thu/Wed–Sat) and a real shift-length question (10 or 12 hours, user-selected, not
+  hardcoded), reuses the existing night/morning-shift question unchanged; custom-rotation question
+  hidden for Warehouse (v1 scope, Plant only)
+- [x] **Step 2** — Short/Long Week pills hidden for Warehouse (nothing to ask beyond start date,
+  `isValid` already correct for both sites unchanged)
+- [x] **Step 4** — "Load DHL Preset" button hidden for Warehouse (its split rates are Plant-specific
+  and would desync `fedRateHigh`/`fedRateLow` for Warehouse's single-rate schedule)
+- [x] **`finance.js`** — `getDhlPlannedDayIndexes()`/`getDhlPlannedPattern()` carry a Warehouse
+  branch and are the single shared source behind `buildYear()`, `projectedGross()`, and
+  `calcEventImpact()` alike, so all three are correct with no per-caller duplication;
+  `buildYear()` forces `isHighWeek: false` for Warehouse weeks (financially inert since
+  `scheduleIsVariable: false` already guarantees `fedRateHigh === fedRateLow`)
+- [x] **`ProfilePanel.jsx` T5 Employment card** — DHL Team editor and `scheduleLabel` made
+  site-aware (same field, second editor, per `docs/drift-app-warden.md` §7); Schedule Override
+  section hidden for Warehouse
+- [x] **`configHistory.js`** — `dhlSite` added to `HISTORY_SENSITIVE_FIELDS`
+- [x] Tests: `finance.test.js` (fixed-schedule fixtures for both teams, weekend-hour math,
+  `isHighWeek`/`requiredOtShifts` always false/0, Plant regression guard), `SetupWizard.test.jsx`
+  (site question placement, Warehouse/Plant branching, full Warehouse wizard run through
+  `onComplete`), `ProfilePanel.test.jsx` (site-aware Employment card)
+- [ ] Not yet done: mirroring this into `SetupWizardAdlib.jsx`'s ad-lib preview (explicit follow-up)
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

@@ -142,6 +142,50 @@ describe('ProfilePanel — Pay Structure section saves never touch expenses/goal
   })
 })
 
+describe('ProfilePanel — Employment card (T5 DHL Team editor) is site-aware', () => {
+  it('Warehouse config shows Mon-Thu/Wed-Sat pills, not Team A/B', () => {
+    const config = { ...DEFAULT_CONFIG, employerPreset: 'DHL', dhlSite: 'WAREHOUSE', dhlTeam: 'MT' }
+    renderMainProfile({ config })
+
+    fireEvent.click(screen.getByText('Job & Pay'))
+    fireEvent.click(screen.getAllByText('Edit')[4]) // Employment is the 5th card
+
+    expect(screen.queryByText('Team A')).toBeNull()
+    expect(screen.queryByText('Team B')).toBeNull()
+    expect(screen.getByText('Mon–Thu')).toBeTruthy()
+    expect(screen.getByText('Wed–Sat')).toBeTruthy()
+  })
+
+  it('Plant config still shows Team A/B pills (regression guard)', () => {
+    const config = { ...DEFAULT_CONFIG, employerPreset: 'DHL', dhlSite: 'PLANT', dhlTeam: 'B' }
+    renderMainProfile({ config })
+
+    fireEvent.click(screen.getByText('Job & Pay'))
+    fireEvent.click(screen.getAllByText('Edit')[4])
+
+    expect(screen.getByText('Team A')).toBeTruthy()
+    expect(screen.getByText('Team B')).toBeTruthy()
+    expect(screen.queryByText('Mon–Thu')).toBeNull()
+  })
+
+  it('saving a new warehouse team writes dhlTeam without touching startingWeekIsLong', () => {
+    const setConfig = vi.fn()
+    const saveConfigNow = vi.fn()
+    const config = { ...DEFAULT_CONFIG, employerPreset: 'DHL', dhlSite: 'WAREHOUSE', dhlTeam: 'MT', startDate: '2026-03-01' }
+    renderMainProfile({ config, setConfig, saveConfigNow })
+
+    fireEvent.click(screen.getByText('Job & Pay'))
+    fireEvent.click(screen.getAllByText('Edit')[4])
+    fireEvent.click(screen.getByText('Wed–Sat'))
+    fireEvent.click(screen.getByText('Save Changes'))
+
+    expect(setConfig).toHaveBeenCalledTimes(1)
+    const newConfig = setConfig.mock.calls[0][0]
+    expect(newConfig.dhlTeam).toBe('WS')
+    expect(saveConfigNow).toHaveBeenCalledWith(newConfig)
+  })
+})
+
 describe('AccountDetail — Change Password visibility by identity', () => {
   it('shows the password form for an email/password account', () => {
     render(

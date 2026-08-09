@@ -20,7 +20,7 @@ export const HISTORY_SENSITIVE_FIELDS = [
   "customWeeklyHoursShort", "scheduleIsVariable", "userPaySchedule",
   "payPeriodEndDay", "biweeklyPayWeekParity", "startDate", "firstActiveIdx",
   // Employer identity — a DHL↔base flip swaps the entire buildYear branch
-  "employerPreset", "startingWeekIsLong", "dhlTeam", "dhlOtOnWeekend",
+  "employerPreset", "dhlSite", "startingWeekIsLong", "dhlTeam", "dhlOtOnWeekend",
   "dhlCustomSchedule", "dhlNightShift",
   // Tax
   "fedRateLow", "fedRateHigh", "stateRateLow", "stateRateHigh",

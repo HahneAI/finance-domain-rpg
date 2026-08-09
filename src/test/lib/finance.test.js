@@ -337,6 +337,101 @@ describe('buildYear', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
+// buildYear — DHL Warehouse (fixed schedule, no rotation)
+// ─────────────────────────────────────────────────────────────
+// Warehouse has no long/short alternation — each team works the SAME 4 fixed
+// days every single week. Mon-Thu (MT) has no weekend day at all; Wed-Sat (WS)
+// includes Fri (half diff) + Sat (full diff), same weekend-differential
+// semantics as Plant's rotation.
+const WAREHOUSE_MT_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: "DHL",
+  dhlSite: "WAREHOUSE",
+  dhlTeam: "MT",
+  shiftHours: 10,
+  scheduleIsVariable: false,
+  k401Rate: 0.06,
+  k401MatchRate: 0.05,
+  k401StartDate: "2026-05-15",
+}
+
+const WAREHOUSE_WS_CONFIG = {
+  ...WAREHOUSE_MT_CONFIG,
+  dhlTeam: "WS",
+  shiftHours: 12,
+}
+
+describe('buildYear — DHL Warehouse (fixed schedule, no rotation)', () => {
+  it('Mon-Thu team works the same 4 fixed days every week, no alternation', () => {
+    const weeks = buildYear(WAREHOUSE_MT_CONFIG)
+    const activeWeeks = weeks.filter(w => w.active)
+    expect(activeWeeks.length).toBeGreaterThan(1)
+    activeWeeks.forEach(w => {
+      expect(w.workedDayNames).toEqual(['Mon', 'Tue', 'Wed', 'Thu'])
+    })
+  })
+
+  it('Wed-Sat team works the same 4 fixed days every week, no alternation', () => {
+    const weeks = buildYear(WAREHOUSE_WS_CONFIG)
+    const activeWeeks = weeks.filter(w => w.active)
+    expect(activeWeeks.length).toBeGreaterThan(1)
+    activeWeeks.forEach(w => {
+      expect(w.workedDayNames).toEqual(['Wed', 'Thu', 'Fri', 'Sat'])
+    })
+  })
+
+  it('Mon-Thu team has 0 weekend hours (no Fri/Sat/Sun in the fixed schedule)', () => {
+    const weeks = buildYear(WAREHOUSE_MT_CONFIG)
+    weeks.filter(w => w.active).forEach(w => expect(w.weekendHours).toBe(0))
+  })
+
+  it('Wed-Sat team earns weekend diff on Fri (half) and Sat (full)', () => {
+    const weeks = buildYear(WAREHOUSE_WS_CONFIG)
+    // Fri half-shift (shiftHours/2) + Sat full shift (shiftHours) = 1.5 × shiftHours = 18h at 12h shifts.
+    weeks.filter(w => w.active).forEach(w => expect(w.weekendHours).toBe(18))
+  })
+
+  it('totalHours = 4 × shiftHours for both the 10h and 12h shift choices', () => {
+    const mtWeeks = buildYear(WAREHOUSE_MT_CONFIG)
+    const wsWeeks = buildYear(WAREHOUSE_WS_CONFIG)
+    mtWeeks.filter(w => w.active).forEach(w => expect(w.totalHours).toBe(40))  // 4 × 10
+    wsWeeks.filter(w => w.active).forEach(w => expect(w.totalHours).toBe(48))  // 4 × 12
+  })
+
+  it('rotation and rotationLabel are the team display label for every week', () => {
+    const mtWeeks = buildYear(WAREHOUSE_MT_CONFIG)
+    const wsWeeks = buildYear(WAREHOUSE_WS_CONFIG)
+    mtWeeks.forEach(w => {
+      expect(w.rotation).toBe('Mon–Thu')
+      expect(w.rotationLabel).toBe('Mon–Thu')
+    })
+    wsWeeks.forEach(w => {
+      expect(w.rotation).toBe('Wed–Sat')
+      expect(w.rotationLabel).toBe('Wed–Sat')
+    })
+  })
+
+  it('isHighWeek is always false (no long/short distinction)', () => {
+    const weeks = buildYear(WAREHOUSE_MT_CONFIG)
+    weeks.forEach(w => expect(w.isHighWeek).toBe(false))
+  })
+
+  it('requiredOtShifts is always 0 (no custom-hours-extension concept for Warehouse)', () => {
+    const weeks = buildYear(WAREHOUSE_MT_CONFIG)
+    weeks.forEach(w => expect(w.requiredOtShifts).toBe(0))
+  })
+
+  it('an existing Plant account (no dhlSite key) is unaffected — still alternates 6-Day/4-Day', () => {
+    // Confirms the "route everything active today to Plant" migration-free default:
+    // DHL_CONFIG never sets dhlSite, so it must behave exactly as before this feature.
+    const weeks = buildYear(DHL_STANDARD_CONFIG)
+    expect(weeks[0].rotation).not.toBe('Mon–Thu')
+    expect(weeks[0].rotation).not.toBe('Wed–Sat')
+    expect(['6-Day', '4-Day']).toContain(weeks[0].rotation)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
 // resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §1.D / §3 slice)
 // ─────────────────────────────────────────────────────────────
 
@@ -924,6 +1019,15 @@ describe('projectedGross', () => {
     const fourDay = weeks.find(w => w.active && w.rotation === '4-Day')
     expect(projectedGross(true, DHL_CONFIG)).toBeCloseTo(sixDay.grossPay)
     expect(projectedGross(false, DHL_CONFIG)).toBeCloseTo(fourDay.grossPay)
+  })
+
+  it('Warehouse: matches the fixed-schedule grossPay of any active week regardless of the isWeek2 argument', () => {
+    // Warehouse has no long/short distinction — getDhlPlannedPattern ignores isLongWeek
+    // entirely for it, so both isWeek2=true and isWeek2=false must return the same value.
+    const weeks = buildYear(WAREHOUSE_MT_CONFIG)
+    const activeWeek = weeks.find(w => w.active)
+    expect(projectedGross(true, WAREHOUSE_MT_CONFIG)).toBeCloseTo(activeWeek.grossPay)
+    expect(projectedGross(false, WAREHOUSE_MT_CONFIG)).toBeCloseTo(activeWeek.grossPay)
   })
 })
 

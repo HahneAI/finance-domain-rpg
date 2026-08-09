@@ -4200,41 +4200,48 @@ shipping or merging.
 *Status: live admin-only preview, awaiting a real feel-test before any further decision. Not
 user-facing — see `.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
 
-**What shipped:** the first two SetupWizard steps (Welcome + Pay Structure) reimagined as one
-continuous mad-libs-style sentence on a single page with inline blanks, instead of stacked form
-fields — an experiment in whether a friendlier, game-like onboarding reduces the setup-wizard
-friction point. Admin-only (`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools
-panel, both mobile/desktop copies). Reuses the exact same config fields/DHL-preset defaults as the
-real steps, then hands off into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for
-Schedule/Deductions/Tax Rates/Wrap Up (or the jobless mini-flow) — a real, click-through
-continuation, not a mockup. **Mock only — nothing is ever saved**, including that continuation
-(`App.jsx`'s `onComplete` skips `handleWizardComplete` whenever the run originated from this
-preview); Cancel also stays available the whole way through so admins can bail at any point with
-zero risk to real account data.
+**What shipped:** the first three SetupWizard steps reimagined as two cascading mad-libs pages
+with inline blanks, instead of stacked form fields — an experiment in whether a friendlier,
+game-like onboarding reduces the setup-wizard friction point. Page 1 merges Welcome + Pay
+Structure into one continuous sentence; page 2 covers Schedule as its own page, same style.
+Admin-only (`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools panel, both
+mobile/desktop copies). Reuses the exact same config fields/DHL-preset defaults as the real steps,
+then hands off into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for
+Deductions/Tax Rates/Wrap Up (or the jobless mini-flow) — a real, click-through continuation, not
+a mockup. **Mock only — nothing is ever saved**, including that continuation (`App.jsx`'s
+`onComplete` skips `handleWizardComplete` whenever the run originated from this preview); Cancel
+also stays available the whole way through so admins can bail at any point with zero risk to real
+account data.
 
-**Since first ship:** three rounds of feel-test feedback fixed. (1) The pilot page now starts
-fully blank (`BLANK_PAY_FIELDS`) instead of pre-filling from the admin's own real config — an admin
-with an already-answered account (DHL preset, existing pay schedule) previously landed already
-Continue-Setup-eligible with zero interaction, silently defeating the pilot's own required-field
-gating. Blank selects also read `(select)` in italics instead of a bare `___`, and the blank option
-stays choosable after answering (not removed from the list) so a pick can be undone back to blank.
+**Since first ship:** four rounds of feel-test feedback fixed. (1) The pilot pages now start fully
+blank (`BLANK_PAY_FIELDS`) instead of pre-filling from the admin's own real config — an admin with
+an already-answered account (DHL preset, existing pay schedule) previously landed already
+proceed-eligible with zero interaction, silently defeating the pilot's own required-field gating.
+Blank selects also read `(select)` in italics instead of a bare `___`, and the blank option stays
+choosable after answering (not removed from the list) so a pick can be undone back to blank.
 (2) Hitting Back on the real wizard's first handed-off step no longer falls through into that
-component's own Step0/Step1 (confusingly showing the stacked-field UI for the same questions this
-pilot just asked ad-lib style) — `SetupWizard`'s new `onBackBeforeStart` prop intercepts Back at
-that exact boundary and `App.jsx` reopens `SetupWizardAdlib` via its `resumeFormData` prop,
-resuming with the in-progress answers intact. (3) Welcome and Pay Structure were merged from two
-separate pages into one continuous page — each clause (employment status, then employer, then
-team/shift/pay-schedule) now cascades onto the same page the instant its prerequisite answer is
-given, instead of requiring a Next click between them. Each newly-revealed clause plays a crisp
-stepped typewriter reveal (`TypedText` + the `adlibType` keyframe in `index.css`) combined with the
-existing `fadeSlideUp` fade+lift, so it both rolls onto the page and types itself out; the blank
-that follows fades in right as its introducing text finishes. The old per-page Next/Back is gone
-entirely — one "Continue Setup" button gated by `isFormValid()`, no internal Back (nothing to page
-back to on a single page; undoing an earlier answer is just re-picking that blank directly).
+component's own Step0/Step1/Step2 (confusingly showing the stacked-field UI for the same
+questions this pilot just asked ad-lib style) — `SetupWizard`'s new `onBackBeforeStart` prop
+intercepts Back at that exact boundary and `App.jsx` reopens `SetupWizardAdlib` via its
+`resumeFormData` prop, resuming with the in-progress answers intact. (3) Welcome and Pay Structure
+were merged from two separate pages into one continuous page — each clause (employment status,
+then employer, then team/shift/pay-schedule) now cascades onto the same page the instant its
+prerequisite answer is given, instead of requiring a Next click between them. Each newly-revealed
+clause plays a crisp stepped typewriter reveal (`TypedText` + the `adlibType` keyframe in
+`index.css`) combined with the existing `fadeSlideUp` fade+lift, so it both rolls onto the page and
+types itself out; the blank that follows fades in right as its introducing text finishes.
+(4) Schedule was added as a second page (`SchedulePage`) in the same cascading/typed style,
+mirroring STEP_DEFS id 2's exact required-field set (`startDate`, then `maxWeeklyHours` →
+`hoursUnderstood` → `payPeriodEndDay` → `biweeklyPayWeekParity` for base users; just `startDate`
+for DHL, with an unrequired Short/Long-Week blank to match the real Step2's own non-gating). The
+handoff target moved from Schedule (id 2) to Deductions (id 3) accordingly. Page-level navigation
+(`StepSlide`, page-level Next/Back) came back for the 2-page structure, but stays entirely separate
+from each page's own internal clause-cascade — Back on page 2 returns to page 1 with its answers
+intact; there is no Back on page 1 (nothing to page back to).
 
 **Open decisions, pending how the pilot feels in practice:**
-- [ ] Expand the ad-lib treatment to the remaining 4 steps (Schedule, Deductions, Tax Rates, Wrap
-      Up), or stop here if the feel doesn't hold up over a longer sentence-based flow
+- [ ] Expand the ad-lib treatment to the remaining 3 steps (Deductions, Tax Rates, Wrap Up), or
+      stop here if the feel doesn't hold up over a longer multi-page sentence flow
 - [ ] Decide the eventual split-test mechanism: stay admin-only-preview forever, promote to a real
       user-facing A/B split (needs signup volume to be meaningful), or just replace the real wizard
       outright if the pilot feels clearly better

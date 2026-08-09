@@ -149,6 +149,7 @@ describe('SetupWizard — validation gates', () => {
     clickNext()
     const nextBtn = screen.getByRole('button', { name: /next/i })
     expect(nextBtn).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /^plant$/i }))
     // Team pick resets userPaySchedule → must also pick pay schedule before Next unlocks
     fireEvent.click(screen.getByRole('button', { name: /team b/i }))
     expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
@@ -265,10 +266,11 @@ describe('SetupWizard — DHL hidden defaults', () => {
   })
 
   it('hides pay-period selector for DHL users on Schedule step', () => {
-    const config = { ...BASE_CONFIG, employerPreset: 'DHL', dhlTeam: 'A', userPaySchedule: 'weekly' }
+    const config = { ...BASE_CONFIG, employerPreset: 'DHL', dhlSite: 'PLANT', dhlTeam: 'A', userPaySchedule: 'weekly' }
     renderWizard({ config })
     clickNext()
     clickNext()
+    expect(screen.getByText('Schedule')).toBeTruthy() // guards against a false-positive pass (Next silently no-op'd)
     expect(screen.queryByText(/pay period closes on/i)).toBeNull()
   })
 
@@ -276,6 +278,7 @@ describe('SetupWizard — DHL hidden defaults', () => {
     const config = {
       ...BASE_CONFIG,
       employerPreset: 'DHL',
+      dhlSite: 'PLANT',
       dhlTeam: 'A',
       userPaySchedule: 'weekly',
       payPeriodEndDay: 2,
@@ -291,6 +294,90 @@ describe('SetupWizard — DHL hidden defaults', () => {
     expect(payload.payPeriodEndDay).toBe(0)
     expect(payload.otThreshold).toBe(40)
     expect(payload.otMultiplier).toBe(1.5)
+  })
+})
+
+describe('SetupWizard — DHL Warehouse site', () => {
+  function goToDHLGate(lifeEvent = null) {
+    const config = { ...BASE_CONFIG, employerPreset: null, dhlSite: null, dhlTeam: null }
+    const { onComplete } = renderWizard({ lifeEvent, config })
+    clickNext() // step 0 -> step 1 (Pay Structure)
+    fireEvent.click(screen.getAllByRole('button', { name: /^yes$/i })[0]) // DHL employer gate -> Yes
+    return { onComplete }
+  }
+
+  it('shows the Site question right after the DHL gate, before any team question', () => {
+    goToDHLGate()
+    expect(screen.getByText(/which dhl site/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^team a$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^team b$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /mon.thu/i })).toBeNull()
+  })
+
+  it('Plant reveals the existing Team A/B question (regression guard)', () => {
+    goToDHLGate()
+    fireEvent.click(screen.getByRole('button', { name: /^plant$/i }))
+    expect(screen.getByRole('button', { name: /^team a$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^team b$/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /mon.thu/i })).toBeNull()
+  })
+
+  it('Warehouse reveals Mon-Thu/Wed-Sat team pills and a shift-length question instead of Team A/B', () => {
+    goToDHLGate()
+    fireEvent.click(screen.getByRole('button', { name: /^warehouse$/i }))
+    expect(screen.queryByRole('button', { name: /^team a$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^team b$/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /mon.thu/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /wed.sat/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^10 hours$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^12 hours$/i })).toBeTruthy()
+  })
+
+  it('Warehouse hides the "standard DHL rotation" custom-schedule question (Plant only, v1 scope)', () => {
+    goToDHLGate()
+    fireEvent.click(screen.getByRole('button', { name: /^warehouse$/i }))
+    expect(screen.queryByText(/do you follow the standard dhl rotation/i)).toBeNull()
+  })
+
+  it('Next stays disabled until Warehouse team, shift length, AND pay schedule are all chosen', () => {
+    goToDHLGate()
+    fireEvent.click(screen.getByRole('button', { name: /^warehouse$/i }))
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /mon.thu/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled() // shift length still unset
+    fireEvent.click(screen.getByRole('button', { name: /^10 hours$/i }))
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
+  })
+
+  it('completes the Warehouse path with the correct payload and hands off past Step 2 unaffected', async () => {
+    const { onComplete } = goToDHLGate('changed_jobs') // changed_jobs shows Wrap Up + Finish button
+    fireEvent.click(screen.getByRole('button', { name: /^warehouse$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mon.thu/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^10 hours$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    clickNext() // Pay Structure -> Schedule
+    expect(screen.queryByText(/which week are you currently on/i)).toBeNull()
+
+    advanceSteps(4) // Schedule -> Deductions -> Tax Rates -> Wrap Up, then Wrap Up's own Finish click
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.dhlSite).toBe('WAREHOUSE')
+    expect(payload.dhlTeam).toBe('MT')
+    expect(payload.shiftHours).toBe(10)
+    expect(payload.scheduleIsVariable).toBe(false)
+    expect(payload.userPaySchedule).toBe('weekly')
+  })
+
+  it('Load DHL MO Preset button (Step 4) is hidden for Warehouse — its rates are Plant-specific', () => {
+    goToDHLGate()
+    fireEvent.click(screen.getByRole('button', { name: /^warehouse$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mon.thu/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^10 hours$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    advanceSteps(3) // Pay Structure -> Schedule -> Deductions -> Tax Rates
+    expect(screen.queryByRole('button', { name: /load dhl mo preset/i })).toBeNull()
   })
 })
 
@@ -353,6 +440,7 @@ describe('SetupWizard — employer switch never touches expenses/goals/logs', ()
 
     clickNext() // step 0 -> step 1 (Pay Structure)
     fireEvent.click(screen.getAllByRole('button', { name: /^yes$/i })[0]) // DHL employer gate -> Yes
+    fireEvent.click(screen.getByRole('button', { name: /^plant$/i }))
     fireEvent.click(screen.getByRole('button', { name: /team b/i }))
     fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem } from "../lib/db.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
+import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -2120,7 +2120,7 @@ class AdminDetailErrorBoundary extends Component {
 // a user sees. Writes go through api/admin-changelog.js (db.js's
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
-function ChangelogAdminDetail({ onBack }) {
+function ChangelogAdminDetail({ onBack, embedded = false }) {
   // "use no memo" opts this component OUT of React Compiler auto-memoization
   // (babel-plugin-react-compiler, wired via @rolldown/plugin-babel in
   // vite.config.js). This works around a confirmed compiler miscompilation:
@@ -2303,7 +2303,7 @@ function ChangelogAdminDetail({ onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Changelog" />
+      {!embedded && <BackBar onBack={onBack} title="Changelog" />}
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         Published entries appear as a "What's New" prompt alongside the update-available
         banner, the next time a user's app detects a new deploy.
@@ -2375,24 +2375,49 @@ const BETA_CONTENT_COPY = {
   },
 };
 
-// Admin authoring surface for beta_content_items (database/migrations/037) —
-// the write side of the Beta Homebase's checklist + suggestions sections.
-// Shares one component across both `kind`s rather than two near-duplicate
-// files — checklist items and suggestion prompts are the exact same
-// title/body/published shape ChangelogAdminDetail already establishes for
-// changelog_entries, just a different table and a different tester-facing
-// destination. Writes go through api/admin-beta-hub.js (db.js's
-// fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem) — never
-// a direct client write, per migration 037's RLS posture.
-function BetaContentAdminDetail({ kind, onBack }) {
+// Base-user counterpart (database/migrations/039_add_base_productivity_hub.sql,
+// ProductivityHub.jsx's "Money Moves" panel) — same shape, different copy
+// and audience ("every user" rather than "the tracked beta cohort").
+const BASE_CONTENT_COPY = {
+  checklist: {
+    title: "Money Moves Checklist",
+    listBlurb: "Published items appear as checkboxes in every user's Money Moves panel — each user's check-off state is personal to them.",
+    bodyLabel: "Description (optional)",
+    bodyPlaceholder: "What should they try?",
+    publishedHint: "Published — visible in Money Moves",
+  },
+  suggestion: {
+    title: "Money Moves Tips",
+    listBlurb: "Published prompts appear as a read-only feed in every user's Money Moves panel.",
+    bodyLabel: "Body (Markdown)",
+    bodyPlaceholder: "Supports **bold**, *italic*, lists, links, and headers.",
+    publishedHint: "Published — visible in Money Moves",
+  },
+};
+
+// Admin authoring surface for beta_content_items (database/migrations/037)
+// AND, since 039_add_base_productivity_hub.sql, base_content_items too — the
+// write side of the Beta Homebase's and Money Moves' checklist + suggestions
+// sections. One component across both `kind`s AND both audiences rather than
+// four near-duplicate blocks — checklist items and suggestion prompts are
+// the exact same title/body/published shape ChangelogAdminDetail already
+// establishes for changelog_entries either way; `fetchItems`/`saveItem`/
+// `deleteItem` are the audience-specific db.js wrappers
+// (fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem for
+// beta, fetchAllBaseContentItems/saveBaseContentItem/deleteBaseContentItem
+// for base) passed in by each call site below. Writes always go through
+// api/admin-beta-hub.js's service-role client — never a direct client
+// write, per migration 037's/039's RLS posture.
+function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem, embedded = false }) {
   // "use no memo" — same confirmed React Compiler miscompilation documented
-  // in detail on ChangelogAdminDetail above (this component was modeled
-  // directly on it): cancelEdit() immediately followed by handleSave()
-  // (closing over draft.body) triggered an identical "Cannot read properties
-  // of null (reading 'body')" crash on the very first render, production
-  // build only. Reproduced and confirmed fixed via the same harness.
+  // in detail on ChangelogAdminDetail above (this component — formerly
+  // BetaContentAdminDetail, generalized to also serve base_content_items —
+  // was modeled directly on it): cancelEdit() immediately followed by
+  // handleSave() (closing over draft.body) triggered an identical "Cannot
+  // read properties of null (reading 'body')" crash on the very first
+  // render, production build only. Reproduced and confirmed fixed via the
+  // same harness.
   "use no memo";
-  const copy = BETA_CONTENT_COPY[kind];
   const [items, setItems] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else item.id
@@ -2404,24 +2429,24 @@ function BetaContentAdminDetail({ kind, onBack }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await fetchAllBetaContentItems(kind);
+      const result = await fetchItems(kind);
       if (cancelled) return;
       if (!result.ok) setLoadError(result.error);
       else { setLoadError(null); setItems(result.items); }
     }
     load();
     return () => { cancelled = true; };
-  }, [kind]);
+  }, [kind, fetchItems]);
 
   function startNew() {
-    setDraft({ id: null, title: "", body: "", published: false });
+    setDraft({ id: null, title: "", body: "", published: false, employerPreset: null });
     setSaveError(null);
     setShowPreview(false);
     setEditingId("new");
   }
 
   function startEdit(item) {
-    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null });
+    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null, employerPreset: item.employer_preset ?? null });
     setSaveError(null);
     setShowPreview(false);
     setEditingId(item.id);
@@ -2436,7 +2461,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
   async function handleSave() {
     if (!draft.title.trim()) { setSaveError("Title is required."); return; }
     setSaveError(null);
-    const result = await saveBetaContentItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published });
+    const result = await saveItem({ id: draft.id, kind, title: draft.title, body: draft.body, published: draft.published, employerPreset: draft.employerPreset });
     if (!result.ok) { setSaveError(result.error); return; }
     setItems(prev => {
       const list = prev ?? [];
@@ -2450,7 +2475,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
 
   async function handleDelete(id) {
     setConfirmDeleteId(null);
-    const result = await deleteBetaContentItem(id);
+    const result = await deleteItem(id);
     if (result.ok) setItems(prev => (prev ?? []).filter(i => i.id !== id));
   }
 
@@ -2504,6 +2529,21 @@ function BetaContentAdminDetail({ kind, onBack }) {
                 {copy.publishedHint}{draft.published ? "" : " (currently a draft)"}
               </span>
             </label>
+            {/* Employer-preset targeting (migration 040) — unconstrained
+                string underneath (draft.employerPreset is "DHL" or null),
+                a checkbox today since DHL is the only preset that exists.
+                Extending to a second preset (e.g. Amazon) is a dropdown
+                swap here, not a data-model change. */}
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={draft.employerPreset === "DHL"}
+                onChange={e => setDraft(d => ({ ...d, employerPreset: e.target.checked ? "DHL" : null }))}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                DHL Employees Only{draft.employerPreset !== "DHL" ? " (unchecked = every eligible user)" : ""}
+              </span>
+            </label>
             {saveError && (
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
@@ -2516,7 +2556,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title={copy.title} />
+      {!embedded && <BackBar onBack={onBack} title={copy.title} />}
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         {copy.listBlurb}
       </div>
@@ -2542,9 +2582,16 @@ function BetaContentAdminDetail({ kind, onBack }) {
               <div style={{ padding: "13px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
                   <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{item.title}</div>
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
-                    {isPublished ? "Published" : "Draft"}
-                  </span>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    {item.employer_preset && (
+                      <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg-raised)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)" }}>
+                        {item.employer_preset} Only
+                      </span>
+                    )}
+                    <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                      {isPublished ? "Published" : "Draft"}
+                    </span>
+                  </div>
                 </div>
                 {confirming ? (
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -2567,12 +2614,112 @@ function BetaContentAdminDetail({ kind, onBack }) {
   );
 }
 
+// One row in the Account tab ("User Communication") fanning out to every
+// user-facing content-authoring flow that used to be five separate rows —
+// Changelog, Beta Checklist, Beta Tips, Money Moves Checklist, Money Moves
+// Tips. A top toggle (VT, same primitive the panels' own view tabs use)
+// switches which method is active; each method is the exact same component
+// used before consolidation (ChangelogAdminDetail/ContentAdminDetail),
+// mounted with `embedded` so it doesn't render its own redundant BackBar —
+// this page owns the single "back to Account" affordance, each method's own
+// edit-view BackBar ("back to this method's list") is untouched. Investor
+// Codes and Beta Scores stay their own separate rows — neither is "content
+// pushed for a user to read," so they don't belong in this consolidation.
+const USER_COMM_METHODS = [
+  { key: "changelog", label: "Changelog" },
+  { key: "beta_checklist", label: "Beta Checklist" },
+  { key: "beta_suggestion", label: "Beta Tips" },
+  { key: "base_checklist", label: "Money Moves Checklist" },
+  { key: "base_suggestion", label: "Money Moves Tips" },
+];
+
+function UserCommunicationAdminDetail({ onBack }) {
+  const [method, setMethod] = useState("changelog");
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="User Communication" />
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px" }}>
+        {USER_COMM_METHODS.map(m => (
+          <VT key={m.key} label={m.label} active={method === m.key} onClick={() => setMethod(m.key)} />
+        ))}
+      </div>
+      {method === "changelog" && <ChangelogAdminDetail embedded />}
+      {method === "beta_checklist" && (
+        <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+      )}
+      {method === "beta_suggestion" && (
+        <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+      )}
+      {method === "base_checklist" && (
+        <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+      )}
+      {method === "base_suggestion" && (
+        <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+      )}
+    </>
+  );
+}
+
 const RUBRIC_ADMIN_CATEGORIES = [
   { key: "usageScore", scoreboardKey: "usage_score", label: "App Usage", max: 50 },
   { key: "feedbackScore", scoreboardKey: "feedback_score", label: "Feedback", max: 25 },
   { key: "callsScore", scoreboardKey: "calls_score", label: "Call Attendance", max: 15 },
   { key: "longevityScore", scoreboardKey: "longevity_score", label: "Longevity", max: 10 },
 ];
+
+// App Usage rubric category (0-50, 30-pt floor) reference board — every field
+// here already comes off api/admin-beta-report.js's per-user aggregate
+// (db.js's fetchBetaScoreboard), scoped to the tester's own 10-week window
+// (docs/TODO.md §30). Purely informational — the admin still hand-enters the
+// score itself below; this just replaces the old one-line text summary with
+// the same tiles the rest of the app uses for at-a-glance metrics.
+function BetaUsageBoard({ row }) {
+  const daysSince = row?.days_since_last_active;
+  const hasActivity = daysSince !== "" && daysSince != null;
+  const lastActiveStatus = !hasActivity ? "red" : daysSince <= 3 ? "green" : daysSince <= 13 ? "teal" : "red";
+  const lastActiveSub = !hasActivity ? "no activity yet" : daysSince === 0 ? "today" : daysSince === 1 ? "1 day ago" : `${daysSince} days ago`;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      <Card label="Logins" rawVal={row?.login_count ?? 0} status="teal" entranceIndex={0} />
+      <Card label="Active Days" rawVal={row?.active_days ?? 0} sub="distinct days" status="teal" entranceIndex={1} />
+      <Card label="Goals Logged" rawVal={row?.goal_created ?? 0} sub={`${row?.goal_updated ?? 0} updates`} status="teal" entranceIndex={2} />
+      <Card label="Expenses Logged" rawVal={row?.expense_created ?? 0} sub={`${row?.expense_updated ?? 0} updates`} status="teal" entranceIndex={3} />
+      <Card label="Checklist" val={`${row?.checklist_completed_count ?? 0}/${row?.checklist_total_count ?? 0}`} sub="items completed" status="teal" entranceIndex={4} />
+      <Card label="Last Active" val={hasActivity ? String(daysSince) : "—"} sub={lastActiveSub} status={lastActiveStatus} entranceIndex={5} />
+    </div>
+  );
+}
+
+// Feedback rubric category (0-25) reference — the tester's own submitted
+// text (api/admin-beta-report.js's ?format=json `feedback` array, most-
+// recent first, scoped to their own 10-week window same as the usage
+// board), inline instead of only a count — so "specificity" is judgable
+// right here instead of cross-referencing the separate ?format=feedback CSV.
+function BetaFeedbackList({ feedback }) {
+  if (!feedback || feedback.length === 0) {
+    return (
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+        No feedback submitted yet.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {feedback.map((entry, i) => (
+        <div key={`${entry.created_at}-${i}`} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "1px", color: "var(--color-text-secondary)", marginBottom: "4px", fontFamily: "var(--font-sans)" }}>
+            {new Date(entry.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </div>
+          <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+            {entry.note || "—"}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Admin scoresheet for the beta rubric (database/migrations/037's
 // beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
@@ -2652,10 +2799,13 @@ function BetaScoresAdminDetail({ onBack }) {
         <BackBar onBack={cancelEdit} title={row?.display_name || row?.email || "Score"} />
         <DetailCard>
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              Reference: {row?.login_count ?? 0} logins · {row?.active_days ?? 0} active days ·{" "}
-              {row?.feedback_count ?? 0} feedback submissions · checklist {row?.checklist_completed_count ?? 0}/{row?.checklist_total_count ?? 0} ·{" "}
-              week {row?.beta_week_number || "—"} of 10.
+            <div>
+              <SH color="var(--color-teal)" right={`week ${row?.beta_week_number || "—"} of 10`}>App Usage</SH>
+              <BetaUsageBoard row={row} />
+            </div>
+            <div>
+              <SH color="var(--color-teal)" right={`${row?.feedback_count ?? 0} submissions`}>Feedback</SH>
+              <BetaFeedbackList feedback={row?.feedback} />
             </div>
             {RUBRIC_ADMIN_CATEGORIES.map(cat => (
               <div key={cat.key}>
@@ -2778,24 +2928,10 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "investorcodes") {
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
   }
-  if (activeSection === "changelog") {
+  if (activeSection === "usercomm") {
     return (
-      <AdminDetailErrorBoundary title="Changelog" onBack={() => setActiveSection(null)}>
-        <ChangelogAdminDetail onBack={() => setActiveSection(null)} />
-      </AdminDetailErrorBoundary>
-    );
-  }
-  if (activeSection === "betachecklistadmin") {
-    return (
-      <AdminDetailErrorBoundary title="Feature Checklist" onBack={() => setActiveSection(null)}>
-        <BetaContentAdminDetail kind="checklist" onBack={() => setActiveSection(null)} />
-      </AdminDetailErrorBoundary>
-    );
-  }
-  if (activeSection === "betasuggestionadmin") {
-    return (
-      <AdminDetailErrorBoundary title="Suggestions" onBack={() => setActiveSection(null)}>
-        <BetaContentAdminDetail kind="suggestion" onBack={() => setActiveSection(null)} />
+      <AdminDetailErrorBoundary title="User Communication" onBack={() => setActiveSection(null)}>
+        <UserCommunicationAdminDetail onBack={() => setActiveSection(null)} />
       </AdminDetailErrorBoundary>
     );
   }
@@ -2893,23 +3029,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         )}
         {isAdmin && (
           <ListRow
-            label="Changelog"
-            summary="Author the What's New entries paired with the update banner"
-            onPress={() => setActiveSection("changelog")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Beta Checklist"
-            summary="Author the Feature Checklist testers check off in their Homebase"
-            onPress={() => setActiveSection("betachecklistadmin")}
-          />
-        )}
-        {isAdmin && (
-          <ListRow
-            label="Beta Suggestions"
-            summary="Author the suggestion prompts shown in the tester Homebase"
-            onPress={() => setActiveSection("betasuggestionadmin")}
+            label="User Communication"
+            summary="Changelog, Beta Checklist/Tips, Money Moves Checklist/Tips — one page, switch method with the toggle"
+            onPress={() => setActiveSection("usercomm")}
           />
         )}
         {isAdmin && (

@@ -24,7 +24,10 @@ import { createClient } from "@supabase/supabase-js";
 // GET ?format=json returns the same per-user summary rows as JSON instead of
 // CSV — the Beta Homebase admin scoresheet (db.js's fetchBetaScoreboard)
 // reads this to pre-fill each tester's current usage stats, checklist
-// completion, and existing rubric score before the admin edits it.
+// completion, existing rubric score, and (unlike the CSV, whose fixed header
+// list ignores the extra key) each tester's own feedback text — same
+// event rows as ?format=feedback, just grouped per-user and inline instead
+// of a separate cross-tester export — before the admin edits their score.
 //
 // docs/TODO.md §30 — each user's aggregate is scoped to THEIR OWN 10-week
 // window (beta_started_at .. beta_started_at + 10 weeks, migration
@@ -174,6 +177,7 @@ export default async function handler(req, res) {
     const activeDays = new Set();
     let firstAt = null;
     let lastAt = null;
+    const userFeedback = [];
     for (const e of userEvents) {
       counts[e.event_type] = (counts[e.event_type] ?? 0) + 1;
       activeDays.add(e.created_at.slice(0, 10));
@@ -187,8 +191,13 @@ export default async function handler(req, res) {
           created_at: e.created_at,
           note: e.note ?? "",
         });
+        userFeedback.push({ created_at: e.created_at, note: e.note ?? "" });
       }
     }
+    // Most-recent-first — the admin scoresheet reads this to show a tester's
+    // actual feedback text inline (json format only; CSV's fixed header list
+    // below never references this key, so it's harmlessly ignored there).
+    userFeedback.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
     const betaWeekNumber = windowStart
       ? Math.min(BETA_PROGRAM_WEEKS, Math.max(1, Math.ceil((Date.now() - new Date(windowStart).getTime()) / (7 * 24 * 60 * 60 * 1000))))
@@ -222,6 +231,7 @@ export default async function handler(req, res) {
       days_since_last_active: daysSinceLastActive,
       checklist_completed_count: checklistCompletedByUser[u.user_id] ?? 0,
       checklist_total_count: checklistTotalCount ?? 0,
+      feedback: userFeedback,
       usage_score: score?.usage_score ?? "",
       feedback_score: score?.feedback_score ?? "",
       calls_score: score?.calls_score ?? "",

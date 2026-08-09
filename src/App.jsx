@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { diffSensitiveFields } from "./lib/configHistory.js";
@@ -24,6 +24,7 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel, BetaFeedbackDetail } from "./components/ProfilePanel.jsx";
 import { BetaHomebase } from "./components/BetaHomebase.jsx";
+import { ProductivityHub } from "./components/ProductivityHub.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
@@ -391,6 +392,123 @@ export default function App() {
   // bell, tracked beta testers only. BetaHomebase.jsx owns its own portal +
   // fold motion, so this is just an open/closed flag.
   const [betaHomebaseOpen, setBetaHomebaseOpen] = useState(false);
+  // Beta Homebase notification badge. Green = count of unchecked feature
+  // checklist items only (an "outstanding actions" count, same idea as the
+  // weekly check-in bell's unconfirmedCount — no read/unread state needed
+  // there, since every unconfirmed week IS the notification). Red = that
+  // same unchecked count PLUS anything new since the tester last opened the
+  // panel — a new changelog entry, a new suggestion prompt, or an updated
+  // score — styled identically to the check-in bell's red badge.
+  // "New since last opened" needs an actual read marker (unlike the
+  // checklist, nothing else here has its own per-tester "done" state), so
+  // it's tracked client-side only via localStorage — the same
+  // lastSeenChangelogId pattern the sitewide changelog bell already uses
+  // below (closeChangelogModal). No DB round trip, no realtime subscription
+  // — this app has neither anywhere else, so the badge is (re)computed on
+  // login and whenever the panel opens/closes, not polled.
+  const [betaHomebaseBadge, setBetaHomebaseBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+  const isTrackedTester = isTrackedBetaTester({ isTester, betaCodeUsed });
+
+  const loadBetaHomebaseBadge = useCallback(async () => {
+    if (!isTrackedTester || !authedUser?.id) return;
+    const [items, completions, suggestions, myScore, changelog] = await Promise.all([
+      fetchBetaChecklistItems(),
+      fetchMyChecklistCompletions(),
+      fetchBetaSuggestions(),
+      fetchMyBetaScore(),
+      fetchPublishedChangelogEntries(5),
+    ]);
+    const completedIds = new Set(completions);
+    const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+
+    const lastViewedKey = `betaHomebaseLastViewedAt:${authedUser.id}`;
+    let lastViewedAt = null;
+    try { lastViewedAt = window.localStorage.getItem(lastViewedKey); } catch { /* private mode etc. */ }
+    if (!lastViewedAt) {
+      // First time this device has ever computed the badge for this account —
+      // stamp "now" as the baseline instead of flagging every pre-existing
+      // changelog entry/suggestion/score as "new," which would otherwise dump
+      // a false red badge on the whole cohort the moment this feature ships.
+      lastViewedAt = new Date().toISOString();
+      try { window.localStorage.setItem(lastViewedKey, lastViewedAt); } catch { /* ignore */ }
+    }
+
+    const newChangelogCount = changelog.filter(e => e.published_at && e.published_at > lastViewedAt).length;
+    const newSuggestionCount = suggestions.filter(s => s.published_at && s.published_at > lastViewedAt).length;
+    const scoreUpdated = myScore?.updated_at && myScore.updated_at > lastViewedAt ? 1 : 0;
+
+    setBetaHomebaseBadge({ uncheckedCount, newCount: newChangelogCount + newSuggestionCount + scoreUpdated });
+  }, [isTrackedTester, authedUser?.id]);
+
+  useEffect(() => { loadBetaHomebaseBadge(); }, [loadBetaHomebaseBadge]);
+
+  function openBetaHomebase() {
+    // Mark "seen" the instant they open it (not on close) — everything
+    // currently new is about to be visible in the panel itself, so the red
+    // state should clear right away rather than lag behind the click.
+    if (authedUser?.id) {
+      try { window.localStorage.setItem(`betaHomebaseLastViewedAt:${authedUser.id}`, new Date().toISOString()); } catch { /* ignore */ }
+    }
+    setBetaHomebaseBadge(b => ({ ...b, newCount: 0 }));
+    setBetaHomebaseOpen(true);
+  }
+
+  function closeBetaHomebase() {
+    setBetaHomebaseOpen(false);
+    // Re-sync uncheckedCount — the tester may have toggled checklist items
+    // while the panel was open, and that state lives inside BetaHomebase.jsx,
+    // not here.
+    loadBetaHomebaseBadge();
+  }
+
+  // "Money Moves" — the base-user counterpart (docs: 039_add_base_productivity_hub.sql),
+  // mutually exclusive with the Beta Homebase icon above (a tracked beta
+  // tester sees only their beta-specific homebase). Same green/unchecked-
+  // count-only vs. red/plus-new-updates badge logic, own localStorage key
+  // namespace, no scoring signal to check (base users have none).
+  const [productivityHubOpen, setProductivityHubOpen] = useState(false);
+  const [productivityHubBadge, setProductivityHubBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+
+  const loadProductivityHubBadge = useCallback(async () => {
+    if (isTrackedTester || !authedUser?.id) return;
+    const [items, completions, suggestions, changelog] = await Promise.all([
+      fetchBaseChecklistItems(),
+      fetchMyBaseChecklistCompletions(),
+      fetchBaseSuggestions(),
+      fetchPublishedChangelogEntries(5),
+    ]);
+    const completedIds = new Set(completions);
+    const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+
+    const lastViewedKey = `productivityHubLastViewedAt:${authedUser.id}`;
+    let lastViewedAt = null;
+    try { lastViewedAt = window.localStorage.getItem(lastViewedKey); } catch { /* private mode etc. */ }
+    if (!lastViewedAt) {
+      lastViewedAt = new Date().toISOString();
+      try { window.localStorage.setItem(lastViewedKey, lastViewedAt); } catch { /* ignore */ }
+    }
+
+    const newChangelogCount = changelog.filter(e => e.published_at && e.published_at > lastViewedAt).length;
+    const newSuggestionCount = suggestions.filter(s => s.published_at && s.published_at > lastViewedAt).length;
+
+    setProductivityHubBadge({ uncheckedCount, newCount: newChangelogCount + newSuggestionCount });
+  }, [isTrackedTester, authedUser?.id]);
+
+  useEffect(() => { loadProductivityHubBadge(); }, [loadProductivityHubBadge]);
+
+  function openProductivityHub() {
+    if (authedUser?.id) {
+      try { window.localStorage.setItem(`productivityHubLastViewedAt:${authedUser.id}`, new Date().toISOString()); } catch { /* ignore */ }
+    }
+    setProductivityHubBadge(b => ({ ...b, newCount: 0 }));
+    setProductivityHubOpen(true);
+  }
+
+  function closeProductivityHub() {
+    setProductivityHubOpen(false);
+    loadProductivityHubBadge();
+  }
+
   // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
   // { status: "success" | "error", message } | null. Shown once via
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
@@ -2540,30 +2658,114 @@ export default function App() {
           {/* ── Beta Tester Homebase — tracked beta testers only, sits directly
               next to the notification bell (docs/TODO.md §12). isTrackedBetaTester,
               not bare isTester — friends/family testers never see this, same
-              distinction every other tracked-cohort-only surface makes. ── */}
-          {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
-            <Pressable
-              onClick={() => setBetaHomebaseOpen(true)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--color-text-primary)",
-                cursor: "pointer",
-                width: "44px",
-                height: "44px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-              aria-label="Beta Tester Homebase"
-            >
-              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-            </Pressable>
-          )}
+              distinction every other tracked-cohort-only surface makes.
+              Badge: green digit = unchecked checklist items only. Red digit =
+              unchecked checklist items + new changelog/suggestion/score
+              updates since last opened — same red badge style as the
+              check-in bell just to its right. ── */}
+          {isTrackedTester && (() => {
+            const { uncheckedCount, newCount } = betaHomebaseBadge;
+            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
+            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+            return (
+              <Pressable
+                onClick={openBetaHomebase}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: newCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
+                  cursor: "pointer",
+                  width: "44px",
+                  height: "44px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+                aria-label={badgeCount > 0 ? `Beta Tester Homebase — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Beta Tester Homebase"}
+              >
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                {badgeCount > 0 && (
+                  <span style={{
+                    position: "absolute",
+                    top: "6px",
+                    right: "6px",
+                    background: badgeColor,
+                    color: "var(--color-bg-base)",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    fontSize: "9px",
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {badgeCount}
+                  </span>
+                )}
+              </Pressable>
+            );
+          })()}
+
+          {/* ── Money Moves (Productivity Hub) — every signed-in user who ISN'T
+              a tracked beta tester (docs: 039_add_base_productivity_hub.sql).
+              Mutually exclusive with the Beta Tester Homebase icon above —
+              never both, so a user only ever sees the one that applies to
+              them. Same green/red badge convention, distinct icon (lightning
+              bolt, not the beta checkmark) so the two are never mistaken for
+              each other at a glance. ── */}
+          {!isTrackedTester && (() => {
+            const { uncheckedCount, newCount } = productivityHubBadge;
+            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
+            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+            return (
+              <Pressable
+                onClick={openProductivityHub}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: newCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
+                  cursor: "pointer",
+                  width: "44px",
+                  height: "44px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+                aria-label={badgeCount > 0 ? `Money Moves — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Money Moves"}
+              >
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                {badgeCount > 0 && (
+                  <span style={{
+                    position: "absolute",
+                    top: "6px",
+                    right: "6px",
+                    background: badgeColor,
+                    color: "var(--color-bg-base)",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    fontSize: "9px",
+                    fontWeight: "bold",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    {badgeCount}
+                  </span>
+                )}
+              </Pressable>
+            );
+          })()}
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
           <Pressable
@@ -3732,9 +3934,15 @@ export default function App() {
       {/* ── Beta Tester Homebase (docs/TODO.md §12) — owns its own portal + fold motion. ── */}
       <BetaHomebase
         open={betaHomebaseOpen}
-        onClose={() => setBetaHomebaseOpen(false)}
+        onClose={closeBetaHomebase}
         isTester={isTester}
         betaCodeUsed={betaCodeUsed}
+      />
+      {/* ── Money Moves / Productivity Hub (039_add_base_productivity_hub.sql) —
+          owns its own portal + fold motion, same shell as BetaHomebase. ── */}
+      <ProductivityHub
+        open={productivityHubOpen}
+        onClose={closeProductivityHub}
       />
       {/* ── New Job Season entry (TODO §1.C1) ── */}
       <NewJobSeasonEntry

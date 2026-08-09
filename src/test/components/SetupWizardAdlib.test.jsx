@@ -22,6 +22,10 @@ function dateField() {
   return screen.getByLabelText('Start date')
 }
 
+function k401DateField() {
+  return screen.getByLabelText('401k enrollment date')
+}
+
 // The single primary action button — its label flips between "Next" (more pages
 // ahead) and "Continue Setup →" (the last page), but there is always exactly one.
 function primaryBtn() {
@@ -67,6 +71,23 @@ function advanceToSchedule_dhlWarehouse(team = 'MT', shiftHours = '10') {
   fireEvent.click(primaryBtn())
 }
 
+// Fills the base-user Schedule page completely and advances to Deductions.
+function advanceToDeductions_baseUser() {
+  advanceToSchedule_baseUser()
+  fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+  fireEvent.change(numbers()[0], { target: { value: '40' } })
+  fireEvent.change(selects()[0], { target: { value: 'do' } })
+  fireEvent.change(selects()[1], { target: { value: '1' } }) // Monday
+  fireEvent.click(primaryBtn())
+}
+
+// Fills the DHL Plant Schedule page (just a start date) and advances to Deductions.
+function advanceToDeductions_dhlPlant() {
+  advanceToSchedule_dhlPlant()
+  fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+  fireEvent.click(primaryBtn())
+}
+
 describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', () => {
   it('disables the primary action until the employment-status blank is filled', () => {
     renderAdlib()
@@ -79,11 +100,11 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     expect(screen.getByText(/I work for/i)).toBeTruthy()
     // Still one page: the employment-status select is still present, not swapped out.
     expect(selects()[0].value).toBe('employed')
-    // A second page (Schedule) is still ahead for an employed user.
+    // More pages (Schedule, Deductions) are still ahead for an employed user.
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
   })
 
-  it('hands off directly to the jobless flow when "unemployed" is chosen, skipping Schedule entirely', () => {
+  it('hands off directly to the jobless flow when "unemployed" is chosen, skipping Schedule/Deductions entirely', () => {
     const { onHandoff } = renderAdlib()
     fireEvent.change(selects()[0], { target: { value: 'unemployed' } })
     expect(screen.queryByText(/I work for/i)).toBeNull()
@@ -183,11 +204,11 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
 })
 
 describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
-  it('lands on the Schedule page after completing a base-user Intake page', () => {
+  it('lands on the Schedule page (2 of 3) after completing a base-user Intake page', () => {
     renderAdlib()
     advanceToSchedule_baseUser()
     expect(screen.getByText(/I started on/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 2 of 2/i)).toBeTruthy()
+    expect(screen.getByText(/Ad-Lib Preview · 2 of 3/i)).toBeTruthy()
   })
 
   it('shows a Back button on the Schedule page that returns to Intake', () => {
@@ -196,7 +217,7 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
     expect(screen.getByRole('button', { name: /^back$/i })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
     expect(screen.getByText(/I work for/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 1 of 2/i)).toBeTruthy()
+    expect(screen.getByText(/Ad-Lib Preview · 1 of 3/i)).toBeTruthy()
   })
 })
 
@@ -240,27 +261,22 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     expect(primaryBtn()).toBeDisabled()
   })
 
-  it('completes the weekly path and hands off to Deductions (step id 3)', () => {
-    const { onHandoff } = renderAdlib()
+  it('advances to the Deductions page (not a handoff) once the Schedule page is complete', () => {
+    renderAdlib()
     advanceToSchedule_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(numbers()[0], { target: { value: '40' } })
     fireEvent.change(selects()[0], { target: { value: 'do' } })
     fireEvent.change(selects()[1], { target: { value: '1' } }) // Monday
     expect(primaryBtn()).not.toBeDisabled()
-    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(primaryBtn()).toHaveTextContent(/^next$/i)
     fireEvent.click(primaryBtn())
-    expect(onHandoff).toHaveBeenCalledTimes(1)
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.startDate).toBe('2026-03-01')
-    expect(mergedFormData.maxWeeklyHours).toBe(40)
-    expect(mergedFormData.hoursUnderstood).toBe(true)
-    expect(mergedFormData.payPeriodEndDay).toBe(1)
-    expect(initialStepId).toBe(3)
+    expect(screen.getByText(/Ad-Lib Preview · 3 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
   })
 
   it('requires the payday-parity answer for a biweekly/salary pay schedule before proceeding', () => {
-    const { onHandoff } = renderAdlib()
+    renderAdlib()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
     fireEvent.change(selects()[2], { target: { value: 'biweekly' } })
@@ -277,9 +293,6 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
 
     fireEvent.change(selects()[2], { target: { value: 'this' } })
     expect(primaryBtn()).not.toBeDisabled()
-    fireEvent.click(primaryBtn())
-    const [mergedFormData] = onHandoff.mock.calls[0]
-    expect(mergedFormData.biweeklyPayWeekParity).not.toBeNull()
   })
 })
 
@@ -289,21 +302,8 @@ describe('SetupWizardAdlib — Schedule page (DHL Plant)', () => {
     advanceToSchedule_dhlPlant()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     expect(screen.getByText(/Right now I'm on my/i)).toBeTruthy()
-    // Not required by the real Step2 gate — Continue Setup is already enabled.
+    // Not required by the real Step2 gate — Next is already enabled.
     expect(primaryBtn()).not.toBeDisabled()
-  })
-
-  it('completes the Plant path and hands off to Deductions (step id 3) with DHL fields intact', () => {
-    const { onHandoff } = renderAdlib()
-    advanceToSchedule_dhlPlant()
-    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
-    fireEvent.click(primaryBtn())
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.employerPreset).toBe('DHL')
-    expect(mergedFormData.dhlSite).toBe('PLANT')
-    expect(mergedFormData.dhlTeam).toBe('B')
-    expect(mergedFormData.startDate).toBe('2026-03-01')
-    expect(initialStepId).toBe(3)
   })
 })
 
@@ -314,29 +314,123 @@ describe('SetupWizardAdlib — Schedule page (DHL Warehouse)', () => {
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     expect(screen.queryByText(/Right now I'm on my/i)).toBeNull()
     expect(screen.queryByText(/which week are you currently on/i)).toBeNull()
-    // Not required by the real Step2 gate — Continue Setup is already enabled
-    // as soon as the start date is filled.
+    expect(primaryBtn()).not.toBeDisabled()
+  })
+})
+
+describe('SetupWizardAdlib — Deductions page (base user)', () => {
+  it('is the last page (3 of 3) and Continue Setup starts disabled — attendance is required', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    expect(screen.getByText(/Ad-Lib Preview · 3 of 3/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(primaryBtn()).toBeDisabled()
+  })
+
+  it('reveals the attendance question once the benefits gate is answered either way', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    expect(screen.queryByText(/formal points or hours system/i)).toBeNull()
+    fireEvent.change(selects()[0], { target: { value: 'no' } })
+    expect(screen.getByText(/formal points or hours system/i)).toBeTruthy()
+  })
+
+  it('reveals benefit chips once answered "have", and a $ blank once a weekly benefit is toggled on', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'yes' } })
+    expect(screen.getByText(/I'm enrolled in/i)).toBeTruthy()
+    const healthChip = screen.getByRole('button', { name: /health \/ medical/i })
+    fireEvent.click(healthChip)
+    expect(screen.getByText(/Health \/ Medical costs \$/i)).toBeTruthy()
+    expect(numbers().length).toBeGreaterThan(0)
+  })
+
+  it('gates Continue Setup on the selected weekly benefit amount being filled', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: /health \/ medical/i }))
+    fireEvent.change(selects()[1], { target: { value: 'no' } }) // attendance answered
+    expect(primaryBtn()).toBeDisabled() // health $ amount still blank
+
+    fireEvent.change(numbers()[0], { target: { value: '18.50' } })
     expect(primaryBtn()).not.toBeDisabled()
   })
 
-  it('completes the Warehouse path and hands off to Deductions (step id 3) with the Warehouse fields intact', () => {
+  it('deselecting a benefit removes its clause and clears the gate on it', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'yes' } })
+    const healthChip = screen.getByRole('button', { name: /health \/ medical/i })
+    fireEvent.click(healthChip)
+    expect(screen.getByText(/Health \/ Medical costs \$/i)).toBeTruthy()
+    fireEvent.click(healthChip)
+    expect(screen.queryByText(/Health \/ Medical costs \$/i)).toBeNull()
+  })
+
+  it('401k reveals a contribution-rate and enrollment-date blank, both required', () => {
+    renderAdlib()
+    advanceToDeductions_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: /401k \/ retirement/i }))
+    expect(screen.getByText(/I put/i)).toBeTruthy()
+    fireEvent.change(selects()[1], { target: { value: 'no' } }) // attendance answered
+    expect(primaryBtn()).toBeDisabled()
+
+    fireEvent.change(numbers()[0], { target: { value: '6' } })
+    expect(primaryBtn()).toBeDisabled() // still needs the enrollment date
+    fireEvent.change(k401DateField(), { target: { value: '2026-05-01' } })
+    expect(primaryBtn()).not.toBeDisabled()
+  })
+
+  it('completes with benefits + attendance and hands off to Tax Rates (step id 4)', () => {
     const { onHandoff } = renderAdlib()
-    advanceToSchedule_dhlWarehouse('WS', '12')
-    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    advanceToDeductions_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: /health \/ medical/i }))
+    fireEvent.change(numbers()[0], { target: { value: '18.50' } })
+    fireEvent.change(selects()[1], { target: { value: 'yes' } }) // attendance
+    expect(primaryBtn()).not.toBeDisabled()
+    fireEvent.click(primaryBtn())
+    expect(onHandoff).toHaveBeenCalledTimes(1)
+    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
+    expect(mergedFormData.selectedBenefits).toEqual(['health'])
+    expect(mergedFormData.healthPremium).toBe(18.50)
+    expect(mergedFormData.attendanceBucketEnabled).toBe(true)
+    expect(initialStepId).toBe(4)
+  })
+})
+
+describe('SetupWizardAdlib — Deductions page (DHL)', () => {
+  it('is already valid with zero interaction — no attendance question, no required benefits', () => {
+    const { onHandoff } = renderAdlib()
+    advanceToDeductions_dhlPlant()
+    expect(screen.queryByText(/formal points or hours system/i)).toBeNull()
+    expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
     const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
     expect(mergedFormData.employerPreset).toBe('DHL')
-    expect(mergedFormData.dhlSite).toBe('WAREHOUSE')
-    expect(mergedFormData.dhlTeam).toBe('WS')
-    expect(mergedFormData.shiftHours).toBe(12)
-    expect(mergedFormData.scheduleIsVariable).toBe(false)
-    expect(mergedFormData.startDate).toBe('2026-03-01')
-    expect(initialStepId).toBe(3)
+    expect(mergedFormData.dhlSite).toBe('PLANT')
+    expect(initialStepId).toBe(4)
+  })
+
+  it('does not carry over selectedBenefits/attendanceBucketEnabled from an already-answered real config', () => {
+    const answeredConfig = {
+      ...DEFAULT_CONFIG,
+      selectedBenefits: ['health', 'k401'],
+      healthPremium: 40,
+      attendanceBucketEnabled: false,
+    }
+    renderAdlib(answeredConfig)
+    advanceToDeductions_dhlPlant()
+    expect(screen.queryByText(/I'm enrolled in/i)).toBeNull()
+    expect(selects()[0].value).toBe('')
   })
 })
 
 describe('SetupWizardAdlib — resumeFormData', () => {
-  it('reopens on the Schedule page (page 2) pre-filled with the in-progress answers, for an employed resume', () => {
+  it('reopens on the Deductions page (page 3, the last page) pre-filled with the in-progress answers, for an employed resume', () => {
     const resumeFormData = {
       ...DEFAULT_CONFIG,
       startedUnemployed: false,
@@ -348,9 +442,10 @@ describe('SetupWizardAdlib — resumeFormData', () => {
       maxWeeklyHours: 40,
       hoursUnderstood: true,
       payPeriodEndDay: 0,
+      attendanceBucketEnabled: true,
     }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
-    expect(screen.getByText(/I started on/i)).toBeTruthy()
+    expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/continue setup/i)
   })

@@ -42,6 +42,33 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## Ad-Lib Wizard preview — page-by-page conversion (2026-08-09)
+
+- [x] **Page 1 (`IntakePage`)** — merged real Welcome + Pay Structure (Step0/Step1) into one
+  cascading mad-libs page; blank-by-default (`BLANK_PAY_FIELDS`), real mandatory-field gating
+  (`isIntakeValid()` mirrors `STEP_DEFS id 0/1`), typed-reveal cascading clauses
+- [x] **Page 2 (`SchedulePage`)** — real Schedule (Step2) as its own ad-lib page, same style;
+  `isScheduleValid()` mirrors `STEP_DEFS id 2`
+- [x] **Page 3 (`DeductionsPage`)** — real Deductions (Step3) as its own ad-lib page;
+  `isDeductionsValid()` mirrors `STEP_DEFS id 3` exactly (base users require the attendance
+  question, DHL users need nothing, any selected benefit needs its amount/rate+date filled in);
+  new `InlineChip` toggle component for the one multi-select field (9 `BENEFIT_OPTIONS`, since a
+  native `<select>` blank doesn't fit an independently-toggleable set inside the sentence-flow
+  metaphor); k401 shows a %-based rate blank (stored as a decimal, displayed ×100) plus an
+  enrollment-date blank reusing `InlineDate` with a new `label` prop; deselecting a chip zeroes its
+  field(s) the same way real `Step3` does; `benefitsStartDate`, the dynamic `otherDeductions` list,
+  and attendance sub-fields scoped out (v1, none of them gate real Step3's `isValid`)
+  handoff `initialStepId` bumped from Deductions (3) to Tax Rates (4) as each page was absorbed
+- [x] Outer page-count/resume machinery (`activePages`, `pageIdx`, "N of M" header, resume-at-
+  last-page via `resumeFormData`) confirmed generic against `PAGES.length` — required zero changes
+  across all three page additions
+- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 31 tests
+  covering all three pages, DHL Plant/Warehouse branching, resume-on-Back, and handoff targets
+- Remaining real steps not yet ad-lib-ified: Tax Rates (id 4), Wrap Up (id 7) — future work, one
+  page at a time per the established pattern
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

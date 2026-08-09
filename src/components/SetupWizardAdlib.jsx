@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
-import { DHL_PRESET } from "../constants/config.js";
+import { DHL_PRESET, BENEFIT_OPTIONS } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for the first
-// three SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
-// page, then Schedule as its own second page in the same style. Admin-only
-// preview, gated behind the "Ad-Lib Preview" toggle in App.jsx — never shown
-// to real users.
+// four SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
+// page, then Schedule and Deductions each as their own page in the same style.
+// Admin-only preview, gated behind the "Ad-Lib Preview" toggle in App.jsx —
+// never shown to real users.
 //
 // Each page is one continuous mad-libs sentence with inline blanks (native
 // <select>/<input> styled to sit inline in the text). Within a page, each new
@@ -112,12 +112,12 @@ function InlineNumber({ value, onChange, placeholder = "___", width = "84px" }) 
   );
 }
 
-function InlineDate({ value, onChange, width = "168px" }) {
+function InlineDate({ value, onChange, width = "168px", label = "Start date" }) {
   const hasValue = value !== null && value !== undefined && value !== "";
   return (
     <input
       type="date"
-      aria-label="Start date"
+      aria-label={label}
       value={value ?? ""}
       onChange={e => onChange(e.target.value)}
       style={{
@@ -130,6 +130,30 @@ function InlineDate({ value, onChange, width = "168px" }) {
         colorScheme: "dark",
       }}
     />
+  );
+}
+
+// A toggleable inline tag — the multi-select equivalent of InlineSelect/InlineNumber
+// for benefit picking, where "one value per blank" doesn't fit (any subset of the 9
+// BENEFIT_OPTIONS can be on at once). Not a real form blank, so no placeholder/(select)
+// state — just on/off, styled to sit inline in the sentence like the other controls.
+function InlineChip({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", cursor: "pointer",
+        margin: "3px 4px", padding: "3px 11px",
+        borderRadius: "999px", font: "inherit", fontSize: "0.62em",
+        fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
+        border: active ? "1px solid var(--color-teal)" : "1px dashed var(--color-text-disabled)",
+        background: active ? "rgba(0,200,150,0.12)" : "transparent",
+        color: active ? "var(--color-teal)" : "var(--color-text-disabled)",
+      }}
+    >
+      {active ? "✓ " : "+ "}{label}
+    </button>
   );
 }
 
@@ -184,12 +208,27 @@ function isScheduleValid(d) {
   return true;
 }
 
-// Fields these two pilot pages ask about — blanked on a fresh open (below)
+// Mandatory-field gate for the Deductions page — mirrors STEP_DEFS id 3
+// (Deductions) in SetupWizard.jsx exactly.
+function isDeductionsValid(d) {
+  if (d.employerPreset !== "DHL" && d.attendanceBucketEnabled === null) return false;
+  const sel = new Set(d.selectedBenefits ?? []);
+  if (sel.has("k401")) {
+    if (!((d.k401Rate ?? 0) > 0)) return false;
+    if (!d.k401StartDate) return false;
+  }
+  for (const def of BENEFIT_OPTIONS.filter(b => b.type === "weekly")) {
+    if (sel.has(def.id) && !((d[def.field] ?? 0) > 0)) return false;
+  }
+  return true;
+}
+
+// Fields these three pilot pages ask about — blanked on a fresh open (below)
 // rather than carried over from the admin's real config, so isIntakeValid/
-// isScheduleValid's mandatory-field gates actually have something to gate.
-// Pre-filling from `config` (the admin's own real answers) made every field
-// already "answered" before the admin touched anything, silently bypassing
-// both the blank look and the required-field check.
+// isScheduleValid/isDeductionsValid's mandatory-field gates actually have
+// something to gate. Pre-filling from `config` (the admin's own real answers)
+// made every field already "answered" before the admin touched anything,
+// silently bypassing both the blank look and the required-field check.
 const BLANK_PAY_FIELDS = {
   startedUnemployed: null, employerPreset: null, dhlSite: null, dhlTeam: null,
   dhlNightShift: null, nightDiffRate: null, userPaySchedule: null,
@@ -199,6 +238,11 @@ const BLANK_PAY_FIELDS = {
   bucketPayoutRate: null, diffRate: null, startingWeekIsLong: null,
   startDate: null, firstActiveIdx: null, maxWeeklyHours: null,
   hoursUnderstood: null, biweeklyPayWeekParity: null,
+  // Deductions page
+  selectedBenefits: null, attendanceBucketEnabled: null,
+  healthPremium: null, dentalPremium: null, visionPremium: null,
+  ltd: null, stdWeekly: null, lifePremium: null, hsaWeekly: null, fsaWeekly: null,
+  k401Rate: null, k401MatchRate: null, k401StartDate: null,
 };
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
@@ -532,18 +576,133 @@ function SchedulePage({ formData, onChange }) {
   );
 }
 
-// Jobless users skip Schedule entirely — same as the real wizard's
-// isFirstRunJobless gate skipping STEP_DEFS id 2 outright.
+// ── Page 2: Deductions (mirrors real Step3's core required fields) — benefit
+// selection is a multi-select (any subset of BENEFIT_OPTIONS can be on at once),
+// which doesn't fit the "one blank" mad-libs shape, so it's a row of toggleable
+// InlineChip tags instead. Each toggled-on benefit cascades in its own required
+// sub-blank(s) right after, same required-field set as real Step3's isValid —
+// benefitsStartDate/otherDeductions/attendance-detail-sub-fields/PTO are all
+// skipped (v1 scope, matching Warehouse's custom-hours precedent): none of them
+// gate isValid, and this pilot only asks what's actually required to proceed. ──
+function DeductionsPage({ formData, onChange }) {
+  const isBaseUser = formData.employerPreset !== "DHL";
+  // Local-only gate (mirrors real Step3's own benefitsGate state) — never enters
+  // isValid, purely reveals/hides the benefit chips. Defaults to "answered Yes"
+  // when resumed formData already has a selection, same seeding as the real page.
+  const [benefitsGate, setBenefitsGate] = useState(() =>
+    (formData.selectedBenefits ?? []).length > 0 ? true : null
+  );
+
+  function toggleBenefit(id) {
+    const next = new Set(formData.selectedBenefits ?? []);
+    const def = BENEFIT_OPTIONS.find(b => b.id === id);
+    if (next.has(id)) {
+      next.delete(id);
+      if (def?.type === "weekly") onChange({ [def.field]: 0 });
+      if (def?.type === "k401") onChange({ k401Rate: 0, k401MatchRate: 0, k401StartDate: null });
+    } else {
+      next.add(id);
+    }
+    onChange({ selectedBenefits: [...next] });
+  }
+
+  const selected = new Set(formData.selectedBenefits ?? []);
+  const gateText = "Right now, I";
+  const paycheckText = "benefits or deductions taken from my paycheck.";
+  const enrolledText = "I'm enrolled in:";
+  const attendanceText = "Does my employer track attendance with a formal points or hours system?";
+
+  return (
+    <p style={BLANK_FONT}>
+      <TypedText text={gateText} />{" "}
+      <FadeIn delay={typeDuration(gateText)}>
+        <InlineSelect
+          value={benefitsGate === true ? "yes" : benefitsGate === false ? "no" : ""}
+          onChange={v => setBenefitsGate(v === "" ? null : v === "yes")}
+          options={[{ value: "yes", label: "have" }, { value: "no", label: "don't have" }]}
+        />
+      </FadeIn>{" "}
+      <TypedText text={paycheckText} />
+      {benefitsGate === true && (
+        <>
+          {" "}<TypedText text={enrolledText} />{" "}
+          <FadeIn delay={typeDuration(enrolledText)}>
+            {BENEFIT_OPTIONS.map(def => (
+              <InlineChip key={def.id} label={def.label} active={selected.has(def.id)} onClick={() => toggleBenefit(def.id)} />
+            ))}
+          </FadeIn>
+          {BENEFIT_OPTIONS.filter(def => selected.has(def.id)).map(def => {
+            const leadText = def.type === "k401" ? "I put" : `${def.label} costs $`;
+            return (
+              <span key={def.id}>
+                {" "}<TypedText text={leadText} />{" "}
+                <FadeIn delay={typeDuration(leadText)}>
+                  {def.type === "k401" ? (
+                    <InlineNumber
+                      value={formData.k401Rate != null ? +(formData.k401Rate * 100).toFixed(2) : ""}
+                      onChange={v => onChange({ k401Rate: v === "" ? null : parseFloat(v) / 100 })}
+                      placeholder="6"
+                      width="44px"
+                    />
+                  ) : (
+                    <InlineNumber
+                      value={formData[def.field] ?? ""}
+                      onChange={v => onChange({ [def.field]: v === "" ? null : parseFloat(v) })}
+                      placeholder={def.placeholder?.replace("e.g. ", "") ?? "0"}
+                      width="64px"
+                    />
+                  )}
+                </FadeIn>
+                {def.type === "k401" ? (
+                  <>
+                    {" "}<TypedText text="% into 401k, starting" />{" "}
+                    <FadeIn delay={typeDuration("% into 401k, starting")}>
+                      <InlineDate
+                        value={formData.k401StartDate}
+                        onChange={v => onChange({ k401StartDate: v === "" ? null : v })}
+                        width="140px"
+                        label="401k enrollment date"
+                      />
+                    </FadeIn>
+                  </>
+                ) : (
+                  <TypedText text="a week." />
+                )}
+              </span>
+            );
+          })}
+        </>
+      )}
+      {isBaseUser && benefitsGate !== null && (
+        <>
+          {" "}<TypedText text={attendanceText} />{" "}
+          <FadeIn delay={typeDuration(attendanceText)}>
+            <InlineSelect
+              value={formData.attendanceBucketEnabled === true ? "yes" : formData.attendanceBucketEnabled === false ? "no" : ""}
+              onChange={v => onChange({ attendanceBucketEnabled: v === "" ? null : v === "yes" })}
+              options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]}
+            />
+          </FadeIn>
+        </>
+      )}
+    </p>
+  );
+}
+
+// Jobless users skip Schedule and Deductions entirely — same as the real
+// wizard's isFirstRunJobless gate skipping STEP_DEFS id 2/3 outright.
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
   { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
+  { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage },
 ];
 
 // onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
 // answered. initialStepId targets the real SetupWizard's jobless mini-flow
-// (id 10) when unemployed, else Deductions (id 3) — Welcome, Pay Structure,
-// and Schedule are all covered by this preview now, so the real wizard picks
-// up one step later than before. See SetupWizard.jsx's initialStepId prop.
+// (id 10) when unemployed, else Tax Rates (id 4) — Welcome, Pay Structure,
+// Schedule, and Deductions are all covered by this preview now, so the real
+// wizard picks up one step later than before. See SetupWizard.jsx's
+// initialStepId prop.
 //
 // resumeFormData (optional): when the admin already answered these pages, handed off
 // into the real wizard, and then hit Back at the real wizard's very first step, App.jsx
@@ -575,7 +734,7 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
   function handleNext() {
     if (!canProceed) return;
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    onHandoff(formData, formData.startedUnemployed === true ? 10 : 3);
+    onHandoff(formData, formData.startedUnemployed === true ? 10 : 4);
   }
 
   function handleBack() {

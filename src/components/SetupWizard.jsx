@@ -423,6 +423,28 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
     });
   }
 
+  // Site switch clears the cross-site team value (A/B vs MT/WS are meaningless on the
+  // other site) and flips scheduleIsVariable — Warehouse has no rotation, so its pay is
+  // constant week-to-week (single paystub), unlike Plant's alternating long/short weeks.
+  // otThreshold/otMultiplier/payPeriodEndDay/bucket/diffRate are already seeded by
+  // setDHL(yes) above, the moment DHL is chosen — same values for either site.
+  function pickSite(site) {
+    onChange({
+      dhlSite: site,
+      dhlTeam: null,
+      scheduleIsVariable: site === "WAREHOUSE" ? false : true,
+      // Warehouse asks shift length as a real question (see below) — Plant keeps its
+      // usual DHL-preset default of 12, restored here in case the admin bounces back.
+      shiftHours: site === "WAREHOUSE" ? null : (formData.shiftHours ?? DHL_PRESET.defaults.shiftHours),
+    });
+  }
+
+  // Warehouse: fixed team, no rotation — otThreshold/otMultiplier/payPeriodEndDay/bucket
+  // are already correct from setDHL(yes)/pickSite, so only dhlTeam needs setting here.
+  function pickWarehouseTeam(t) {
+    onChange({ dhlTeam: t, scheduleIsVariable: false, userPaySchedule: null });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
@@ -464,27 +486,58 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
         </Field>
       )}
 
-      {/* ── DHL: Team + shift ── */}
+      {/* ── DHL: Site + Team + shift ── */}
       {isEmployerDHL && (
         <>
-          <Field label="Which DHL team are you on?">
+          <Field label="Which DHL site do you work at?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-              <Pill label="Team A" active={formData.dhlTeam === "A"} onClick={() => pickTeam("A")} />
-              <Pill label="Team B" active={formData.dhlTeam === "B"} onClick={() => pickTeam("B")} />
+              <Pill label="Warehouse" active={formData.dhlSite === "WAREHOUSE"} onClick={() => pickSite("WAREHOUSE")} />
+              <Pill label="Plant" active={formData.dhlSite === "PLANT"} onClick={() => pickSite("PLANT")} />
             </div>
-            {formData.dhlTeam && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
-                {DHL_PRESET.teams[formData.dhlTeam].startsLong
-                  ? `${DHL_PRESET.rotation.long.label} (your first active week)`
-                  : `${DHL_PRESET.rotation.short.label} (your first active week)`}. Teams alternate every week.
-              </div>
-            )}
-            {!formData.dhlTeam && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
-                Team A starts short (Mon / Thu / Fri). Team B starts long (Tue / Wed / Sat / Sun).
-              </div>
-            )}
           </Field>
+
+          {formData.dhlSite === "PLANT" && (
+            <Field label="Which DHL team are you on?">
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <Pill label="Team A" active={formData.dhlTeam === "A"} onClick={() => pickTeam("A")} />
+                <Pill label="Team B" active={formData.dhlTeam === "B"} onClick={() => pickTeam("B")} />
+              </div>
+              {formData.dhlTeam && (
+                <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                  {DHL_PRESET.teams[formData.dhlTeam].startsLong
+                    ? `${DHL_PRESET.rotation.long.label} (your first active week)`
+                    : `${DHL_PRESET.rotation.short.label} (your first active week)`}. Teams alternate every week.
+                </div>
+              )}
+              {!formData.dhlTeam && (
+                <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                  Team A starts short (Mon / Thu / Fri). Team B starts long (Tue / Wed / Sat / Sun).
+                </div>
+              )}
+            </Field>
+          )}
+
+          {formData.dhlSite === "WAREHOUSE" && (
+            <>
+              <Field label="Which warehouse team are you on?">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  {Object.entries(DHL_PRESET.warehouseTeams).map(([t, meta]) => (
+                    <Pill key={t} label={meta.label} active={formData.dhlTeam === t} onClick={() => pickWarehouseTeam(t)} />
+                  ))}
+                </div>
+                <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                  Fixed schedule — the same days every week, no rotation.
+                </div>
+              </Field>
+
+              <Field label="How long are your shifts?">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <Pill label="10 hours" active={formData.shiftHours === 10} onClick={() => onChange({ shiftHours: 10 })} />
+                  <Pill label="12 hours" active={formData.shiftHours === 12} onClick={() => onChange({ shiftHours: 12 })} />
+                </div>
+              </Field>
+            </>
+          )}
 
           <Field label="Which shift do you work?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
@@ -504,6 +557,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
             </div>
           </Field>
 
+          {formData.dhlSite === "PLANT" && (
           <Field label="Do you follow the standard DHL rotation?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
               <Pill
@@ -582,6 +636,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
               </div>
             )}
           </Field>
+          )}
 
         </>
       )}
@@ -839,26 +894,29 @@ function Step2({ formData, onChange, attempted }) {
 
       {/* ── Hours / rotation ── */}
       {isEmployerDHL ? (
-        <Field label="Which week are you currently on?">
-          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-            <Pill
-              label="Short Week"
-              active={formData.startingWeekIsLong === false}
-              onClick={() => onChange({ startingWeekIsLong: false })}
-            />
-            <Pill
-              label="Long Week"
-              active={formData.startingWeekIsLong === true}
-              onClick={() => onChange({ startingWeekIsLong: true })}
-            />
-          </div>
-          <div style={{
-            marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)",
-            lineHeight: "1.5",
-          }}>
-            Used to alternate short/long week income from your start date.
-          </div>
-        </Field>
+        // Warehouse has no rotation — nothing to ask here beyond the start date above.
+        formData.dhlSite !== "WAREHOUSE" && (
+          <Field label="Which week are you currently on?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="Short Week"
+                active={formData.startingWeekIsLong === false}
+                onClick={() => onChange({ startingWeekIsLong: false })}
+              />
+              <Pill
+                label="Long Week"
+                active={formData.startingWeekIsLong === true}
+                onClick={() => onChange({ startingWeekIsLong: true })}
+              />
+            </div>
+            <div style={{
+              marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)",
+              lineHeight: "1.5",
+            }}>
+              Used to alternate short/long week income from your start date.
+            </div>
+          </Field>
+        )
       ) : (
         <>
         <Field label="Max Weekly Hours" error={attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168) ? "Enter hours between 1 and 168" : null}>
@@ -1699,7 +1757,7 @@ function Step4({ formData, onChange, attempted }) {
       </Field>
 
       {/* DHL MO preset load button — only when no rates set yet */}
-      {isEmployerDHL && !hasRates && formData.userState === "MO" && (
+      {isEmployerDHL && formData.dhlSite !== "WAREHOUSE" && !hasRates && formData.userState === "MO" && (
         <div style={{
           padding: "12px 14px",
           background: "rgba(0,200,150,0.05)",
@@ -2322,6 +2380,7 @@ const STEP_DEFS = [
     showIf: (d, ev) => !isFirstRunJobless(d, ev),
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
+      if (d.employerPreset === "DHL" && !d.dhlSite) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
       if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false;
       if (d.customWeeklyHours === 0) return false;

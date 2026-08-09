@@ -83,6 +83,28 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 Multi-step onboarding (~2500 lines). Controlled steps with conditional routing based on `lifeEvent` (null/structure_change/lost_job/changed_jobs/commission_job). Covers pay structure, schedule, deductions, tax rates, and wrap-up. Full drift map: `docs/drift-app-warden.md` §7 — consult before changes. See source file for step definitions, helper components, state management, and DHL employer preset overrides.
 
+**DHL Site — Plant vs Warehouse (`dhlSite`).** DHL now has two schedule shapes, chosen in Step 1
+right after "Do you work for DHL? Yes": **Plant** (`dhlSite: "PLANT"`) is the original rotating
+Team A/B short/long-week alternation — unchanged. **Warehouse** (`dhlSite: "WAREHOUSE"`) is a
+fixed schedule with no rotation at all — a Mon–Thu team and a Wed–Sat team (`dhlTeam: "MT" | "WS"`,
+`DHL_PRESET.warehouseTeams`), each working the *same 4 days every single week*, plus a real
+user-selectable shift-length question (10 or 12 hours, not hardcoded) alongside the existing
+night/morning-shift question. Same bucket/PTO numbers, weekend differential, and night
+differential dollar amounts as Plant. `dhlSite !== "WAREHOUSE"` is the Plant fallback — every
+existing DHL account (no `dhlSite` key in its stored config at all) needs **no migration**, it
+just keeps behaving exactly as before. `finance.js`'s `getDhlPlannedDayIndexes()`/
+`getDhlPlannedPattern()` are the single shared source of the day-pattern for `buildYear()`,
+`projectedGross()`, and `calcEventImpact()` alike — a Warehouse branch there is enough to make all
+three correct, no per-caller duplication. `buildYear()` additionally forces `isHighWeek: false`
+for Warehouse weeks (financially inert — `PaystubCalc` already guarantees `fedRateHigh ===
+fedRateLow` whenever `scheduleIsVariable` is false, which Warehouse always sets). Site-gated UI:
+Step 1 (site/team/shift-length questions, custom-rotation question hidden for Warehouse), Step 2
+(Short/Long Week pills hidden for Warehouse — nothing else to ask beyond the start date), Step 4
+("Load DHL Preset" hidden for Warehouse — those rates are Plant-specific), and `ProfilePanel.jsx`'s
+T5 Employment card (DHL Team editor + Schedule Override, same field/second-editor pattern per
+`docs/drift-app-warden.md` §7). See that doc's DHL_PRESET/`dhlSite` trigger-map rows before
+touching any of this again.
+
 `initialStepId` (optional prop, default `null`) opens the wizard on a specific `STEP_DEFS` id
 instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off into the real
 wizard after its own pilot pages are answered. No effect on any existing call site that omits it.

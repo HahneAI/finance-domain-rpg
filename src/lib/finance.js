@@ -324,6 +324,10 @@ function buildStandardDhlDayIndexes(cfg, isLongWeek) {
 }
 
 function getDhlPlannedDayIndexes(cfg, isLongWeek) {
+  if (cfg.dhlSite === "WAREHOUSE") {
+    // Warehouse: fixed team days, same every week — isLongWeek is meaningless here.
+    return [...(DHL_PRESET.warehouseTeams[cfg.dhlTeam] ?? DHL_PRESET.warehouseTeams.MT).days];
+  }
   if (cfg.dhlCustomSchedule) {
     return (isLongWeek ? CUSTOM_LONG_DAY_INDEXES : CUSTOM_SHORT_DAY_INDEXES).slice();
   }
@@ -346,6 +350,11 @@ function getDhlPlannedPattern(cfg, isLongWeek) {
   const indexes = getDhlPlannedDayIndexes(cfg, isLongWeek);
   const totalHours = indexes.length * cfg.shiftHours;
   const weekendHours = indexes.reduce((sum, idx) => sum + dhlWeekendHoursPerDayIndex(idx, cfg.shiftHours), 0);
+  if (cfg.dhlSite === "WAREHOUSE") {
+    // No rotation, so no custom-hours-extension concept (v1 scope) — always the fixed team pattern.
+    const rotationLabel = (DHL_PRESET.warehouseTeams[cfg.dhlTeam] ?? DHL_PRESET.warehouseTeams.MT).label;
+    return { indexes, totalHours, weekendHours, rotationLabel, requiredOtShifts: 0 };
+  }
   const rotationLabel = getDhlRotationLabel(isLongWeek);
   let requiredOtShifts;
   const resolvedHours = resolveDhlWeeklyHours(cfg, isLongWeek, totalHours);
@@ -511,8 +520,15 @@ export function buildYear(cfg, baseRateHistory = null) {
       // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
       isHighWeek = offset === 0 ? !!cfg.startingWeekIsLong : !cfg.startingWeekIsLong;
+      // Warehouse: fixed schedule, no long/short alternation — the offset/parity math
+      // above is meaningless here, so force it off. Financially inert: isHighWeek only
+      // ever selects fedHigh/fedLow in computeNet(), and PaystubCalc always writes
+      // fedRateHigh === fedRateLow when scheduleIsVariable is false (Warehouse's case).
+      if (cfg.dhlSite === "WAREHOUSE") isHighWeek = false;
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-      rotation = isHighWeek ? "6-Day" : "4-Day";
+      rotation = cfg.dhlSite === "WAREHOUSE"
+        ? (DHL_PRESET.warehouseTeams[cfg.dhlTeam] ?? DHL_PRESET.warehouseTeams.MT).label
+        : (isHighWeek ? "6-Day" : "4-Day");
       adminRotationTag = rotation;
       if (!cfg.dhlCustomSchedule) {
         const pattern = getDhlPlannedPattern(cfg, isHighWeek);

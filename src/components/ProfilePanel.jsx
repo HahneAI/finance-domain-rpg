@@ -2122,7 +2122,7 @@ class AdminDetailErrorBoundary extends Component {
           <BackBar onBack={this.props.onBack} title={this.props.title} />
           <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
             <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{this.state.error?.message || String(this.state.error)}</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)" }}>{this.state.error?.message || String(this.state.error)}</div>
           </div>
         </>
       );

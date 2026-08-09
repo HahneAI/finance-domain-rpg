@@ -47,8 +47,12 @@
   --color-signal-purple: #7c5cff;
   --color-signal-glow:   rgba(124, 92, 255, 0.25);
 
-  --font-display: 'Inter', system-ui, sans-serif;
-  --font-sans:    'Inter', system-ui, sans-serif;
+  /* Two-font system (adopted 2026-08-09): Titillium Web for all headings/display
+     text, Rajdhani for everything else (body, nav, labels, buttons, tabs, badges).
+     --font-mono stays JetBrains Mono — deliberate exception for inputs/data
+     tables (tabular-figure alignment), not part of the display/body split. */
+  --font-display: 'Titillium Web', system-ui, sans-serif;
+  --font-sans:    'Rajdhani', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Courier New', monospace;
 }
 
@@ -157,7 +161,11 @@ button {
 }
 
 h1,
-h2 {
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   font-weight: 500;
   color: var(--color-text-primary);

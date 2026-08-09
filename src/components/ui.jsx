@@ -39,7 +39,7 @@ function useCountUp(target, duration = 1200) {
 // ─────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "'JetBrains Mono', 'Courier New', monospace", minHeight: "44px" };
+export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "var(--font-mono)", minHeight: "44px" };
 // eslint-disable-next-line react-refresh/only-export-components
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 

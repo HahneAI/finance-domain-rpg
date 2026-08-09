@@ -33,7 +33,12 @@ One-liner per item — see git history for full implementation detail.*
   `isHighWeek`/`requiredOtShifts` always false/0, Plant regression guard), `SetupWizard.test.jsx`
   (site question placement, Warehouse/Plant branching, full Warehouse wizard run through
   `onComplete`), `ProfilePanel.test.jsx` (site-aware Employment card)
-- [ ] Not yet done: mirroring this into `SetupWizardAdlib.jsx`'s ad-lib preview (explicit follow-up)
+- [x] **Mirrored into `SetupWizardAdlib.jsx`'s ad-lib preview** — `IntakePage` asks the same
+  "Which DHL site do you work at?" question before any team clause, branching to the unchanged
+  Plant Team A/B clause or a new Warehouse Mon–Thu/Wed–Sat team + real shift-length (10/12h)
+  clause; `SchedulePage` hides the Short/Long-Week clause for Warehouse the same way Step2 does;
+  `isIntakeValid()`/`BLANK_PAY_FIELDS` extended with `dhlSite` so the mandatory-field gating and
+  blank-by-default behavior cover it too
 
 ---
 

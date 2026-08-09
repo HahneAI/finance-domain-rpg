@@ -134,7 +134,7 @@ function InlineDate({ value, onChange, width = "168px" }) {
 }
 
 // Mirrors real Step1's pickTeam() — same field set/defaults so a handed-off
-// wizard resuming at Schedule sees an identical DHL config either way.
+// wizard resuming at Schedule sees an identical DHL config either way. Plant only.
 function pickTeamPatch(t) {
   const preset = DHL_PRESET.teams[t];
   const d = DHL_PRESET.defaults;
@@ -152,12 +152,20 @@ function pickTeamPatch(t) {
   };
 }
 
+// Mirrors real Step1's pickWarehouseTeam() — otThreshold/otMultiplier/payPeriodEndDay/
+// bucket/diffRate are already seeded by setEmployer's DHL branch below the moment DHL
+// is chosen (same values for either site), so only dhlTeam + scheduleIsVariable differ.
+function pickWarehouseTeamPatch(t) {
+  return { dhlTeam: t, scheduleIsVariable: false, userPaySchedule: null };
+}
+
 // Combined mandatory-field gate for the Intake page — mirrors STEP_DEFS id 0
 // (Welcome) + id 1 (Pay Structure) in SetupWizard.jsx exactly.
 function isIntakeValid(d) {
   if (d.startedUnemployed !== true && d.startedUnemployed !== false) return false;
   if (d.startedUnemployed === true) return true;
   if (!d.userPaySchedule) return false;
+  if (d.employerPreset === "DHL" && !d.dhlSite) return false;
   if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
   if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
   return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
@@ -183,7 +191,7 @@ function isScheduleValid(d) {
 // already "answered" before the admin touched anything, silently bypassing
 // both the blank look and the required-field check.
 const BLANK_PAY_FIELDS = {
-  startedUnemployed: null, employerPreset: null, dhlTeam: null,
+  startedUnemployed: null, employerPreset: null, dhlSite: null, dhlTeam: null,
   dhlNightShift: null, nightDiffRate: null, userPaySchedule: null,
   annualSalary: null, baseRate: null, shiftHours: null,
   otThreshold: null, otMultiplier: null, payPeriodEndDay: null,
@@ -217,16 +225,42 @@ function IntakePage({ formData, onChange }) {
         diffRate: formData.diffRate ?? 1.75,
         baseRate: formData.baseRate ?? DHL_PRESET.defaults.baseRate,
         shiftHours: formData.shiftHours ?? DHL_PRESET.defaults.shiftHours,
-        userPaySchedule: null, dhlTeam: null,
+        userPaySchedule: null, dhlTeam: null, dhlSite: null,
       });
     } else {
       onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0, scheduleIsVariable: false, baseRate: null, shiftHours: null });
     }
   }
 
+  // Mirrors real Step1's pickSite() — clears the cross-site team value (A/B vs MT/WS are
+  // meaningless on the other site) and flips scheduleIsVariable (Warehouse has no rotation,
+  // so pay is constant week-to-week, unlike Plant's alternating long/short weeks).
+  function pickSite(site) {
+    onChange({
+      dhlSite: site,
+      dhlTeam: null,
+      scheduleIsVariable: site === "WAREHOUSE" ? false : true,
+      shiftHours: site === "WAREHOUSE" ? null : (formData.shiftHours ?? DHL_PRESET.defaults.shiftHours),
+    });
+  }
+
+  const isEmployerWarehouse = formData.dhlSite === "WAREHOUSE";
+  const isEmployerPlant = formData.dhlSite === "PLANT";
+  // Warehouse's shared "working the [shift], paid [schedule]" clause additionally needs the
+  // shift-length blank answered first — Plant's team pick alone is enough.
+  const dhlTeamReady = isEmployerPlant
+    ? !!formData.dhlTeam
+    : isEmployerWarehouse
+      ? !!formData.dhlTeam && (formData.shiftHours ?? 0) > 0
+      : false;
+
   const introText = "Let's set you up. Right now, I am";
   const workForText = "I work for";
+  const siteText = "I work at the";
   const onTeamText = "I'm on Team";
+  const warehouseTeamText = "I'm on the";
+  const teamShiftsText = "team, on";
+  const shiftsWordText = "shifts";
   const workingTheText = "working the";
   const shiftPaidText = "shift, paid";
   const iGetPaidText = "I get paid";
@@ -258,15 +292,52 @@ function IntakePage({ formData, onChange }) {
           </FadeIn>.
           {isEmployerDHL && (
             <>
-              {" "}<TypedText text={onTeamText} />{" "}
-              <FadeIn delay={typeDuration(onTeamText)}>
+              {" "}<TypedText text={siteText} />{" "}
+              <FadeIn delay={typeDuration(siteText)}>
                 <InlineSelect
-                  value={formData.dhlTeam ?? ""}
-                  onChange={t => onChange(t === "" ? { dhlTeam: null } : pickTeamPatch(t))}
-                  options={[{ value: "A", label: "A" }, { value: "B", label: "B" }]}
+                  value={formData.dhlSite ?? ""}
+                  onChange={v => v === "" ? onChange({ dhlSite: null, dhlTeam: null }) : pickSite(v)}
+                  options={[{ value: "WAREHOUSE", label: "Warehouse" }, { value: "PLANT", label: "Plant" }]}
                 />
-              </FadeIn>
-              {formData.dhlTeam && (
+              </FadeIn>.
+              {isEmployerPlant && (
+                <>
+                  {" "}<TypedText text={onTeamText} />{" "}
+                  <FadeIn delay={typeDuration(onTeamText)}>
+                    <InlineSelect
+                      value={formData.dhlTeam ?? ""}
+                      onChange={t => onChange(t === "" ? { dhlTeam: null } : pickTeamPatch(t))}
+                      options={[{ value: "A", label: "A" }, { value: "B", label: "B" }]}
+                    />
+                  </FadeIn>
+                </>
+              )}
+              {isEmployerWarehouse && (
+                <>
+                  {" "}<TypedText text={warehouseTeamText} />{" "}
+                  <FadeIn delay={typeDuration(warehouseTeamText)}>
+                    <InlineSelect
+                      value={formData.dhlTeam ?? ""}
+                      onChange={t => onChange(t === "" ? { dhlTeam: null } : pickWarehouseTeamPatch(t))}
+                      options={Object.entries(DHL_PRESET.warehouseTeams).map(([t, meta]) => ({ value: t, label: meta.label }))}
+                    />
+                  </FadeIn>
+                  {formData.dhlTeam && (
+                    <>
+                      {" "}<TypedText text={teamShiftsText} />{" "}
+                      <FadeIn delay={typeDuration(teamShiftsText)}>
+                        <InlineSelect
+                          value={formData.shiftHours === 10 ? "10" : formData.shiftHours === 12 ? "12" : ""}
+                          onChange={v => onChange({ shiftHours: v === "" ? null : parseInt(v, 10) })}
+                          options={[{ value: "10", label: "10-hour" }, { value: "12", label: "12-hour" }]}
+                        />
+                      </FadeIn>{" "}
+                      <TypedText text={shiftsWordText} />
+                    </>
+                  )}
+                </>
+              )}
+              {dhlTeamReady && (
                 <>
                   , <TypedText text={workingTheText} />{" "}
                   <FadeIn delay={typeDuration(workingTheText)}>
@@ -388,16 +459,20 @@ function SchedulePage({ formData, onChange }) {
       </FadeIn>.
       {formData.startDate && (
         isEmployerDHL ? (
-          <>
-            {" "}<TypedText text={shortLongText} />{" "}
-            <FadeIn delay={typeDuration(shortLongText)}>
-              <InlineSelect
-                value={formData.startingWeekIsLong === true ? "long" : formData.startingWeekIsLong === false ? "short" : ""}
-                onChange={v => onChange({ startingWeekIsLong: v === "" ? null : v === "long" })}
-                options={[{ value: "short", label: "Short Week" }, { value: "long", label: "Long Week" }]}
-              />
-            </FadeIn>.
-          </>
+          // Warehouse has no rotation — nothing to ask here beyond the start date above,
+          // same as SetupWizard.jsx's Step2.
+          formData.dhlSite !== "WAREHOUSE" && (
+            <>
+              {" "}<TypedText text={shortLongText} />{" "}
+              <FadeIn delay={typeDuration(shortLongText)}>
+                <InlineSelect
+                  value={formData.startingWeekIsLong === true ? "long" : formData.startingWeekIsLong === false ? "short" : ""}
+                  onChange={v => onChange({ startingWeekIsLong: v === "" ? null : v === "long" })}
+                  options={[{ value: "short", label: "Short Week" }, { value: "long", label: "Long Week" }]}
+                />
+              </FadeIn>.
+            </>
+          )
         ) : (
           <>
             {" "}<TypedText text={hoursText} />{" "}

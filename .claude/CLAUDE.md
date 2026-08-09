@@ -151,8 +151,8 @@ decision pending how the pilot feels in practice.
 - **Blank by default, not prefilled from the admin's real config.** `formData` starts as
   `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field either page asks
   about, both the original Welcome/Pay Structure set (`startedUnemployed`, `employerPreset`,
-  `dhlTeam`, `dhlNightShift`, `nightDiffRate`, `userPaySchedule`, `annualSalary`, `baseRate`,
-  `shiftHours`, `otThreshold`, `otMultiplier`, `payPeriodEndDay`, `scheduleIsVariable`,
+  `dhlSite`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`, `userPaySchedule`, `annualSalary`,
+  `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`, `payPeriodEndDay`, `scheduleIsVariable`,
   `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`, `diffRate`, `startingWeekIsLong`) and the
   Schedule additions (`startDate`, `firstActiveIdx`, `maxWeeklyHours`, `hoursUnderstood`,
   `biweeklyPayWeekParity`). Without this, an admin whose real account already has these answered
@@ -166,6 +166,19 @@ decision pending how the pilot feels in practice.
   `pickTeamPatch()`), which is intentional — it mirrors the real wizard's own Step1→Step2 default
   seeding, and `SchedulePage`'s Short/Long-Week select is deliberately not gated in
   `isScheduleValid()` for the same reason the real Step2 doesn't require it for DHL users.
+- **DHL Site (Warehouse vs Plant) mirrors the real Step1 exactly, same fields/functions.** Once DHL
+  is chosen, `IntakePage` asks "Which DHL site do you work at?" before any team question, then
+  branches: Plant keeps the original Team A/B clause unchanged (`pickTeamPatch()`); Warehouse asks
+  a Mon–Thu/Wed–Sat team blank (`pickWarehouseTeamPatch()`, options built from
+  `DHL_PRESET.warehouseTeams`) followed by a real shift-length blank (10/12 hours, writes
+  `shiftHours` directly — the only place in this pilot a select writes a number). The shared
+  "working the [shift], paid [schedule]" clause that follows is gated on `dhlTeamReady`, which
+  additionally requires `shiftHours` for Warehouse (Plant only needs `dhlTeam`) — mirrors
+  `isIntakeValid()`'s own gate exactly, which mirrors STEP_DEFS id 1's `!d.dhlSite`/`!d.dhlTeam`
+  checks. `SchedulePage`'s Short/Long-Week clause is hidden entirely for Warehouse (`dhlSite !==
+  "WAREHOUSE"`), matching Step2's DHL branch. Local `pickSite()` (site pick) and
+  `pickWarehouseTeamPatch()` (team pick) mirror the real wizard's own `pickSite()`/
+  `pickWarehouseTeam()` field-for-field.
 - **Back at the hand-off boundary returns to this component, not the real Step0/Step1/Step2.**
   Without intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Deductions
   id 3, or the jobless flow id 10) falls through to that component's own Welcome/Pay

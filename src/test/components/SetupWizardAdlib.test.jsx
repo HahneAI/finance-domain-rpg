@@ -44,13 +44,26 @@ function advanceToSchedule_baseUser() {
   fireEvent.click(primaryBtn())
 }
 
-// Fills the DHL Intake page completely and advances to the Schedule page.
-function advanceToSchedule_dhl() {
+// Fills the DHL Plant Intake page completely and advances to the Schedule page.
+function advanceToSchedule_dhlPlant() {
   chooseEmployed()
   fireEvent.change(selects()[1], { target: { value: 'DHL' } })
-  fireEvent.change(selects()[2], { target: { value: 'B' } })
-  fireEvent.change(selects()[3], { target: { value: 'night' } })
-  fireEvent.change(selects()[4], { target: { value: 'weekly' } })
+  fireEvent.change(selects()[2], { target: { value: 'PLANT' } })
+  fireEvent.change(selects()[3], { target: { value: 'B' } })
+  fireEvent.change(selects()[4], { target: { value: 'night' } })
+  fireEvent.change(selects()[5], { target: { value: 'weekly' } })
+  fireEvent.click(primaryBtn())
+}
+
+// Fills the DHL Warehouse Intake page completely and advances to the Schedule page.
+function advanceToSchedule_dhlWarehouse(team = 'MT', shiftHours = '10') {
+  chooseEmployed()
+  fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+  fireEvent.change(selects()[2], { target: { value: 'WAREHOUSE' } })
+  fireEvent.change(selects()[3], { target: { value: team } })
+  fireEvent.change(selects()[4], { target: { value: shiftHours } })
+  fireEvent.change(selects()[5], { target: { value: 'night' } })
+  fireEvent.change(selects()[6], { target: { value: 'weekly' } })
   fireEvent.click(primaryBtn())
 }
 
@@ -103,25 +116,56 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     expect(primaryBtn()).toBeDisabled()
   })
 
-  it('reveals Team, then shift + pay-schedule blanks progressively for DHL', () => {
+  it('reveals the Site question once DHL is chosen, before any team question', () => {
     renderAdlib()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    expect(screen.getByText(/I work at the/i)).toBeTruthy()
+    expect(screen.queryByText(/I'm on Team/i)).toBeNull()
+    expect(screen.queryByText(/I'm on the/i)).toBeNull()
+    expect(primaryBtn()).toBeDisabled()
+  })
+
+  it('Plant reveals Team, then shift + pay-schedule blanks progressively', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    fireEvent.change(selects()[2], { target: { value: 'PLANT' } })
     expect(screen.getByText(/I'm on Team/i)).toBeTruthy()
+    expect(screen.queryByText(/I'm on the/i)).toBeNull() // Warehouse-only clause
     expect(primaryBtn()).toBeDisabled()
 
-    fireEvent.change(selects()[2], { target: { value: 'A' } })
+    fireEvent.change(selects()[3], { target: { value: 'A' } })
     expect(screen.getByText(/working the/i)).toBeTruthy()
   })
 
-  it('does not carry over startedUnemployed/employer/pay fields from an already-answered real config', () => {
-    // A DHL admin's real config already has employerPreset/dhlTeam/userPaySchedule/etc.
+  it('Warehouse reveals a Mon-Thu/Wed-Sat team blank and a shift-length blank instead of Team A/B', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    fireEvent.change(selects()[2], { target: { value: 'WAREHOUSE' } })
+    expect(screen.getByText(/I'm on the/i)).toBeTruthy()
+    expect(screen.queryByText(/I'm on Team/i)).toBeNull()
+    expect(primaryBtn()).toBeDisabled()
+
+    fireEvent.change(selects()[3], { target: { value: 'MT' } })
+    expect(screen.getByText(/team, on/i)).toBeTruthy()
+    expect(screen.queryByText(/working the/i)).toBeNull() // still needs shift length first
+    expect(primaryBtn()).toBeDisabled()
+
+    fireEvent.change(selects()[4], { target: { value: '10' } })
+    expect(screen.getByText(/working the/i)).toBeTruthy()
+  })
+
+  it('does not carry over startedUnemployed/employer/site/pay fields from an already-answered real config', () => {
+    // A DHL admin's real config already has employerPreset/dhlSite/dhlTeam/userPaySchedule/etc.
     // answered. The preview must not pre-fill from that — every mandatory blank should
     // still require an explicit choice before the primary action enables.
     const answeredConfig = {
       ...DEFAULT_CONFIG,
       startedUnemployed: false,
       employerPreset: 'DHL',
+      dhlSite: 'PLANT',
       dhlTeam: 'B',
       dhlNightShift: true,
       userPaySchedule: 'weekly',
@@ -133,6 +177,8 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     expect(selects()[0].value).toBe('')
     chooseEmployed()
     expect(selects()[1].value).toBe('')
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    expect(selects()[2].value).toBe('')
   })
 })
 
@@ -237,24 +283,53 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
   })
 })
 
-describe('SetupWizardAdlib — Schedule page (DHL)', () => {
+describe('SetupWizardAdlib — Schedule page (DHL Plant)', () => {
   it('reveals the Short/Long Week clause once a start date is entered, but does not require it', () => {
     renderAdlib()
-    advanceToSchedule_dhl()
+    advanceToSchedule_dhlPlant()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     expect(screen.getByText(/Right now I'm on my/i)).toBeTruthy()
     // Not required by the real Step2 gate — Continue Setup is already enabled.
     expect(primaryBtn()).not.toBeDisabled()
   })
 
-  it('completes the DHL path and hands off to Deductions (step id 3) with DHL fields intact', () => {
+  it('completes the Plant path and hands off to Deductions (step id 3) with DHL fields intact', () => {
     const { onHandoff } = renderAdlib()
-    advanceToSchedule_dhl()
+    advanceToSchedule_dhlPlant()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.click(primaryBtn())
     const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
     expect(mergedFormData.employerPreset).toBe('DHL')
+    expect(mergedFormData.dhlSite).toBe('PLANT')
     expect(mergedFormData.dhlTeam).toBe('B')
+    expect(mergedFormData.startDate).toBe('2026-03-01')
+    expect(initialStepId).toBe(3)
+  })
+})
+
+describe('SetupWizardAdlib — Schedule page (DHL Warehouse)', () => {
+  it('does not show the Short/Long Week clause — nothing to ask beyond the start date', () => {
+    renderAdlib()
+    advanceToSchedule_dhlWarehouse()
+    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    expect(screen.queryByText(/Right now I'm on my/i)).toBeNull()
+    expect(screen.queryByText(/which week are you currently on/i)).toBeNull()
+    // Not required by the real Step2 gate — Continue Setup is already enabled
+    // as soon as the start date is filled.
+    expect(primaryBtn()).not.toBeDisabled()
+  })
+
+  it('completes the Warehouse path and hands off to Deductions (step id 3) with the Warehouse fields intact', () => {
+    const { onHandoff } = renderAdlib()
+    advanceToSchedule_dhlWarehouse('WS', '12')
+    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    fireEvent.click(primaryBtn())
+    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
+    expect(mergedFormData.employerPreset).toBe('DHL')
+    expect(mergedFormData.dhlSite).toBe('WAREHOUSE')
+    expect(mergedFormData.dhlTeam).toBe('WS')
+    expect(mergedFormData.shiftHours).toBe(12)
+    expect(mergedFormData.scheduleIsVariable).toBe(false)
     expect(mergedFormData.startDate).toBe('2026-03-01')
     expect(initialStepId).toBe(3)
   })

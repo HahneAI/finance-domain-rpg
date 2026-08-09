@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Pressable, SH, useFoldTransition } from "./ui.jsx";
+import { Pressable, PanelHero, SH } from "./ui.jsx";
 import { ChecklistSection, SuggestionsSection, WhatsNewSection } from "./BetaHomebase.jsx";
 import {
   fetchBaseChecklistItems,
@@ -21,13 +20,18 @@ import {
 // tester, not a scored path toward a free-account reward. No ScoreSection —
 // scoring stays beta-program-specific, deliberately not ported here.
 //
-// Opened from the header icon next to the notification bell (App.jsx),
-// mutually exclusive with the Beta Tester Homebase icon — a tracked beta
-// tester sees their beta-specific homebase only, everyone else sees this.
+// Reached from the header icon next to the notification bell (App.jsx,
+// which pushes the "moneyMoves" view onto the nav stack — see App.jsx's
+// `navigate` vs `navigateDirect`), mutually exclusive with the Beta Tester
+// Homebase icon — a tracked beta tester sees their beta-specific homebase
+// only, everyone else sees this.
 //
-// Same portal + fold-motion shell as BetaHomebase.jsx/ChangelogModal —
-// position:fixed must portal to document.body or iOS Safari hit-tests
-// against the wrong scroll container.
+// A real page in App.jsx's main content area (like Home/Income/Budget/Log),
+// not a modal — no portal, no backdrop, no close button. The mobile bottom
+// nav bar and desktop sidebar stay visible and ARE the way to leave: tapping
+// any of them calls navigateDirect(), which resets the view stack and drops
+// this page. (Was a fixed-position portal modal before 2026-08-09 — no
+// longer needed once this became a real navigable view.)
 
 function FeedbackSection() {
   const [note, setNote] = useState("");
@@ -76,8 +80,7 @@ function FeedbackSection() {
   );
 }
 
-export function ProductivityHub({ open, onClose }) {
-  const fold = useFoldTransition(open, { ms: 340 });
+export function ProductivityHub() {
   const [loading, setLoading] = useState(true);
   const [checklistItems, setChecklistItems] = useState([]);
   const [completedIds, setCompletedIds] = useState(new Set());
@@ -85,9 +88,7 @@ export function ProductivityHub({ open, onClose }) {
   const [changelogEntries, setChangelogEntries] = useState([]);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
-    setLoading(true);
     Promise.all([
       fetchBaseChecklistItems(),
       fetchMyBaseChecklistCompletions(),
@@ -102,7 +103,7 @@ export function ProductivityHub({ open, onClose }) {
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [open]);
+  }, []);
 
   async function handleToggle(itemId, completed) {
     // Optimistic — flip local state immediately, roll back only if the write fails.
@@ -121,44 +122,24 @@ export function ProductivityHub({ open, onClose }) {
     }
   }
 
-  if (!fold.mounted) return null;
-
-  return createPortal(
-    <div
-      className="fold-backdrop" data-fold={fold.fold}
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
-    >
-      <div
-        className="fold-modal" data-fold={fold.fold}
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: "520px", maxHeight: "88vh", overflowY: "auto", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", padding: "22px" }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
-          <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>For You</div>
-            <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.3px" }}>Money Moves</div>
+  return (
+    <>
+      <PanelHero eyebrow="For You">Money Moves</PanelHero>
+      {loading ? (
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Loading…</div>
+      ) : (
+        <>
+          <ChecklistSection items={checklistItems} completedIds={completedIds} onToggle={handleToggle} title="Quick Wins" />
+          <SuggestionsSection items={suggestions} title="Tips From The Team" />
+          {/* WhatsNewSection has no bottom margin of its own — it's always
+              last in BetaHomebase.jsx. Wrapped here since FeedbackSection
+              follows it in this panel. */}
+          <div style={{ marginBottom: changelogEntries.length > 0 ? "24px" : 0 }}>
+            <WhatsNewSection entries={changelogEntries} />
           </div>
-          <Pressable onClick={onClose} aria-label="Close" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>✕</Pressable>
-        </div>
-
-        {loading ? (
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Loading…</div>
-        ) : (
-          <>
-            <ChecklistSection items={checklistItems} completedIds={completedIds} onToggle={handleToggle} title="Quick Wins" />
-            <SuggestionsSection items={suggestions} title="Tips From The Team" />
-            {/* WhatsNewSection has no bottom margin of its own — it's always
-                last in BetaHomebase.jsx. Wrapped here since FeedbackSection
-                follows it in this panel. */}
-            <div style={{ marginBottom: changelogEntries.length > 0 ? "24px" : 0 }}>
-              <WhatsNewSection entries={changelogEntries} />
-            </div>
-            <FeedbackSection />
-          </>
-        )}
-      </div>
-    </div>,
-    document.body,
+          <FeedbackSection />
+        </>
+      )}
+    </>
   );
 }

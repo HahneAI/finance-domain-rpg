@@ -64,8 +64,8 @@ src/
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
-│   ├── BetaHomebase.jsx     — tracked-beta-tester-only modal: rubric score, feature checklist, suggestion feed, changelog recap
-│   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
+│   ├── BetaHomebase.jsx     — tracked-beta-tester-only page (real nav-stack view, not a modal — see App.jsx's `navigate("betaHomebase")`): rubric score, feature checklist, suggestion feed, changelog recap
+│   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same page treatment, same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
 │   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS

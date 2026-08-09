@@ -3077,6 +3077,17 @@ is the drift this entry exists to prevent:
   another. That's an accepted gap, not an oversight — this app has no other read-receipt/
   notification-state table, and the checklist half of the badge (the only part with real
   per-tester DB state) isn't affected by it.
+- **Modal → real nav-stack page (2026-08-09).** `BetaHomebase.jsx`/`ProductivityHub.jsx` were
+  originally `position:fixed` portal modals (backdrop, fold-in/out, own ✕ close button);
+  they're now plain pages rendered inside `App.jsx`'s `activePanel` when `currentView ===
+  "betaHomebase"`/`"moneyMoves"`, reached via `navigate("betaHomebase"/"moneyMoves")` (pushes
+  onto `viewStack`, unlike the bottom nav's `navigateDirect` which resets it) — same pattern
+  `HomePanel.jsx`'s tiles already use to drill into `log`/`income`/`budget`, just with a view
+  key that isn't one of the 5 primary tabs, so no bottom-nav item shows "active" while on
+  either page. There is no in-page back button — the bottom nav / sidebar (always visible,
+  unconditional siblings of the main content area) IS the exit, matching every other real
+  page in the app. The badge's "mark as seen" trigger moved from "modal opened" to "navigated
+  to" (`goToBetaHomebase`/`goToProductivityHub` in `App.jsx`) — same semantics, different verb.
 > **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
 > three postures above before writing a migration — do not default to "admin route" or
 > "direct client write" out of habit; the posture follows from *who legitimately produces the

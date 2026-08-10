@@ -635,14 +635,55 @@ each file, convert what's a clean fit, and note anything that isn't.
 
 **Status: every file in this table is converted (2026-08-10).** The only raw `fontSize` literals
 left anywhere in `src/` are: (1) `Card`'s dynamic `size` prop in `ui.jsx` — numeric emphasis,
-always out of scope; and (2) seven small shared JS style objects reused across multiple JSX call
-sites within their file (`NewJobSeasonEntry.jsx`'s `labelStyle`, `ReemploymentTracker.jsx` /
-`ResumeReviewCard.jsx`'s `inputStyle`/`labelStyle`, `RateUpdateModal.jsx`'s `labelStyle`,
-`LoginScreen.jsx` / `InvestorRegister.jsx`'s `linkBtnStyle`/`linkStyle`, `ConsentGateModal.jsx`'s
-`linkStyle`) — same DRY precedent as `ui.jsx`'s `lS`: the object is the single source of truth
-for every render site that uses it, so the value only needs to be correct in one place, not
-wrapped in a `className`. Each was checked and is already at (or bumped to) its correct
-class-equivalent size.
+always out of scope; (2) three dynamically-scaled template-literal sizes (`` `${...}px` ``) in
+`IncomePanel.jsx`'s data table and `HomePanel.jsx`'s goal-timeline rows — computed density
+scaling, not a static label size, so they never matched the literal-string sweep and are
+correctly out of scope too; and (3) eight small shared JS style objects reused across multiple
+JSX call sites within their file (`NewJobSeasonEntry.jsx`'s `labelStyle`, `ReemploymentTracker.jsx`
+/ `ResumeReviewCard.jsx`'s `inputStyle`/`labelStyle` — 2 in that file, `RateUpdateModal.jsx`'s
+`labelStyle`, `LoginScreen.jsx` / `InvestorRegister.jsx`'s `linkBtnStyle`/`linkStyle`,
+`ConsentGateModal.jsx`'s `linkStyle`) — same DRY precedent as `ui.jsx`'s `lS`: the object is the
+single source of truth for every render site that uses it, so the value only needs to be correct
+in one place, not wrapped in a `className`. Each was checked and is already at (or bumped to) its
+correct class-equivalent size.
+
+### Final scrutiny audit (2026-08-10) — one real bug found and fixed
+
+A last full-repo pass beyond the simple `fontSize: "Npx"` grep turned up a genuine defect, not
+just cosmetic gaps:
+
+**Tailwind name collision on `.text-xs`/`.text-sm`/`.text-base`.** Those three class names are
+*also* Tailwind v4's own default text-size utility names. Tailwind auto-generates a matching
+utility for any class name it finds referenced in scanned source — so `className="text-xs"`
+triggered Tailwind to emit its own `.text-xs{font-size:var(--text-xs);line-height:var(--tw-leading,var(--text-xs--line-height))}`
+inside `@layer utilities`, sitting alongside our custom `.text-xs{font-size:11px}` in
+`src/index.css`. Confirmed by inspecting the built CSS (`npx vite build` → `dist/assets/*.css`).
+Our rule reliably wins the *font-size* property only because it's unlayered plain CSS, and
+per the CSS Cascade Layers spec, unlayered rules always beat layered ones regardless of source
+order — this is NOT an accident of file order, but it also means the safety net breaks the
+moment someone "cleans up" by wrapping our rules in `@layer utilities` too. **The real bug**:
+our rule never declared `line-height`, so Tailwind's competing `line-height` declaration (≈1.33
+for xs, ≈1.43 for sm, ≈1.5 for base) was silently winning on every one of the ~750 elements using
+those three classes that didn't already set an explicit inline `lineHeight` — a real, uninten­ded
+layout change nobody asked for. Fixed by adding `line-height: normal` explicitly to all five
+`text-*` classes (decouples them from Tailwind's tokens entirely) plus a loud warning comment
+directly above the block in `index.css` telling future editors never to move it into a `@layer`.
+Re-verified via the same "inspect the built CSS" method that both properties now resolve from
+our rule.
+
+Also found and cleaned up 4 dead `style={{ }}` (empty object) props left behind where a JSX
+element's *entire* style was just the removed `fontSize` — harmless to React but dead weight
+(`UpgradeCard.jsx`, `ReviveScreen.jsx`, `LogPanel.jsx`, `BudgetPanel.jsx`).
+
+**Enforcement — `src/test/lib/textUtilityClassAudit.test.js`.** A static-analysis test (same
+"scan the real source" pattern as `cronLifecycleSelectColumns.test.js`) that greps every
+`src/components/*.jsx` file + `App.jsx` for raw `fontSize: "Npx"` (9–14px) and asserts an exact
+allowed count per file — 0 for everything, except the 8 files above pinned to their documented
+shared-object count. **New code that adds a raw inline `fontSize` in this range fails
+`npm run test:run` immediately**, with the offending file named in the failure. Verified the
+guard actually fires (temporarily injected a violation into `TrialBanner.jsx`, confirmed the
+test failed with the exact expected/received diff, then reverted). Raising an allowlisted file's
+count requires a deliberate edit to `ALLOWLIST` in that test — it won't happen by accident.
 
 **`SmBtn` gained an optional `className` prop (2026-08-10, default `"text-xs"`)** — one call
 site in `BulkEditPanel.jsx` needed a smaller `.text-2xs` override that the component previously

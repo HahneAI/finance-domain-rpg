@@ -109,7 +109,7 @@ export function ReviveScreen({ revival, checkoutReturn }) {
               style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--color-teal)", border: "none", color: "var(--color-bg-base)", textAlign: "left", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
             >
               <div className="text-md" style={{ fontWeight: "bold" }}>Annual — Best Value</div>
-              <div className="text-sm" style={{ }}>
+              <div className="text-sm">
                 {checkoutState.plan === "annual" ? "Redirecting…" : "$10.00/mo billed annually ($120/yr)"}
               </div>
             </Pressable>

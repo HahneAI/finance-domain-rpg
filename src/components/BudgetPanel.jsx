@@ -1643,7 +1643,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span className="text-base" style={{ }}>{exp.label}</span>
+                    <span className="text-base">{exp.label}</span>
                     <span className="text-2xs" style={{ background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span className="text-2xs" style={{ background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span className="text-2xs" style={{ color: "var(--color-green)" }}>✓ PAID OFF</span>}

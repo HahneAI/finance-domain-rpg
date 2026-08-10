@@ -79,7 +79,7 @@ export function UpgradeCard({ onClose, tagline } = {}) {
         </Pressable>
         <Pressable onClick={() => handleCheckout("annual")} disabled={checkoutState.plan !== null} style={planBtnStyle("annual", "var(--color-teal)", "var(--color-bg-base)")}>
           <div className="text-md" style={{ fontWeight: "bold" }}>Annual — Best Value</div>
-          <div className="text-sm" style={{ }}>
+          <div className="text-sm">
             {checkoutState.plan === "annual" ? "Redirecting…" : "$10.00/mo billed annually ($120/yr)"}
           </div>
         </Pressable>

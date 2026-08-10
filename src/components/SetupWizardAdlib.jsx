@@ -118,67 +118,100 @@ function FadeIn({ children, delay = 0 }) {
   );
 }
 
-function InlineSelect({ value, onChange, options, placeholder = "(select)" }) {
+// Shared "↑ Required" tail — mirrors real SetupWizard.jsx's Field/errBorder pattern
+// (red label + red border + inline required text once a field is `attempted` and still
+// empty), adapted to an inline mad-libs blank instead of a labeled form field: the red
+// border carries the same signal as errBorder(), and this small tail supplies the same
+// "why is this red" text real Field's error message gives, right next to the blank
+// instead of below a separate label.
+function RequiredNote({ show }) {
+  if (!show) return null;
+  return (
+    <span style={{
+      display: "inline-block", fontSize: "0.5em", fontWeight: 700, letterSpacing: "0.5px",
+      textTransform: "uppercase", color: "var(--color-deduction)", verticalAlign: "super",
+      margin: "0 2px",
+    }}>
+      ↑ Required
+    </span>
+  );
+}
+
+function InlineSelect({ value, onChange, options, placeholder = "(select)", ariaLabel, error = false }) {
   const hasValue = value != null && value !== "";
   return (
-    <select
-      value={value ?? ""}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
-        display: "inline-block", maxWidth: "100%", boxSizing: "border-box", background: "transparent",
-        border: "none",
-        borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
-        color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
-        font: "inherit", fontWeight: 700, fontStyle: hasValue ? "normal" : "italic",
-        textAlign: "center", padding: "0 4px", margin: "0 2px", cursor: "pointer",
-      }}
-    >
-      {/* Kept as a real (non-disabled) option, not just a pre-selection placeholder — lets the
-          user explicitly pick back to blank after choosing something, same as any other option. */}
-      <option value="" disabled={false}>{placeholder}</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <>
+      <select
+        value={value ?? ""}
+        onChange={e => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        aria-invalid={error || undefined}
+        style={{
+          appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
+          display: "inline-block", maxWidth: "100%", boxSizing: "border-box", background: "transparent",
+          border: "none",
+          borderBottom: error ? "3px solid var(--color-deduction)" : hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
+          color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
+          font: "inherit", fontWeight: 700, fontStyle: hasValue ? "normal" : "italic",
+          textAlign: "center", padding: "0 4px", margin: "0 2px", cursor: "pointer",
+        }}
+      >
+        {/* Kept as a real (non-disabled) option, not just a pre-selection placeholder — lets the
+            user explicitly pick back to blank after choosing something, same as any other option. */}
+        <option value="" disabled={false}>{placeholder}</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <RequiredNote show={error} />
+    </>
   );
 }
 
-function InlineNumber({ value, onChange, placeholder = "___", width = "84px" }) {
+function InlineNumber({ value, onChange, placeholder = "___", width = "84px", ariaLabel, error = false }) {
   const hasValue = value !== null && value !== undefined && value !== "";
   return (
-    <input
-      type="number" inputMode="decimal"
-      value={value ?? ""}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        display: "inline-block", width, maxWidth: "100%", boxSizing: "border-box",
-        background: "transparent", border: "none",
-        borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
-        color: "var(--color-teal)", font: "inherit", fontWeight: 700,
-        textAlign: "center", padding: "0 2px", margin: "0 2px",
-      }}
-    />
+    <>
+      <input
+        type="number" inputMode="decimal"
+        value={value ?? ""}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        aria-invalid={error || undefined}
+        style={{
+          display: "inline-block", width, maxWidth: "100%", boxSizing: "border-box",
+          background: "transparent", border: "none",
+          borderBottom: error ? "3px solid var(--color-deduction)" : hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
+          color: "var(--color-teal)", font: "inherit", fontWeight: 700,
+          textAlign: "center", padding: "0 2px", margin: "0 2px",
+        }}
+      />
+      <RequiredNote show={error} />
+    </>
   );
 }
 
-function InlineDate({ value, onChange, width = "168px", label = "Start date" }) {
+function InlineDate({ value, onChange, width = "168px", label = "Start date", error = false }) {
   const hasValue = value !== null && value !== undefined && value !== "";
   return (
-    <input
-      type="date"
-      aria-label={label}
-      value={value ?? ""}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        display: "inline-block", width, maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
-        background: "transparent", border: "none",
-        borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
-        color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
-        font: "inherit", fontWeight: 700,
-        textAlign: "center", padding: "0 2px", margin: "0 2px",
-        colorScheme: "dark",
-      }}
-    />
+    <>
+      <input
+        type="date"
+        aria-label={label}
+        aria-invalid={error || undefined}
+        value={value ?? ""}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          display: "inline-block", width, maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
+          background: "transparent", border: "none",
+          borderBottom: error ? "3px solid var(--color-deduction)" : hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
+          color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
+          font: "inherit", fontWeight: 700,
+          textAlign: "center", padding: "0 2px", margin: "0 2px",
+          colorScheme: "dark",
+        }}
+      />
+      <RequiredNote show={error} />
+    </>
   );
 }
 
@@ -191,6 +224,8 @@ function InlineChip({ label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${label}${active ? " (selected)" : ""}`}
       style={{
         display: "inline-flex", alignItems: "center", cursor: "pointer",
         margin: "3px 4px", padding: "3px 11px",
@@ -316,7 +351,7 @@ const BLANK_PAY_FIELDS = {
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
 // clause rolls in as soon as the answer it depends on is given. ──
-function IntakePage({ formData, onChange, isInvestor = false }) {
+function IntakePage({ formData, onChange, isInvestor = false, attempted = false }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
   // so track which blank the user picked as local UI state (mirrors real Step1's
@@ -440,6 +475,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
           value={formData.startedUnemployed === true ? "unemployed" : formData.startedUnemployed === false ? "employed" : ""}
           onChange={v => onChange({ startedUnemployed: v === "" ? null : v === "unemployed" })}
           options={[{ value: "employed", label: "employed" }, { value: "unemployed", label: "unemployed" }]}
+          ariaLabel="Employment status"
+          error={attempted && formData.startedUnemployed !== true && formData.startedUnemployed !== false}
         />
       </FadeIn>.
       {isEmployed && (
@@ -452,6 +489,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                   value={employerChoice}
                   onChange={setEmployer}
                   options={[{ value: "DHL", label: "DHL" }, { value: "OTHER", label: "someone else" }]}
+                  ariaLabel="Employer"
                 />
               </FadeIn>.
             </>
@@ -464,6 +502,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                   value={formData.dhlSite ?? ""}
                   onChange={v => v === "" ? onChange({ dhlSite: null, dhlTeam: null }) : pickSite(v)}
                   options={[{ value: "WAREHOUSE", label: "Warehouse" }, { value: "PLANT", label: "Plant" }]}
+                  ariaLabel="DHL site"
+                  error={attempted && !formData.dhlSite}
                 />
               </FadeIn>.
               {isEmployerPlant && (
@@ -474,6 +514,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       value={formData.dhlTeam ?? ""}
                       onChange={t => onChange(t === "" ? { dhlTeam: null } : pickTeamPatch(t))}
                       options={[{ value: "A", label: "A" }, { value: "B", label: "B" }]}
+                      ariaLabel="DHL team"
+                      error={attempted && !formData.dhlTeam}
                     />
                   </FadeIn>
                 </>
@@ -486,6 +528,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       value={formData.dhlTeam ?? ""}
                       onChange={t => onChange(t === "" ? { dhlTeam: null } : pickWarehouseTeamPatch(t))}
                       options={Object.entries(DHL_PRESET.warehouseTeams).map(([t, meta]) => ({ value: t, label: meta.label }))}
+                      ariaLabel="DHL warehouse team"
+                      error={attempted && !formData.dhlTeam}
                     />
                   </FadeIn>
                   {formData.dhlTeam && (
@@ -496,6 +540,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                           value={formData.shiftHours === 10 ? "10" : formData.shiftHours === 12 ? "12" : ""}
                           onChange={v => onChange({ shiftHours: v === "" ? null : parseInt(v, 10) })}
                           options={[{ value: "10", label: "10-hour" }, { value: "12", label: "12-hour" }]}
+                          ariaLabel="Shift length"
+                          error={attempted && !((formData.shiftHours ?? 0) > 0)}
                         />
                       </FadeIn>{" "}
                       <TypedText text={shiftsWordText} />
@@ -511,6 +557,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       value={formData.dhlNightShift === false ? "morning" : formData.dhlNightShift === true ? "night" : ""}
                       onChange={v => onChange(v === "" ? { dhlNightShift: null, nightDiffRate: null } : { dhlNightShift: v === "night", nightDiffRate: v === "night" ? 1.50 : 0 })}
                       options={[{ value: "night", label: "night" }, { value: "morning", label: "morning" }]}
+                      ariaLabel="Shift time"
                     />
                   </FadeIn>{" "}
                   <TypedText text={shiftPaidText} />{" "}
@@ -519,6 +566,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       value={formData.userPaySchedule ?? ""}
                       onChange={v => onChange({ userPaySchedule: v === "" ? null : v, annualSalary: null })}
                       options={[{ value: "weekly", label: "weekly" }, { value: "salary", label: "every two weeks" }]}
+                      ariaLabel="Pay schedule"
+                      error={attempted && !formData.userPaySchedule}
                     />
                   </FadeIn>.
                   {formData.userPaySchedule && (
@@ -530,6 +579,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                           onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
                           placeholder="1.75"
                           width="56px"
+                          ariaLabel="Weekend differential, dollars per hour"
                         />
                       </FadeIn>{" "}
                       <TypedText text={perHourText} />
@@ -552,6 +602,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                     { value: "monthly", label: "monthly" },
                     { value: "salary", label: "on salary" },
                   ]}
+                  ariaLabel="Pay schedule"
+                  error={attempted && !formData.userPaySchedule}
                 />
               </FadeIn>.
               {formData.userPaySchedule && (isSalary ? (
@@ -565,6 +617,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                         onChange({ annualSalary: sal, baseRate: sal != null ? Math.round((sal / 2080) * 100) / 100 : null, shiftHours: 8 });
                       }}
                       placeholder="52,000"
+                      ariaLabel="Annual salary, dollars"
+                      error={attempted && !((formData.annualSalary ?? 0) > 0)}
                     />
                   </FadeIn>{" "}
                   <TypedText text={aYearText} />
@@ -578,6 +632,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       onChange={v => onChange({ baseRate: v === "" ? null : parseFloat(v) })}
                       placeholder="19.65"
                       width="72px"
+                      ariaLabel="Hourly rate, dollars"
+                      error={attempted && !((formData.baseRate ?? 0) > 0)}
                     />
                   </FadeIn>{" "}
                   <TypedText text={shiftsRunText} />{" "}
@@ -587,6 +643,8 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       onChange={v => onChange({ shiftHours: v === "" ? null : parseFloat(v) })}
                       placeholder="10"
                       width="52px"
+                      ariaLabel="Shift length, hours"
+                      error={attempted && !((formData.shiftHours ?? 0) > 0)}
                     />
                   </FadeIn>{" "}
                   <TypedText text={hoursText} />
@@ -611,6 +669,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                     { value: "custom", label: "a custom number" },
                     { value: "exempt", label: "I'm exempt" },
                   ]}
+                  ariaLabel="Overtime threshold"
                 />
               </FadeIn>
               {otChoice === "custom" && (
@@ -622,6 +681,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       onChange={v => onChange({ otThreshold: v === "" ? null : parseInt(v, 10) })}
                       placeholder="45"
                       width="52px"
+                      ariaLabel="Custom overtime threshold, hours per week"
                     />
                   </FadeIn>{" "}
                   <TypedText text={otHoursWordText} />
@@ -657,6 +717,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                     { value: "tips", label: "earn tips" },
                     { value: "commission", label: "earn commission" },
                   ]}
+                  ariaLabel="Tips or commission"
                 />
               </FadeIn>.
               {formData.tipsOrCommissionEnabled && (
@@ -672,6 +733,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       value={formData.tipsCommissionOnlyPosition === true ? "yes" : formData.tipsCommissionOnlyPosition === false ? "no" : ""}
                       onChange={v => onChange({ tipsCommissionOnlyPosition: v === "" ? null : v === "yes" })}
                       options={[{ value: "yes", label: "a" }, { value: "no", label: "not a" }]}
+                      ariaLabel="Commission-only position"
                     />
                   </FadeIn>{" "}
                   <TypedText text={commissionOnlyTailText} />
@@ -688,7 +750,7 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
 // ── Page 1: Schedule (mirrors real Step2's core required fields) — a second
 // cascading sentence, only shown for employed users (jobless skips Schedule
 // entirely, same as the real wizard's isFirstRunJobless gate). ──
-function SchedulePage({ formData, onChange }) {
+function SchedulePage({ formData, onChange, attempted = false }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
   const isBiweekly = formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary";
 
@@ -720,7 +782,7 @@ function SchedulePage({ formData, onChange }) {
     <p style={BLANK_FONT}>
       <TypedText text={startedText} />{" "}
       <FadeIn delay={typeDuration(startedText)}>
-        <InlineDate value={formData.startDate} onChange={handleDateChange} />
+        <InlineDate value={formData.startDate} onChange={handleDateChange} error={attempted && !formData.startDate} />
       </FadeIn>.
       {formData.startDate && (
         isEmployerDHL ? (
@@ -734,6 +796,7 @@ function SchedulePage({ formData, onChange }) {
                   value={formData.startingWeekIsLong === true ? "long" : formData.startingWeekIsLong === false ? "short" : ""}
                   onChange={v => onChange({ startingWeekIsLong: v === "" ? null : v === "long" })}
                   options={[{ value: "short", label: "Short Week" }, { value: "long", label: "Long Week" }]}
+                  ariaLabel="Starting week"
                 />
               </FadeIn>.
             </>
@@ -747,6 +810,8 @@ function SchedulePage({ formData, onChange }) {
                 onChange={v => onChange({ maxWeeklyHours: v === "" ? null : parseFloat(v) })}
                 placeholder="40"
                 width="56px"
+                ariaLabel="Max weekly hours"
+                error={attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168)}
               />
             </FadeIn>{" "}
             <TypedText text={hoursPerWeekText} />
@@ -758,6 +823,8 @@ function SchedulePage({ formData, onChange }) {
                     value={formData.hoursUnderstood === true ? "do" : formData.hoursUnderstood === false ? "dont" : ""}
                     onChange={v => onChange({ hoursUnderstood: v === "" ? null : v === "do" })}
                     options={[{ value: "do", label: "do" }, { value: "dont", label: "don't" }]}
+                    ariaLabel="Hours understood acknowledgment"
+                    error={attempted && !formData.hoursUnderstood}
                   />
                 </FadeIn>{" "}
                 <TypedText text={forecastText} />
@@ -769,6 +836,8 @@ function SchedulePage({ formData, onChange }) {
                         value={Number.isInteger(formData.payPeriodEndDay) ? String(formData.payPeriodEndDay) : ""}
                         onChange={v => onChange({ payPeriodEndDay: v === "" ? null : parseInt(v, 10), biweeklyPayWeekParity: null })}
                         options={DAY_LABELS.map((label, i) => ({ value: String(i), label }))}
+                        ariaLabel="Pay period closing day"
+                        error={attempted && !Number.isInteger(formData.payPeriodEndDay)}
                       />
                     </FadeIn>.
                     {isBiweekly && Number.isInteger(formData.payPeriodEndDay) && (
@@ -782,6 +851,8 @@ function SchedulePage({ formData, onChange }) {
                               { value: "this", label: `Yes, this ${payDayName}` },
                               { value: "next", label: `No, next ${payDayName}` },
                             ]}
+                            ariaLabel="Pay week timing"
+                            error={attempted && formData.biweeklyPayWeekParity == null}
                           />
                         </FadeIn>
                       </>
@@ -805,7 +876,7 @@ function SchedulePage({ formData, onChange }) {
 // benefitsStartDate/otherDeductions/attendance-detail-sub-fields/PTO are all
 // skipped (v1 scope, matching Warehouse's custom-hours precedent): none of them
 // gate isValid, and this pilot only asks what's actually required to proceed. ──
-function DeductionsPage({ formData, onChange }) {
+function DeductionsPage({ formData, onChange, attempted = false }) {
   const isBaseUser = formData.employerPreset !== "DHL";
   // Local-only gate (mirrors real Step3's own benefitsGate state) — never enters
   // isValid, purely reveals/hides the benefit chips. Defaults to "answered Yes"
@@ -841,6 +912,7 @@ function DeductionsPage({ formData, onChange }) {
           value={benefitsGate === true ? "yes" : benefitsGate === false ? "no" : ""}
           onChange={v => setBenefitsGate(v === "" ? null : v === "yes")}
           options={[{ value: "yes", label: "have" }, { value: "no", label: "don't have" }]}
+          ariaLabel="Benefits enrollment"
         />
       </FadeIn>{" "}
       <TypedText text={paycheckText} />
@@ -864,6 +936,8 @@ function DeductionsPage({ formData, onChange }) {
                       onChange={v => onChange({ k401Rate: v === "" ? null : parseFloat(v) / 100 })}
                       placeholder="6"
                       width="44px"
+                      ariaLabel="401k contribution percentage"
+                      error={attempted && !((formData.k401Rate ?? 0) > 0)}
                     />
                   ) : (
                     <InlineNumber
@@ -871,6 +945,8 @@ function DeductionsPage({ formData, onChange }) {
                       onChange={v => onChange({ [def.field]: v === "" ? null : parseFloat(v) })}
                       placeholder={def.placeholder?.replace("e.g. ", "") ?? "0"}
                       width="64px"
+                      ariaLabel={`${def.label} weekly cost, dollars`}
+                      error={attempted && !((formData[def.field] ?? 0) > 0)}
                     />
                   )}
                 </FadeIn>
@@ -883,6 +959,7 @@ function DeductionsPage({ formData, onChange }) {
                         onChange={v => onChange({ k401StartDate: v === "" ? null : v })}
                         width="140px"
                         label="401k enrollment date"
+                        error={attempted && !formData.k401StartDate}
                       />
                     </FadeIn>
                   </>
@@ -902,6 +979,8 @@ function DeductionsPage({ formData, onChange }) {
               value={formData.attendanceBucketEnabled === true ? "yes" : formData.attendanceBucketEnabled === false ? "no" : ""}
               onChange={v => onChange({ attendanceBucketEnabled: v === "" ? null : v === "yes" })}
               options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]}
+              ariaLabel="Attendance tracking policy"
+              error={attempted && formData.attendanceBucketEnabled === null}
             />
           </FadeIn>
         </>
@@ -951,7 +1030,7 @@ function CalcField({ label, value, onChange }) {
 // Rates" writes real fedRateLow/stateRateLow (and the long-week pair, for a
 // variable schedule) — satisfying isTaxRatesValid the same way the real
 // wizard's paystub path does. ──
-function TaxRatesPage({ formData, onChange }) {
+function TaxRatesPage({ formData, onChange, attempted = false }) {
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax = stateConfig?.model === "NONE";
@@ -1004,6 +1083,8 @@ function TaxRatesPage({ formData, onChange }) {
               { value: "mfj", label: "married filing jointly" },
               { value: "hoh", label: "head of household" },
             ]}
+            ariaLabel="Filing status"
+            error={attempted && !formData.filingStatus}
           />
         </FadeIn>
         {", "}
@@ -1013,6 +1094,8 @@ function TaxRatesPage({ formData, onChange }) {
             value={formData.userState ?? ""}
             onChange={v => onChange({ userState: v || null })}
             options={STATE_NAMES.map(({ code, name }) => ({ value: code, label: name }))}
+            ariaLabel="State"
+            error={attempted && formData.userState == null}
           />
         </FadeIn>.
       </p>
@@ -1032,7 +1115,13 @@ function TaxRatesPage({ formData, onChange }) {
               >
                 Recalculate Using Paystub
               </Pressable>
-            ) : (
+            ) : null}
+            {!showCalc && attempted && !(formData.fedRateLow > 0) && (
+              <div style={{ marginTop: "8px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--color-deduction)" }}>
+                ↑ Required — use the paystub calculator to set your tax rates
+              </div>
+            )}
+            {showCalc && (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={calcBoxStyle}>
                   <div style={calcHdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
@@ -1156,6 +1245,7 @@ function WrapUpPage({ formData, onChange }) {
               value={bufferOn ? "on" : "off"}
               onChange={v => onChange({ freedomAllowanceEnabled: v === "on" })}
               options={[{ value: "on", label: "want" }, { value: "off", label: "don't want" }]}
+              ariaLabel="Paycheck buffer preference"
             />
           </FadeIn>{" "}
           <TypedText text="a paycheck buffer" />
@@ -1168,6 +1258,7 @@ function WrapUpPage({ formData, onChange }) {
                   onChange={v => onChange({ freedomAllowance: v === "" ? null : Math.min(parseFloat(v) || 0, FREEDOM_ALLOWANCE_MAX) })}
                   placeholder="50"
                   width="56px"
+                  ariaLabel="Paycheck buffer amount, dollars"
                 />
               </FadeIn>{" "}
               <TypedText text="per check." />

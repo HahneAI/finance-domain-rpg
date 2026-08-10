@@ -4426,13 +4426,29 @@ for screen edges")*
 
 **G. Accessibility & validation-feedback parity**
 
-- [ ] The real wizard shows explicit red-label + red-border + "↑ Required" text once a field is
+- [x] The real wizard shows explicit red-label + red-border + "↑ Required" text once a field is
       `attempted` and still empty — concrete, in-page feedback for *why* the primary button is
-      disabled. Ad-lib pages only disable the button with no explanation. Real users (not admins
-      familiar with the fields) need equivalent required-field feedback before this ships.
-- [ ] Screen-reader pass on `InlineChip`/`InlineSelect`/`InlineNumber`/`InlineDate` accessible
-      names — these were built and tested for an admin-only tool; verify they hold up for a
-      real, broader signup audience.
+      disabled. **Done 2026-08-10:** `InlineSelect`/`InlineNumber`/`InlineDate` gained an `error`
+      prop that swaps the dashed border for a solid `--color-deduction` border, sets
+      `aria-invalid`, and renders a new `RequiredNote` ("↑ Required", mirrors real `Field`'s error
+      text) — the same signal real `errBorder()`/`Field` give, adapted to an inline blank instead
+      of a labeled form field. `IntakePage`/`SchedulePage`/`DeductionsPage`/`TaxRatesPage` gained
+      an `attempted` param (already threaded from the parent, previously unconsumed) and wire
+      `error={attempted && <same missing-condition isXValid checks>}` on every required control —
+      line-for-line mirrors of the real wizard's own `attempted && !foo` conditions. `WrapUpPage`
+      needs none (`isWrapUpValid` is always `true`). Known, accepted limitation carried over
+      unchanged from the real wizard: the Next/Finish button stays `disabled={!canProceed}`, so
+      the `setAttempted(true)` branch in `handleNext` is reachable only if `canProceed` somehow
+      passes render-to-click (native `<button disabled>` blocks click dispatch entirely) — this is
+      the *same* dead-branch shape `SetupWizard.jsx`'s own `handleNext` already has; not something
+      this round invented or was asked to redesign, and changing it (e.g. an always-enabled Next)
+      would itself be a real behavioral divergence from the wizard this component mirrors.
+- [x] Screen-reader pass on `InlineChip`/`InlineSelect`/`InlineNumber`/`InlineDate` accessible
+      names — **done 2026-08-10.** Every `InlineSelect`/`InlineNumber` call site across all five
+      pages now carries a contextual `ariaLabel` (e.g. "Employment status", "Hourly rate,
+      dollars"); `InlineDate` already had a `label` prop (unchanged). `InlineChip` gained
+      `aria-pressed`/`aria-label` (includes "(selected)" state) — it's a toggle button, not a
+      native checkbox, so `aria-pressed` is the correct role signal.
 
 **H. Field-set completeness housekeeping**
 

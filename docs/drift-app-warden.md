@@ -602,6 +602,39 @@ wizard writes was already tracked.
 > `ptoAccrualMethod`/`ptoAccrualRate`/`ptoCap` from real Step1/Step2/Step3's own writes, so no
 > new list entries are expected there, but confirm rather than assume.
 
+**F132 · `SetupWizardAdlib.jsx` — `attempted`/required-field feedback + accessible names** —
+`SetupWizardAdlib.jsx` (`InlineSelect`/`InlineNumber`/`InlineDate`/`InlineChip`, `RequiredNote`,
+`IntakePage`/`SchedulePage`/`DeductionsPage`/`TaxRatesPage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 3, docs/TODO.md §19.1.G)*
+`attempted` was threaded to every page component since the save-wiring round but never consumed —
+inert scaffolding. Now: `InlineSelect`/`InlineNumber`/`InlineDate` take an `error` boolean that
+swaps their dashed/teal border for a solid `--color-deduction` one, sets `aria-invalid`, and
+renders a small red `RequiredNote` ("↑ Required") — the same visual/semantic signal real
+`errBorder()`/`Field` give in `SetupWizard.jsx`, just adapted to an inline mad-libs blank instead
+of a labeled block-level form field (no separate `<label>` to redden, so the note sits right next
+to the blank instead). Each page wires `error={attempted && <missing-condition>}` on every control
+its own `isXValid` (F-mirrors of real `STEP_DEFS`) requires — line-for-line copies of the
+condition already inside that page's `isXValid` function, not independently re-derived. All four
+`Inline*` controls also gained/kept contextual accessible names (`InlineSelect`/`InlineNumber`
+via a new `ariaLabel` prop threaded per call site; `InlineDate` already had `label`; `InlineChip`
+gained `aria-pressed` + `aria-label`).
+> **IF** a required field's error condition is added or changed on the real wizard's matching
+> `STEP_DEFS` step, **THEN** update the mirrored `isXValid` here (already required by F7's
+> line-for-line-mirror convention) AND the matching `error={attempted && ...}` prop on this page —
+> three places in sync now (real `isValid`, ad-lib `isXValid`, ad-lib `error` prop), not two.
+> **IF** you add a new required field to any page, **THEN** its control needs `error={attempted &&
+> <the same condition isXValid checks for that field>}` plus an `ariaLabel` — omitting either is a
+> silent accessibility/UX regression that no test currently catches (no automated a11y assertions
+> exist for this file; `SetupWizardAdlib.test.jsx` doesn't query `aria-invalid` or `aria-label`
+> today).
+> **Known, accepted, NOT fixed by this round:** the Next/Finish `Pressable` stays
+> `disabled={!canProceed}` (unchanged), meaning `handleNext`'s `setAttempted(true)` branch mirrors
+> real `SetupWizard.jsx`'s own `handleNext` exactly — including that same function's own
+> reachability quirk (a native `<button disabled>` blocks click dispatch, so the branch cannot
+> fire from a literal click on a disabled button in either wizard). This round's brief was to
+> mirror the real wizard's pattern, not redesign it; an always-enabled Next button would itself be
+> a real behavioral divergence from `SetupWizard.jsx`, not a parity fix.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

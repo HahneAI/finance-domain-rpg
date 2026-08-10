@@ -90,7 +90,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
+              <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
                 Life Events
               </div>
               <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
@@ -157,7 +157,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <span className="text-md" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
                       {t.title}
                     </span>
                     {t.comingSoon && (
@@ -170,7 +170,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: "12px", lineHeight: 1.4, color: "var(--color-text-secondary)" }}>
+                  <div className="text-sm" style={{ lineHeight: 1.4, color: "var(--color-text-secondary)" }}>
                     {t.desc}
                   </div>
                 </div>

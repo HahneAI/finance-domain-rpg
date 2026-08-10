@@ -163,12 +163,11 @@ function SidebarNavItem({ item, active, onClick }) {
   return (
     <Pressable
       onClick={onClick}
-      style={{
+      className="text-xs" style={{
         display: "block",
         width: "100%",
         textAlign: "left",
         padding: "14px 20px",
-        fontSize: "11px",
         letterSpacing: "2px",
         textTransform: "uppercase",
        
@@ -208,8 +207,7 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
       `}</style>
 
       {/* Brand label */}
-      <div style={{
-        fontSize: "10px",
+      <div className="text-xs" style={{
         letterSpacing: "4px",
         textTransform: "uppercase",
         color: "var(--color-text-disabled)",
@@ -249,8 +247,7 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
       </div>
 
       {/* Status label */}
-      <div style={{
-        fontSize: "11px",
+      <div className="text-xs" style={{
         letterSpacing: "1.5px",
         textTransform: "uppercase",
         color: "var(--color-text-disabled)",
@@ -2281,8 +2278,8 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div>
-                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
+                <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div className="text-base" style={{ fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
             <Pressable
@@ -2297,11 +2294,11 @@ export default function App() {
               </svg>
             </Pressable>
           </div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
+          {currentWeekNumber && <div className="text-2xs" style={{ display: "inline-block", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <Pressable onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <Pressable onClick={() => setConfirmDismissed(false)} className="text-2xs" style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
             </Pressable>
           )}
@@ -2309,13 +2306,13 @@ export default function App() {
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)" }}>
                   {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
               </div>
               <Pressable
                 onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px", display: "flex", alignItems: "center" }}
+                className="text-md" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", lineHeight: 1, padding: "0 2px", display: "flex", alignItems: "center" }}
                 aria-label="Clear lock date"
               >×</Pressable>
             </div>
@@ -2330,10 +2327,9 @@ export default function App() {
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
               onClick={() => setLifeEventMenu(true)}
-              style={{
+              className="text-xs" style={{
                 display: "block", width: "100%", textAlign: "left",
-                padding: "14px 20px", fontSize: "11px",
-                letterSpacing: "2px", textTransform: "uppercase",
+                padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
                 color: "var(--color-text-primary)",
                 borderLeft: "3px solid transparent",
@@ -2349,18 +2345,18 @@ export default function App() {
             <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
               <div style={{ padding: "8px 20px 6px", display: "flex", alignItems: "center", gap: "6px" }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+                <span className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
                   Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
                 </span>
               </div>
               <div style={{ padding: "4px 20px 12px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
                 {tempLockDate ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                    <span className="text-xs" style={{ color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                     <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                      className="text-2xs" style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
                     >Clear</Pressable>
                   </div>
                 ) : (
@@ -2369,31 +2365,31 @@ export default function App() {
                       type="date"
                       value={adminDateDraft}
                       onChange={e => setAdminDateDraft(e.target.value)}
-                      style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "11px", padding: "4px 6px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
+                      className="text-xs" style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", padding: "4px 6px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
                     />
                     <Pressable
                       onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
                       disabled={!adminDateDraft}
-                      style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold" }}
+                      className="text-2xs" style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold" }}
                     >Set</Pressable>
                   </div>
                 )}
               </div>
               {/* Force Sync */}
               <div style={{ padding: "0 20px 10px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   {["push", "pull"].map(op => (
                     <Pressable
                       key={op}
                       onClick={op === "push" ? handleForcePush : handleForcePull}
                       disabled={!!syncStatus?.pending}
-                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
+                      className="text-2xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
                     >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
                   ))}
                 </div>
                 {syncStatus && (
-                  <div style={{ fontSize: "9px", marginTop: "5px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                  <div className="text-2xs" style={{ marginTop: "5px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
                     {syncStatus.pending
                       ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
                       : syncStatus.ok
@@ -2405,27 +2401,27 @@ export default function App() {
 
               {/* Reopen Last Check-In */}
               <div style={{ padding: "0 20px 10px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
                 <button
                   onClick={handleReopenLastCheckIn}
                   disabled={reopenableWeekIdx == null}
-                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+                  className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
                 >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
               </div>
 
               {/* Config Raw View */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
                   <Pressable
                     onClick={() => setConfigViewOpen(v => !v)}
-                    style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                    className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
                   >{configViewOpen ? "Hide" : "View"}</Pressable>
                 </div>
                 {configViewOpen && (
                   <div style={{ position: "relative" }}>
                     {lifeEventsConfigFields.length > 0 && (
-                      <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "6px", lineHeight: "1.5" }}>
+                      <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "6px", lineHeight: "1.5" }}>
                         <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "3px" }}>Life Events</div>
                         {lifeEventsConfigFields.map(([k, v]) => (
                           <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
@@ -2435,12 +2431,12 @@ export default function App() {
                         ))}
                       </div>
                     )}
-                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    <pre className="text-2xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
                     <Pressable
                       onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
-                      style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
+                      className="text-2xs" style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
                     >Copy to Clipboard</Pressable>
                   </div>
                 )}
@@ -2449,41 +2445,41 @@ export default function App() {
               {/* Supabase Row Viewer */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                    {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
-                    <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
-                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
+                    {rowDiff.length > 0 && <span className="text-2xs" style={{ color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                    <Pressable onClick={handleFetchRow} disabled={rowFetching} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
                   </div>
                 </div>
                 {rowData && rowViewOpen && (
                   <div>
                     {rowData.__error
-                      ? <div style={{ fontSize: "9px", color: "var(--color-red)" }}>{rowData.__error}</div>
+                      ? <div className="text-2xs" style={{ color: "var(--color-red)" }}>{rowData.__error}</div>
                       : <>
-                          {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
-                          {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
-                          {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
-                          {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
+                          {rowData.updated_at && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                          {rowDiff.length > 0 && <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                          {historyLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                          {expenseTriageLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                           {coachChatsLine && (
                             <div style={{ marginBottom: "4px" }}>
                               <Pressable
                                 onClick={() => setCoachChatsListOpen(v => !v)}
                                 disabled={!coachChatsMeta?.count}
-                                style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                                className="text-2xs" style={{ background: "transparent", border: "none", padding: "0", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
                               >
                                 {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
                               </Pressable>
                               {coachChatsListOpen && coachChatsMeta?.count > 0 && (
                                 <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
                                   {coachChatsMeta.recentTitles.map((t, i) => (
-                                    <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
+                                    <div key={i} className="text-2xs" style={{ color: "var(--color-text-disabled)" }}>· {t}</div>
                                   ))}
                                 </div>
                               )}
                             </div>
                           )}
-                          <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          <pre className="text-2xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                             {JSON.stringify(rowData, null, 2)}
                           </pre>
                         </>
@@ -2495,8 +2491,8 @@ export default function App() {
               {/* Tax Weeks Grid */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <Pressable onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                  <Pressable onClick={() => setTaxGridOpen(v => !v)} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
                 </div>
                 {taxGridOpen && (() => {
                   const overrides = config.pastWeekTaxStatusOverrides ?? {};
@@ -2521,21 +2517,21 @@ export default function App() {
 
               {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
               <div style={{ padding: "0 20px 12px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
-                  <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+                  <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} className="text-2xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                  <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} className="text-2xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
                 </div>
                 {betaReportStatus?.error && (
-                  <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "4px" }}>{betaReportStatus.error}</div>
+                  <div className="text-2xs" style={{ color: "var(--color-red)", marginTop: "4px" }}>{betaReportStatus.error}</div>
                 )}
               </div>
 
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
                 {adminDemoView !== null && (
-                  <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <div className="text-2xs" style={{ color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -2549,13 +2545,12 @@ export default function App() {
                       key={n}
                       onClick={() => setAdminDemoView(adminDemoView === n ? null : n)}
                       title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
-                      style={{
+                      className="text-xs" style={{
                         flex: 1,
                         background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
                         border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
                         borderRadius: "6px",
                         padding: "5px 0",
-                        fontSize: "10px",
                         letterSpacing: "1px",
                         textTransform: "uppercase",
                         color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
@@ -2633,23 +2628,23 @@ export default function App() {
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
+                <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
                 {isAdmin && tempLockDate && (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                    <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
                       {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
                     <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, fontSize: "11px", display: "flex", alignItems: "center" }}
+                      className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
                       aria-label="Clear lock date"
                     >×</Pressable>
                   </div>
                 )}
               </div>
-              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
+              <div className="text-md" style={{ fontWeight: "bold" }}>Authority Finance</div>
             </div>
           </div>
 
@@ -2688,7 +2683,7 @@ export default function App() {
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                 </svg>
                 {badgeCount > 0 && (
-                  <span style={{
+                  <span className="text-2xs" style={{
                     position: "absolute",
                     top: "6px",
                     right: "6px",
@@ -2697,7 +2692,6 @@ export default function App() {
                     borderRadius: "50%",
                     width: "16px",
                     height: "16px",
-                    fontSize: "9px",
                     fontWeight: "bold",
                     display: "flex",
                     alignItems: "center",
@@ -2743,7 +2737,7 @@ export default function App() {
                   <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
                 </svg>
                 {badgeCount > 0 && (
-                  <span style={{
+                  <span className="text-2xs" style={{
                     position: "absolute",
                     top: "6px",
                     right: "6px",
@@ -2752,7 +2746,6 @@ export default function App() {
                     borderRadius: "50%",
                     width: "16px",
                     height: "16px",
-                    fontSize: "9px",
                     fontWeight: "bold",
                     display: "flex",
                     alignItems: "center",
@@ -2787,7 +2780,7 @@ export default function App() {
               <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
             </svg>
             {unconfirmedCount > 0 && (
-              <span style={{
+              <span className="text-2xs" style={{
                 position: "absolute",
                 top: "6px",
                 right: "6px",
@@ -2796,7 +2789,6 @@ export default function App() {
                 borderRadius: "50%",
                 width: "16px",
                 height: "16px",
-                fontSize: "9px",
                 fontWeight: "bold",
                 display: "flex",
                 alignItems: "center",
@@ -2819,7 +2811,7 @@ export default function App() {
               borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
               display: "flex", alignItems: "center", gap: "10px",
             }}>
-              <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>
                 Confirming your subscription…
               </div>
             </div>
@@ -2830,10 +2822,10 @@ export default function App() {
               borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
             }}>
-              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
                 Checkout canceled — no charge was made.
               </div>
-              <Pressable onClick={() => setCheckoutReturn(null)} aria-label="Dismiss" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "14px", padding: "2px 6px" }}>✕</Pressable>
+              <Pressable onClick={() => setCheckoutReturn(null)} aria-label="Dismiss" className="text-md" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", padding: "2px 6px" }}>✕</Pressable>
             </div>
           )}
           {/* ── Trial/dunning banner (§17.F) — phase-aware (trial/grace/expired),
@@ -2919,10 +2911,10 @@ export default function App() {
                 boxShadow: "0 0 8px rgba(245,158,11,0.6)",
               }} />
               <div style={{ flex: 1, minWidth: "180px" }}>
-                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: 700 }}>
+                <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: 700 }}>
                   New Job Season
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
                   {/* §1.H5: users who started jobless have no real pay history to compare
                       against — say so plainly instead of implying a job was actually lost. */}
                   {config.startedUnemployed === true ? (
@@ -2953,13 +2945,13 @@ export default function App() {
                     button just jumps there instead of opening one. */}
                 <Pressable
                   onClick={() => navigateDirect("budget")}
-                  style={{
+                  className="text-xs" style={{
                     background: "transparent",
                     color: "var(--color-warning)",
                     border: "1px solid rgba(245,158,11,0.4)",
                     borderRadius: "10px",
                     padding: "6px 12px",
-                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    letterSpacing: "1.5px", textTransform: "uppercase",
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
@@ -2967,12 +2959,12 @@ export default function App() {
                 </Pressable>
                 <Pressable
                   onClick={handleBackToWork}
-                  style={{
+                  className="text-xs" style={{
                     background: "var(--color-warning)",
                     color: "var(--color-bg-base)",
                     border: "none", borderRadius: "10px",
                     padding: "6px 12px",
-                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    letterSpacing: "1.5px", textTransform: "uppercase",
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
@@ -3054,7 +3046,7 @@ export default function App() {
         {/* Drawer header */}
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -3089,10 +3081,9 @@ export default function App() {
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
               onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
-              style={{
+              className="text-xs" style={{
                 display: "block", width: "100%", textAlign: "left",
-                padding: "14px 20px", fontSize: "11px",
-                letterSpacing: "2px", textTransform: "uppercase",
+                padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
                 color: "var(--color-text-primary)",
                 borderLeft: "3px solid transparent",
@@ -3104,10 +3095,9 @@ export default function App() {
             {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
               <Pressable
                 onClick={() => { setDrawerFeedbackOpen(true); setDrawerOpen(false); }}
-                style={{
+                className="text-xs" style={{
                   display: "block", width: "100%", textAlign: "left",
-                  padding: "14px 20px", fontSize: "11px",
-                  letterSpacing: "2px", textTransform: "uppercase",
+                  padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                   background: "transparent",
                   color: "var(--color-text-primary)",
                   borderLeft: "3px solid transparent",
@@ -3123,11 +3113,10 @@ export default function App() {
                 aria-haspopup="dialog"
                 aria-controls="pwa-install-dialog"
                 onClick={(e) => { openPwaModal(e.currentTarget); setDrawerOpen(false); }}
-                style={{
+                className="text-xs" style={{
                   display: "flex", alignItems: "center", gap: "10px",
                   width: "100%", textAlign: "left",
-                  padding: "14px 20px", fontSize: "11px",
-                  letterSpacing: "2px", textTransform: "uppercase",
+                  padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                   background: "transparent",
                   color: "var(--color-text-primary)",
                   borderLeft: "3px solid transparent",
@@ -3148,7 +3137,7 @@ export default function App() {
         {/* ── Investor accounts pill ── */}
         {config.isInvestor && (
           <div style={{ padding: "12px 16px 0", borderTop: "1px solid #1e1e1e" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
               Accounts
             </div>
             <div style={{
@@ -3165,11 +3154,10 @@ export default function App() {
                     key={n}
                     type="button"
                     onClick={() => handleSelectInvestorAccount(n)}
-                    style={{
+                    className="text-xs" style={{
                       flex: 1,
                       padding: "10px 0",
                       minHeight: "44px",
-                      fontSize: "11px",
                       fontWeight: active ? "700" : "500",
                       letterSpacing: "1px",
                       background: active ? "var(--color-accent-primary)" : "transparent",
@@ -3194,17 +3182,17 @@ export default function App() {
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+              <span className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
                 Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
               </span>
             </div>
-            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+            <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
             {tempLockDate ? (
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                <span className="text-sm" style={{ color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                 <Pressable
                   onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                  className="text-2xs" style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
                 >Clear</Pressable>
               </div>
             ) : (
@@ -3218,25 +3206,25 @@ export default function App() {
                 <Pressable
                   onClick={() => { if (adminDateDraft) { setTempLockDate(adminDateDraft); setDrawerOpen(false); } }}
                   disabled={!adminDateDraft}
-                  style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
+                  className="text-xs" style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
                 >Set</Pressable>
               </div>
             )}
             {/* Force Sync */}
             <div style={{ marginTop: "12px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
               <div style={{ display: "flex", gap: "8px" }}>
                 {["push", "pull"].map(op => (
                   <Pressable
                     key={op}
                     onClick={op === "push" ? handleForcePush : handleForcePull}
                     disabled={!!syncStatus?.pending}
-                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+                    className="text-xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
                   >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
                 ))}
               </div>
               {syncStatus && (
-                <div style={{ fontSize: "10px", marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                <div className="text-xs" style={{ marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
                   {syncStatus.pending
                     ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
                     : syncStatus.ok
@@ -3248,27 +3236,27 @@ export default function App() {
 
             {/* Reopen Last Check-In */}
             <div style={{ marginTop: "12px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
               <button
                 onClick={handleReopenLastCheckIn}
                 disabled={reopenableWeekIdx == null}
-                style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+                className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
               >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
             </div>
 
             {/* Config Raw View */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
                 <Pressable
                   onClick={() => setConfigViewOpen(v => !v)}
-                  style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                  className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
                 >{configViewOpen ? "Hide" : "View"}</Pressable>
               </div>
               {configViewOpen && (
                 <div>
                   {lifeEventsConfigFields.length > 0 && (
-                    <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "8px", lineHeight: "1.6" }}>
+                    <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "8px", lineHeight: "1.6" }}>
                       <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "4px" }}>Life Events</div>
                       {lifeEventsConfigFields.map(([k, v]) => (
                         <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
@@ -3278,12 +3266,12 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                  <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                  <pre className="text-xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                     {JSON.stringify(config, null, 2)}
                   </pre>
                   <Pressable
                     onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
-                    style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
+                    className="text-xs" style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
                   >Copy to Clipboard</Pressable>
                 </div>
               )}
@@ -3292,41 +3280,41 @@ export default function App() {
             {/* Supabase Row Viewer */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
-                  <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
-                  {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
+                  {rowDiff.length > 0 && <span className="text-2xs" style={{ color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                  <Pressable onClick={handleFetchRow} disabled={rowFetching} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                  {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
                 </div>
               </div>
               {rowData && rowViewOpen && (
                 <div>
                   {rowData.__error
-                    ? <div style={{ fontSize: "10px", color: "var(--color-red)" }}>{rowData.__error}</div>
+                    ? <div className="text-xs" style={{ color: "var(--color-red)" }}>{rowData.__error}</div>
                     : <>
-                        {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
-                        {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
-                        {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
-                        {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
+                        {rowData.updated_at && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                        {rowDiff.length > 0 && <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                        {historyLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                        {expenseTriageLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                         {coachChatsLine && (
                           <div style={{ marginBottom: "4px" }}>
                             <Pressable
                               onClick={() => setCoachChatsListOpen(v => !v)}
                               disabled={!coachChatsMeta?.count}
-                              style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                              className="text-2xs" style={{ background: "transparent", border: "none", padding: "0", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
                             >
                               {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
                             </Pressable>
                             {coachChatsListOpen && coachChatsMeta?.count > 0 && (
                               <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
                                 {coachChatsMeta.recentTitles.map((t, i) => (
-                                  <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
+                                  <div key={i} className="text-2xs" style={{ color: "var(--color-text-disabled)" }}>· {t}</div>
                                 ))}
                               </div>
                             )}
                           </div>
                         )}
-                        <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                        <pre className="text-xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
                         </pre>
                       </>
@@ -3338,8 +3326,8 @@ export default function App() {
             {/* Tax Weeks Grid */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                <Pressable onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                <Pressable onClick={() => setTaxGridOpen(v => !v)} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
               </div>
               {taxGridOpen && (() => {
                 const overrides = config.pastWeekTaxStatusOverrides ?? {};
@@ -3364,21 +3352,21 @@ export default function App() {
 
             {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
             <div style={{ marginTop: "12px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
               <div style={{ display: "flex", gap: "6px" }}>
-                <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
-                <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+                <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} className="text-xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} className="text-xs" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
               </div>
               {betaReportStatus?.error && (
-                <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
+                <div className="text-2xs" style={{ color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
               )}
             </div>
 
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
               {adminDemoView !== null && (
-                <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <div className="text-2xs" style={{ color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -3392,13 +3380,12 @@ export default function App() {
                     key={n}
                     onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setDrawerOpen(false); }}
                     title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
-                    style={{
+                    className="text-xs" style={{
                       flex: 1,
                       background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
                       border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
                       borderRadius: "6px",
                       padding: "7px 0",
-                      fontSize: "10px",
                       letterSpacing: "1px",
                       textTransform: "uppercase",
                       color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
@@ -3417,7 +3404,7 @@ export default function App() {
         )}
 
         {/* Active section indicator at bottom */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
+        <div className="text-xs" style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
           Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
         </div>
       </div>
@@ -3505,7 +3492,7 @@ export default function App() {
                     navigateDirect(item.key);
                   }
                 }}
-                style={{
+                className="text-2xs" style={{
                   flex: 1,
                   height: "100%",
                   background: "transparent",
@@ -3517,7 +3504,6 @@ export default function App() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "3px",
-                  fontSize: "9px",
                   letterSpacing: "1px",
                   textTransform: "uppercase",
                   paddingTop: "2px",
@@ -3558,7 +3544,7 @@ export default function App() {
               width: "220px",
               boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
             }}>
-              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "10px", fontWeight: "bold" }}>Live State</div>
+              <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "10px", fontWeight: "bold" }}>Live State</div>
               {[
                 ["Effective Today", effectiveToday, today !== effectiveToday ? `real: ${today}` : null],
                 ["Week", currentWeek ? `${currentWeek.idx}` : "—", currentWeekLabel],
@@ -3590,9 +3576,9 @@ export default function App() {
                 ["Card / Dunning", subscription.cardOnFile ? "on file" : "none", subscription.dunningEmailCount ? `${subscription.dunningEmailCount} sent` : null],
               ].map(([label, val, sub, amber]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
+                  <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
                   <div style={{ textAlign: "right" }}>
-                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: amber || (label === "Effective Today" && today !== effectiveToday) ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
+                    <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: amber || (label === "Effective Today" && today !== effectiveToday) ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
                     {sub && <div style={{ fontSize: "8px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{sub}</div>}
                   </div>
                 </div>
@@ -3602,6 +3588,7 @@ export default function App() {
           {/* Pill toggle button */}
           <Pressable
             onClick={() => setInspectorOpen(v => !v)}
+            className="text-2xs"
             style={{
               position: "relative",
               background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
@@ -3614,7 +3601,6 @@ export default function App() {
               gap: "5px",
               cursor: "pointer",
               color: inspectorOpen ? "var(--color-bg-base)" : "var(--color-warning)",
-              fontSize: "9px",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
               fontWeight: "bold",
@@ -3655,8 +3641,8 @@ export default function App() {
         const fN = n => n != null ? fC(n) : "—";
         const Row = ({ label, val, mono = true, color }) => (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-            <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0, paddingRight: "12px" }}>{label}</span>
-            <span style={{ fontSize: "11px", fontFamily: mono ? "var(--font-mono)" : "inherit", color: color ?? "var(--color-text-primary)", textAlign: "right", wordBreak: "break-all" }}>{val}</span>
+            <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0, paddingRight: "12px" }}>{label}</span>
+            <span className="text-xs" style={{ fontFamily: mono ? "var(--font-mono)" : "inherit", color: color ?? "var(--color-text-primary)", textAlign: "right", wordBreak: "break-all" }}>{val}</span>
           </div>
         );
         const SH = ({ children }) => (
@@ -3674,11 +3660,11 @@ export default function App() {
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
                 <div>
-                  <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "4px" }}>Week Inspector</div>
+                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "4px" }}>Week Inspector</div>
                   <div style={{ fontSize: "17px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
                     Wk {w.idx} · {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
                   </div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+                  <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "3px" }}>
                     {w.weekStart instanceof Date ? w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekStart}
                     {" – "}
                     {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
@@ -3745,20 +3731,20 @@ export default function App() {
                 {conf.missedScheduledDays?.length > 0 && <Row label="Missed Days" val={conf.missedScheduledDays.join(", ")} color="var(--color-deduction)" />}
                 {conf.pickupDays?.length > 0 && <Row label="Pickup Days" val={conf.pickupDays.join(", ")} color="var(--color-green)" />}
                 {conf.autoConfirmed && <Row label="Auto-confirmed" val="yes" color="var(--color-text-disabled)" />}
-              </> : <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>Not confirmed</div>}
+              </> : <div className="text-xs" style={{ color: "var(--color-text-disabled)", padding: "6px 0" }}>Not confirmed</div>}
 
               {/* Log Entries */}
               <SH>Log Entries ({weekLogs.length})</SH>
               {weekLogs.length === 0
-                ? <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>None</div>
+                ? <div className="text-xs" style={{ color: "var(--color-text-disabled)", padding: "6px 0" }}>None</div>
                 : weekLogs.map(e => {
                     const imp = calcEventImpact(e, config);
                     const isB = e.type === "bonus";
                     const ev = EVENT_TYPES[e.type] ?? { label: e.type, color: "var(--color-text-secondary)", icon: "?" };
                     return (
                       <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <span style={{ fontSize: "9px", color: ev.color }}>{ev.icon} {ev.label}</span>
-                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>
+                        <span className="text-2xs" style={{ color: ev.color }}>{ev.icon} {ev.label}</span>
+                        <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>
                           {isB ? "+" : "-"}{fC(isB ? imp.netGained : imp.netLost)} net
                         </span>
                       </div>

@@ -63,7 +63,7 @@ const cardHeaderStyle = {
   cursor: "pointer", textAlign: "left",
 };
 const cardLabelStyle = {
-  fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+  letterSpacing: "1px", textTransform: "uppercase",
   color: "var(--color-text-secondary)", marginBottom: "6px",
 };
 
@@ -397,17 +397,17 @@ function AdvancedPayRulesCard({ formData, onChange }) {
     <div style={cardShellStyle}>
       <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
         <div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Advanced Pay Rules</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>Advanced Pay Rules</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
             OT multiplier, night differential, weekend rate — defaults work for most.
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
       </Pressable>
       {expanded && (
         <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <div style={cardLabelStyle}>OT Multiplier</div>
+            <div className="text-2xs" style={cardLabelStyle}>OT Multiplier</div>
             <div style={{ display: "flex", gap: "8px" }}>
               {OT_MULTIPLIERS.map(m => (
                 <InlineChip key={m} label={`${m}×`} active={formData.otMultiplier === m} onClick={() => onChange({ otMultiplier: m })} />
@@ -415,14 +415,14 @@ function AdvancedPayRulesCard({ formData, onChange }) {
             </div>
           </div>
           <div>
-            <div style={cardLabelStyle}>Night Differential?</div>
+            <div className="text-2xs" style={cardLabelStyle}>Night Differential?</div>
             <div style={{ display: "flex", gap: "8px" }}>
               <InlineChip label="Yes" active={formData.nightDiffEnabled === true} onClick={() => onChange({ nightDiffEnabled: true })} />
               <InlineChip label="No" active={formData.nightDiffEnabled === false} onClick={() => onChange({ nightDiffEnabled: false, nightDiffRate: 0 })} />
             </div>
             {formData.nightDiffEnabled === true && (
               <div style={{ marginTop: "10px" }}>
-                <div style={cardLabelStyle}>Night Diff Rate ($/hr)</div>
+                <div className="text-2xs" style={cardLabelStyle}>Night Diff Rate ($/hr)</div>
                 <InlineNumber
                   value={formData.nightDiffRate ?? ""}
                   onChange={v => onChange({ nightDiffRate: v === "" ? null : parseFloat(v) })}
@@ -434,7 +434,7 @@ function AdvancedPayRulesCard({ formData, onChange }) {
             )}
           </div>
           <div>
-            <div style={cardLabelStyle}>Weekend Differential ($/hr, 0 = none)</div>
+            <div className="text-2xs" style={cardLabelStyle}>Weekend Differential ($/hr, 0 = none)</div>
             <InlineNumber
               value={formData.diffRate ?? ""}
               onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
@@ -467,12 +467,12 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
     <div style={cardShellStyle}>
       <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
         <div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>DHL Rotation</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>DHL Rotation</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
             {isCustom ? "Custom long/short-week hours" : "Standard rotation — tap to override"}
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
       </Pressable>
       {expanded && (
         <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -497,8 +497,8 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
           </div>
           {isCustom ? (
             <div>
-              <div style={{ ...cardLabelStyle, color: hoursMissing ? "var(--color-deduction)" : cardLabelStyle.color }}>Hours per week</div>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>Long week</div>
+              <div className="text-2xs" style={{ ...cardLabelStyle, color: hoursMissing ? "var(--color-deduction)" : cardLabelStyle.color }}>Hours per week</div>
+              <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>Long week</div>
               <InlineNumber
                 value={longDraft}
                 onChange={v => {
@@ -511,7 +511,7 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
                 ariaLabel="Long week hours"
                 error={attempted && formData.customWeeklyHoursLong === 0}
               />
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "8px" }}>Short week</div>
+              <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "8px" }}>Short week</div>
               <InlineNumber
                 value={shortDraft}
                 onChange={v => {
@@ -524,12 +524,12 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
                 ariaLabel="Short week hours"
                 error={attempted && formData.customWeeklyHoursShort === 0}
               />
-              <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+              <div className="text-xs" style={{ marginTop: "8px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
                 Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
               Override per-week from Income for extra shifts.
             </div>
           )}
@@ -911,7 +911,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                 />
               </FadeIn>.
               {formData.tipsOrCommissionEnabled && (
-                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px" }}>
+                <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "6px" }}>
                   We&rsquo;ll ask a quick daily check-in — did you make any {formData.tipsOrCommissionLabel} that day?
                 </div>
               )}
@@ -1237,10 +1237,10 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
 function OtherDeductionsList({ others, onAdd, onUpdate, onRemove }) {
   return (
     <div style={{ ...cardShellStyle, marginTop: "18px", padding: "14px" }}>
-      <div style={cardLabelStyle}>Other Recurring Deductions (per paycheck)</div>
+      <div className="text-2xs" style={cardLabelStyle}>Other Recurring Deductions (per paycheck)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {others.length === 0 && (
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", padding: "4px 0" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", padding: "4px 0" }}>
             Nothing added — examples: union dues, parking, equipment.
           </div>
         )}
@@ -1248,6 +1248,7 @@ function OtherDeductionsList({ others, onAdd, onUpdate, onRemove }) {
           <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 32px", gap: "8px", alignItems: "center" }}>
             <input
               type="text"
+              className="text-base"
               placeholder="Label (e.g. Union Dues)"
               aria-label="Deduction label"
               value={row.label}
@@ -1255,11 +1256,12 @@ function OtherDeductionsList({ others, onAdd, onUpdate, onRemove }) {
               style={{
                 background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)",
                 borderRadius: "8px", padding: "8px 10px", color: "var(--color-text-primary)",
-                fontFamily: "var(--font-sans)", fontSize: "13px",
+                fontFamily: "var(--font-sans)",
               }}
             />
             <input
               type="number" min="0" step="0.01"
+              className="text-base"
               placeholder="$/check"
               aria-label="Deduction amount per paycheck, dollars"
               value={row.perCheckAmount ?? row.weeklyAmount ?? ""}
@@ -1267,26 +1269,28 @@ function OtherDeductionsList({ others, onAdd, onUpdate, onRemove }) {
               style={{
                 background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)",
                 borderRadius: "8px", padding: "8px 10px", color: "var(--color-text-primary)",
-                fontFamily: "var(--font-sans)", fontSize: "13px",
+                fontFamily: "var(--font-sans)",
               }}
             />
             <Pressable
               onClick={() => onRemove(row.id)}
               aria-label={`Remove ${row.label || "deduction"}`}
+              className="text-md"
               style={{
                 background: "transparent", color: "var(--color-text-primary)",
                 border: "1px solid var(--color-border-subtle)", borderRadius: "8px",
-                width: "32px", height: "36px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
+                width: "32px", height: "36px", cursor: "pointer", lineHeight: 1,
               }}
             >×</Pressable>
           </div>
         ))}
         <Pressable
           onClick={onAdd}
+          className="text-2xs"
           style={{
             background: "transparent", color: "var(--color-text-primary)",
             border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
-            padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+            padding: "7px 14px", letterSpacing: "1.5px",
             textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
           }}
         >
@@ -1310,33 +1314,34 @@ function AttendanceDetailsCard({ formData, onChange }) {
     <div style={{ ...cardShellStyle, marginTop: "12px" }}>
       <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
         <div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Attendance Policy Details</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>Attendance Policy Details</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
             Unit, thresholds, current balance — set these up once.
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
       </Pressable>
       {expanded && (
         <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <div style={cardLabelStyle}>What unit does your policy use?</div>
+            <div className="text-2xs" style={cardLabelStyle}>What unit does your policy use?</div>
             <input
               type="text" placeholder="e.g. points, hours, occurrences"
               aria-label="Attendance policy unit"
+              className="text-base"
               value={formData.attendanceUnit ?? ""}
               onChange={e => onChange({ attendanceUnit: e.target.value || null })}
               style={{
                 width: "100%", maxWidth: "260px", background: "var(--color-bg-base)",
                 border: "1px solid var(--color-border-subtle)", borderRadius: "8px",
                 padding: "8px 10px", color: "var(--color-text-primary)",
-                fontFamily: "var(--font-sans)", fontSize: "13px", boxSizing: "border-box",
+                fontFamily: "var(--font-sans)", boxSizing: "border-box",
               }}
             />
           </div>
           <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
             <div>
-              <div style={cardLabelStyle}>Warning Threshold</div>
+              <div className="text-2xs" style={cardLabelStyle}>Warning Threshold</div>
               <InlineNumber
                 value={formData.attendanceWarnThreshold ?? ""}
                 onChange={v => onChange({ attendanceWarnThreshold: v === "" ? null : parseFloat(v) })}
@@ -1345,7 +1350,7 @@ function AttendanceDetailsCard({ formData, onChange }) {
               />
             </div>
             <div>
-              <div style={cardLabelStyle}>Termination Threshold</div>
+              <div className="text-2xs" style={cardLabelStyle}>Termination Threshold</div>
               <InlineNumber
                 value={formData.attendanceTerminateThreshold ?? ""}
                 onChange={v => onChange({ attendanceTerminateThreshold: v === "" ? null : parseFloat(v) })}
@@ -1356,7 +1361,7 @@ function AttendanceDetailsCard({ formData, onChange }) {
           </div>
           <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
             <div>
-              <div style={cardLabelStyle}>Current Balance</div>
+              <div className="text-2xs" style={cardLabelStyle}>Current Balance</div>
               <InlineNumber
                 value={formData.attendanceCurrentBalance ?? ""}
                 onChange={v => onChange({ attendanceCurrentBalance: v === "" ? null : parseFloat(v) })}
@@ -1365,14 +1370,14 @@ function AttendanceDetailsCard({ formData, onChange }) {
               />
             </div>
             <div>
-              <div style={cardLabelStyle}>Per-Event Increment</div>
+              <div className="text-2xs" style={cardLabelStyle}>Per-Event Increment</div>
               <InlineNumber
                 value={formData.attendanceIncrement ?? ""}
                 onChange={v => onChange({ attendanceIncrement: v === "" ? 1 : parseFloat(v) })}
                 placeholder="1" width="64px"
                 ariaLabel="Attendance per-event increment"
               />
-              <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-secondary)" }}>Default 1 per absence</div>
+              <div className="text-2xs" style={{ marginTop: "4px", color: "var(--color-text-secondary)" }}>Default 1 per absence</div>
             </div>
           </div>
         </div>
@@ -1396,17 +1401,17 @@ function PtoDetailsCard({ formData, onChange }) {
     <div style={{ ...cardShellStyle, marginTop: "12px" }}>
       <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
         <div>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>PTO Policy Details</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>PTO Policy Details</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
             Accrual method, rate, current balance — set these up once.
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
       </Pressable>
       {expanded && (
         <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <div style={cardLabelStyle}>How does your PTO accrue?</div>
+            <div className="text-2xs" style={cardLabelStyle}>How does your PTO accrue?</div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <InlineChip label="Per Hour Worked" active={formData.ptoAccrualMethod === "per_hour"} onClick={() => onChange({ ptoAccrualMethod: "per_hour" })} />
               <InlineChip label="Per Pay Period" active={formData.ptoAccrualMethod === "per_period"} onClick={() => onChange({ ptoAccrualMethod: "per_period" })} />
@@ -1415,7 +1420,7 @@ function PtoDetailsCard({ formData, onChange }) {
           </div>
           {formData.ptoAccrualMethod && (
             <div>
-              <div style={cardLabelStyle}>{accrualLabel}</div>
+              <div className="text-2xs" style={cardLabelStyle}>{accrualLabel}</div>
               <InlineNumber
                 value={formData.ptoAccrualRate ?? ""}
                 onChange={v => onChange({ ptoAccrualRate: v === "" ? null : parseFloat(v) })}
@@ -1427,7 +1432,7 @@ function PtoDetailsCard({ formData, onChange }) {
           )}
           <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
             <div>
-              <div style={cardLabelStyle}>Current Balance (hrs)</div>
+              <div className="text-2xs" style={cardLabelStyle}>Current Balance (hrs)</div>
               <InlineNumber
                 value={formData.ptoCurrentBalance ?? ""}
                 onChange={v => onChange({ ptoCurrentBalance: v === "" ? null : parseFloat(v) })}
@@ -1436,7 +1441,7 @@ function PtoDetailsCard({ formData, onChange }) {
               />
             </div>
             <div>
-              <div style={cardLabelStyle}>Cap (hrs, optional)</div>
+              <div className="text-2xs" style={cardLabelStyle}>Cap (hrs, optional)</div>
               <InlineNumber
                 value={formData.ptoCap ?? ""}
                 onChange={v => onChange({ ptoCap: v === "" ? null : parseFloat(v) })}
@@ -1456,7 +1461,7 @@ const calcBoxStyle = {
   padding: "14px", display: "flex", flexDirection: "column", gap: "10px",
 };
 const calcHdrStyle = {
-  fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+  letterSpacing: "2px", textTransform: "uppercase",
   color: "var(--color-text-secondary)",
 };
 
@@ -1464,20 +1469,21 @@ const calcHdrStyle = {
 // sentence blank like InlineNumber, so it doesn't share that styling.
 function CalcField({ label, value, onChange }) {
   return (
-    <label style={{
+    <label className="text-2xs" style={{
       display: "flex", flexDirection: "column", gap: "4px",
-      fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+      letterSpacing: "1px", textTransform: "uppercase",
       color: "var(--color-text-secondary)",
     }}>
       {label}
       <input
         type="number" inputMode="decimal" min="0" step="0.01"
+        className="text-base"
         value={value}
         onChange={e => onChange(e.target.value)}
         style={{
           width: "110px", padding: "6px 8px", borderRadius: "8px",
           border: "1px solid var(--color-border-subtle)", background: "var(--color-bg-base)",
-          color: "var(--color-text-primary)", fontFamily: "var(--font-mono)", fontSize: "13px",
+          color: "var(--color-text-primary)", fontFamily: "var(--font-mono)",
         }}
       />
     </label>
@@ -1602,18 +1608,19 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
                 background: "rgba(0,200,150,0.05)", border: "1px solid rgba(0,200,150,0.15)",
                 borderRadius: "10px",
               }}>
-                <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
+                <div className="text-sm" style={{ color: "var(--color-text-primary)", marginBottom: "4px" }}>
                   Load DHL Missouri supply chain reference rates
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "10px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "10px" }}>
                   Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
                 </div>
                 <Pressable
                   onClick={loadDHLPreset}
+                  className="text-2xs"
                   style={{
                     background: "rgba(0,200,150,0.10)", color: "var(--color-teal)",
                     border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
-                    padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                    padding: "7px 14px", letterSpacing: "1.5px",
                     textTransform: "uppercase", cursor: "pointer",
                   }}
                 >
@@ -1624,10 +1631,11 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
             {!showCalc ? (
               <Pressable
                 onClick={() => setShowCalc(true)}
+                className="text-2xs"
                 style={{
                   background: "transparent", color: "var(--color-text-primary)",
                   border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-                  padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                  padding: "7px 14px", letterSpacing: "1.5px",
                   textTransform: "uppercase", cursor: "pointer",
                 }}
               >
@@ -1635,35 +1643,35 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
               </Pressable>
             ) : null}
             {!showCalc && attempted && !(formData.fedRateLow > 0) && (
-              <div style={{ marginTop: "8px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--color-deduction)" }}>
+              <div className="text-2xs" style={{ marginTop: "8px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--color-deduction)" }}>
                 ↑ Required — set your tax rates from a paystub, an estimate, or the DHL preset above
               </div>
             )}
             {showCalc && (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={calcBoxStyle}>
-                  <div style={calcHdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
+                  <div className="text-2xs" style={calcHdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
                   <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                     <CalcField label="Gross Pay ($)" value={g1} onChange={setG1} />
                     <CalcField label="Fed Withheld ($)" value={f1} onChange={setF1} />
                     {!isNoTax && <CalcField label="State Withheld ($)" value={s1} onChange={setS1} />}
                   </div>
                   {fed1 !== null && (
-                    <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                    <div className="text-xs" style={{ color: "var(--color-green)" }}>
                       → Fed {pct(fed1)}{!isNoTax && sta1 != null ? `  ·  State ${pct(sta1)}` : ""}
                     </div>
                   )}
                 </div>
                 {isVariable && (
                   <div style={calcBoxStyle}>
-                    <div style={calcHdrStyle}>Longer Week Paystub</div>
+                    <div className="text-2xs" style={calcHdrStyle}>Longer Week Paystub</div>
                     <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                       <CalcField label="Gross Pay ($)" value={g2} onChange={setG2} />
                       <CalcField label="Fed Withheld ($)" value={f2} onChange={setF2} />
                       {!isNoTax && <CalcField label="State Withheld ($)" value={s2} onChange={setS2} />}
                     </div>
                     {fed2 !== null && (
-                      <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                      <div className="text-xs" style={{ color: "var(--color-green)" }}>
                         → Fed {pct(fed2)}{!isNoTax && sta2 != null ? `  ·  State ${pct(sta2)}` : ""}
                       </div>
                     )}
@@ -1673,10 +1681,11 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
                   {canApply && (
                     <Pressable
                       onClick={applyRates}
+                      className="text-2xs"
                       style={{
                         background: "var(--color-green)", color: "var(--color-bg-base)",
                         border: "none", borderRadius: "12px", padding: "8px 16px",
-                        fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                        letterSpacing: "2px", textTransform: "uppercase",
                         fontWeight: "bold", cursor: "pointer",
                       }}
                     >
@@ -1685,10 +1694,11 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
                   )}
                   <Pressable
                     onClick={handleEstimate}
+                    className="text-2xs"
                     style={{
                       background: "transparent", color: "var(--color-text-primary)",
                       border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-                      padding: "8px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                      padding: "8px 14px", letterSpacing: "1.5px",
                       textTransform: "uppercase", cursor: "pointer",
                     }}
                   >
@@ -1733,10 +1743,10 @@ function TaxExemptPreview() {
       border: "1px solid var(--color-border-subtle)",
       display: "flex", flexDirection: "column", gap: "8px",
     }}>
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
         Tax-Exempt Projections — Coming Soon
       </div>
-      <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+      <div className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: "1.6" }}>
         Thanks — we&rsquo;ve noted that you&rsquo;d like tax-exempt week projections. The feature is
         being finalized and will be turned on for your account once it&rsquo;s ready. Until then,
         your paychecks use standard withholding and nothing here changes.
@@ -1786,13 +1796,13 @@ function WrapUpPage({ formData, onChange }) {
       <FadeIn delay={0}>
         <div style={calcBoxStyle}>
           {rows.map(r => (
-            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-primary)" }}>
+            <div key={r.label} className="text-sm" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)" }}>
               <span>{r.label}</span>
               <span style={{ fontFamily: "var(--font-mono)" }}>{r.sign} {fmt(r.val)}</span>
             </div>
           ))}
           <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", marginTop: "4px", borderTop: "1px solid var(--color-border-subtle)" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Net</span>
+            <span className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>Net</span>
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 700,
               color: net >= 0 ? "var(--color-green)" : "var(--color-deduction)",
@@ -1834,22 +1844,23 @@ function WrapUpPage({ formData, onChange }) {
         {/* ── Tax-Exempt Week Projections — optional, non-blocking, mirrors real
              StepWrapUp's gate exactly (does not gate isWrapUpValid on either wizard). ── */}
         <div style={{ marginTop: "16px" }}>
-          <div style={{ ...cardLabelStyle, marginBottom: "8px" }}>Tax-Exempt Week Projections</div>
+          <div className="text-2xs" style={{ ...cardLabelStyle, marginBottom: "8px" }}>Tax-Exempt Week Projections</div>
           {!taxExemptAccepted ? (
             <div style={{
               background: "var(--color-bg-raised)", borderRadius: "12px", padding: "16px",
               border: "1px dashed rgba(0,200,150,0.3)",
               display: "flex", flexDirection: "column", gap: "10px",
             }}>
-              <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
+              <p className="text-sm" style={{ margin: 0, color: "var(--color-text-primary)", lineHeight: 1.6 }}>
                 {TAX_EXEMPT_DISCLAIMER}
               </p>
               <Pressable
                 onClick={() => onChange({ taxExemptOptIn: true })}
+                className="text-2xs"
                 style={{
                   background: "rgba(0,200,150,0.12)", color: "var(--color-teal)",
                   border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
-                  padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                  padding: "7px 14px", letterSpacing: "1.5px",
                   fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
                   alignSelf: "flex-start",
                 }}
@@ -1972,7 +1983,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
     }}>
       <div style={{ padding: "20px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right))", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: "720px", margin: "0 auto" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
+          <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
             Setup · {pageIdx + 1} of {activePages.length}
           </div>
         </div>
@@ -1994,7 +2005,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
           {onCancel && (
             <Pressable
               onClick={onCancel}
-              style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              className="text-xs" style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
             >
               Cancel
             </Pressable>
@@ -2002,7 +2013,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
           {pageIdx > 0 && (
             <Pressable
               onClick={handleBack}
-              style={{ marginLeft: onCancel ? 0 : "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              className="text-xs" style={{ marginLeft: onCancel ? 0 : "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
             >
               Back
             </Pressable>
@@ -2010,7 +2021,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
           {current?.skippable && (
             <Pressable
               onClick={handleSkip}
-              style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
             >
               Skip
             </Pressable>
@@ -2018,11 +2029,11 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
           <Pressable
             onClick={handleNext}
             disabled={!canProceed}
-            style={{
+            className="text-xs" style={{
               background: canProceed ? "var(--color-teal)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 22px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold",
+              letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold",
               cursor: canProceed ? "pointer" : "not-allowed",
               marginLeft: (!onCancel && pageIdx === 0 && !current?.skippable) ? "auto" : 0,
             }}

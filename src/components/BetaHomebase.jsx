@@ -45,8 +45,8 @@ function ScoreRow({ label, value, max }) {
   const scored = typeof value === "number";
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-      <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>{label}</span>
-      <span style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: scored ? "var(--color-teal)" : "var(--color-text-disabled)" }}>
+      <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>{label}</span>
+      <span className="text-base" style={{ fontFamily: "var(--font-mono)", color: scored ? "var(--color-teal)" : "var(--color-text-disabled)" }}>
         {scored ? `${value} / ${max}` : `Not yet scored (of ${max})`}
       </span>
     </div>
@@ -67,13 +67,13 @@ function ScoreSection({ score }) {
           <ScoreRow key={c.key} label={c.label} value={score?.[c.key] ?? null} max={c.max} />
         ))}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 6px" }}>
-          <span style={{ fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Total</span>
+          <span className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Total</span>
           <span style={{ fontSize: "15px", fontWeight: "bold", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
             {anyScored ? `${total} / 100` : "Not yet scored"}
           </span>
         </div>
       </div>
-      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginTop: "10px" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginTop: "10px" }}>
         Scoring is reviewed by hand at the end of the 10-week program, not calculated live —
         this is a running reference, not a running total. <strong>70–100</strong> (floor met on
         Usage) → lifetime access. <strong>60–69</strong> (floor met) → 6 months free.
@@ -94,7 +94,7 @@ export function ChecklistSection({ items, completedIds, onToggle, title = "Featu
     <div style={{ marginBottom: "24px" }}>
       <SH right={items.length > 0 ? `${completedCount} / ${items.length}` : null}>{title}</SH>
       {items.length === 0 ? (
-        <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
+        <div className="text-base" style={{ color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {items.map(item => {
@@ -111,10 +111,10 @@ export function ChecklistSection({ items, completedIds, onToggle, title = "Featu
                   style={{ width: "16px", height: "16px", marginTop: "1px", accentColor: "var(--color-teal)", cursor: "pointer", flexShrink: 0 }}
                 />
                 <div>
-                  <div style={{ fontSize: "13px", color: checked ? "var(--color-text-secondary)" : "var(--color-text-primary)", textDecoration: checked ? "line-through" : "none" }}>
+                  <div className="text-base" style={{ color: checked ? "var(--color-text-secondary)" : "var(--color-text-primary)", textDecoration: checked ? "line-through" : "none" }}>
                     {item.title}
                   </div>
-                  {item.body && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{item.body}</div>}
+                  {item.body && <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "3px" }}>{item.body}</div>}
                 </div>
               </label>
             );
@@ -130,12 +130,12 @@ export function SuggestionsSection({ items, title = "Suggestions From The Team" 
     <div style={{ marginBottom: "24px" }}>
       <SH>{title}</SH>
       {items.length === 0 ? (
-        <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
+        <div className="text-base" style={{ color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {items.map(item => (
             <div key={item.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: item.body ? "6px" : 0 }}>{item.title}</div>
+              <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)", marginBottom: item.body ? "6px" : 0 }}>{item.title}</div>
               {item.body && <ChangelogBody markdown={item.body} />}
             </div>
           ))}
@@ -154,9 +154,9 @@ export function WhatsNewSection({ entries }) {
         {entries.map(entry => (
           <div key={entry.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px", marginBottom: "6px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+              <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
               {entry.published_at && (
-                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", flexShrink: 0 }}>
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>
                   {new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </div>
               )}
@@ -218,7 +218,7 @@ export function BetaHomebase({ isTester, betaCodeUsed }) {
     <>
       <PanelHero eyebrow="10-Week Beta">Tester Homebase</PanelHero>
       {loading ? (
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Loading…</div>
+        <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Loading…</div>
       ) : (
         <>
           <ScoreSection score={score} />

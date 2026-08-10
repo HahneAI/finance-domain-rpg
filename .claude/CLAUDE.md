@@ -437,15 +437,26 @@ components, not a class system). Does **not** apply to numeric emphasis (MetricC
 dollar totals) — those are data display, not headline text, and kept their existing styling.
 See `docs/authority-design-system`'s Typography section for the full file list touched.
 
-**Body-text size scale (2026-08-10).** Non-numeric text (labels, sublabels, descriptions, list
-summaries) should use one of `src/index.css`'s five `text-*` classes instead of a hardcoded
-inline `fontSize`: `.text-2xs` 10px, `.text-xs` 11px, `.text-sm` 12px, `.text-base` 13px,
-`.text-md` 14px (the two smallest are +1px over their old raw values — small body copy read
-cramped after the Rajdhani switch). Numeric emphasis is out of scope. All of `ui.jsx`'s shared
-primitives (`Card`/`MetricCard`, `SH`, `PanelHero`, `SectionHeader`, `NT`, `VT`, `SmBtn`, `lS`,
-`InsightRow`) are migrated; individual panels still carry their own unmigrated one-off
-`fontSize` literals — future text-sizing work in a panel should convert what it touches to
-these classes rather than adding another raw px value.
+**Body-text size scale (2026-08-10, fully rolled out).** Non-numeric text (labels, sublabels,
+descriptions, list summaries) MUST use one of `src/index.css`'s five `text-*` classes instead of
+a hardcoded inline `fontSize` — never write `style={{ fontSize: "11px", ... }}` for label/body
+copy again: `.text-2xs` 10px, `.text-xs` 11px, `.text-sm` 12px, `.text-base` 13px, `.text-md`
+14px. Numeric emphasis (MetricCard values, dollar totals, computed readouts) is out of scope and
+keeps its own per-component sizing. Every file under `src/components/` + `App.jsx` is converted
+as of 2026-08-10 — the only raw literals left are `ui.jsx`'s `Card.size` (numeric, always
+exempt), 3 dynamically-scaled template-literal sizes, and 8 shared JS style objects
+(`labelStyle`/`inputStyle`/`linkStyle`, same DRY treatment as `lS` — see
+`docs/ux-animations-tasks.md`'s audit map for the exact list). **Enforced by
+`src/test/lib/textUtilityClassAudit.test.js`** — a static-analysis test asserting an exact
+allowed raw-`fontSize` count per file (0 for nearly everything); a PR that adds a new raw
+`fontSize: "9px"`–`"14px"` literal anywhere else fails `npm run test:run` immediately, naming
+the offending file. **`.text-xs`/`.text-sm`/`.text-base` collide by name with Tailwind v4's own
+default text-size utilities** (Tailwind auto-generates a matching utility for any scanned
+class name) — our rule wins on `font-size` only because it's unlayered CSS (unlayered always
+beats `@layer`-wrapped rules per the CSS Cascade Layers spec) and explicitly sets
+`line-height: normal` to avoid inheriting Tailwind's colliding line-height token. **Never wrap
+the `.text-*` block in `@layer` of any kind** — see the warning comment directly above it in
+`src/index.css` before touching that block.
 
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 

@@ -57,35 +57,35 @@ export function UpgradeCard({ onClose, tagline } = {}) {
         <Pressable onClick={onClose} aria-label="Dismiss" style={{ position: "absolute", top: "14px", right: "14px", background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}>✕</Pressable>
       )}
       {tagline && (
-        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "14px" }}>
+        <div className="text-base" style={{ color: "var(--color-text-primary)", marginBottom: "14px" }}>
           {tagline}
         </div>
       )}
-      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "8px" }}>
+      <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "8px" }}>
         Authority Finance Premium
       </div>
       <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", marginBottom: "10px" }}>
         Your free trial has ended
       </div>
-      <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "22px", lineHeight: 1.5 }}>
+      <div className="text-base" style={{ color: "var(--color-text-secondary)", marginBottom: "22px", lineHeight: 1.5 }}>
         Subscribe to keep editing your income, budget, and goals.
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Pressable onClick={() => handleCheckout("monthly")} disabled={checkoutState.plan !== null} style={planBtnStyle("monthly")}>
-          <div style={{ fontSize: "14px", fontWeight: "bold" }}>Monthly</div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+          <div className="text-md" style={{ fontWeight: "bold" }}>Monthly</div>
+          <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
             {checkoutState.plan === "monthly" ? "Redirecting…" : "$14.99/mo"}
           </div>
         </Pressable>
         <Pressable onClick={() => handleCheckout("annual")} disabled={checkoutState.plan !== null} style={planBtnStyle("annual", "var(--color-teal)", "var(--color-bg-base)")}>
-          <div style={{ fontSize: "14px", fontWeight: "bold" }}>Annual — Best Value</div>
-          <div style={{ fontSize: "12px" }}>
+          <div className="text-md" style={{ fontWeight: "bold" }}>Annual — Best Value</div>
+          <div className="text-sm">
             {checkoutState.plan === "annual" ? "Redirecting…" : "$10.00/mo billed annually ($120/yr)"}
           </div>
         </Pressable>
       </div>
       {checkoutState.error && (
-        <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "14px" }}>{checkoutState.error}</div>
+        <div className="text-sm" style={{ color: "var(--color-deduction)", marginTop: "14px" }}>{checkoutState.error}</div>
       )}
     </LiquidGlass>
   );

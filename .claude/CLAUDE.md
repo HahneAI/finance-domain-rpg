@@ -276,6 +276,16 @@ components, not a class system). Does **not** apply to numeric emphasis (MetricC
 dollar totals) — those are data display, not headline text, and kept their existing styling.
 See `docs/authority-design-system`'s Typography section for the full file list touched.
 
+**Body-text size scale (2026-08-10).** Non-numeric text (labels, sublabels, descriptions, list
+summaries) should use one of `src/index.css`'s five `text-*` classes instead of a hardcoded
+inline `fontSize`: `.text-2xs` 10px, `.text-xs` 11px, `.text-sm` 12px, `.text-base` 13px,
+`.text-md` 14px (the two smallest are +1px over their old raw values — small body copy read
+cramped after the Rajdhani switch). Numeric emphasis is out of scope. All of `ui.jsx`'s shared
+primitives (`Card`/`MetricCard`, `SH`, `PanelHero`, `SectionHeader`, `NT`, `VT`, `SmBtn`, `lS`,
+`InsightRow`) are migrated; individual panels still carry their own unmigrated one-off
+`fontSize` literals — future text-sizing work in a panel should convert what it touches to
+these classes rather than adding another raw px value.
+
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 
 **Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.

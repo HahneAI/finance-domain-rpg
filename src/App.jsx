@@ -389,9 +389,10 @@ export default function App() {
   const [drawerFeedbackOpen, setDrawerFeedbackOpen] = useState(false);
   const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
   // Beta Tester Homebase (docs/TODO.md §12) — icon next to the notification
-  // bell, tracked beta testers only. BetaHomebase.jsx owns its own portal +
-  // fold motion, so this is just an open/closed flag.
-  const [betaHomebaseOpen, setBetaHomebaseOpen] = useState(false);
+  // bell, tracked beta testers only. A real page pushed onto the nav stack
+  // (`navigate("betaHomebase")` below) as of 2026-08-09 — was a modal
+  // before that; BetaHomebase.jsx no longer owns a portal/fold-motion shell,
+  // so there's no open/closed flag to track here anymore.
   // Beta Homebase notification badge. Green = count of unchecked feature
   // checklist items only (an "outstanding actions" count, same idea as the
   // weekly check-in bell's unconfirmedCount — no read/unread state needed
@@ -440,25 +441,18 @@ export default function App() {
     setBetaHomebaseBadge({ uncheckedCount, newCount: newChangelogCount + newSuggestionCount + scoreUpdated });
   }, [isTrackedTester, authedUser?.id]);
 
-  useEffect(() => { loadBetaHomebaseBadge(); }, [loadBetaHomebaseBadge]);
-
-  function openBetaHomebase() {
-    // Mark "seen" the instant they open it (not on close) — everything
-    // currently new is about to be visible in the panel itself, so the red
-    // state should clear right away rather than lag behind the click.
+  function goToBetaHomebase() {
+    // Mark "seen" the instant they navigate there (not on leaving) —
+    // everything currently new is about to be visible on the page itself,
+    // so the red state should clear right away rather than lag behind the
+    // tap. Pushed via `navigate` (not `navigateDirect`) so it stacks like a
+    // drill-down rather than resetting to ["home", key] — the bottom nav is
+    // the way back out, not a dedicated in-page back button.
     if (authedUser?.id) {
       try { window.localStorage.setItem(`betaHomebaseLastViewedAt:${authedUser.id}`, new Date().toISOString()); } catch { /* ignore */ }
     }
     setBetaHomebaseBadge(b => ({ ...b, newCount: 0 }));
-    setBetaHomebaseOpen(true);
-  }
-
-  function closeBetaHomebase() {
-    setBetaHomebaseOpen(false);
-    // Re-sync uncheckedCount — the tester may have toggled checklist items
-    // while the panel was open, and that state lives inside BetaHomebase.jsx,
-    // not here.
-    loadBetaHomebaseBadge();
+    navigate("betaHomebase");
   }
 
   // "Money Moves" — the base-user counterpart (docs: 039_add_base_productivity_hub.sql),
@@ -466,7 +460,6 @@ export default function App() {
   // tester sees only their beta-specific homebase). Same green/unchecked-
   // count-only vs. red/plus-new-updates badge logic, own localStorage key
   // namespace, no scoring signal to check (base users have none).
-  const [productivityHubOpen, setProductivityHubOpen] = useState(false);
   const [productivityHubBadge, setProductivityHubBadge] = useState({ uncheckedCount: 0, newCount: 0 });
 
   const loadProductivityHubBadge = useCallback(async () => {
@@ -494,19 +487,12 @@ export default function App() {
     setProductivityHubBadge({ uncheckedCount, newCount: newChangelogCount + newSuggestionCount });
   }, [isTrackedTester, authedUser?.id]);
 
-  useEffect(() => { loadProductivityHubBadge(); }, [loadProductivityHubBadge]);
-
-  function openProductivityHub() {
+  function goToProductivityHub() {
     if (authedUser?.id) {
       try { window.localStorage.setItem(`productivityHubLastViewedAt:${authedUser.id}`, new Date().toISOString()); } catch { /* ignore */ }
     }
     setProductivityHubBadge(b => ({ ...b, newCount: 0 }));
-    setProductivityHubOpen(true);
-  }
-
-  function closeProductivityHub() {
-    setProductivityHubOpen(false);
-    loadProductivityHubBadge();
+    navigate("moneyMoves");
   }
 
   // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
@@ -569,6 +555,19 @@ export default function App() {
   }
 
   const currentView = viewStack[viewStack.length - 1];
+
+  // Beta Homebase / Money Moves badges — (re)computed on every nav change,
+  // not just on login. Covers both directions: arriving (harmless refetch,
+  // goToBetaHomebase/goToProductivityHub already optimistically cleared
+  // newCount) and — the case that actually needs it — LEAVING, since a
+  // tester may have toggled checklist items while on the page and that
+  // state lives inside BetaHomebase.jsx/ProductivityHub.jsx, not here.
+  // Effects fire on mount regardless of deps, so this alone also covers the
+  // original login-time load — no separate mount-only effect needed.
+  useEffect(() => {
+    loadBetaHomebaseBadge();
+    loadProductivityHubBadge();
+  }, [currentView, loadBetaHomebaseBadge, loadProductivityHubBadge]);
 
   // TODO §1 nav restructuring — Income/Log are dropped from the nav entirely
   // in New Job Season (effectiveBottomNav/effectiveNavItems above), but a user
@@ -2127,6 +2126,12 @@ export default function App() {
         onBackToWork={handleBackToWork}
         subscription={subscription}
       />}
+      {currentView === "betaHomebase" && isTrackedTester && (
+        <BetaHomebase isTester={isTester} betaCodeUsed={betaCodeUsed} />
+      )}
+      {currentView === "moneyMoves" && !isTrackedTester && (
+        <ProductivityHub />
+      )}
     </>
   );
 
@@ -2669,11 +2674,11 @@ export default function App() {
             const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
             return (
               <Pressable
-                onClick={openBetaHomebase}
+                onClick={goToBetaHomebase}
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
+                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "betaHomebase" ? "var(--color-teal)" : "var(--color-text-primary)"),
                   cursor: "pointer",
                   width: "44px",
                   height: "44px",
@@ -2725,11 +2730,11 @@ export default function App() {
             const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
             return (
               <Pressable
-                onClick={openProductivityHub}
+                onClick={goToProductivityHub}
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
+                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "moneyMoves" ? "var(--color-teal)" : "var(--color-text-primary)"),
                   cursor: "pointer",
                   width: "44px",
                   height: "44px",
@@ -3931,19 +3936,6 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* ── Beta Tester Homebase (docs/TODO.md §12) — owns its own portal + fold motion. ── */}
-      <BetaHomebase
-        open={betaHomebaseOpen}
-        onClose={closeBetaHomebase}
-        isTester={isTester}
-        betaCodeUsed={betaCodeUsed}
-      />
-      {/* ── Money Moves / Productivity Hub (039_add_base_productivity_hub.sql) —
-          owns its own portal + fold motion, same shell as BetaHomebase. ── */}
-      <ProductivityHub
-        open={productivityHubOpen}
-        onClose={closeProductivityHub}
-      />
       {/* ── New Job Season entry (TODO §1.C1) ── */}
       <NewJobSeasonEntry
         open={newJobSeasonEntryOpen}

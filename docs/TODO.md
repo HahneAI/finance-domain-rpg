@@ -4511,18 +4511,32 @@ for screen edges")*
       `onComplete(finalConfig)` payload — not the old mock `onHandoff` contract. Caught and fixed
       a real bug in the process: `DhlRotationCard`/`AdvancedPayRulesCard` (F133) were nested
       inside `IntakePage`'s `<p>`, invalid HTML — see drift-app-warden §7 F137.
-- [ ] `docs/account-reference.json` — spot-check that the reference account's
-      `computed_expectations` still line up once real signups can complete through this UI.
+- [x] `docs/account-reference.json` — spot-checked 2026-08-10. Read the file: it's Anthony's
+      existing DHL account (`db_record`), not wizard output, and its `computed_expectations`
+      tier is entirely `null` placeholders already (never filled in, pre-existing). This round's
+      changes only touched `SetupWizardAdlib.jsx`'s wizard UI and `finalizeWizardConfig()`'s
+      normalization (plus the `otMultiplier ?? 1.5` default) — no change to `finance.js`'s
+      `buildYear`/`computeNet`/etc., which is what `computed_expectations` would derive from.
+      **The reference account's expected output shape is unaffected by this round; no change
+      made to the file.**
 
 **I. Docs to update once wired** *(do this in the same PR — a stale drift-map entry certifies a
 false checklist per CLAUDE.md's own drift-warden philosophy)*
 
-- [ ] `.claude/CLAUDE.md` — rewrite the `SetupWizardAdlib.jsx` section: drop "EXPERIMENTAL,
+- [x] `.claude/CLAUDE.md` — rewrite the `SetupWizardAdlib.jsx` section: drop "EXPERIMENTAL,
       admin-only, not for real users" and "MOCK ONLY", describe the real production entry point
-      and save path instead.
-- [ ] `docs/drift-app-warden.md` §7 — extend the F1–F12 critical inventory and the six-path gate
-      matrix to cover `SetupWizardAdlib.jsx` as a second real surface writing the same sensitive
-      fields; note the line-number drift already present in the current §7 text while in there.
-- [ ] `docs/active-systems.md` — update if it documents the wizard's live behavior.
-- [ ] `docs/past-TODO-tasks.md` — close out this entry once shipped, one-liner per the section's
-      own convention.
+      and save path instead. Done across all four rounds (0a6026d onward); verified 2026-08-10 —
+      no stale "MOCK ONLY"/"EXPERIMENTAL" wording remains anywhere in the file.
+- [x] `docs/drift-app-warden.md` §7 — extend the F1–F12 critical inventory (now F1–F137) to cover
+      `SetupWizardAdlib.jsx` as a second real surface writing the same sensitive fields — done
+      across F128–F137. The six-path gate matrix (§7.3) itself was **not** extended with a
+      seventh ad-lib-specific path — `SetupWizardAdlib.jsx` funnels through the exact same
+      `handleComplete`/`finalizeWizardConfig`/`handleWizardComplete` commit point every existing
+      path already uses (F128), so it's a new *entry point* onto an existing path, not a new
+      path; noted here explicitly rather than silently left alone.
+- [x] `docs/active-systems.md` — checked 2026-08-10; §9 (Setup Wizard) documented `SetupWizard.jsx`
+      only. Added a note explaining the two-component split (`SetupWizardAdlib.jsx` for first-run,
+      `SetupWizard.jsx` unchanged for life-event re-entry + jobless continuation) at the top of
+      §9, pointing to CLAUDE.md/drift-app-warden for full detail rather than duplicating it.
+- [x] `docs/past-TODO-tasks.md` — closed out with a new "§19.1 — Ad-Lib Wizard field-parity
+      rounds 3-4 + housekeeping + accessibility (2026-08-10)" entry, one-liner per F131–F137.

@@ -194,6 +194,57 @@ Missouri preset, Wrap Up's Tax-Exempt Week Projections opt-in); §19.1.G; §19.1
 
 ---
 
+## §19.1 — Ad-Lib Wizard field-parity rounds 3-4 + housekeeping + accessibility (2026-08-10)
+
+Closes out **all** of §19.1.A (field/UI parity), all of §19.1.G (accessibility/validation
+feedback), and the first two boxes of §19.1.H (field-set housekeeping). Six commits:
+
+- [x] **F131 — resolved F130's tips/commission history gap.** `tipsOrCommissionEnabled`/
+  `tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` added to both `HISTORY_SENSITIVE_FIELDS`
+  and `DIFF_FIELDS` (F7's three-way rule). Full sweep of every field `SetupWizardAdlib.jsx` wrote
+  at that point found no other gaps.
+- [x] **F132 — `attempted`-driven required-field feedback + accessible names.**
+  `InlineSelect`/`InlineNumber`/`InlineDate` gained an `error` prop (red border + `aria-invalid` +
+  a new `RequiredNote` "↑ Required" tail, mirroring real `errBorder()`/`Field`); every page wires
+  `error={attempted && <the same condition that page's own isXValid checks>}` on every required
+  control. `ariaLabel` added to every `InlineSelect`/`InlineNumber` call site; `InlineChip` gained
+  `aria-pressed`/`aria-label`.
+- [x] **F133 — Advanced Pay Rules + DHL custom rotation.** `AdvancedPayRulesCard` (base users, OT
+  multiplier/night diff/weekend diff) and `DhlRotationCard` (DHL Plant, Standard-vs-Custom
+  weekly-hours override) added as collapsible cards. Closed two pre-existing `isIntakeValid` gaps
+  found in the process (`customWeeklyHours` checks, base-user custom-OT-threshold-positive
+  check — both present in real STEP_DEFS id 1 but missing from `isIntakeValid` since before this
+  round). `finalizeWizardConfig()` gained an `otMultiplier ?? 1.5` default.
+- [x] **F134 — Tax Rates fallback paths.** "Use Estimate for Now" (`handleEstimate()`) and the
+  DHL Missouri preset button (`loadDHLPreset()`), both straight copies of real Step4's functions.
+- [x] **F135 — Wrap Up Tax-Exempt Week Projections opt-in.** Static disclosure copy +
+  "coming soon" placeholder, straight copies of real `StepWrapUp`'s components.
+- [x] **F136 — Deductions: Benefits Start Date, Other Recurring Deductions, Attendance Policy
+  Details, PTO.** `OtherDeductionsList`/`AttendanceDetailsCard`/`PtoDetailsCard` added. Found and
+  fixed two more pre-existing `HISTORY_SENSITIVE_FIELDS` gaps (`attendanceUnit`/
+  `attendanceCurrentBalance`/`ptoCurrentBalance` — missing even on the real wizard).
+- [x] **F137 — bug found + fixed: invalid `<div>`-in-`<p>` nesting.** F133's two cards were
+  rendered inside `IntakePage`'s sentence `<p>` — invalid HTML, caught by a console warning while
+  writing this round's full-completion test (no assertion failure; `npm run test:run` doesn't
+  fail on console warnings). Fixed by making `IntakePage`'s return a Fragment with both cards as
+  siblings after `</p>` closes.
+- [x] New "full ad-lib-to-production completion" test in `SetupWizardAdlib.test.jsx` — builds a
+  base-user run through every page, touching every field added across rounds 2–4, asserts against
+  the real `onComplete(finalConfig)` payload (not the old mock `onHandoff` contract).
+- [x] `docs/account-reference.json` spot-checked — its `computed_expectations` tier is entirely
+  `null` placeholders already (pre-existing, unrelated to this round); no `finance.js` computation
+  logic changed, so no update was needed.
+
+**Not done this round:** the rest of §19.1.E/F's responsive polish (mobile-width verification —
+needs a real browser, none available in this sandbox); §19.1.B's flow-coverage decisions
+(life-event/jobless-mini-flow ad-libbing scope); widening `DIFF_FIELDS` toward full parity with
+`HISTORY_SENSITIVE_FIELDS` (pre-existing gap predating this round, documented but not attempted —
+see drift-app-warden §7 F136's own note).
+
+Full suite: 1539 passed (up from 1538). See `docs/drift-app-warden.md` §7 F131–F137.
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

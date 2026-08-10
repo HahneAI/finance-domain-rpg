@@ -22,7 +22,7 @@ export function LegalDocumentModal({ open, title, markdown, onClose }) {
         <ChangelogBody markdown={markdown} />
         <Pressable
           onClick={onClose}
-          style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "10px 0", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer", marginTop: "4px" }}
+          className="text-xs" style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "10px 0", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer", marginTop: "4px" }}
         >
           Close
         </Pressable>

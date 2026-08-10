@@ -103,9 +103,8 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
         />
         <span style={{ flex: 1, minWidth: 0 }}>
           <span
-            style={{
+            className="text-2xs" style={{
               display: "block",
-              fontSize: "9px",
               letterSpacing: "2.5px",
               textTransform: "uppercase",
               color: "var(--color-accent-primary)",
@@ -114,18 +113,17 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
           >
             A note from Coach
           </span>
-          <span style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.35 }}>
+          <span className="text-base" style={{ display: "block", fontWeight: 600, color: "var(--color-text-primary)", lineHeight: 1.35 }}>
             A few real levers for a thin cushion
           </span>
           {!open && (
-            <span style={{ display: "block", fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            <span className="text-xs" style={{ display: "block", color: "var(--color-text-secondary)", marginTop: "2px" }}>
               No pressure — tap to read
             </span>
           )}
         </span>
         <span
-          style={{
-            fontSize: "13px",
+          className="text-base" style={{
             color: "var(--color-text-secondary)",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 200ms ease",
@@ -158,7 +156,7 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
                 marginBottom: "14px",
               }}
             >
-              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginBottom: "4px" }}>
+              <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginBottom: "4px" }}>
                 Personalized
               </div>
               <div style={{ fontSize: "12.5px", lineHeight: 1.55, color: "var(--color-text-primary)" }}>{aiTip}</div>
@@ -182,7 +180,7 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
                   <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "2px" }}>
                     {tip.title}
                   </div>
-                  <div style={{ fontSize: "12px", lineHeight: 1.55, color: "var(--color-text-secondary)" }}>
+                  <div className="text-sm" style={{ lineHeight: 1.55, color: "var(--color-text-secondary)" }}>
                     {tip.body}
                   </div>
                 </div>

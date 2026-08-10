@@ -136,16 +136,16 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
         borderBottom: "1px solid var(--color-border-subtle)",
       }}>
         <div>
-          <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+          <div className="text-xs" style={{ fontWeight: "700", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
             Bulk edit — {monthLabel}
           </div>
-          <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", marginTop: "2px" }}>
+          <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", marginTop: "2px" }}>
             Stage changes then save all at once
           </div>
         </div>
         <SmBtn
           onClick={onClose}
-          style={{ padding: "3px 9px", minHeight: "28px", fontSize: "12px", lineHeight: 1, flexShrink: 0 }}
+          className="text-sm" style={{ padding: "3px 9px", minHeight: "28px", lineHeight: 1, flexShrink: 0 }}
         >
           ✕
         </SmBtn>
@@ -191,8 +191,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                       {/* Collapsed row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{
-                            fontSize: "12px",
+                          <div className="text-sm" style={{
                             color: isDeleted ? "var(--color-text-disabled)" : isInactive ? "var(--color-text-secondary)" : "var(--color-text-primary)",
                             fontWeight: 500,
                             whiteSpace: "nowrap",
@@ -202,18 +201,18 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                           }}>
                             {exp.label}
                             {isEdited && (
-                              <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>
+                              <span className="text-2xs" style={{ marginLeft: "6px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>
                                 {edits[exp.id]?.scope === "month-only" ? "THIS MONTH" : "CHANGED →"}
                               </span>
                             )}
                             {isDeleted && (
-                              <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-deduction)", letterSpacing: "1px" }}>
+                              <span className="text-2xs" style={{ marginLeft: "6px", color: "var(--color-deduction)", letterSpacing: "1px" }}>
                                 {deletions[exp.id] === "forward" ? "REMOVED →" : "THIS MONTH"}
                               </span>
                             )}
-                            {isInactive && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px" }}>INACTIVE</span>}
+                            {isInactive && <span className="text-2xs" style={{ marginLeft: "6px", color: "var(--color-text-disabled)", letterSpacing: "1px" }}>INACTIVE</span>}
                           </div>
-                          <div style={{ fontSize: "11px", color: isDeleted ? "var(--color-deduction)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
+                          <div className="text-xs" style={{ color: isDeleted ? "var(--color-deduction)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
                             {f2(displayAmt * perCheckFactor)}/check
                           </div>
                         </div>
@@ -224,7 +223,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               <SmBtn
                                 onClick={() => clearDeletion(exp.id)}
                                 c="var(--color-text-secondary)"
-                                style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
+                                className="text-2xs" style={{ letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
                               >
                                 UNDO
                               </SmBtn>
@@ -232,7 +231,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               <SmBtn
                                 onClick={() => openEdit(exp)}
                                 c="var(--color-text-secondary)"
-                                style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
+                                className="text-2xs" style={{ letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
                               >
                                 SET AMOUNT
                               </SmBtn>
@@ -241,14 +240,14 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                                 <SmBtn
                                   onClick={() => openEdit(exp)}
                                   c="var(--color-accent-primary)"
-                                  style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
+                                  className="text-2xs" style={{ letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
                                 >
                                   {isEdited ? "EDIT" : "CHANGE"}
                                 </SmBtn>
                                 <SmBtn
                                   onClick={() => openDeletePopup(exp.id)}
                                   c="var(--color-deduction)"
-                                  style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 8px", minHeight: "28px" }}
+                                  className="text-2xs" style={{ letterSpacing: "1px", padding: "5px 8px", minHeight: "28px" }}
                                 >
                                   DEL
                                 </SmBtn>
@@ -261,7 +260,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                       {/* Delete confirmation */}
                       {isDeleteOpen && (
                         <div style={{ marginTop: "10px", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "10px" }}>
-                          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "10px", letterSpacing: "0.3px" }}>
+                          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px", letterSpacing: "0.3px" }}>
                             Remove <strong style={{ color: "var(--color-text-primary)" }}>{exp.label}</strong> from budget for:
                           </div>
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -275,8 +274,8 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               }}
                               bg={monthOnlyArmed === exp.id ? "var(--color-deduction)" : "var(--color-bg-raised)"}
                               c={monthOnlyArmed === exp.id ? "#fff" : "var(--color-text-primary)"}
-                              style={{
-                                fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px",
+                              className="text-2xs" style={{
+                                letterSpacing: "1px", padding: "6px 10px", minHeight: "30px",
                                 transition: "background 0.15s ease, color 0.15s ease",
                                 border: monthOnlyArmed === exp.id ? "1px solid rgba(239,68,68,0.5)" : undefined,
                               }}
@@ -286,13 +285,13 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                             <SmBtn
                               onClick={() => stageDeletion(exp.id, "forward")}
                               c="var(--color-deduction)"
-                              style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
+                              className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                             >
                               FROM HERE FORWARD
                             </SmBtn>
                             <SmBtn
                               onClick={() => { setDeletePopup(null); setMonthOnlyArmed(null); }}
-                              style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
+                              className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                             >
                               NEVERMIND
                             </SmBtn>
@@ -328,7 +327,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               </select>
                             </div>
                           </div>
-                          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>
+                          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px" }}>
                             Per-paycheck reserve: <span style={{ color: "var(--color-accent-primary)" }}>{f2(draftPerPaycheck)}</span>
                           </div>
                           {/* Scope toggle */}
@@ -337,8 +336,8 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               onClick={() => setDraftScope("month-only")}
                               bg={draftScope === "month-only" ? "rgba(245,158,11,0.15)" : "var(--color-bg-raised)"}
                               c={draftScope === "month-only" ? "var(--color-warning)" : "var(--color-text-secondary)"}
-                              style={{
-                                flex: 1, fontSize: "9px", letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
+                              className="text-2xs" style={{
+                                flex: 1, letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
                                 border: draftScope === "month-only" ? "1px solid rgba(245,158,11,0.35)" : undefined,
                               }}
                             >
@@ -348,15 +347,15 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               onClick={() => setDraftScope("forward")}
                               bg={draftScope === "forward" ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)"}
                               c={draftScope === "forward" ? "var(--color-accent-primary)" : "var(--color-text-secondary)"}
-                              style={{
-                                flex: 1, fontSize: "9px", letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
+                              className="text-2xs" style={{
+                                flex: 1, letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
                                 border: draftScope === "forward" ? "1px solid rgba(0,200,150,0.28)" : undefined,
                               }}
                             >
                               & FORWARD
                             </SmBtn>
                           </div>
-                          <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px", letterSpacing: "0.5px" }}>
+                          <div className="text-2xs" style={{ color: "var(--color-text-disabled)", marginBottom: "10px", letterSpacing: "0.5px" }}>
                             {draftScope === "month-only"
                               ? `${monthLabel} only · reverts to prior amount next month`
                               : `Effective from ${monthLabel} · cascades through Q${phaseIdx + 1}–Q4`}
@@ -366,7 +365,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               onClick={() => stageEdit(exp.id)}
                               bg="var(--color-accent-primary)"
                               c="#0a0a0a"
-                              style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 14px", minHeight: "30px", fontWeight: "bold" }}
+                              className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 14px", minHeight: "30px", fontWeight: "bold" }}
                             >
                               DONE
                             </SmBtn>
@@ -374,14 +373,14 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               <SmBtn
                                 onClick={() => clearEdit(exp.id)}
                                 c="var(--color-deduction)"
-                                style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
+                                className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                               >
                                 CLEAR
                               </SmBtn>
                             )}
                             <SmBtn
                               onClick={() => setExpandedExpId(null)}
-                              style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
+                              className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                             >
                               CANCEL
                             </SmBtn>
@@ -408,18 +407,18 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "12px", color: "var(--color-text-primary)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div className="text-sm" style={{ color: "var(--color-text-primary)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {a.label}
-                        <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>NEW</span>
+                        <span className="text-2xs" style={{ marginLeft: "6px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>NEW</span>
                       </div>
-                      <div style={{ fontSize: "11px", color: "var(--color-accent-primary)", marginTop: "2px" }}>
+                      <div className="text-xs" style={{ color: "var(--color-accent-primary)", marginTop: "2px" }}>
                         {f2(perPaycheckFromCycle(parseFloat(a.amount) || 0, a.cycle, cpm) * perCheckFactor)}/check
                       </div>
                     </div>
                     <SmBtn
                       onClick={() => removeAddition(a.tempId)}
                       c="var(--color-text-secondary)"
-                      style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 8px", minHeight: "28px", flexShrink: 0 }}
+                      className="text-2xs" style={{ letterSpacing: "1px", padding: "5px 8px", minHeight: "28px", flexShrink: 0 }}
                     >
                       REMOVE
                     </SmBtn>
@@ -436,7 +435,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
             <SmBtn
               onClick={() => setShowAddForm(true)}
               c="var(--color-accent-primary)"
-              style={{ width: "100%", fontSize: "9px", letterSpacing: "1.5px", padding: "8px", minHeight: "36px" }}
+              className="text-2xs" style={{ width: "100%", letterSpacing: "1.5px", padding: "8px", minHeight: "36px" }}
             >
               + ADD EXPENSE
             </SmBtn>
@@ -447,7 +446,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
               borderRadius: "8px",
               padding: "12px",
             }}>
-              <div style={{ fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "10px" }}>
+              <div className="text-2xs" style={{ color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "10px" }}>
                 New expense — effective {monthLabel}
               </div>
               <div style={{ marginBottom: "8px" }}>
@@ -497,7 +496,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                 </select>
               </div>
               {parseFloat(addDraft.amount) > 0 && (
-                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px" }}>
                   Per-paycheck reserve: <span style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(addDraft.amount) || 0, addDraft.cycle, cpm) * perCheckFactor)}</span>
                 </div>
               )}
@@ -506,13 +505,14 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                   onClick={stageAddition}
                   bg={addDraft.label.trim() && parseFloat(addDraft.amount) > 0 ? "var(--color-accent-primary)" : "var(--color-bg-raised)"}
                   c={addDraft.label.trim() && parseFloat(addDraft.amount) > 0 ? "#0a0a0a" : "var(--color-text-disabled)"}
-                  style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 14px", minHeight: "30px", fontWeight: "bold", cursor: addDraft.label.trim() && parseFloat(addDraft.amount) > 0 ? "pointer" : "not-allowed" }}
+                  className="text-2xs"
+                  style={{ letterSpacing: "1px", padding: "6px 14px", minHeight: "30px", fontWeight: "bold", cursor: addDraft.label.trim() && parseFloat(addDraft.amount) > 0 ? "pointer" : "not-allowed" }}
                 >
                   ADD
                 </SmBtn>
                 <SmBtn
                   onClick={() => { setShowAddForm(false); setAddDraft({ label: "", amount: "", cycle: "every30days", category: "Needs" }); }}
-                  style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
+                  className="text-2xs" style={{ letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                 >
                   CANCEL
                 </SmBtn>
@@ -522,7 +522,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
         </div>
 
         {expenses.length === 0 && additions.length === 0 && (
-          <div style={{ fontSize: "12px", color: "var(--color-text-disabled)", textAlign: "center", padding: "20px 0" }}>
+          <div className="text-sm" style={{ color: "var(--color-text-disabled)", textAlign: "center", padding: "20px 0" }}>
             No expenses yet.
           </div>
         )}
@@ -537,7 +537,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
       }}>
         <SmBtn
           onClick={onClose}
-          style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "7px", minHeight: "36px" }}
+          className="text-xs" style={{ flex: 1, letterSpacing: "1px", padding: "7px", minHeight: "36px" }}
         >
           CANCEL
         </SmBtn>
@@ -545,9 +545,8 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
           onClick={hasStagedChanges ? handleSave : undefined}
           bg={hasStagedChanges ? "var(--color-accent-primary)" : "var(--color-bg-raised)"}
           c={hasStagedChanges ? "#0a0a0a" : "var(--color-text-disabled)"}
-          style={{
+          className="text-xs" style={{
             flex: 2,
-            fontSize: "10px",
             letterSpacing: "1px",
             padding: "7px",
             minHeight: "36px",

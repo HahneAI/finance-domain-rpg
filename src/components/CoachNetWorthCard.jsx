@@ -157,10 +157,10 @@ export function CoachNetWorthCard({
         style={{ width: "8px", height: "8px", borderRadius: "50%", background: TIER_COLOR[tier], marginTop: "5px", flexShrink: 0 }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "9px", letterSpacing: "2.5px", textTransform: "uppercase", color: TIER_COLOR[tier], marginBottom: "6px" }}>
+        <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: TIER_COLOR[tier], marginBottom: "6px" }}>
           {TIER_LABEL[tier]}
         </div>
-        <div style={{ fontSize: "13px", lineHeight: 1.55, color: "var(--color-text-primary)" }}>
+        <div className="text-base" style={{ lineHeight: 1.55, color: "var(--color-text-primary)" }}>
           {loading && !liveMessage ? "…" : liveMessage}
         </div>
       </div>
@@ -168,11 +168,10 @@ export function CoachNetWorthCard({
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        style={{
+        className="text-md" style={{
           background: "transparent",
           border: "none",
           color: "var(--color-text-secondary)",
-          fontSize: "14px",
           cursor: "pointer",
           padding: "4px",
           minHeight: "44px",

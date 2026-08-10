@@ -20,13 +20,13 @@ export function BetaSignupNoticeBanner({ status, message, onDismiss }) {
       display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
     }}>
       <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: "180px", fontSize: "12px", color: textColor }}>
+      <div className="text-sm" style={{ flex: 1, minWidth: "180px", color: textColor }}>
         {isSuccess ? "You're in the beta — welcome aboard." : (message || "Beta signup didn't go through.")}
       </div>
       <Pressable
         onClick={onDismiss}
         aria-label="Dismiss"
-        style={{ background: "transparent", color: textColor, border: "none", cursor: "pointer", fontSize: "14px", padding: "2px 6px" }}
+        className="text-md" style={{ background: "transparent", color: textColor, border: "none", cursor: "pointer", padding: "2px 6px" }}
       >
         ✕
       </Pressable>

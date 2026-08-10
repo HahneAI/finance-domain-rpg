@@ -54,13 +54,13 @@ export function TipsCommissionCheckIn({ label, dateIso, isYesterday, onLog, onSk
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-green)", flexShrink: 0 }} />
-        <div style={{ flex: 1, fontSize: "12px", color: "var(--color-text-primary)" }}>
+        <div className="text-sm" style={{ flex: 1, color: "var(--color-text-primary)" }}>
           Did you make any {label} {dayLabel}?
         </div>
         <Pressable
           onClick={handleSkip}
           aria-label="Skip"
-          style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "14px", padding: "2px 6px" }}
+          className="text-md" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", padding: "2px 6px" }}
         >
           ✕
         </Pressable>
@@ -70,13 +70,13 @@ export function TipsCommissionCheckIn({ label, dateIso, isYesterday, onLog, onSk
         <div style={{ display: "flex", gap: "8px" }}>
           <Pressable
             onClick={() => setShowAmount(true)}
-            style={{ flex: 1, background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "8px 0", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+            className="text-xs" style={{ flex: 1, background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "8px 0", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
           >
             Yes
           </Pressable>
           <Pressable
             onClick={handleNo}
-            style={{ flex: 1, background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 0", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+            className="text-xs" style={{ flex: 1, background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 0", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
           >
             No
           </Pressable>
@@ -87,11 +87,11 @@ export function TipsCommissionCheckIn({ label, dateIso, isYesterday, onLog, onSk
             type="number" min="0" step="0.01" autoFocus placeholder="Amount ($)"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}
+            className="text-base" style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 10px", color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}
           />
           <Pressable
             onClick={handleSaveAmount}
-            style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+            className="text-xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "8px 16px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
           >
             Save
           </Pressable>

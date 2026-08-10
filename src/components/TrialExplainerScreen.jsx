@@ -53,10 +53,10 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
       <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "22px" }}>
         {rows.map((row) => (
           <div key={row.label} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-teal)" }}>
+            <div className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-teal)" }}>
               {row.label}
             </div>
-            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+            <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
               {row.detail}
             </div>
           </div>
@@ -70,7 +70,7 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
           onChange={e => setUnderstood(e.target.checked)}
           style={{ marginTop: "3px", accentColor: "var(--color-teal)", width: "16px", height: "16px", flexShrink: 0 }}
         />
-        <span style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
+        <span className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: 1.6 }}>
           I understand my free trial lasts {days} {dayWord}, no card required to start{endDate ? `, and ends ${endDate}` : ""}.
         </span>
       </label>
@@ -78,14 +78,13 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
       <Pressable
         onClick={onContinue}
         disabled={!understood}
-        style={{
+        className="text-xs" style={{
           width: "100%",
           padding: "12px 16px",
           borderRadius: "12px",
           border: "none",
           background: understood ? "var(--color-teal)" : "var(--color-bg-raised)",
           color: understood ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-          fontSize: "11px",
           fontWeight: 700,
           letterSpacing: "1.5px",
           textTransform: "uppercase",

@@ -44,7 +44,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
     onClose();
   };
 
-  const labelStyle = { fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
+  const labelStyle = { fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
   const inputStyle = {
     width: "100%",
     background: "var(--color-bg-base)",
@@ -79,7 +79,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
         }}
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
+          <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
             Life Event
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
@@ -88,7 +88,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
         </div>
 
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "18px", overflowY: "auto" }}>
-          <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+          <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
             For a raise or rate change with everything else the same — schedule, employer, and
             benefits are untouched. Use Pay Structure Changed instead for anything bigger.
           </p>
@@ -121,14 +121,14 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
             padding: "14px",
             display: "flex", flexDirection: "column", gap: "8px",
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-primary)" }}>
+            <div className="text-sm" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)" }}>
               <span>Base rate</span>
               <span style={{ fontFamily: "var(--font-mono)" }}>
                 ${oldRate.toFixed(2)}/hr {canActivate && <span style={{ color: "var(--color-text-secondary)" }}>→</span>} {canActivate && <strong style={{ color: "var(--color-teal)" }}>${newRate.toFixed(2)}/hr</strong>}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", marginTop: "2px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Est. weekly net change</span>
+              <span className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>Est. weekly net change</span>
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 700,
                 color: netDelta >= 0 ? "var(--color-green)" : "var(--color-deduction)",
@@ -138,12 +138,12 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
             </div>
           </div>
 
-          <div style={{
+          <div className="text-xs" style={{
             background: "rgba(245,158,11,0.08)",
             border: "1px solid rgba(245,158,11,0.28)",
             borderRadius: "10px",
             padding: "10px 12px",
-            fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
+            color: "var(--color-text-secondary)", lineHeight: 1.5,
           }}>
             Goals, expenses, and logs are untouched — only forward-looking projections use the new rate.
           </div>
@@ -156,12 +156,12 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
         }}>
           <Pressable
             onClick={onClose}
-            style={{
+            className="text-xs" style={{
               background: "var(--color-bg-raised)",
               color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)",
               borderRadius: "12px", padding: "7px 14px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              letterSpacing: "2px", textTransform: "uppercase",
               cursor: "pointer",
             }}
           >
@@ -170,11 +170,11 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
           <Pressable
             onClick={confirm}
             disabled={!canActivate}
-            style={{
+            className="text-xs" style={{
               background: canActivate ? "var(--color-teal)" : "var(--color-bg-raised)",
               color: canActivate ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 16px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold",
               cursor: canActivate ? "pointer" : "not-allowed",
             }}

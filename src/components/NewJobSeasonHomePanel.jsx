@@ -163,24 +163,24 @@ export function NewJobSeasonHomePanel({
             <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
           </svg>
         </div>
-        <div style={{ fontSize: "10px", letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
+        <div className="text-xs" style={{ letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
           Cash On Hand
         </div>
         <div style={{ fontSize: "32px", fontWeight: "bold", color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
           ${Math.round(dash.effectiveCashOnHand).toLocaleString()}
         </div>
         {billsCaptionValue > 0 && (
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+          <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-secondary)" }}>
             − ${billsCaptionValue.toLocaleString()} in bills since you last updated this
           </div>
         )}
         {huntIncome > 0 && (
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-green)" }}>
+          <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-green)" }}>
             + ${Math.round(huntIncome).toLocaleString()} extra income logged below — counted in your runway, not shown in this balance
           </div>
         )}
         {dash.pendingCheck && (
-          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ marginTop: "10px", color: "var(--color-green)", lineHeight: 1.5 }}>
             Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
             {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
             {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
@@ -200,7 +200,7 @@ export function NewJobSeasonHomePanel({
         <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "teal"} centered />
       </div>
       {dash.lifestyleWeeklySpend > 0 && (
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
           + ${Math.round(dash.lifestyleWeeklySpend).toLocaleString()}/wk Lifestyle spend still tracked (not counted in runway above)
         </div>
       )}
@@ -238,12 +238,12 @@ export function NewJobSeasonHomePanel({
         <Pressable
           onClick={logIncome}
           disabled={!canLog}
-          style={{
+          className="text-xs" style={{
             width: "100%",
             background: canLog ? "var(--color-green)" : "var(--color-bg-raised)",
             color: canLog ? "var(--color-bg-base)" : "var(--color-text-disabled)",
             border: "none", borderRadius: "10px", padding: "10px",
-            fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+            letterSpacing: "1.5px", textTransform: "uppercase",
             fontWeight: 700, cursor: canLog ? "pointer" : "not-allowed",
           }}
         >
@@ -259,22 +259,22 @@ export function NewJobSeasonHomePanel({
                 border: "1px solid var(--color-border-subtle)", borderRadius: "8px",
               }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                  <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>
                     {entry.note || "Extra income"}
                   </div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
+                  <div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>
                     {new Date(entry.loggedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </div>
                 </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>
+                <div className="text-base" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-green)" }}>
                   +${Math.round(entry.amount).toLocaleString()}
                 </div>
                 <Pressable
                   onClick={() => removeEntry(entry.id)}
                   aria-label="Remove entry"
-                  style={{
+                  className="text-md" style={{
                     background: "transparent", border: "none", color: "var(--color-text-disabled)",
-                    cursor: "pointer", fontSize: "14px", padding: "2px 4px",
+                    cursor: "pointer", padding: "2px 4px",
                   }}
                 >
                   ✕
@@ -301,20 +301,20 @@ export function NewJobSeasonHomePanel({
         <>
           <div style={{ marginTop: "20px" }}>
             <SH>Job Hunt Assistant</SH>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: 1.5 }}>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: 1.5 }}>
               Coach-guided help with the search itself — application strategy, interview prep,
               salary negotiation, or how long your runway lets you hold out.
             </div>
             <Pressable
               onClick={() => setJobHuntOpen(true)}
-              style={{
+              className="text-xs" style={{
                 width: "100%",
                 background: "rgba(0,200,150,0.10)",
                 color: "var(--color-teal)",
                 border: "1px solid rgba(0,200,150,0.32)",
                 borderRadius: "10px",
                 padding: "12px",
-                fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+                letterSpacing: "1.5px", textTransform: "uppercase",
                 fontWeight: 700, cursor: "pointer",
                 minHeight: "44px",
               }}

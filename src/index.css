@@ -221,12 +221,29 @@ h2 {
    classes instead of a hardcoded inline fontSize. The two smallest tiers are
    +1px over their old raw pixel values — small body copy read too cramped
    after the Rajdhani switch. text-xs absorbs what used to be two separate
-   raw sizes (10px and 11px), which is why it has no unbumped predecessor. */
-.text-2xs { font-size: 10px; } /* was 9px */
-.text-xs  { font-size: 11px; } /* was 10px/11px */
-.text-sm  { font-size: 12px; }
-.text-base { font-size: 13px; }
-.text-md  { font-size: 14px; }
+   raw sizes (10px and 11px), which is why it has no unbumped predecessor.
+
+   CRITICAL — DO NOT move these into `@layer utilities` or any other @layer.
+   .text-xs/.text-sm/.text-base collide by name with Tailwind's own default
+   text-size utilities (Tailwind v4 auto-generates a matching utility for any
+   class name found in scanned source that fits its naming scheme — text-2xs
+   and text-md happen not to collide, but text-xs/sm/base do). Tailwind's
+   versions live inside `@layer utilities` with a `line-height` var attached
+   (e.g. --text-xs--line-height ≈ 1.33). Per the CSS Cascade Layers spec,
+   *unlayered* rules always beat *any* layered rule regardless of source
+   order — that's the only reason our font-size below reliably wins over
+   Tailwind's. Wrapping this block in a layer would remove that guarantee and
+   make the font-size a coin flip on source order (or lose outright, since
+   Tailwind's utilities layer is emitted after `@import "tailwindcss"`).
+   `line-height: normal` on every tier below is deliberate, not filler — it
+   decouples us from Tailwind's colliding line-height var, which would
+   otherwise silently apply (font-size and line-height are separate
+   properties, so "our rule wins" only settles font-size on its own). */
+.text-2xs { font-size: 10px; line-height: normal; } /* was 9px */
+.text-xs  { font-size: 11px; line-height: normal; } /* was 10px/11px */
+.text-sm  { font-size: 12px; line-height: normal; }
+.text-base { font-size: 13px; line-height: normal; }
+.text-md  { font-size: 14px; line-height: normal; }
 
 p {
   margin: 0;

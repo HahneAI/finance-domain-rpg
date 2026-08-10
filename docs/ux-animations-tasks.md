@@ -596,9 +596,9 @@ each file, convert what's a clean fit, and note anything that isn't.
 | ~~`BudgetPanel.jsx`~~ | **0** (was 105) — ✅ converted 2026-08-10 | Budget |
 | `SetupWizard.jsx` | 97 | Onboarding |
 | `WeekConfirmModal.jsx` | 75 | Weekly check-in modal |
-| `HomePanel.jsx` | 44 | Home |
+| ~~`HomePanel.jsx`~~ | **0** (was 44) — ✅ converted 2026-08-10 | Home |
 | `BulkEditPanel.jsx` | 35 | Budget (bulk expense edit) |
-| `IncomePanel.jsx` | 29 | Income |
+| ~~`IncomePanel.jsx`~~ | **0** (was 29) — ✅ converted 2026-08-10 | Income |
 | `NewJobSeasonEntry.jsx` | 28 | New Job Season |
 | `InvestorAdminPanel.jsx` | 25 | Investor demo |
 | `NewJobSeasonBudgetPanel.jsx` | 17 | New Job Season |
@@ -634,10 +634,11 @@ each file, convert what's a clean fit, and note anything that isn't.
 | `ui.jsx` | 1 | `Card`'s dynamic `size` prop — numeric emphasis, intentionally out of scope |
 
 **Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
-`App.jsx` ✅, `BudgetPanel` ✅, `HomePanel`, `IncomePanel` — then the remaining shell/modals
-(`WeekConfirmModal`), then the lower-traffic surfaces (New Job Season, Investor demo, admin-only
-screens). Convert one file at a time, run the test suite after each, and update this table's
-count (or strike the row) as each file's cleanly-convertible instances land.
+`App.jsx` ✅, `BudgetPanel` ✅, `HomePanel` ✅, `IncomePanel` ✅ — all 5 main panels + the app
+shell are now fully converted. Remaining: `SetupWizard.jsx`, `WeekConfirmModal.jsx`, then the
+lower-traffic surfaces (New Job Season, Investor demo, admin-only screens). Convert one file at a
+time, run the test suite after each, and update this table's count (or strike the row) as each
+file's cleanly-convertible instances land.
 
 **Conversion method (established on `ProfilePanel.jsx`, 2026-08-10):** a scripted regex pass
 handles the mechanical bulk — locate `<Tag ... style={{ ...fontSize: "Npx"... }}>` where the tag

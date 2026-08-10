@@ -597,13 +597,12 @@ export function HomePanel({
     <div style={{ paddingBottom: "8px" }}>
       {goals.length === 0 && (
         <div
-          style={{
+          className="text-sm" style={{
             marginBottom: "14px",
             padding: "12px 14px",
             background: "rgba(0,200,150,0.07)",
             border: "1px solid rgba(0,200,150,0.18)",
             borderRadius: "10px",
-            fontSize: "12px",
             color: "var(--color-text-secondary)",
           }}
         >
@@ -611,7 +610,7 @@ export function HomePanel({
         </div>
       )}
       <div id="home-goals-section" style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
-        <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "14px" }}>
+        <div className="text-2xs" style={{ letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "14px" }}>
           Authority Finance
         </div>
         <div style={{
@@ -626,7 +625,7 @@ export function HomePanel({
           Goals
         </div>
         <div style={{ width: "40px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 16px", borderRadius: "1px", opacity: 0.55 }} />
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
+        <div className="text-sm" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
           {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
         </div>
       </div>
@@ -634,8 +633,8 @@ export function HomePanel({
       <div>
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
               {formatRotationDisplay(currentWeek, { isAdmin })}
               {nextPayWeek
                 ? ` · pay period ends${daysUntilPaycheck === 0 ? " today" : ` in ${daysUntilPaycheck}d`} · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
@@ -666,13 +665,12 @@ export function HomePanel({
 
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {tl.length > 0 && setConfigProp && !readOnly && (
                 <Pressable
                   onClick={() => setShowResetTimeline(true)}
-                  style={{
-                    fontSize: "9px",
+                  className="text-2xs" style={{
                     letterSpacing: "1px",
                     textTransform: "uppercase",
                     color: "var(--color-text-secondary)",
@@ -687,10 +685,10 @@ export function HomePanel({
                   Reset Timeline
                 </Pressable>
               )}
-              <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tl.length}</div>
+              <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{tl.length}</div>
             </div>
           </div>
-          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
+          {!tl.length && <div className="text-xs" style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
           {isMobile ? (
             <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
@@ -746,14 +744,14 @@ export function HomePanel({
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                              <span className="text-md" style={{ fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
+                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -780,10 +778,10 @@ export function HomePanel({
                             </span>
                           ))}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                        <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
-                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                            <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "8px" }}>
                               {(() => {
                                 const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
                                 const rate = pN > 0 ? g.target / pN : 0;
@@ -877,14 +875,14 @@ export function HomePanel({
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                              <span className="text-md" style={{ fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
+                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -911,10 +909,10 @@ export function HomePanel({
                             </span>
                           ))}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                        <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
-                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                            <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "8px" }}>
                               {(() => {
                                 const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
                                 const rate = pN > 0 ? g.target / pN : 0;
@@ -989,7 +987,7 @@ export function HomePanel({
             >
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", flexShrink: 0 }}>
-                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>
+                <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>
                   REORDER GOALS
                 </div>
                 <Pressable
@@ -999,7 +997,7 @@ export function HomePanel({
                   ✕
                 </Pressable>
               </div>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "18px", flexShrink: 0 }}>
+              <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "18px", flexShrink: 0 }}>
                 {isCoarsePointer ? "Tap ↑ ↓ to reprioritize. Goals fund in order." : "Drag goals to reorder. Goals fund in order."}
               </div>
               {/* Vertical card list */}
@@ -1067,8 +1065,7 @@ export function HomePanel({
                         {i + 1}
                       </div>
                       {/* Visible ordinal */}
-                      <div style={{
-                        fontSize: "11px",
+                      <div className="text-xs" style={{
                         fontWeight: 700,
                         color: "var(--color-text-disabled)",
                         width: "16px",
@@ -1091,8 +1088,7 @@ export function HomePanel({
                         }}>
                           {g.label}
                         </div>
-                        <div style={{
-                          fontSize: "12px",
+                        <div className="text-sm" style={{
                           color: "var(--color-accent-primary)",
                           fontWeight: 600,
                         }}>
@@ -1113,7 +1109,7 @@ export function HomePanel({
                           <Pressable
                             onClick={() => handleMoveWithAnim(g.id, -1, i)}
                             disabled={upDisabled}
-                            style={{
+                            className="text-md" style={{
                               background: "none",
                               border: "none",
                               borderBottom: "1px solid var(--color-border-subtle)",
@@ -1121,7 +1117,6 @@ export function HomePanel({
                               width: "44px",
                               height: "38px",
                               cursor: upDisabled ? "default" : "pointer",
-                              fontSize: "14px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -1130,14 +1125,13 @@ export function HomePanel({
                           <Pressable
                             onClick={() => handleMoveWithAnim(g.id, 1, i)}
                             disabled={downDisabled}
-                            style={{
+                            className="text-md" style={{
                               background: "none",
                               border: "none",
                               color: downDisabled ? "var(--color-text-disabled)" : "var(--color-text-primary)",
                               width: "44px",
                               height: "38px",
                               cursor: downDisabled ? "default" : "pointer",
-                              fontSize: "14px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -1166,14 +1160,13 @@ export function HomePanel({
               {/* Done button */}
               <Pressable
                 onClick={closeReorderModal}
-                style={{
+                className="text-xs" style={{
                   marginTop: "18px",
                   flexShrink: 0,
                   background: "var(--color-bg-raised)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "12px",
                   color: "var(--color-text-primary)",
-                  fontSize: "11px",
                   fontWeight: 700,
                   letterSpacing: "1.5px",
                   textTransform: "uppercase",
@@ -1217,10 +1210,10 @@ export function HomePanel({
                 boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "12px" }}>
+              <div className="text-base" style={{ fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "12px" }}>
                 Reset Goal Timeline
               </div>
-              <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", marginBottom: "8px" }}>
+              <div className="text-base" style={{ lineHeight: 1.5, color: "var(--color-text-primary)", marginBottom: "8px" }}>
                 This restarts every active goal's timeline so funding begins on your{" "}
                 {(() => {
                   const anchor = nextPayWeek ?? futureWeeks?.[0] ?? null;
@@ -1228,7 +1221,7 @@ export function HomePanel({
                   return d ? <>next paycheck (<strong>{d}</strong>)</> : "next paycheck";
                 })()}.
               </div>
-              <div style={{ fontSize: "12px", lineHeight: 1.5, color: "var(--color-text-secondary)", marginBottom: "20px" }}>
+              <div className="text-sm" style={{ lineHeight: 1.5, color: "var(--color-text-secondary)", marginBottom: "20px" }}>
                 It's okay — this happens. If you had to pull your savings for an emergency or spent
                 what you set aside, this re-anchors your goals to reality. Targets, due dates, and
                 labels stay; only the timeline start moves.
@@ -1236,13 +1229,12 @@ export function HomePanel({
               <div style={{ display: "flex", gap: "10px" }}>
                 <Pressable
                   onClick={() => setShowResetTimeline(false)}
-                  style={{
+                  className="text-xs" style={{
                     flex: 1,
                     background: "var(--color-bg-raised)",
                     border: "1px solid var(--color-border-subtle)",
                     borderRadius: "12px",
                     color: "var(--color-text-secondary)",
-                    fontSize: "10px",
                     fontWeight: 700,
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
@@ -1254,13 +1246,12 @@ export function HomePanel({
                 </Pressable>
                 <Pressable
                   onClick={resetGoalTimeline}
-                  style={{
+                  className="text-xs" style={{
                     flex: 1,
                     background: "var(--color-teal)",
                     border: "none",
                     borderRadius: "12px",
                     color: "var(--color-bg-base)",
-                    fontSize: "10px",
                     fontWeight: 700,
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
@@ -1288,13 +1279,13 @@ export function HomePanel({
               <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
             </div>
           </div>
-        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
+        ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
 
         {completedGoals.length > 0 && (
           <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
             <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
-              <span style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
-              <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
+              <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
+              <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
             </Pressable>
             {fundedFold.mounted && (
               <div className="fold-scale" data-fold={fundedFold.fold}>
@@ -1327,7 +1318,7 @@ export function HomePanel({
           Financial Health
         </div>
         <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
+        <div className="text-sm" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
           {subtitle}
         </div>
       </div>
@@ -1382,26 +1373,26 @@ export function HomePanel({
       <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
+          <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
           <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
             <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
           </div>
           <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
           </div>
           <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
             <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
               {fmt$(annualSavings - yearEndGoalDraw)}
             </div>

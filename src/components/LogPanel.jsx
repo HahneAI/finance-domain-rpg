@@ -352,8 +352,8 @@ export function LogPanel({
             const isScheduled = scheduled.includes(day);
             const isMissed = missed.includes(day);
             return (
-              <Pressable key={day} type="button" onClick={() => toggleDay(day, vals, set)} style={{
-                padding: "6px 10px", borderRadius: "12px", fontSize: "10px", letterSpacing: "1px",
+              <Pressable key={day} type="button" onClick={() => toggleDay(day, vals, set)} className="text-xs" style={{
+                padding: "6px 10px", borderRadius: "12px", letterSpacing: "1px",
                 cursor: "pointer",
                 border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
                 background: isMissed ? "rgba(224,92,92,0.13)" : isScheduled ? "var(--color-bg-surface)" : "#111",
@@ -367,7 +367,7 @@ export function LogPanel({
           })}
         </div>
         {missed.length > 0 && (
-          <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "6px" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "6px" }}>
             {missed.length} day(s) · {missed.length * config.shiftHours}h missed
             {missed.some(d => d === "Sat" || d === "Sun") && ` · ${missed.filter(d => d === "Sat" || d === "Sun").length} wknd`}
           </div>
@@ -406,7 +406,7 @@ export function LogPanel({
           ? `${pUnit} ${inlineCheckNumber}, ${inlineChecksLeft} left`
           : `${pUnit} —`;
         return (
-          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "4px" }}>
             {formatRotationDisplay(vals.weekRotation, { isAdmin })} · {inlineWeekLabel}
             {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
           </div>
@@ -454,11 +454,11 @@ export function LogPanel({
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
+              <div className="text-2xs" style={{ gridColumn: "1/-1", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
               </div>
             ) : (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-text-disabled)" }}>
+              <div className="text-2xs" style={{ gridColumn: "1/-1", color: "var(--color-text-disabled)" }}>
                 {s} × {config.shiftHours}h = {expected}h — edit to override
               </div>
             );
@@ -472,7 +472,7 @@ export function LogPanel({
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
         {hasBucket && (
-          <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", fontSize: "10px", color: "#e8622a", lineHeight: "1.6" }}>
+          <div className="text-xs" style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", color: "#e8622a", lineHeight: "1.6" }}>
             ⚠ Unapproved — hits attendance bucket ({normalizeDays(vals.missedDays).length * config.shiftHours}h deducted this entry)
           </div>
         )}
@@ -493,7 +493,7 @@ export function LogPanel({
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
+              <div className="text-2xs" style={{ gridColumn: "1/-1", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h{hasBucket ? " · bucket hit uses override amount" : ""}
               </div>
             ) : null;
@@ -505,7 +505,7 @@ export function LogPanel({
     {vals.type === "pto_unapproved" && (
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
-        <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1510", border: "1px solid #c8922a44", borderRadius: "4px", fontSize: "10px", color: "#c8922a", lineHeight: "1.6" }}>
+        <div className="text-xs" style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1510", border: "1px solid #c8922a44", borderRadius: "4px", color: "#c8922a", lineHeight: "1.6" }}>
           ⚠ PTO covers pay — but absence was unapproved. PTO hours consumed{hasBucket ? ` AND attendance bucket hit (${normalizeDays(vals.missedDays).length * config.shiftHours}h this entry)` : ""}.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
@@ -535,7 +535,7 @@ export function LogPanel({
       <div><label style={lS}>Hours Lost (of {config.shiftHours})</label>
         <input type="number" min="0" max={config.shiftHours} step="0.5" value={vals.hoursLost} onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))} style={iS} />
       </div>
-      <div style={{ gridColumn: "1 / -1", padding: "8px 10px", background: "#141e14", border: "1px solid #6dbf8a44", borderRadius: "4px", fontSize: "10px", color: "var(--color-green)", lineHeight: "1.6" }}>
+      <div className="text-xs" style={{ gridColumn: "1 / -1", padding: "8px 10px", background: "#141e14", border: "1px solid #6dbf8a44", borderRadius: "4px", color: "var(--color-green)", lineHeight: "1.6" }}>
         Partial shift (approved) — reduces pay and PTO accrual. Does not hit attendance bucket.
       </div>
     </>}
@@ -570,15 +570,15 @@ export function LogPanel({
         <label style={lS}>Extra day outside your schedule?</label>
         <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
           <Pressable type="button" onClick={() => set(v => ({ ...v, extraDay: true }))}
-            style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: vals.extraDay ? "rgba(34,197,94,0.13)" : "var(--color-bg-raised)", color: vals.extraDay ? "var(--color-green)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: vals.extraDay ? "bold" : "normal" }}>
+            className="text-xs" style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: vals.extraDay ? "rgba(34,197,94,0.13)" : "var(--color-bg-raised)", color: vals.extraDay ? "var(--color-green)" : "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: vals.extraDay ? "bold" : "normal" }}>
             Yes — extra pay
           </Pressable>
           <Pressable type="button" onClick={() => set(v => ({ ...v, extraDay: false }))}
-            style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !vals.extraDay ? "rgba(122,139,191,0.16)" : "var(--color-bg-raised)", color: !vals.extraDay ? "#7a8bbf" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: !vals.extraDay ? "bold" : "normal" }}>
+            className="text-xs" style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !vals.extraDay ? "rgba(122,139,191,0.16)" : "var(--color-bg-raised)", color: !vals.extraDay ? "#7a8bbf" : "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: !vals.extraDay ? "bold" : "normal" }}>
             No — paid day off
           </Pressable>
         </div>
-        <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: 1.5 }}>
+        <div className="text-2xs" style={{ color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: 1.5 }}>
           {vals.extraDay
             ? "Counts as money gained — paid on top of your normal scheduled projection."
             : "No change to your projection — a normally scheduled day covered by PTO."}
@@ -596,14 +596,14 @@ export function LogPanel({
     <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
 
     {/* Subtitle — nudges the daily logging habit */}
-    <div style={{ textAlign: "center", fontSize: "14px", color: "var(--color-text-secondary)", marginTop: "-14px", marginBottom: "24px", lineHeight: 1.4 }}>
+    <div className="text-md" style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "-14px", marginBottom: "24px", lineHeight: 1.4 }}>
       Did you make extra or lose any money today?
     </div>
 
     {/* Current week indicator */}
     {currentWeek && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
-      <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
+      <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
+      <div className="text-xs" style={{ display: "flex", gap: "16px", alignItems: "center", }}>
         <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
         <span style={{ color: "var(--color-text-primary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })}</span>
         <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
@@ -612,25 +612,25 @@ export function LogPanel({
 
     {/* Log header + add button */}
     <div style={{ marginBottom: "12px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
-      <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
+      <div className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
+      <Pressable onClick={() => { setAdding(true); setEditId(null); }} className="text-sm" style={{ width: "100%", background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
     </div>
 
     {/* Add form */}
     {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-      <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
+      <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
       </div>
       {addConfirming && (
-        <div style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm entry?</div>
+        <div className="text-xs" style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", color: "var(--color-text-secondary)" }}>
+          <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm entry?</div>
           {(nEv.type === "missed_unpaid" || nEv.type === "missed_unapproved") && (() => {
             const s = parseInt(nEv.shiftsLost) || 0;
             const h = parseFloat(nEv.hoursLost) || 0;
             const expected = s * config.shiftHours;
             const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
-            return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-teal)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+            return <div>{s} shift(s) · {h}h missed{overridden && <span className="text-2xs" style={{ color: "var(--color-teal)", marginLeft: "6px", }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
           })()}
           {nEv.type === "bonus" && <div>+${parseFloat(nEv.amount) || 0} · {parseInt(nEv.shiftsGained) || 0} shift(s) · {parseFloat(nEv.hoursGained) || 0}h gained</div>}
           {nEv.type === "partial" && <div>{parseFloat(nEv.hoursLost) || 0}h partial shift</div>}
@@ -639,31 +639,31 @@ export function LogPanel({
         </div>
       )}
       {cancelWarning && (
-        <div style={{ marginBottom: "10px", padding: "12px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px", fontSize: "11px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "6px" }}>Leave without saving?</div>
-          <div style={{ color: "var(--color-text-secondary)", marginBottom: "10px", fontSize: "10px" }}>This event will be discarded.</div>
+        <div className="text-xs" style={{ marginBottom: "10px", padding: "12px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px", }}>
+          <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "6px" }}>Leave without saving?</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px", }}>This event will be discarded.</div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <Pressable onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); setCancelWarning(false); }} style={{ background: "var(--color-deduction)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Yes, Discard</Pressable>
-            <Pressable onClick={() => setCancelWarning(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Keep Editing</Pressable>
+            <Pressable onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); setCancelWarning(false); }} className="text-xs" style={{ background: "var(--color-deduction)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Yes, Discard</Pressable>
+            <Pressable onClick={() => setCancelWarning(false)} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Keep Editing</Pressable>
           </div>
         </div>
       )}
       <div style={{ display: "flex", gap: "8px" }}>
         {!addConfirming ? (
           <>
-            <Pressable onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</Pressable>
-            <Pressable onClick={() => nEv.weekEnd ? setCancelWarning(true) : (setAdding(false), setNEv(blank), setAddConfirming(false))} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
+            <Pressable onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} className="text-xs" style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</Pressable>
+            <Pressable onClick={() => nEv.weekEnd ? setCancelWarning(true) : (setAdding(false), setNEv(blank), setAddConfirming(false))} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
           </>
         ) : (
           <>
-            <Pressable onClick={addLog} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, LOG IT</Pressable>
-            <Pressable onClick={() => setAddConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
+            <Pressable onClick={addLog} className="text-xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, LOG IT</Pressable>
+            <Pressable onClick={() => setAddConfirming(false)} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
           </>
         )}
       </div>
     </div>}
 
-    {logs.length === 0 && !adding && <div style={{ textAlign: "center", padding: "40px", color: "var(--color-text-primary)", fontSize: "13px" }}>No events logged yet.</div>}
+    {logs.length === 0 && !adding && <div className="text-base" style={{ textAlign: "center", padding: "40px", color: "var(--color-text-primary)", }}>No events logged yet.</div>}
 
     {/* ── Tips / Commission daily check-in log — only appears once at least one
          day has actually been logged (mere wizard opt-in isn't enough). ── */}
@@ -673,27 +673,27 @@ export function LogPanel({
           onClick={() => setTipsOpen(o => !o)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: tipsOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
         >
-          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+          <span className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
             {isTipsLabel ? "Tips" : "Commission"} Log ({tipsCommissionEntries.length})
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>{f(tipsCommissionTotals.amount)}</span>
-            <span style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tipsOpen ? "▲" : "▼"}</span>
+            <span className="text-xs" style={{ color: "var(--color-green)", fontWeight: "bold" }}>{f(tipsCommissionTotals.amount)}</span>
+            <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{tipsOpen ? "▲" : "▼"}</span>
           </span>
         </Pressable>
         {tipsFold.mounted && (
           <div className="fold-scale" data-fold={tipsFold.fold} style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
             {isTipsLabel && (
               <div style={{ marginBottom: "14px", padding: "10px 12px", background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.22)", borderRadius: "8px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>If you claim all tips</div>
-                <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
+                <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>If you claim all tips</div>
+                <div className="text-base" style={{ color: "var(--color-text-primary)" }}>
                   You'd owe <span style={{ color: "var(--color-deduction)", fontWeight: "bold" }}>{f(tipsCommissionTotals.extraTaxOwed)}</span> extra in tax on {f(tipsCommissionTotals.amount)} logged
                 </div>
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {tipsCommissionEntries.map(e => (
-                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
+                <div key={e.id} className="text-xs" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
                   <span style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{fmtDate(e.date)}</span>
                   <span style={{ color: e.amount > 0 ? "var(--color-green)" : "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
                     {e.amount > 0 ? f(e.amount) : (isTipsLabel ? "No tips" : "No commission")}
@@ -749,19 +749,19 @@ export function LogPanel({
 
         {isEditing ? (
           <>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", color: ev.color, textTransform: "uppercase", marginBottom: "14px" }}>Edit Event</div>
+            <div className="text-xs" style={{ letterSpacing: "2px", color: ev.color, textTransform: "uppercase", marginBottom: "14px" }}>Edit Event</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <FormFields vals={editVals} set={setEditVals} onWeekEndChange={handleEditWeekEndChange} />
             </div>
             {editConfirming && (
-              <div style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm changes?</div>
+              <div className="text-xs" style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", color: "var(--color-text-secondary)" }}>
+                <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm changes?</div>
                 {(editVals.type === "missed_unpaid" || editVals.type === "missed_unapproved") && (() => {
                   const s = parseInt(editVals.shiftsLost) || 0;
                   const h = parseFloat(editVals.hoursLost) || 0;
                   const expected = s * config.shiftHours;
                   const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
-                  return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-teal)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+                  return <div>{s} shift(s) · {h}h missed{overridden && <span className="text-2xs" style={{ color: "var(--color-teal)", marginLeft: "6px", }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
                 })()}
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
@@ -773,13 +773,13 @@ export function LogPanel({
             <div style={{ display: "flex", gap: "8px" }}>
               {!editConfirming ? (
                 <>
-                  <Pressable onClick={() => setEditConfirming(true)} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
-                  <Pressable onClick={() => { setEditId(null); setEditConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
+                  <Pressable onClick={() => setEditConfirming(true)} className="text-xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
+                  <Pressable onClick={() => { setEditId(null); setEditConfirming(false); }} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
                 </>
               ) : (
                 <>
-                  <Pressable onClick={saveEdit} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, SAVE</Pressable>
-                  <Pressable onClick={() => setEditConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
+                  <Pressable onClick={saveEdit} className="text-xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, SAVE</Pressable>
+                  <Pressable onClick={() => setEditConfirming(false)} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
                 </>
               )}
             </div>
@@ -790,12 +790,12 @@ export function LogPanel({
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* Title = financial direction (Gained Money / Missed Money / PTO); note + pay period give context. */}
                 <div style={{ fontSize: "18px", fontWeight: "bold", color: titleColor, letterSpacing: "0.2px", marginBottom: "3px" }}>{cardTitle}</div>
-                {entry.note && <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "2px" }}>{entry.note}</div>}
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodText}</div>
+                {entry.note && <div className="text-sm" style={{ color: "var(--color-text-primary)", marginBottom: "2px" }}>{entry.note}</div>}
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodText}</div>
                 {(hasBucket && isUA) || ak ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
-                    {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
-                    {ak && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
+                    {hasBucket && isUA && <span className="text-2xs" style={{ background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
+                    {ak && <span className="text-2xs" style={{ background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
                   </div>
                 ) : null}
               </div>
@@ -812,16 +812,16 @@ export function LogPanel({
                     next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
                     return next;
                   })}
-                  style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                  className="text-sm" style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", lineHeight: 1 }}
                   title="Impact breakdown"
                 >{expandedImpact.has(entry.id) ? "▲" : "▼"}</Pressable>
-                <Pressable onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</Pressable>
+                <Pressable onClick={() => startEdit(entry)} className="text-xs" style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>EDIT</Pressable>
                 {cdel === entry.id
                   ? <>
-                      <Pressable onClick={() => { const next = logs.filter(e => e.id !== entry.id); setLogs(next); onSaveLogsNow?.(next); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</Pressable>
-                      <Pressable onClick={() => setCdel(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</Pressable>
+                      <Pressable onClick={() => { const next = logs.filter(e => e.id !== entry.id); setLogs(next); onSaveLogsNow?.(next); setCdel(null); }} className="text-xs" style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>CONFIRM</Pressable>
+                      <Pressable onClick={() => setCdel(null)} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>CANCEL</Pressable>
                     </>
-                  : <Pressable onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</Pressable>
+                  : <Pressable onClick={() => setCdel(entry.id)} className="text-xs" style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>DELETE</Pressable>
                 }
               </div>
             </div>
@@ -842,13 +842,13 @@ export function LogPanel({
               return (
                 <div style={{ marginTop: "8px", padding: "10px 12px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "11px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
+                    <span className="text-xs" style={{ background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "5px" }}>
                     {rows.map(([label, val]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{label}</span>
-                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
+                        <span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{label}</span>
+                        <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
                       </div>
                     ))}
                   </div>
@@ -881,8 +881,8 @@ export function LogPanel({
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px" }}>
                     {rows.map(([label, val]) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
-                        <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
+                        <span className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
+                        <span className="text-2xs" style={{ fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
                       </div>
                     ))}
                   </div>
@@ -919,35 +919,35 @@ export function LogPanel({
 
     <LiquidGlass purpose="log-summary" tone="teal" intensity="light" style={{ borderRadius: "6px", marginBottom: "20px" }}>
     <div style={{ padding: "14px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
+      <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
         Log Effect Summary
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: "10px 14px", marginBottom: "10px" }}>
         <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Total Gross Lost</div>
-          <div style={{ fontSize: "14px", color: "var(--color-deduction)", fontWeight: "bold" }}>{f(tot.gL)}</div>
+          <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Total Gross Lost</div>
+          <div className="text-md" style={{ color: "var(--color-deduction)", fontWeight: "bold" }}>{f(tot.gL)}</div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
-          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjustedTakeHome)}</div>
+          <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
+          <div className="text-md" style={{ color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjustedTakeHome)}</div>
         </div>
         <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
-          <div style={{ fontSize: "14px", color: adjWA > 0 ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold" }}>{f(adjWA)}</div>
+          <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
+          <div className="text-md" style={{ color: adjWA > 0 ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold" }}>{f(adjWA)}</div>
         </div>
         {has401k && <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
-          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(logK401kLost)}</div>
+          <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
+          <div className="text-md" style={{ color: "#7a8bbf", fontWeight: "bold" }}>{f(logK401kLost)}</div>
         </div>}
       </div>
       <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
         <div>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Adj. savings: <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-teal)" }}>{f0(totGoals)}</span></div>
+          <div className="text-xs" style={{ letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
+          <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>Adj. savings: <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-teal)" }}>{f0(totGoals)}</span></div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "14px", fontWeight: "bold", color: ok ? "var(--color-green)" : "var(--color-deduction)" }}>{ok ? "All goals on track" : "Goals at risk"}</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{Math.ceil(totGoals / adjWA)} wks to fund all goals</div>
+          <div className="text-md" style={{ fontWeight: "bold", color: ok ? "var(--color-green)" : "var(--color-deduction)" }}>{ok ? "All goals on track" : "Goals at risk"}</div>
+          <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{Math.ceil(totGoals / adjWA)} wks to fund all goals</div>
         </div>
       </div>
     </div>
@@ -960,10 +960,10 @@ export function LogPanel({
           onClick={() => setHistOpen(o => !o)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: histOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
         >
-          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Attendance History</span>
+          <span className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Attendance History</span>
           <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {(ytdUnpaid + ytdUnapproved) > 0 && <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
-            <span style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{histOpen ? "▲" : "▼"}</span>
+            {(ytdUnpaid + ytdUnapproved) > 0 && <span className="text-xs" style={{ color: "var(--color-deduction)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
+            <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{histOpen ? "▲" : "▼"}</span>
           </span>
         </Pressable>
         {histFold.mounted && (
@@ -971,21 +971,21 @@ export function LogPanel({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
               <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
                 <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-deduction)", fontFamily: "var(--font-mono)" }}>{ytdUnpaid}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unpaid Shifts</div>
+                <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unpaid Shifts</div>
               </div>
               <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
                 <div style={{ fontSize: "20px", fontWeight: "bold", color: "#e8622a", fontFamily: "var(--font-mono)" }}>{ytdUnapproved}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unapprov. Days</div>
+                <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unapprov. Days</div>
               </div>
               <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
                 <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{ytdPartial}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Partial Shifts</div>
+                <div className="text-2xs" style={{ letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Partial Shifts</div>
               </div>
             </div>
             {Object.keys(byMonth).length > 0 && (
               <div style={{ marginBottom: "14px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>By Month</div>
-                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", fontSize: "9px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "4px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>By Month</div>
+                <div className="text-2xs" style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "4px" }}>
                   <span>Month</span><span>Unpaid</span><span>Unapprov.</span><span>Partial</span>
                 </div>
                 {Object.entries(byMonth).sort().map(([month, m]) => {
@@ -993,10 +993,10 @@ export function LogPanel({
                   const label = `${LOG_MONTH_SHORT[parseInt(mo) - 1]} ${yr}`;
                   return (
                     <div key={month} style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
-                      <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{label}</span>
-                      <span style={{ fontSize: "11px", color: m.unpaid > 0 ? "var(--color-deduction)" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.unpaid > 0 ? `${m.unpaid}sh` : "—"}</span>
-                      <span style={{ fontSize: "11px", color: m.unapproved > 0 ? "#e8622a" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.unapproved > 0 ? `${m.unapproved}d·${m.unapprovedH}h` : "—"}</span>
-                      <span style={{ fontSize: "11px", color: m.partial > 0 ? "var(--color-text-secondary)" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.partial > 0 ? `${m.partial}·${m.partialH}h` : "—"}</span>
+                      <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{label}</span>
+                      <span className="text-xs" style={{ color: m.unpaid > 0 ? "var(--color-deduction)" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.unpaid > 0 ? `${m.unpaid}sh` : "—"}</span>
+                      <span className="text-xs" style={{ color: m.unapproved > 0 ? "#e8622a" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.unapproved > 0 ? `${m.unapproved}d·${m.unapprovedH}h` : "—"}</span>
+                      <span className="text-xs" style={{ color: m.partial > 0 ? "var(--color-text-secondary)" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>{m.partial > 0 ? `${m.partial}·${m.partialH}h` : "—"}</span>
                     </div>
                   );
                 })}
@@ -1004,7 +1004,7 @@ export function LogPanel({
             )}
             {dowSorted.length > 0 && (
               <div>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>Day Pattern</div>
+                <div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>Day Pattern</div>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {dowSorted.map(([day, count]) => {
                     const pct = totalMissedDays > 0 ? count / totalMissedDays : 0;
@@ -1012,13 +1012,13 @@ export function LogPanel({
                     const col = pct >= 0.3 ? "var(--color-deduction)" : pct >= 0.15 ? "var(--color-teal)" : "var(--color-text-secondary)";
                     return (
                       <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
-                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-teal)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
-                        <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
+                        <span className="text-xs" style={{ color: isWeekend ? "var(--color-teal)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
+                        <span className="text-xs" style={{ color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "6px" }}>{totalMissedDays} total missed day{totalMissedDays !== 1 ? "s" : ""} logged</div>
+                <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "6px" }}>{totalMissedDays} total missed day{totalMissedDays !== 1 ? "s" : ""} logged</div>
               </div>
             )}
           </div>
@@ -1028,24 +1028,24 @@ export function LogPanel({
 
     {/* ── 401k ── */}
     {has401k && currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", margin: "24px 0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
+      <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
       {!hasValid401Start ? (
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
       ) : k401Active ? (
-        <div style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>
+        <div className="text-xs" style={{ color: "var(--color-green)", fontWeight: "bold" }}>
           Active — contributions running since {fmtDate(raw401StartIso)}
           {k401StartSource === "benefits" && (
-            <span style={{ fontSize: "10px", color: "var(--color-text-disabled)", fontWeight: "normal" }}> (benefits start)</span>
+            <span className="text-xs" style={{ color: "var(--color-text-disabled)", fontWeight: "normal" }}> (benefits start)</span>
           )}
         </div>
       ) : (
-        <div style={{ fontSize: "11px", color: "#7a8bbf" }}>
+        <div className="text-xs" style={{ color: "#7a8bbf" }}>
           {(() => {
             const periodsUntil = weeksToChecksRemaining(weeksUntil401k, checksPerYear);
             const pUnit = payPeriodUnit(checksPerYear, 'lower');
             return <><strong style={{ color: "var(--color-text-primary)" }}>{periodsUntil} {pUnit}{periodsUntil !== 1 ? "s" : ""}</strong> until enrollment ({fmtDate(raw401StartIso)})</>;
           })()}
-          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "4px" }}>
             Projected totals below assume contributions begin on this date.
           </div>
         </div>
@@ -1080,8 +1080,8 @@ export function LogPanel({
         if (!rows.length) return null;
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
-            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "360px" }}>
-              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+            <table className="data-table text-sm" style={{ width: "100%", borderCollapse: "collapse", minWidth: "360px" }}>
+              <thead><tr className="text-xs" style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
                 <th style={{ textAlign: "left", padding: "8px 4px" }}>Month</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Match {(matchRate * 100).toFixed(1)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Mo Total</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
               </tr></thead>
               <tbody>{rows.map(m => <tr key={m.name} style={{ borderBottom: "1px solid #161616" }}><td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f(m.gross)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(m.k4E)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(m.k4E + m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-teal)", fontWeight: "bold" }}>{f2(m.running)}</td></tr>)}</tbody>
@@ -1100,10 +1100,10 @@ export function LogPanel({
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "14px 16px", marginBottom: "14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingPto ? "10px" : "0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>PTO Balance</div>
-              {config.ptoHoursOverride != null && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
+              <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>PTO Balance</div>
+              {config.ptoHoursOverride != null && <span className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
             </div>
-            <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{effectiveAdjP.toFixed(1)} hrs</span>
+            <span className="text-md" style={{ fontWeight: "bold", color: "var(--color-text-primary)" }}>{effectiveAdjP.toFixed(1)} hrs</span>
           </div>
           {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1162,10 +1162,10 @@ export function LogPanel({
         {!formOpen && ptoGoal && (
           <div style={{ background: onTrack ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${onTrack ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
-              <div><div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", marginBottom: "4px" }}>{ptoGoal.label}</div><div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Need {hoursNeed} hrs · {goalPtoProjected.toFixed(1)} proj. by {fmtDate(ptoGoal.targetDate)} + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts</div></div>
+              <div><div className="text-xs" style={{ color: onTrack ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", marginBottom: "4px" }}>{ptoGoal.label}</div><div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Need {hoursNeed} hrs · {goalPtoProjected.toFixed(1)} proj. by {fmtDate(ptoGoal.targetDate)} + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong></div><div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "3px" }}>Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts</div></div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-deduction)" }}>{onTrack ? "On Track" : "Shortfall"}</div>
-                {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-deduction)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
+                <div className="text-md" style={{ fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-deduction)" }}>{onTrack ? "On Track" : "Shortfall"}</div>
+                {!onTrack && <div className="text-xs" style={{ color: "var(--color-deduction)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
                 <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
                   <SmBtn onClick={openEdit} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Edit</SmBtn>
                   <SmBtn onClick={() => { setPtoGoal?.(null); onSavePtoGoalNow?.(null); }} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
@@ -1176,22 +1176,22 @@ export function LogPanel({
         )}
         {!formOpen && !ptoGoal && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>No PTO leave goal set. Add one to track your accrual progress toward a leave target.</div>
+            <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>No PTO leave goal set. Add one to track your accrual progress toward a leave target.</div>
             <SmBtn onClick={openAdd} c="var(--color-teal)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
           </div>
         )}
         {formOpen && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>{editMode ? "Edit Leave Goal" : "New Leave Goal"}</div>
+            <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>{editMode ? "Edit Leave Goal" : "New Leave Goal"}</div>
             <div><label style={lS}>Goal Label</label><input {...iS} style={{ ...iS }} type="text" value={formVals.label} onChange={e => setFormVals(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Paternity Leave" /></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              <div><label style={lS}>Hours Needed</label><input {...iS} style={{ ...iS }} type="number" min="0" step="1" value={formVals.hoursNeeded} onChange={e => setFormVals(v => ({ ...v, hoursNeeded: e.target.value }))} placeholder="e.g. 134" />{formVals.hoursNeeded && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>≈ {Math.ceil(parseFloat(formVals.hoursNeeded) / shiftHours)} shifts at {shiftHours}h</div>}</div>
-              <div><label style={lS}>Negative Balance Cap (hrs)</label><input {...iS} style={{ ...iS }} type="number" min="0" step="1" value={formVals.negativeBalanceCap} onChange={e => setFormVals(v => ({ ...v, negativeBalanceCap: e.target.value }))} placeholder="40" /><div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>Hours DHL allows you to borrow</div></div>
+              <div><label style={lS}>Hours Needed</label><input {...iS} style={{ ...iS }} type="number" min="0" step="1" value={formVals.hoursNeeded} onChange={e => setFormVals(v => ({ ...v, hoursNeeded: e.target.value }))} placeholder="e.g. 134" />{formVals.hoursNeeded && <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "4px" }}>≈ {Math.ceil(parseFloat(formVals.hoursNeeded) / shiftHours)} shifts at {shiftHours}h</div>}</div>
+              <div><label style={lS}>Negative Balance Cap (hrs)</label><input {...iS} style={{ ...iS }} type="number" min="0" step="1" value={formVals.negativeBalanceCap} onChange={e => setFormVals(v => ({ ...v, negativeBalanceCap: e.target.value }))} placeholder="40" /><div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "4px" }}>Hours DHL allows you to borrow</div></div>
             </div>
-            <div><label style={lS}>Leave Start Date</label><input {...iS} style={{ ...iS }} type="date" value={formVals.targetDate} onChange={e => setFormVals(v => ({ ...v, targetDate: e.target.value }))} /><div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>App projects your PTO accrual up to this date.</div></div>
+            <div><label style={lS}>Leave Start Date</label><input {...iS} style={{ ...iS }} type="date" value={formVals.targetDate} onChange={e => setFormVals(v => ({ ...v, targetDate: e.target.value }))} /><div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "4px" }}>App projects your PTO accrual up to this date.</div></div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <Pressable onClick={() => setFormOpen(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</Pressable>
+              <Pressable onClick={() => setFormOpen(false)} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} className="text-xs" style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</Pressable>
             </div>
           </div>
         )}
@@ -1214,16 +1214,16 @@ export function LogPanel({
             return (
               <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px", marginBottom: "10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-                  <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                  <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
-                    <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
+                    <span className="text-sm" style={{ fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span className="text-xs" style={{ color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
+                    <span className="text-2xs" style={{ background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
                   </div>
                 </div>
                 <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
                 </div>
-                <div style={{ fontSize: "10px" }}>
+                <div className="text-xs" style={{ }}>
                   <span style={{ color: "var(--color-text-primary)" }}>{monthLabel}: </span>
                   {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>Tier 1 · any unapproved absence changes tier</span>}
                   {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
@@ -1238,10 +1238,10 @@ export function LogPanel({
           <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "8px", padding: "14px 16px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingBucket ? "10px" : "0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
-                {config.bucketBalanceOverride != null && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
+                <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                {config.bucketBalanceOverride != null && <span className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
               </div>
-              <span style={{ fontSize: "14px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
+              <span className="text-md" style={{ fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span className="text-xs" style={{ color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
             </div>
             {editingBucket ? (
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1283,7 +1283,7 @@ export function LogPanel({
             )}
           </div>
 
-          <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
+          <div className="text-xs" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}
             {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
@@ -1291,17 +1291,17 @@ export function LogPanel({
             {bm.currentTier === 4 && <span style={{ color: "var(--color-deduction)" }}>worst tier · {bm.currentM}h unapproved this month</span>}
           </div>
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "10px" }}>
-            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
-              <thead><tr style={{ borderBottom: "1px solid #222", color: "var(--color-text-disabled)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ padding: "8px 12px", textAlign: "left" }}>Month</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Unappr.</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Net</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Balance</th><th style={{ padding: "8px 12px", textAlign: "right" }}>Overflow Payout</th></tr></thead>
+            <table className="data-table text-xs" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr className="text-2xs" style={{ borderBottom: "1px solid #222", color: "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ padding: "8px 12px", textAlign: "left" }}>Month</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Unappr.</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Net</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Balance</th><th style={{ padding: "8px 12px", textAlign: "right" }}>Overflow Payout</th></tr></thead>
               <tbody>
                 {bm.monthHistory.map(row => <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}><td style={{ padding: "7px 12px", color: "var(--color-text-primary)" }}>{fmtMonth(row.month)}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td></tr>)}
-                <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}><td style={{ padding: "7px 12px", color: "var(--color-teal)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td><td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td></tr>
+                <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}><td style={{ padding: "7px 12px", color: "var(--color-teal)" }}>{fmtMonth(currentMonthStr)} <span className="text-2xs" style={{ color: "var(--color-text-disabled)" }}>in progress</span></td><td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td></tr>
                 {bm.projectedHistory.map(row => <tr key={row.month} style={{ borderBottom: "1px solid #181818", opacity: 0.45 }}><td style={{ padding: "7px 12px", color: "var(--color-text-primary)", fontStyle: "italic" }}>{fmtMonth(row.month)}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>+{row.net}h</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>{row.closingBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td></tr>)}
               </tbody>
             </table>
           </div>
           <div style={{ background: bandBg, border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", fontSize: "11px", alignItems: "center" }}>
+            <div className="text-xs" style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", alignItems: "center" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Realized overflow payout:</span><span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
               <span style={{ color: "var(--color-text-secondary)" }}>Projected (perfect attendance):</span><span style={{ textAlign: "right", color: "var(--color-green)" }}>{f2(bm.projectedPayout)}</span>
               <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span><span style={{ textAlign: "right", color: "var(--color-teal)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
@@ -1329,12 +1329,12 @@ export function LogPanel({
           <SectionHeader>Attendance Tracker</SectionHeader>
           <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}44`, borderRadius: "6px", padding: "12px 14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Balance</div>
+              <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Balance</div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>
-                  {currentBalance % 1 === 0 ? currentBalance : currentBalance.toFixed(1)} <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {termT} {unit}</span>
+                <span className="text-sm" style={{ fontWeight: "bold", color: bandColor }}>
+                  {currentBalance % 1 === 0 ? currentBalance : currentBalance.toFixed(1)} <span className="text-xs" style={{ color: "var(--color-text-disabled)" }}>/ {termT} {unit}</span>
                 </span>
-                <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>
+                <span className="text-2xs" style={{ background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>
                   ● {status.toUpperCase()}
                 </span>
               </div>
@@ -1342,7 +1342,7 @@ export function LogPanel({
             <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
               <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
             </div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
               {unapprovedCount} unapproved absence{unapprovedCount !== 1 ? "s" : ""} logged this year (+{unapprovedCount * increment} {unit})
               {warnT != null && status === "safe" && ` · ${(warnT - currentBalance).toFixed(1)} ${unit} until warning`}
               {warnT != null && status === "caution" && ` · ${(termT - currentBalance).toFixed(1)} ${unit} until termination threshold`}

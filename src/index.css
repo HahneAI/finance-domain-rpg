@@ -215,6 +215,19 @@ h2 {
   line-height: 1.25;
 }
 
+/* Body-text size scale (adopted 2026-08-10). Non-numeric text areas (labels,
+   sublabels, descriptions, list summaries — everything besides large numeric
+   emphasis, which keeps its own per-component sizing) should use one of these
+   classes instead of a hardcoded inline fontSize. The two smallest tiers are
+   +1px over their old raw pixel values — small body copy read too cramped
+   after the Rajdhani switch. text-xs absorbs what used to be two separate
+   raw sizes (10px and 11px), which is why it has no unbumped predecessor. */
+.text-2xs { font-size: 10px; } /* was 9px */
+.text-xs  { font-size: 11px; } /* was 10px/11px */
+.text-sm  { font-size: 12px; }
+.text-base { font-size: 13px; }
+.text-md  { font-size: 14px; }
+
 p {
   margin: 0;
 }

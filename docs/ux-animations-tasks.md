@@ -537,3 +537,119 @@ Five motion systems live in the codebase:
 wizard step-slide distance (38px) / durations are first-pass values; overhead pass pending
 per the "cover first, tune later" plan. Wizard step scroll-reset between steps is a known
 rough edge to revisit.
+
+---
+
+## Typography — Text Utility Class Rollout & Audit Map
+
+**Purpose:** same job as the animation Surface Map above, for text sizing instead of motion.
+Non-numeric text (labels, sublabels, descriptions, list summaries) should reference one of the
+`text-*` utility classes below instead of a hardcoded inline `fontSize` — one place to tune the
+smallest tiers instead of hundreds of scattered px literals. Large numeric emphasis (MetricCard
+values, dollar totals, computed readouts) is explicitly out of scope; it keeps its own
+per-component sizing. **Last updated:** 2026-08-10.
+
+### The classes (`src/index.css`)
+
+| Class | Size | Was | Status |
+|---|---|---|---|
+| `.text-2xs` | 10px | 9px (bumped) | shipped, in use |
+| `.text-xs` | 11px | 10px *and* 11px (bumped — the two raw sizes collapsed into one class) | shipped, in use |
+| `.text-sm` | 12px | 12px (unchanged) | shipped, in use |
+| `.text-base` | 13px | 13px (unchanged) | shipped, defined, **not yet referenced anywhere** |
+| `.text-md` | 14px | 14px (unchanged) | shipped, defined, **not yet referenced anywhere** |
+| `.heading-xl` | 700 / 0.04em / 1.15 | — | shipped, parity class, **not yet referenced anywhere** |
+| `.heading-lg` | 800 / -0.02em / 1.25 | — | shipped, parity class, **not yet referenced anywhere** |
+
+### Where the classes are displayed today
+
+All current usage is in `src/components/ui.jsx`'s shared primitives — meaning every panel that
+renders these components already benefits, without the panel's own file being touched:
+
+| Component (ui.jsx) | Class | Renders on |
+|---|---|---|
+| `lS` (shared label style object) | `.text-xs` (11px, set directly on the object, not a className) | Every form label across SetupWizard, ProfilePanel, BudgetPanel, LogPanel, IncomePanel |
+| `Card` / `MetricCard` — label | `.text-2xs` | Every metric tile: Home, Income, Budget, Log |
+| `Card` / `MetricCard` — sub | `.text-xs` (button variant) / `.text-sm` (default) | Metric tile sublines app-wide |
+| `SH` (section header) — title | `.text-xs` | Every `<SH>` section eyebrow across all 5 panels |
+| `SH` — right-aligned slot | `.text-sm` | Section header counts/totals (e.g. "3/4", "$X avg") |
+| `PanelHero` — eyebrow | `.text-2xs` | Page-level hero eyebrows (Income, Budget, Account, Tester Homebase, Money Moves) |
+| `SectionHeader` — sub | `.text-xs` | Sub-line under in-panel section titles |
+| `NT` (nav tab) | `.text-xs` | Top-level nav tabs |
+| `VT` (view tab) | `.text-xs` | Sub-view tabs (e.g. Budget's Overview/Breakdown/Loans) |
+| `SmBtn` | `.text-xs` | Small inline utility buttons app-wide |
+| `InsightRow` + its arrow glyph | `.text-xs` | Pulse insight chips on metric cards |
+
+### Panels still needing audit — isolated (non-utility-class) text
+
+Everything below still has its own inline `fontSize: "Npx"` literals in the 9–14px range,
+independent of the `ui.jsx` primitives above. Counts are raw `fontSize` occurrences in that
+size range per file (2026-08-10 grep), not a precise "needs conversion" count — some are
+legitimately one-off (e.g. dynamic ternaries) and won't map cleanly to a single class. Audit
+each file, convert what's a clean fit, and note anything that isn't.
+
+| File | Raw 9–14px instances | Panel/surface |
+|---|---|---|
+| ~~`ProfilePanel.jsx`~~ | **0** (was 175) — ✅ converted 2026-08-10 | Account |
+| ~~`LogPanel.jsx`~~ | **0** (was 130) — ✅ converted 2026-08-10 | Log |
+| `App.jsx` | 122 | Shell / nav / admin toolkit / modals hosted at the root |
+| `BudgetPanel.jsx` | 105 | Budget |
+| `SetupWizard.jsx` | 97 | Onboarding |
+| `WeekConfirmModal.jsx` | 75 | Weekly check-in modal |
+| `HomePanel.jsx` | 44 | Home |
+| `BulkEditPanel.jsx` | 35 | Budget (bulk expense edit) |
+| `IncomePanel.jsx` | 29 | Income |
+| `NewJobSeasonEntry.jsx` | 28 | New Job Season |
+| `InvestorAdminPanel.jsx` | 25 | Investor demo |
+| `NewJobSeasonBudgetPanel.jsx` | 17 | New Job Season |
+| `ReemploymentTracker.jsx` | 16 | New Job Season |
+| `LoginScreen.jsx` | 16 | Auth |
+| `NewJobSeasonHomePanel.jsx` | 12 | New Job Season |
+| `BetaHomebase.jsx` | 12 | Beta Homebase / Money Moves (shared exports) |
+| `ReviveScreen.jsx` | 11 | Subscription revival |
+| `DemoAccountTree.jsx` | 9 | Investor demo |
+| `ChangelogModal.jsx` | 9 | What's New modal |
+| `AskCoachPanel.jsx` | 9 | Coach |
+| `UpgradeCard.jsx` | 8 | Paywall |
+| `RateUpdateModal.jsx` | 8 | Profile (rate change) |
+| `InvestorRegister.jsx` | 7 | Investor demo |
+| `TipsCommissionCheckIn.jsx` | 6 | Home check-in card |
+| `ResumeReviewCard.jsx` | 6 | New Job Season |
+| `NetWorthHealthTips.jsx` | 6 | Home |
+| `ConsentGateModal.jsx` | 6 | Legal re-consent modal |
+| `SetupWizardAdlib.jsx` | 5 | Admin-only wizard pilot |
+| `ProductivityHub.jsx` | 5 | Money Moves |
+| `JobHuntChatPanel.jsx` | 5 | New Job Season |
+| `UpdateAvailableBanner.jsx` | 4 | PWA update banner |
+| `TrialExplainerScreen.jsx` | 4 | Trial onboarding |
+| `CashOnHandSheet.jsx` | 4 | New Job Season |
+| `TrialBanner.jsx` | 3 | Paywall |
+| `SaveFailedBanner.jsx` | 3 | Persistence error banner |
+| `LifeEventMenu.jsx` | 3 | Account |
+| `DueDatePicker.jsx` | 3 | Budget |
+| `CoachNetWorthCard.jsx` | 3 | Coach |
+| `BetaSignupNoticeBanner.jsx` | 2 | Beta program |
+| `MonthQuarterSelector.jsx` | 1 | Budget |
+| `LegalDocumentModal.jsx` | 1 | Legal document modal (title already migrated; this is body text) |
+| `ui.jsx` | 1 | `Card`'s dynamic `size` prop — numeric emphasis, intentionally out of scope |
+
+**Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
+`BudgetPanel`, `HomePanel`, `IncomePanel` — then the shell/modals (`App.jsx`, `WeekConfirmModal`),
+then the lower-traffic surfaces (New Job Season, Investor demo, admin-only screens). Convert one
+file at a time, run the test suite after each, and update this table's count (or strike the row)
+as each file's cleanly-convertible instances land.
+
+**Conversion method (established on `ProfilePanel.jsx`, 2026-08-10):** a scripted regex pass
+handles the mechanical bulk — locate `<Tag ... style={{ ...fontSize: "Npx"... }}>` where the tag
+has no pre-existing `className`, drop the `fontSize` entry, and inject the matching `className`
+(size→class mapping is the same table as above). Three known gaps the script doesn't safely
+handle and need hand-fixing per file: (1) arrow-function attributes (`onClick={() => ...}`)
+contain a literal `>` that a naive tag-boundary regex misreads as the JSX close — match `=>`
+as an allowed exception; (2) multi-line style objects containing a template literal (backtick
+`` ` ``) or nested `{}` (e.g. a conditional `border: \`1px solid ${...}\``) can break a
+brace-counting body match — worth a quick manual pass rather than fighting the regex further;
+(3) a tag that already has a `className` (e.g. `<table className="data-table" style={{
+fontSize: "12px", ... }}>`, found twice in `LogPanel.jsx`) is skipped by design — merge the size
+class into the existing string by hand (`className="data-table text-sm"`) rather than adding a
+second `className` attribute. Always finish with `npx eslint <file>`, `npm run test:run`, and a
+real `npx vite build` (lint alone won't catch every JSX malformation from a scripted edit).

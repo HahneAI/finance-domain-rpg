@@ -41,7 +41,7 @@ function useCountUp(target, duration = 1200) {
 // eslint-disable-next-line react-refresh/only-export-components
 export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "var(--font-sans)", minHeight: "44px" };
 // eslint-disable-next-line react-refresh/only-export-components
-export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
+export const lS = { fontSize: "11px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
 // ─────────────────────────────────────────────────────────────
 // TAP FEEDBACK — default press system
@@ -365,8 +365,9 @@ export function NT({ label, active, onClick }) {
   return (
     <Pressable
       onClick={onClick}
+      className="text-xs"
       style={{
-        padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
+        padding: "10px 18px", minHeight: "44px", letterSpacing: "2px",
         textTransform: "uppercase", fontFamily: "var(--font-sans)",
         background: active ? "var(--color-teal)" : "var(--color-bg-surface)",
         color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
@@ -385,8 +386,9 @@ export function VT({ label, active, onClick }) {
   return (
     <Pressable
       onClick={onClick}
+      className="text-xs"
       style={{
-        padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
+        padding: "10px 16px", minHeight: "44px", letterSpacing: "2px",
         textTransform: "uppercase", fontFamily: "var(--font-sans)",
         background: active ? "var(--color-teal)" : "var(--color-bg-surface)",
         color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
@@ -518,14 +520,14 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 
   const content = (
     <>
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: isButton ? "2px" : "8px", fontFamily: "var(--font-sans)" }}>
+      <div className="text-xs" style={{ letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: isButton ? "2px" : "8px", fontFamily: "var(--font-sans)" }}>
         {label}
       </div>
       <div style={{ fontSize: size, fontWeight: "bold", color: valColor, fontFamily: "var(--font-display)", lineHeight: 1, fontVariantNumeric: "tabular-nums", transition: "color 0.6s ease" }}>
         {displayVal}
       </div>
       {sub && (
-        <div style={{ fontSize: isButton ? "10px" : "11px", color: "var(--color-text-secondary)", marginTop: isButton ? "auto" : "5px", paddingTop: isButton ? "6px" : 0, fontFamily: "var(--font-sans)" }}>
+        <div className={isButton ? "text-xs" : "text-sm"} style={{ color: "var(--color-text-secondary)", marginTop: isButton ? "auto" : "5px", paddingTop: isButton ? "6px" : 0, fontFamily: "var(--font-sans)" }}>
           {sub}
         </div>
       )}
@@ -595,7 +597,7 @@ export function FlowSparklineCard({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
-        <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{label}</div>
+        <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{label}</div>
         <div style={{ fontSize: "23px", lineHeight: 1, fontWeight: 700, color: "var(--color-accent-soft)", fontFamily: "var(--font-display)" }}>{clampedScore}</div>
       </div>
 
@@ -616,20 +618,20 @@ export function FlowSparklineCard({
         <circle cx={lastX} cy={lastY} r="4" fill="var(--color-accent-soft)" />
       </svg>
 
-      <div style={{ marginTop: "7px", fontSize: "10px", color: "var(--color-text-secondary)", letterSpacing: "0.4px" }}>
+      <div className="text-xs" style={{ marginTop: "7px", color: "var(--color-text-secondary)", letterSpacing: "0.4px" }}>
         {trendLabel ?? "Consistency trend · last 6 projected cycles"}
       </div>
     </div>
   );
 }
 
-export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <Pressable onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</Pressable>; }
-export function SH({ children, color, textColor, right }) { const c = color || "var(--color-teal)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
+export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <Pressable onClick={onClick} className="text-xs" style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</Pressable>; }
+export function SH({ children, color, textColor, right }) { const c = color || "var(--color-teal)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div className="text-xs" style={{ letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div className="text-sm" style={{ color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
 export function PanelHero({ eyebrow, children }) {
   return (
     <div style={{ marginBottom: "28px", textAlign: "center" }}>
-      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>{eyebrow}</div>
+      <div className="text-2xs" style={{ letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>{eyebrow}</div>
       <div style={{ fontSize: "32px", fontWeight: 900, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "0.04em", lineHeight: 1.15, marginBottom: "14px" }}>{children}</div>
       <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
     </div>
@@ -643,7 +645,7 @@ export function SectionHeader({ children, sub, right }) {
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <div style={{ flex: 1, textAlign: "center" }}>
           <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: sub ? "6px" : 0 }}>{children}</div>
-          {sub && <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{sub}</div>}
+          {sub && <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{sub}</div>}
         </div>
         {right != null && <div style={{ flexShrink: 0 }}>{right}</div>}
       </div>
@@ -677,6 +679,7 @@ export function InsightRow({ arrow, delta, label, variant = "blue" }) {
       tone={tone}
       intensity="light"
       withBorder
+      className="text-xs"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -684,13 +687,12 @@ export function InsightRow({ arrow, delta, label, variant = "blue" }) {
         marginTop: "6px",
         padding: "3px 8px 3px 6px",
         borderRadius: "6px",
-        fontSize: "10px",
         fontFamily: "var(--font-sans)",
         letterSpacing: "0.3px",
         lineHeight: 1.4,
       }}
     >
-      <span style={{ color, fontWeight: 700, fontSize: "11px", lineHeight: 1, flexShrink: 0 }}>{arrowChar}</span>
+      <span className="text-xs" style={{ color, fontWeight: 700, lineHeight: 1, flexShrink: 0 }}>{arrowChar}</span>
       {delta && <span style={{ color, fontWeight: 600 }}>{delta}</span>}
       <span style={{ color: "var(--color-text-disabled)" }}>{label}</span>
     </LiquidGlass>

@@ -94,7 +94,7 @@ export function ChecklistSection({ items, completedIds, onToggle, title = "Featu
     <div style={{ marginBottom: "24px" }}>
       <SH right={items.length > 0 ? `${completedCount} / ${items.length}` : null}>{title}</SH>
       {items.length === 0 ? (
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
+        <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Nothing to try yet — check back soon.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {items.map(item => {
@@ -111,10 +111,10 @@ export function ChecklistSection({ items, completedIds, onToggle, title = "Featu
                   style={{ width: "16px", height: "16px", marginTop: "1px", accentColor: "var(--color-teal)", cursor: "pointer", flexShrink: 0 }}
                 />
                 <div>
-                  <div style={{ fontSize: "12px", color: checked ? "var(--color-text-secondary)" : "var(--color-text-primary)", textDecoration: checked ? "line-through" : "none" }}>
+                  <div style={{ fontSize: "13px", color: checked ? "var(--color-text-secondary)" : "var(--color-text-primary)", textDecoration: checked ? "line-through" : "none" }}>
                     {item.title}
                   </div>
-                  {item.body && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{item.body}</div>}
+                  {item.body && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px" }}>{item.body}</div>}
                 </div>
               </label>
             );
@@ -130,7 +130,7 @@ export function SuggestionsSection({ items, title = "Suggestions From The Team" 
     <div style={{ marginBottom: "24px" }}>
       <SH>{title}</SH>
       {items.length === 0 ? (
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
+        <div style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>Nothing posted yet.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {items.map(item => (

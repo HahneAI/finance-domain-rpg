@@ -541,6 +541,44 @@ internal to `TypedText`.
 > visible state under `prefers-reduced-motion: reduce` (`index.css`) — the stepped reveal
 > and fade/lift both skip, text just appears.
 
+**F130 · `IntakePage` field-parity round 1 — Tips/Commission, base-user OT Threshold, DHL
+Weekend Differential** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round, docs/TODO.md §19.1.A)*
+Three real Step1 fields ported into `IntakePage`'s trailing clauses, all gated on a new
+`payStructureComplete` boolean (mirrors the point in real Step1 where the core rate/hours
+questions are answered and Advanced Pay Rules/OT Threshold/tips opt-in become relevant):
+Tips/Commission opt-in (`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+`tipsCommissionOnlyPosition`, any employer), base-user Overtime Threshold
+(`otThreshold`, 40/48/custom/exempt — DHL always uses its fixed 40h/1.5× override from
+`setEmployer`, so this only renders for base users), and an editable DHL Weekend Differential
+(`diffRate`, was previously hardcoded to the `DHL_PRESET` default with no way to change it).
+None of the three gate `isIntakeValid` on either wizard.
+> **IF** `payStructureComplete`'s definition changes, **THEN** all three trailing clauses move
+> together — they share one gate, not three independent ones. Check both the DHL branch
+> (`dhlTeamReady && !!formData.userPaySchedule`) and the base/investor branch (rate or salary
+> filled) still match what real Step1 considers "core pay structure answered."
+> **IF** you touch the DHL Weekend Differential clause, **THEN** note it's nested *inside*
+> `{dhlTeamReady && (...)}` but additionally gated on `formData.userPaySchedule` — the DHL
+> pay-schedule question (weekly/every-two-weeks) must be answered first, or the differential
+> blank renders before the sentence has even reached that clause. A regression here (differential
+> appearing before pay-schedule is answered) was caught by this round's own test — see
+> `SetupWizardAdlib.test.jsx`'s "DHL reveals an editable Weekend Differential…" test.
+> **IF** the Overtime Threshold's `otChoice` local state and `formData.otThreshold` diverge
+> (e.g. a resumed formData with `otThreshold === null` meaning "Exempt" on the real wizard),
+> **THEN** know this is a known, accepted ambiguity — `otChoice` only distinguishes
+> unanswered-vs-40-vs-48-vs-custom on *initial mount*, not on every render, and null is treated
+> as "unanswered" on resume rather than "Exempt." Harmless because `otThreshold` never gates
+> `isIntakeValid` on either wizard — purely a cosmetic scope note, not a data-correctness bug.
+> **IF** a field is added to any of these three clauses, **THEN** it must also be added to
+> `BLANK_PAY_FIELDS` (done for the tips/commission trio this round) — `diffRate`/`otThreshold`
+> were already present since the schedule/DHL-pick paths wrote them before this round.
+> `DIFF_FIELDS`/`HISTORY_SENSITIVE_FIELDS` (F7) already track `diffRate`/`otThreshold` (real
+> Step1 already wrote them); `tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+> `tipsCommissionOnlyPosition` are **not** in either list today — a pre-existing gap shared by
+> *both* wizards (real Step1 has written these fields since before this round without being
+> tracked), not something this round introduced or fixed. Flagged for §19.1.H's housekeeping
+> pass, not resolved here.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

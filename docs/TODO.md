@@ -4241,19 +4241,22 @@ concrete, code-grounded finding, not a guess.*
 **A. Field/UI parity gaps — real fields the ad-lib pages don't ask at all, yet**
 
 *Pay Structure (real Step1, `SetupWizard.jsx:339`) vs. `IntakePage`:*
-- [ ] **Tips/Commission daily check-in opt-in** (`SetupWizard.jsx:811–844`) — entirely missing
-      from `IntakePage`. Real production feature (tips/commission check-in card, `LogPanel`
-      section, `calcEventImpact` branch already built this session) has no way to be turned on
-      from the ad-lib flow at all. Also feeds `tipsOrCommissionEnabledAt` stamping in
-      `handleComplete` (`SetupWizard.jsx:2578–2587`) — a real gap, not cosmetic.
-- [ ] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
-      — missing entirely; base users can never set a non-40h OT threshold or go OT-exempt via ad-lib.
+- [x] **Tips/Commission daily check-in opt-in** (`SetupWizard.jsx:811–844`) — added 2026-08-10.
+      `IntakePage` now asks "On top of that, I [don't earn tips or commission / earn tips / earn
+      commission]" once pay structure is fully answered (any employer, DHL or base), with the
+      commission-only-position follow-up blank. `tipsOrCommissionEnabledAt` stamping is unchanged
+      — already handled by `finalizeWizardConfig()` (F128), which both wizards share, so no
+      further wiring was needed there.
+- [x] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
+      — added 2026-08-10, base users only (DHL always uses the fixed 40h/1.5× override applied at
+      employer-pick time, same as the real wizard). Doesn't gate `isIntakeValid` on either wizard.
 - [ ] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — OT multiplier
-      (1.5×/2×), night differential enable+rate, weekend differential for base users — the whole
-      collapsible group is missing. None of it gates `isValid`, but production users need a way to
-      set it.
-- [ ] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — ad-lib
-      only ever uses the DHL_PRESET default (`diffRate ?? 1.75`); DHL users can't edit it.
+      (1.5×/2×) and night-differential-rate editing (base users) still missing; DHL weekend
+      differential now covered (below). None of it gates `isValid`, but production users need a
+      way to set it.
+- [x] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — added
+      2026-08-10. `IntakePage` now shows an editable `InlineNumber` pre-filled with the
+      `DHL_PRESET` default (1.75), once the DHL pay-schedule clause is answered.
 - [ ] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
       (`SetupWizard.jsx:560–639`, Plant-only) — entirely missing from `IntakePage`. A DHL Plant
       user working a non-standard schedule (pickup shifts, extended hours) has no way to say so.

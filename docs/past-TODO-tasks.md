@@ -168,6 +168,32 @@ checklist:
 
 ---
 
+## §19.1.A — Ad-Lib Wizard field-parity round 1 (2026-08-10)
+
+Three of §19.1.A's `IntakePage` gaps closed, all gated behind a new `payStructureComplete`
+boolean (fires once the core rate/hours questions are answered, matching where real Step1
+reveals the same fields):
+
+- [x] **Tips/Commission daily check-in opt-in** — "On top of that, I [don't earn tips or
+  commission / earn tips / earn commission]," with the commission-only-position follow-up blank.
+  Any employer, DHL or base. `tipsOrCommissionEnabledAt` stamping already handled by the shared
+  `finalizeWizardConfig()` (F128) — no additional completion-time wiring needed.
+- [x] **Base-user Overtime Threshold** — 40h/48h/Custom/Exempt picker, base users only (DHL
+  keeps its fixed 40h/1.5× override).
+- [x] **DHL Weekend Differential** — now an editable `$/hr` `InlineNumber`, pre-filled with the
+  `DHL_PRESET` default (was previously hardcoded with no way to change it).
+
+New tests: 4 tests covering all three additions (gating order, Custom OT numeric blank, DHL
+differential pre-fill + edit, commission-only follow-up reveal). Full suite: 1538 passed
+(up from 1534). See `docs/drift-app-warden.md` §7 F130.
+
+**Not done this round:** the rest of §19.1.A (Advanced Pay Rules' OT multiplier + night
+differential rate editing, DHL custom-rotation question, Benefits Start Date, Other Recurring
+Deductions, Attendance Policy Details, PTO section, Tax Rates "Use Estimate for Now" + DHL
+Missouri preset, Wrap Up's Tax-Exempt Week Projections opt-in); §19.1.G; §19.1.H.
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

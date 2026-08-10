@@ -300,6 +300,7 @@ const BLANK_PAY_FIELDS = {
   bucketPayoutRate: null, diffRate: null, startingWeekIsLong: null,
   startDate: null, firstActiveIdx: null, maxWeeklyHours: null,
   hoursUnderstood: null, biweeklyPayWeekParity: null,
+  tipsOrCommissionEnabled: null, tipsOrCommissionLabel: null, tipsCommissionOnlyPosition: null,
   // Deductions page
   selectedBenefits: null, attendanceBucketEnabled: null,
   healthPremium: null, dentalPremium: null, visionPremium: null,
@@ -327,9 +328,32 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
     isInvestor ? "OTHER" : formData.employerPreset === "DHL" ? "DHL" : formData.userPaySchedule ? "OTHER" : ""
   );
   const isEmployerDHL = !isInvestor && employerChoice === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
   const isEmployed = formData.startedUnemployed === false;
   const investorFirstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
+
+  // Overtime Threshold local UI choice — mirrors real Step1's otCustom flag, plus a
+  // separate "have they answered at all" tracked as its own string state so a
+  // resumed/blank `otThreshold === null` (which real Step1 also uses for "Exempt")
+  // doesn't get misread as already-answered. otThreshold doesn't gate isIntakeValid
+  // either here or on real STEP_DEFS id 1, so this ambiguity is cosmetic only — see
+  // docs/drift-app-warden.md §7 F129's sibling entry for this round's field-parity
+  // additions.
+  const [otChoice, setOtChoice] = useState(() => {
+    if (formData.otThreshold === 40) return "40";
+    if (formData.otThreshold === 48) return "48";
+    if (formData.otThreshold != null) return "custom";
+    return "";
+  });
+  function pickOtThreshold(v) {
+    setOtChoice(v);
+    if (v === "40") onChange({ otThreshold: 40 });
+    else if (v === "48") onChange({ otThreshold: 48 });
+    else if (v === "custom") onChange({ otThreshold: null });
+    else if (v === "exempt") onChange({ otThreshold: null });
+    else onChange({ otThreshold: null });
+  }
 
   function setEmployer(v) {
     setEmployerChoice(v);
@@ -369,6 +393,15 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
       ? !!formData.dhlTeam && (formData.shiftHours ?? 0) > 0
       : false;
 
+  // "Pay structure fully answered" gate — real Step1's Advanced Pay Rules/OT
+  // Threshold/tips-commission opt-in all appear once the core rate/schedule
+  // questions are answered; same threshold used here for the trailing clauses below
+  // (DHL Weekend Differential, base-user OT Threshold, Tips/Commission opt-in).
+  const payStructureComplete = isEmployerDHL
+    ? dhlTeamReady && !!formData.userPaySchedule
+    : (employerChoice === "OTHER" || isInvestor) && !!formData.userPaySchedule &&
+      (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0);
+
   const introText = "Let's set you up. Right now, I am";
   const workForText = "I work for";
   const siteText = "I work at the";
@@ -384,6 +417,14 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
   const myRateText = "My rate is $";
   const shiftsRunText = "an hour, and my shifts run";
   const hoursText = "hours.";
+  const weekendDiffText = "My weekend differential is $";
+  const perHourText = "an hour.";
+  const otLeadText = "My overtime kicks in at";
+  const otCustomLeadText = "specifically";
+  const otHoursWordText = "hours a week.";
+  const tipsLeadText = "On top of that, I";
+  const commissionOnlyLeadText = "This is";
+  const commissionOnlyTailText = "commission-only position.";
 
   return (
     <p style={BLANK_FONT}>
@@ -480,6 +521,20 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                       options={[{ value: "weekly", label: "weekly" }, { value: "salary", label: "every two weeks" }]}
                     />
                   </FadeIn>.
+                  {formData.userPaySchedule && (
+                    <>
+                      {" "}<TypedText text={weekendDiffText} />
+                      <FadeIn delay={typeDuration(weekendDiffText)}>
+                        <InlineNumber
+                          value={formData.diffRate ?? ""}
+                          onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
+                          placeholder="1.75"
+                          width="56px"
+                        />
+                      </FadeIn>{" "}
+                      <TypedText text={perHourText} />
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -537,6 +592,91 @@ function IntakePage({ formData, onChange, isInvestor = false }) {
                   <TypedText text={hoursText} />
                 </>
               ))}
+            </>
+          )}
+
+          {/* ── Base-user Overtime Threshold (real Step1 ~741–776) — DHL always uses the
+               40h/1.5x override applied in setEmployer, so this only appears for base
+               users. Doesn't gate isIntakeValid on either wizard. ── */}
+          {isBaseUser && payStructureComplete && (
+            <>
+              {" "}<TypedText text={otLeadText} />{" "}
+              <FadeIn delay={typeDuration(otLeadText)}>
+                <InlineSelect
+                  value={otChoice}
+                  onChange={pickOtThreshold}
+                  options={[
+                    { value: "40", label: "40 hours" },
+                    { value: "48", label: "48 hours" },
+                    { value: "custom", label: "a custom number" },
+                    { value: "exempt", label: "I'm exempt" },
+                  ]}
+                />
+              </FadeIn>
+              {otChoice === "custom" && (
+                <>
+                  , <TypedText text={otCustomLeadText} />{" "}
+                  <FadeIn delay={typeDuration(otCustomLeadText)}>
+                    <InlineNumber
+                      value={formData.otThreshold ?? ""}
+                      onChange={v => onChange({ otThreshold: v === "" ? null : parseInt(v, 10) })}
+                      placeholder="45"
+                      width="52px"
+                    />
+                  </FadeIn>{" "}
+                  <TypedText text={otHoursWordText} />
+                </>
+              )}
+              {otChoice !== "custom" && <TypedText text="." />}
+            </>
+          )}
+
+          {/* ── Tips/Commission daily check-in opt-in (real Step1 ~811–843) — every
+               employed user, DHL or base, can opt in. Stamps tipsOrCommissionEnabledAt
+               at finish time via finalizeWizardConfig() (src/lib/wizardComplete.js),
+               same as the real wizard's handleComplete(). ── */}
+          {payStructureComplete && (
+            <>
+              {" "}<TypedText text={tipsLeadText} />{" "}
+              <FadeIn delay={typeDuration(tipsLeadText)}>
+                <InlineSelect
+                  value={
+                    formData.tipsOrCommissionEnabled === null || formData.tipsOrCommissionEnabled === undefined
+                      ? ""
+                      : formData.tipsOrCommissionEnabled === false
+                        ? "no"
+                        : formData.tipsOrCommissionLabel === "tips" ? "tips" : formData.tipsOrCommissionLabel === "commission" ? "commission" : ""
+                  }
+                  onChange={v => {
+                    if (v === "" || v === "no") onChange({ tipsOrCommissionEnabled: false, tipsOrCommissionLabel: null, tipsCommissionOnlyPosition: null });
+                    else if (v === "tips") onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "tips", tipsCommissionOnlyPosition: null });
+                    else onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "commission" });
+                  }}
+                  options={[
+                    { value: "no", label: "don't earn tips or commission" },
+                    { value: "tips", label: "earn tips" },
+                    { value: "commission", label: "earn commission" },
+                  ]}
+                />
+              </FadeIn>.
+              {formData.tipsOrCommissionEnabled && (
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "6px" }}>
+                  We&rsquo;ll ask a quick daily check-in — did you make any {formData.tipsOrCommissionLabel} that day?
+                </div>
+              )}
+              {formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission" && (
+                <>
+                  {" "}<TypedText text={commissionOnlyLeadText} />{" "}
+                  <FadeIn delay={typeDuration(commissionOnlyLeadText)}>
+                    <InlineSelect
+                      value={formData.tipsCommissionOnlyPosition === true ? "yes" : formData.tipsCommissionOnlyPosition === false ? "no" : ""}
+                      onChange={v => onChange({ tipsCommissionOnlyPosition: v === "" ? null : v === "yes" })}
+                      options={[{ value: "yes", label: "a" }, { value: "no", label: "not a" }]}
+                    />
+                  </FadeIn>{" "}
+                  <TypedText text={commissionOnlyTailText} />
+                </>
+              )}
             </>
           )}
         </>

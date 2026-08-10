@@ -211,6 +211,28 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   "WAREHOUSE"`), matching Step2's DHL branch. Local `pickSite()` (site pick) and
   `pickWarehouseTeamPatch()` (team pick) mirror the real wizard's own `pickSite()`/
   `pickWarehouseTeam()` field-for-field.
+- **`IntakePage`'s trailing clauses (Tips/Commission opt-in, base-user OT Threshold, DHL Weekend
+  Differential) all share one `payStructureComplete` gate** — added 2026-08-10, mirroring the
+  point in real Step1 where the core rate/hours questions are answered and Advanced Pay Rules/OT
+  Threshold/tips opt-in become relevant. Tips/Commission (any employer) asks "On top of that, I
+  [don't earn tips or commission / earn tips / earn commission]," with a commission-only-position
+  follow-up; `tipsOrCommissionEnabledAt` stamping is handled by the shared `finalizeWizardConfig()`
+  (see below), not this page. Base-user Overtime Threshold offers 40h/48h/Custom/Exempt (DHL keeps
+  its fixed 40h/1.5× override from `setEmployer`, so this clause only renders for base users). DHL
+  Weekend Differential is now an editable `InlineNumber` pre-filled with the `DHL_PRESET` default,
+  instead of the previous hardcoded, uneditable value. None of the three gate `isIntakeValid`. See
+  `docs/drift-app-warden.md` §7 F130.
+- **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
+  `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
+  long real clause overflowed horizontally on narrow viewports. Now chunks into per-word
+  `inline-block` spans joined by ordinary breakable spaces in a normal-flow wrapper, so the browser
+  wraps between words like plain text while each word still steps in via the same `adlibType`
+  clip-path keyframe, staggered left-to-right. `typeDuration(text)` still describes a clause's
+  total duration. `Inline*` controls gained `max-width: 100%`; `BLANK_FONT` uses
+  `clamp(18px, 4.2vw, 26px)`; `prefers-reduced-motion` is handled via `.adlib-typed-word`/
+  `.adlib-fade-in` (`index.css`). `SetupWizardAdlib.test.jsx` gained a `byText()` helper (matches
+  recursive `textContent`) since a word-chunked clause is no longer one continuous text node. See
+  `docs/drift-app-warden.md` §7 F129.
 - **Deductions page mirrors real Step3, with a new `InlineChip` control for the one multi-select
   field.** `isDeductionsValid()` is a line-for-line mirror of `STEP_DEFS id 3`: base users must
   answer the attendance-tracking question, DHL users have no required field at all (zero-interaction

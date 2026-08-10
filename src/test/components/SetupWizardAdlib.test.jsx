@@ -268,6 +268,66 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
   })
 })
 
+describe('SetupWizardAdlib — Intake page field-parity additions (OT Threshold, DHL Weekend Differential, Tips/Commission)', () => {
+  it('reveals the base-user Overtime Threshold blank only once pay structure is fully answered, and none of it gates the primary action', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'weekly' } })
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull()
+    fireEvent.change(numbers()[0], { target: { value: '21.15' } })
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull() // shiftHours still blank
+    fireEvent.change(numbers()[1], { target: { value: '10' } })
+    expect(screen.getByText(byText(/my overtime kicks in at/i))).toBeTruthy()
+    expect(screen.getByText(byText(/on top of that, i/i))).toBeTruthy() // tips/commission clause too
+    expect(primaryBtn()).not.toBeDisabled() // neither field is required
+  })
+
+  it('a Custom Overtime Threshold reveals its own numeric blank', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'weekly' } })
+    fireEvent.change(numbers()[0], { target: { value: '21.15' } })
+    fireEvent.change(numbers()[1], { target: { value: '10' } })
+    const otSelect = screen.getAllByRole('combobox').at(-2) // second-to-last select is OT threshold (tips is last)
+    fireEvent.change(otSelect, { target: { value: 'custom' } })
+    const customNum = numbers().at(-1)
+    fireEvent.change(customNum, { target: { value: '45' } })
+    expect(screen.getByText(byText(/hours a week\./i))).toBeTruthy()
+  })
+
+  it('DHL reveals an editable Weekend Differential blank once the pay-schedule clause is answered', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'DHL' } })
+    fireEvent.change(selects()[2], { target: { value: 'PLANT' } })
+    fireEvent.change(selects()[3], { target: { value: 'A' } })
+    fireEvent.change(selects()[4], { target: { value: 'night' } })
+    expect(screen.queryByText(byText(/my weekend differential is/i))).toBeNull()
+    fireEvent.change(selects()[5], { target: { value: 'weekly' } })
+    expect(screen.getByText(byText(/my weekend differential is/i))).toBeTruthy()
+    // DHL_PRESET default (1.75) is pre-filled, editable rather than hardcoded/unchangeable.
+    const diffInput = numbers().at(-1)
+    expect(diffInput.value).toBe('1.75')
+    fireEvent.change(diffInput, { target: { value: '2.5' } })
+    expect(diffInput.value).toBe('2.5')
+  })
+
+  it('selecting "earn commission" reveals the commission-only-position follow-up blank', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'weekly' } })
+    fireEvent.change(numbers()[0], { target: { value: '21.15' } })
+    fireEvent.change(numbers()[1], { target: { value: '10' } })
+    const tipsSelect = screen.getAllByRole('combobox').at(-1)
+    fireEvent.change(tipsSelect, { target: { value: 'commission' } })
+    expect(screen.getByText(byText(/this is/i))).toBeTruthy()
+    expect(screen.getByText(byText(/we.ll ask a quick daily check-in/i))).toBeTruthy()
+  })
+})
+
 describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
   it('lands on the Schedule page (2 of 5) after completing a base-user Intake page', () => {
     renderAdlib()

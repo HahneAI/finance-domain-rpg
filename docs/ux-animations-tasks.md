@@ -593,7 +593,7 @@ each file, convert what's a clean fit, and note anything that isn't.
 | ~~`ProfilePanel.jsx`~~ | **0** (was 175) — ✅ converted 2026-08-10 | Account |
 | ~~`LogPanel.jsx`~~ | **0** (was 130) — ✅ converted 2026-08-10 | Log |
 | ~~`App.jsx`~~ | **0** (was 122) — ✅ converted 2026-08-10 | Shell / nav / admin toolkit / modals hosted at the root |
-| `BudgetPanel.jsx` | 105 | Budget |
+| ~~`BudgetPanel.jsx`~~ | **0** (was 105) — ✅ converted 2026-08-10 | Budget |
 | `SetupWizard.jsx` | 97 | Onboarding |
 | `WeekConfirmModal.jsx` | 75 | Weekly check-in modal |
 | `HomePanel.jsx` | 44 | Home |
@@ -634,7 +634,7 @@ each file, convert what's a clean fit, and note anything that isn't.
 | `ui.jsx` | 1 | `Card`'s dynamic `size` prop — numeric emphasis, intentionally out of scope |
 
 **Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
-`App.jsx` ✅, `BudgetPanel`, `HomePanel`, `IncomePanel` — then the remaining shell/modals
+`App.jsx` ✅, `BudgetPanel` ✅, `HomePanel`, `IncomePanel` — then the remaining shell/modals
 (`WeekConfirmModal`), then the lower-traffic surfaces (New Job Season, Investor demo, admin-only
 screens). Convert one file at a time, run the test suite after each, and update this table's
 count (or strike the row) as each file's cleanly-convertible instances land.

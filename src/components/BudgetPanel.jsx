@@ -1299,11 +1299,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           <Pressable
             onClick={() => setShowCheckInfo(true)}
             aria-label="Show paycheck breakdown"
-            style={{
+            className="text-xs" style={{
               display: "block", width: "100%", textAlign: "right",
               background: "none", border: "none",
-              color: "var(--color-text-secondary)", fontSize: "10px",
-              letterSpacing: "1.5px", textTransform: "uppercase",
+              color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase",
               cursor: "pointer", padding: "5px 4px 0",
               fontFamily: "var(--font-sans)",
               transition: "color 150ms ease",
@@ -1316,7 +1315,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-deduction)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
+      <div className="text-xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-deduction)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
       <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-deduction)" : sp > 70 ? "var(--color-teal)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
@@ -1430,8 +1429,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
                 <Pressable
                   onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); document.body.classList.add("modal-open"); }}
-                  style={{
-                    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+                  className="text-xs" style={{
+                    letterSpacing: "1px", textTransform: "uppercase",
                     color: "var(--color-deduction)", background: "rgba(244,164,164,0.08)",
                     border: "1px solid rgba(244,164,164,0.28)", borderRadius: "8px",
                     padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)",
@@ -1564,6 +1563,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                   aria-label={`Hold to drag ${exp.label}`}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
+                  className="text-xs"
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
                     color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "var(--color-text-primary)",
@@ -1572,7 +1572,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                     width: "26px", height: "26px", minWidth: "26px",
                     padding: 0,
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "11px",
                     cursor: "grab",
                     touchAction: "none",
                     userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
@@ -1580,8 +1579,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                 >⋮⋮</button>}
                 {/* Label */}
                 <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                  <div style={{
-                    fontSize: "14px",
+                  <div className="text-md" style={{
                     color: isScheduledFuture ? "var(--color-text-secondary)" : "var(--color-text-primary)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{exp.label}</div>
@@ -1593,7 +1591,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                     color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
                     whiteSpace: "nowrap",
                   }}>
-                    {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
+                    {f2(effAmt * perCheckFactor)}<span className="text-xs" style={{ color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
                   {<Pressable
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
@@ -1645,17 +1643,17 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "13px" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
-                    {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
-                    {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
-                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {fmtLoanDate(payoffDate, fiscalYearEnd)}</span>}
+                    <span className="text-base" style={{ }}>{exp.label}</span>
+                    <span className="text-2xs" style={{ background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {inRunway && <span className="text-2xs" style={{ background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
+                    {isPaidOff && <span className="text-2xs" style={{ color: "var(--color-green)" }}>✓ PAID OFF</span>}
+                    {!isPaidOff && !inRunway && dropsOff && <span className="text-2xs" style={{ color: "var(--color-green)" }}>drops off {fmtLoanDate(payoffDate, fiscalYearEnd)}</span>}
                   </div>
                   {/* Payments-left / monthly / total detail lives on the Loans tab — overview stays slim */}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
+                    <div className="text-md" style={{ fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt * perCheckFactor)}<span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-teal)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -1673,22 +1671,22 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
       {/* Add expense form */}
       {!readOnly && (addingExp ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
+        <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
           <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option></select></div>
           <div><label style={lS}>Bill Amount ($)</label><input type="number" min="0" step="0.01" value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} style={iS} /></div>
           <div><label style={lS}>Paid Every</label><select value={newExp.cycle} onChange={e => setNewExp(v => ({ ...v, cycle: e.target.value }))} style={iS}>{EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
-          <div style={{ gridColumn: "1/-1", fontSize: "10px", color: "var(--color-text-secondary)" }}>
+          <div className="text-xs" style={{ gridColumn: "1/-1", color: "var(--color-text-secondary)" }}>
             This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle, cpm) * perCheckFactor)} from each paycheck.
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
+          <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
           {/* Primary: this-month-onward gets its own full-width row, label spells out the viewed month
               (falls back to the current month when viewing a whole quarter) */}
-          <Pressable onClick={addExpFromMonthForward} disabled={!newExp.label} style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{anchorMonthFull}+ Onward</Pressable>
+          <Pressable onClick={addExpFromMonthForward} disabled={!newExp.label} className="text-sm" style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{anchorMonthFull}+ Onward</Pressable>
           {/* Secondary row: month-only, all-quarters, and exit */}
           <div style={{ display: "flex", gap: "8px", width: "100%" }}>
             <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>{anchorMonthLabel} ONLY</SmBtn>
@@ -1696,7 +1694,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             <SmBtn onClick={_closeAddForm} style={{ flex: 1 }}>✕</SmBtn>
           </div>
         </div>
-      </div> : <Pressable onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>)}
+      </div> : <Pressable onClick={() => setAddingExp(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>)}
     </div>}
 
     {/* BREAKDOWN — cashflow summary at top, then annual projection table */}
@@ -1717,7 +1715,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       return <div>
         {/* Cashflow: incoming paycheck → payroll deductions → needs → loans → unallocated */}
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet * perCheckFactor)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>{isWeekly ? <>Running week<br />net pay</> : <>Net pay<br />per check</>}</div></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div className="text-xs" style={{ letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet * perCheckFactor)}</div></div><div className="text-xs" style={{ color: "var(--color-text-disabled)", textAlign: "right" }}>{isWeekly ? <>Running week<br />net pay</> : <>Net pay<br />per check</>}</div></div>
         </div>
         {(() => {
           // Per-paycheck breakdown — all values in paycheck terms
@@ -1729,16 +1727,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           const pct = (v) => incomePerCheck > 0 ? ((v / incomePerCheck) * 100).toFixed(1) : "0.0";
           return <>
             <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(payrollPerCheck)}%</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(payrollPerCheck)}%</div></div></div>
             </div>
             <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
             </div>
             {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-teal)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-teal)" }}>{f2(loansPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: "var(--color-teal)", marginBottom: "4px" }}>Loans</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-teal)" }}>{f2(loansPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
             </div>}
             <div style={{ background: wrPerCheck >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly unallocated cashflow snapshot" : "Per-check unallocated snapshot"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wrPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wrPerCheck * checksPerYear / 12)}/mo</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly unallocated cashflow snapshot" : "Per-check unallocated snapshot"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wrPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{f(wrPerCheck * checksPerYear / 12)}/mo</div></div></div>
             </div>
           </>;
         })()}
@@ -1747,23 +1745,23 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + expenseWeeklyAvg(e), 0);
           const pct = (cT / weeklyIncome) * 100;
           return <div key={cat} style={{ marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT * perCheckFactor)}/{checkUnit} avg · {pct.toFixed(1)}%</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span className="text-xs" style={{ letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT * perCheckFactor)}/{checkUnit} avg · {pct.toFixed(1)}%</span></div>
             <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: CATEGORY_COLORS[cat], borderRadius: "3px" }} /></div>
           </div>;
         })}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", margin: "20px 0" }} />
         <SectionHeader>Annual Projection</SectionHeader>
-        <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>{isWeekly ? "Wk Avg" : "Per Check"}</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
+        <table className="data-table text-base" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr className="text-xs" style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>{isWeekly ? "Wk Avg" : "Per Check"}</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
           <tbody>{expenses.map(exp => {
             const annual = yearlyExpenseCost(exp);
             const checkAvg = expenseWeeklyAvg(exp) * perCheckFactor;
             const isLoan = exp.type === "loan";
             return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <td style={{ padding: "8px 4px" }}>
-                <span style={{ fontSize: "10px", color: isLoan ? "var(--color-teal)" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
+                <span className="text-xs" style={{ color: isLoan ? "var(--color-teal)" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
                 {exp.label}
-                {isLoan && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
+                {isLoan && <span className="text-2xs" style={{ background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
               </td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-teal)" : CATEGORY_COLORS[exp.category] }}>{f2(checkAvg)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-secondary)" }}>{f(annual / 12)}</td>
@@ -1800,8 +1798,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+          <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
             {formatRotationDisplay(currentWeek, { isAdmin })}
             {nextPayWeek
               ? ` · pay period ends${daysUntilPaycheck === 0 ? " today" : ` in ${daysUntilPaycheck}d`} · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
@@ -1828,7 +1826,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           />
         </div>
 
-        {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--color-text-primary)", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
+        {loans.length === 0 && <div className="text-sm" style={{ textAlign: "center", padding: "40px 20px", color: "var(--color-text-primary)", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
 
         {loans.map(exp => {
           const meta = exp.loanMeta;
@@ -1855,22 +1853,22 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "14px", fontWeight: "bold" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
-                    {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
-                    {isPaidOff && <span style={{ fontSize: "9px", background: "rgba(76,175,125,0.13)", color: "var(--color-green)", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
+                    <span className="text-md" style={{ fontWeight: "bold" }}>{exp.label}</span>
+                    <span className="text-2xs" style={{ background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {inRunway && <span className="text-2xs" style={{ background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
+                    {isPaidOff && <span className="text-2xs" style={{ background: "rgba(76,175,125,0.13)", color: "var(--color-green)", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
                   </div>
-                  {exp.note[0] && <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{exp.note[0]}</div>}
+                  {exp.note[0] && <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-teal)" }}>{f2(weeklyAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(meta.totalAmount)} total</div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-teal)" }}>{f2(weeklyAmt * perCheckFactor)}<span className="text-xs" style={{ color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
 
               {/* Progress bar — during runway shows savings progress toward first payment */}
               <div style={{ marginBottom: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
+                <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)", marginBottom: "4px" }}>
                   {inRunway
                     ? <span>saving toward first payment · {fmtWeeksDuration(weeksUntilFirst)} away</span>
                     : <span>{paymentsMade} of {paymentsTotal} payments made</span>
@@ -1883,28 +1881,28 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               </div>
 
               {/* Stats row */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
+              <div className="text-xs" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: "8px", marginBottom: "10px" }}>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
-                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd) : paymentsLeft}</div>
+                  <div className="text-2xs" style={{ color: "var(--color-text-primary)", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
+                  <div className="text-xs" style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", }}>{inRunway ? fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd) : paymentsLeft}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
-                  <div style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{fmtLoanDate(payoffDate, fiscalYearEnd)}</div>
+                  <div className="text-2xs" style={{ color: "var(--color-text-primary)", marginBottom: "2px" }}>PAYOFF DATE</div>
+                  <div className="text-xs" style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", }}>{fmtLoanDate(payoffDate, fiscalYearEnd)}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
-                  <div style={{ color: "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {freqShort}</div>
+                  <div className="text-2xs" style={{ color: "var(--color-text-primary)", marginBottom: "2px" }}>TERM PAYMENT</div>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)", fontWeight: "bold", }}>{f2(payAmt)} / {freqShort}</div>
                 </div>
               </div>
 
               {/* Runway banner */}
-              {inRunway && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#7a8bbf" }}>
+              {inRunway && <div className="text-xs" style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", color: "#7a8bbf" }}>
                 Setting aside {f2(weeklyAmt * perCheckFactor)}/{checkUnit} — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd)}
               </div>}
 
               {/* Drop-off banner */}
-              {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "var(--color-green)" }}>
+              {!isPaidOff && !inRunway && dropsThisYear && <div className="text-xs" style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", color: "var(--color-green)" }}>
                 ✓ Drops off in {fmtWeeksDuration(weeksUntilPayoff)} — budget improves after payoff
               </div>}
 
@@ -1924,16 +1922,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
         {/* Add loan form */}
         {!readOnly && (addingLoan ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
+          <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount Owed ($)</label><input type="number" value={newLoan.totalAmount} onChange={e => setNewLoan(v => ({ ...v, totalAmount: e.target.value }))} style={iS} placeholder="2400" /></div>
             <div style={{ gridColumn: "1/-1" }}>
               <label style={lS}>Term Payment</label>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span style={{ color: "var(--color-text-primary)", fontSize: "13px" }}>$</span>
+                <span className="text-base" style={{ color: "var(--color-text-primary)", }}>$</span>
                 <input type="number" value={newLoan.paymentAmount} onChange={e => setNewLoan(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
-                <span style={{ color: "var(--color-text-primary)", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+                <span className="text-sm" style={{ color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>every</span>
                 <select value={newLoan.paymentFrequency} onChange={e => setNewLoan(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
                   <option value="monthly">Month</option>
                   <option value="biweekly">Two Weeks</option>
@@ -1951,7 +1949,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             const total = Math.ceil(meta.totalAmount / meta.paymentAmount);
             const weeklyAmt = loanWeeklyAmount(meta);
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
-            return <div style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
+            return <div className="text-xs" style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                 <span style={{ color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly cost" : "Cost per check"}: <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(weeklyAmt * perCheckFactor)}/{checkUnit}</span></span>
                 <span style={{ color: "var(--color-text-primary)" }}>{total} payments ({freqLabel})</span>
@@ -1960,14 +1958,15 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <Pressable onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</Pressable>
-            <Pressable onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
+            <Pressable onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} className="text-xs" style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</Pressable>
+            <Pressable onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
           </div>
-        </div> : <Pressable onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</Pressable>)}
+        </div> : <Pressable onClick={() => setAddingLoan(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</Pressable>)}
       </div>;
     })()}
     {touchDragOverlay.label && createPortal(<div
       aria-hidden="true"
+      className="text-sm"
       style={{
         position: "fixed",
         left: touchDragOverlay.x,
@@ -1980,7 +1979,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         color: "#fff",
         borderRadius: "999px",
         padding: "8px 12px",
-        fontSize: "12px",
         fontWeight: 700,
         letterSpacing: "0.2px",
         boxShadow: "0 8px 18px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.12) inset",
@@ -2028,12 +2026,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
+                <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
                 <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>Breakdown</div>
               </div>
               {taxFeatureUnlocked && config?.taxExemptOptIn && infoRefWeek && (
-                <span style={{
-                  fontSize: "9px", padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
+                <span className="text-2xs" style={{
+                  padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
                   background: infoRefWeek.taxedBySchedule ? "#1e1e3a" : "#1e4a30",
                   color: infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)",
                   border: "1px solid " + (infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)"),
@@ -2085,10 +2083,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           <div style={{ marginTop: "20px", textAlign: "center" }}>
             <Pressable
               onClick={() => setShowCheckInfo(false)}
-              style={{
+              className="text-xs" style={{
                 background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-                padding: "8px 20px", fontSize: "10px", letterSpacing: "2px",
+                padding: "8px 20px", letterSpacing: "2px",
                 textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-sans)",
               }}
             >Close</Pressable>
@@ -2149,10 +2147,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 20px 14px", flexShrink: 0 }}>
               <div>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
                   {restoreSheetCat} · {activeMonth ? activeMonthLabel : `Q${ap + 1}`}
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
+                <div className="text-md" style={{ fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
               </div>
               <Pressable onClick={closeRestoreSheet}
                 style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</Pressable>
@@ -2161,7 +2159,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             <div style={{ overflowY: "auto", flex: 1, padding: "0 20px calc(20px + var(--safe-area-bottom))" }}>
 
             {sheetExps.length === 0 && (
-              <div style={{ textAlign: "center", padding: "24px 0", fontSize: "12px", color: "var(--color-text-disabled)" }}>
+              <div className="text-sm" style={{ textAlign: "center", padding: "24px 0", color: "var(--color-text-disabled)" }}>
                 No deleted expenses for this period
               </div>
             )}
@@ -2179,16 +2177,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{exp.label}</div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                      <div className="text-base" style={{ color: "var(--color-text-primary)" }}>{exp.label}</div>
+                      <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
                         {histAmt > 0 ? `${f2(histAmt)}/${checkUnit} · ${f(monthlyFromPerPaycheck(histAmt, cpm))}/mo` : "—"}
                       </div>
                     </div>
                     {!isPending && (
                       <Pressable
                         onClick={() => setRestorePendingExpId(exp.id)}
-                        style={{
-                          fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                        className="text-xs" style={{
+                          letterSpacing: "1.5px", textTransform: "uppercase",
                           color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)",
                           border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px",
                           padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)", flexShrink: 0,
@@ -2200,26 +2198,26 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                   {/* Scope picker — shown inline after RESTORE is tapped */}
                   {isPending && (
                     <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                      <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                      <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
                         Restore from…
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                         {activeMonth && (
                           <Pressable onClick={() => restoreExpense(exp.id, "month")}
-                            style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                            className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                             {activeMonthLabel} only
                           </Pressable>
                         )}
                         <Pressable onClick={() => restoreExpense(exp.id, "quarter")}
-                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Q{ap + 1} months
                         </Pressable>
                         <Pressable onClick={() => restoreExpense(exp.id, "year")}
-                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Rest of year
                         </Pressable>
                         <Pressable onClick={() => setRestorePendingExpId(null)}
-                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", background: "transparent", border: "none", padding: "6px 4px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", background: "transparent", border: "none", padding: "6px 4px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Cancel
                         </Pressable>
                       </div>
@@ -2286,7 +2284,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               {(() => {
                 const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
                 return note ? (
-                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px", lineHeight: "1.5", fontStyle: "italic" }}>{note}</div>
+                  <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "3px", lineHeight: "1.5", fontStyle: "italic" }}>{note}</div>
                 ) : null;
               })()}
             </div>
@@ -2298,13 +2296,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               {/* Cost tiles */}
               <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
                 <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
-                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Per Check</div>
+                  <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Per Check</div>
                   <div style={{ fontSize: "22px", fontWeight: 700, color: CATEGORY_COLORS[sheetExpLive.category] ?? "var(--color-green)", fontFamily: "var(--font-mono)" }}>
                     {f2(displayEffective(sheetExpLive, ap) * perCheckFactor)}
                   </div>
                 </div>
                 <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
-                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Monthly</div>
+                  <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Monthly</div>
                   <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
                     {f(monthlyFromPerPaycheck(displayEffective(sheetExpLive, ap), cpm))}
                   </div>
@@ -2313,7 +2311,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
               {/* Month activity bar */}
               <div style={{ marginBottom: "24px" }}>
-                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
+                <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
                 <div style={{ display: "flex", gap: "3px" }}>
                   {(() => {
                     // Determine the earliest month this expense was actually tracking.
@@ -2365,7 +2363,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               {/* Actions */}
               {sheetDeleteConfirm ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                  <div className="text-xs" style={{ color: "var(--color-deduction)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
                     {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -2379,17 +2377,17 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                         { label: `Q${ap + 1} +`,    action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
                       ]),
                     ].map(({ label, action }) => (
-                      <Pressable key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
+                      <Pressable key={label} onClick={action} className="text-2xs" style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
                         {label}
                       </Pressable>
                     ))}
                   </div>
-                  <Pressable onClick={() => setSheetDeleteConfirm(false)} style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+                  <Pressable onClick={() => setSheetDeleteConfirm(false)} className="text-xs" style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "10px" }}>
-                  <Pressable onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</Pressable>
-                  {!isFoodSheet && <Pressable onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</Pressable>}
+                  <Pressable onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} className="text-xs" style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</Pressable>
+                  {!isFoodSheet && <Pressable onClick={() => setSheetDeleteConfirm(true)} className="text-xs" style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</Pressable>}
                 </div>
               )}
             </>) : (
@@ -2412,32 +2410,32 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                     </select>
                   </div>
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: belowFloor ? "rgba(239,68,68,0.07)" : "var(--color-bg-raised)", border: `1px solid ${belowFloor ? "rgba(239,68,68,0.3)" : "transparent"}`, padding: "10px 14px", borderRadius: "10px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-secondary)", background: belowFloor ? "rgba(239,68,68,0.07)" : "var(--color-bg-raised)", border: `1px solid ${belowFloor ? "rgba(239,68,68,0.3)" : "transparent"}`, padding: "10px 14px", borderRadius: "10px" }}>
                   Per-check reserve: <strong style={{ color: belowFloor ? "var(--color-red)" : "var(--color-accent-primary)" }}>{f2(editReserve)}</strong>
-                  {isFoodSheet && <span style={{ marginLeft: "10px", fontSize: "10px", color: belowFloor ? "var(--color-red)" : "var(--color-text-disabled)" }}>{belowFloor ? `↑ min ${f2(minFoodPerCheck)}/${checkUnit}` : `· min ${f2(minFoodPerCheck)}/${checkUnit}`}</span>}
+                  {isFoodSheet && <span className="text-xs" style={{ marginLeft: "10px", color: belowFloor ? "var(--color-red)" : "var(--color-text-disabled)" }}>{belowFloor ? `↑ min ${f2(minFoodPerCheck)}/${checkUnit}` : `· min ${f2(minFoodPerCheck)}/${checkUnit}`}</span>}
                 </div>
                 <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
                 {/* Primary: the onward save gets its own full-width row; the rest sit in a secondary row */}
                 {activeMonth !== null ? (
                   <>
-                    <Pressable disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>{activeMonthFull}+ Onward</Pressable>
+                    <Pressable disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} className="text-sm" style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>{activeMonthFull}+ Onward</Pressable>
                     <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-                      <Pressable disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</Pressable>
-                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>This Qtr</Pressable>
-                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} className="text-2xs" style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} className="text-2xs" style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>This Qtr</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} className="text-2xs" style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
                     </div>
                   </>
                 ) : (
                   <>
-                    <Pressable disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>Q{ap + 1}+ Onward</Pressable>
+                    <Pressable disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} className="text-sm" style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>Q{ap + 1}+ Onward</Pressable>
                     <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</Pressable>
-                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} className="text-2xs" style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} className="text-2xs" style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
                     </div>
                   </>
                 )}
-                <Pressable onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+                <Pressable onClick={() => { setSheetMode("view"); setEditId(null); }} className="text-xs" style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
                   </>);
                 })()}
               </div>
@@ -2453,16 +2451,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 // Shared loan edit form (used in both overview and loans tab)
 function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
   return <div>
-    <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
+    <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
       <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={vals.label ?? ""} onChange={e => setVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
       <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount ($)</label><input type="number" value={vals.totalAmount ?? ""} onChange={e => setVals(v => ({ ...v, totalAmount: e.target.value }))} style={iS} /></div>
       <div style={{ gridColumn: "1/-1" }}>
         <label style={lS}>Term Payment</label>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <span style={{ color: "var(--color-text-primary)", fontSize: "13px" }}>$</span>
+          <span className="text-base" style={{ color: "var(--color-text-primary)", }}>$</span>
           <input type="number" value={vals.paymentAmount ?? vals.paymentPerCheck ?? ""} onChange={e => setVals(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
-          <span style={{ color: "var(--color-text-primary)", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+          <span className="text-sm" style={{ color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>every</span>
           <select value={vals.paymentFrequency ?? vals.payFrequency ?? "monthly"} onChange={e => setVals(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
             <option value="monthly">Month</option>
             <option value="biweekly">Two Weeks</option>
@@ -2474,8 +2472,8 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <div><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
     </div>
     <div style={{ display: "flex", gap: "8px" }}>
-      <Pressable onClick={onSave} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
-      <Pressable onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
+      <Pressable onClick={onSave} className="text-xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
+      <Pressable onClick={onCancel} className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
     </div>
   </div>;
 }
@@ -2495,7 +2493,7 @@ function MathRow({ op, label, val, valColor, note, large }) {
       }}>{op}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
-        {note && <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
+        {note && <span className="text-2xs" style={{ color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
       </div>
       <span style={{ fontSize: large ? "19px" : "14px", fontWeight: large ? "700" : "500", color: computedValColor, fontFamily: "var(--font-mono)", letterSpacing: "-0.5px", paddingLeft: "8px" }}>{val}</span>
     </div>

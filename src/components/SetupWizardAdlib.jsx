@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS } from "../constants/config.js";
+import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for the first
-// four SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
-// page, then Schedule and Deductions each as their own page in the same style.
-// Admin-only preview, gated behind the "Ad-Lib Preview" toggle in App.jsx —
-// never shown to real users.
+// five SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
+// page, then Schedule, Deductions, and Tax Rates each as their own page in the
+// same style. Admin-only preview, gated behind the "Ad-Lib Preview" toggle in
+// App.jsx — never shown to real users.
 //
 // Each page is one continuous mad-libs sentence with inline blanks (native
 // <select>/<input> styled to sit inline in the text). Within a page, each new
@@ -223,12 +224,18 @@ function isDeductionsValid(d) {
   return true;
 }
 
-// Fields these three pilot pages ask about — blanked on a fresh open (below)
+// Mandatory-field gate for the Tax Rates page — mirrors STEP_DEFS id 4
+// (Tax Rates) in SetupWizard.jsx exactly.
+function isTaxRatesValid(d) {
+  return d.fedRateLow > 0 && d.userState != null;
+}
+
+// Fields these four pilot pages ask about — blanked on a fresh open (below)
 // rather than carried over from the admin's real config, so isIntakeValid/
-// isScheduleValid/isDeductionsValid's mandatory-field gates actually have
-// something to gate. Pre-filling from `config` (the admin's own real answers)
-// made every field already "answered" before the admin touched anything,
-// silently bypassing both the blank look and the required-field check.
+// isScheduleValid/isDeductionsValid/isTaxRatesValid's mandatory-field gates
+// actually have something to gate. Pre-filling from `config` (the admin's own
+// real answers) made every field already "answered" before the admin touched
+// anything, silently bypassing both the blank look and the required-field check.
 const BLANK_PAY_FIELDS = {
   startedUnemployed: null, employerPreset: null, dhlSite: null, dhlTeam: null,
   dhlNightShift: null, nightDiffRate: null, userPaySchedule: null,
@@ -243,6 +250,10 @@ const BLANK_PAY_FIELDS = {
   healthPremium: null, dentalPremium: null, visionPremium: null,
   ltd: null, stdWeekly: null, lifePremium: null, hsaWeekly: null, fsaWeekly: null,
   k401Rate: null, k401MatchRate: null, k401StartDate: null,
+  // Tax Rates page
+  filingStatus: null, fedStdDeduction: null, userState: null,
+  fedRateLow: null, fedRateHigh: null, stateRateLow: null, stateRateHigh: null,
+  taxRatesEstimated: null,
 };
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
@@ -689,19 +700,194 @@ function DeductionsPage({ formData, onChange }) {
   );
 }
 
-// Jobless users skip Schedule and Deductions entirely — same as the real
-// wizard's isFirstRunJobless gate skipping STEP_DEFS id 2/3 outright.
+const calcBoxStyle = {
+  background: "var(--color-bg-raised)", borderRadius: "10px",
+  padding: "14px", display: "flex", flexDirection: "column", gap: "10px",
+};
+const calcHdrStyle = {
+  fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+  color: "var(--color-text-secondary)",
+};
+
+// A plain labeled number input for the paystub mini-calculator — not a
+// sentence blank like InlineNumber, so it doesn't share that styling.
+function CalcField({ label, value, onChange }) {
+  return (
+    <label style={{
+      display: "flex", flexDirection: "column", gap: "4px",
+      fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+      color: "var(--color-text-secondary)",
+    }}>
+      {label}
+      <input
+        type="number" inputMode="decimal" min="0" step="0.01"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          width: "110px", padding: "6px 8px", borderRadius: "8px",
+          border: "1px solid var(--color-border-subtle)", background: "var(--color-bg-base)",
+          color: "var(--color-text-primary)", fontFamily: "var(--font-mono)", fontSize: "13px",
+        }}
+      />
+    </label>
+  );
+}
+
+// ── Page 3: Tax Rates. Just the two selectors the sentence asks for — filing
+// status and state — then, once both are answered, a single "Recalculate
+// Using Paystub" button fades in last. Clicking it reveals the same
+// gross/withheld inputs real Step4's PaystubCalc uses (dr() below is a
+// straight copy of PaystubCalc's own withheld÷gross math) so "Apply These
+// Rates" writes real fedRateLow/stateRateLow (and the long-week pair, for a
+// variable schedule) — satisfying isTaxRatesValid the same way the real
+// wizard's paystub path does. ──
+function TaxRatesPage({ formData, onChange }) {
+  const isVariable = formData.scheduleIsVariable;
+  const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
+  const isNoTax = stateConfig?.model === "NONE";
+  const [showCalc, setShowCalc] = useState(false);
+  const [g1, setG1] = useState(""); const [f1, setF1] = useState(""); const [s1, setS1] = useState("");
+  const [g2, setG2] = useState(""); const [f2, setF2] = useState(""); const [s2, setS2] = useState("");
+
+  function dr(gross, withheld) {
+    const g = parseFloat(gross) || 0;
+    if (!g) return null;
+    return +((parseFloat(withheld) || 0) / g).toFixed(4);
+  }
+  const fed1 = dr(g1, f1);
+  const sta1 = dr(g1, s1);
+  const fed2 = isVariable ? dr(g2, f2) : null;
+  const sta2 = isVariable ? dr(g2, s2) : null;
+  const canApply = fed1 !== null;
+  const pct = n => n != null ? (n * 100).toFixed(2) + "%" : "—";
+
+  function pickFilingStatus(v) {
+    const deductions = { single: 15000, mfj: 30000, hoh: 22500 };
+    onChange({ filingStatus: v || null, fedStdDeduction: v ? deductions[v] : null });
+  }
+
+  function applyRates() {
+    if (!canApply) return;
+    onChange({
+      fedRateLow: fed1,
+      stateRateLow: sta1 ?? 0,
+      fedRateHigh: isVariable && fed2 != null ? fed2 : fed1,
+      stateRateHigh: isVariable && sta2 != null ? sta2 : (sta1 ?? 0),
+      taxRatesEstimated: false,
+    });
+    setShowCalc(false);
+  }
+
+  const fileText = "I officially file";
+  const stateText = "living in the state of";
+
+  return (
+    <>
+      <p style={BLANK_FONT}>
+        <TypedText text={fileText} />{" "}
+        <FadeIn delay={typeDuration(fileText)}>
+          <InlineSelect
+            value={formData.filingStatus ?? ""}
+            onChange={pickFilingStatus}
+            options={[
+              { value: "single", label: "single" },
+              { value: "mfj", label: "married filing jointly" },
+              { value: "hoh", label: "head of household" },
+            ]}
+          />
+        </FadeIn>
+        {", "}
+        <TypedText text={stateText} />{" "}
+        <FadeIn delay={typeDuration(stateText)}>
+          <InlineSelect
+            value={formData.userState ?? ""}
+            onChange={v => onChange({ userState: v || null })}
+            options={STATE_NAMES.map(({ code, name }) => ({ value: code, label: name }))}
+          />
+        </FadeIn>.
+      </p>
+
+      {formData.filingStatus && formData.userState && (
+        <FadeIn delay={0}>
+          <div style={{ marginTop: "18px" }}>
+            {!showCalc ? (
+              <Pressable
+                onClick={() => setShowCalc(true)}
+                style={{
+                  background: "transparent", color: "var(--color-text-primary)",
+                  border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                  padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                  textTransform: "uppercase", cursor: "pointer",
+                }}
+              >
+                Recalculate Using Paystub
+              </Pressable>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={calcBoxStyle}>
+                  <div style={calcHdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <CalcField label="Gross Pay ($)" value={g1} onChange={setG1} />
+                    <CalcField label="Fed Withheld ($)" value={f1} onChange={setF1} />
+                    {!isNoTax && <CalcField label="State Withheld ($)" value={s1} onChange={setS1} />}
+                  </div>
+                  {fed1 !== null && (
+                    <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                      → Fed {pct(fed1)}{!isNoTax && sta1 != null ? `  ·  State ${pct(sta1)}` : ""}
+                    </div>
+                  )}
+                </div>
+                {isVariable && (
+                  <div style={calcBoxStyle}>
+                    <div style={calcHdrStyle}>Longer Week Paystub</div>
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      <CalcField label="Gross Pay ($)" value={g2} onChange={setG2} />
+                      <CalcField label="Fed Withheld ($)" value={f2} onChange={setF2} />
+                      {!isNoTax && <CalcField label="State Withheld ($)" value={s2} onChange={setS2} />}
+                    </div>
+                    {fed2 !== null && (
+                      <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                        → Fed {pct(fed2)}{!isNoTax && sta2 != null ? `  ·  State ${pct(sta2)}` : ""}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {canApply && (
+                  <Pressable
+                    onClick={applyRates}
+                    style={{
+                      background: "var(--color-green)", color: "var(--color-bg-base)",
+                      border: "none", borderRadius: "12px", padding: "8px 16px",
+                      fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                      fontWeight: "bold", cursor: "pointer", alignSelf: "flex-start",
+                    }}
+                  >
+                    Apply These Rates
+                  </Pressable>
+                )}
+              </div>
+            )}
+          </div>
+        </FadeIn>
+      )}
+    </>
+  );
+}
+
+// Jobless users skip Schedule, Deductions, and Tax Rates entirely — same as
+// the real wizard's isFirstRunJobless gate skipping STEP_DEFS id 2/3/4 outright.
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
   { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
   { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage },
+  { id: "taxRates", isValid: isTaxRatesValid, Component: TaxRatesPage },
 ];
 
 // onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
 // answered. initialStepId targets the real SetupWizard's jobless mini-flow
-// (id 10) when unemployed, else Tax Rates (id 4) — Welcome, Pay Structure,
-// Schedule, and Deductions are all covered by this preview now, so the real
-// wizard picks up one step later than before. See SetupWizard.jsx's
+// (id 10) when unemployed, else Wrap Up (id 7) — Welcome, Pay Structure,
+// Schedule, Deductions, and Tax Rates are all covered by this preview now, so
+// the real wizard picks up one step later than before. See SetupWizard.jsx's
 // initialStepId prop.
 //
 // resumeFormData (optional): when the admin already answered these pages, handed off
@@ -734,7 +920,7 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
   function handleNext() {
     if (!canProceed) return;
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    onHandoff(formData, formData.startedUnemployed === true ? 10 : 4);
+    onHandoff(formData, formData.startedUnemployed === true ? 10 : 7);
   }
 
   function handleBack() {

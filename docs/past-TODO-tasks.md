@@ -58,14 +58,28 @@ One-liner per item — see git history for full implementation detail.*
   enrollment-date blank reusing `InlineDate` with a new `label` prop; deselecting a chip zeroes its
   field(s) the same way real `Step3` does; `benefitsStartDate`, the dynamic `otherDeductions` list,
   and attendance sub-fields scoped out (v1, none of them gate real Step3's `isValid`)
-  handoff `initialStepId` bumped from Deductions (3) to Tax Rates (4) as each page was absorbed
+- [x] **Page 4 (`TaxRatesPage`)** — real Tax Rates (Step4), scoped down by explicit instruction to
+  one sentence — "I officially file `[filing status]`, living in the state of `[state]`." — plus a
+  single "Recalculate Using Paystub" button that fades in last, once both selectors are answered.
+  `isTaxRatesValid()` mirrors `STEP_DEFS id 4`'s `isValid` exactly (`fedRateLow > 0 && userState !=
+  null`). The button reveals a small paystub calculator (`CalcField` — plain labeled number inputs,
+  not sentence-blank styled like `InlineNumber`, since this is a utility box, not mad-libs prose):
+  one box for a fixed schedule, two ("Shorter"/"Longer Week Paystub") for `scheduleIsVariable`,
+  same shape as real `PaystubCalc`; `dr()` (withheld ÷ gross) is a straight copy of `PaystubCalc`'s
+  own helper; "Apply These Rates" writes `fedRateLow/High`/`stateRateLow/High`/
+  `taxRatesEstimated: false` and collapses the calculator. State Withheld hidden for a
+  no-income-tax state (`STATE_TAX_TABLE[userState]?.model === "NONE"`). Real Step4's "Use Estimate
+  for Now" fallback and DHL Missouri preset button are intentionally not ad-libbed — only the
+  paystub path, per the request.
+  Handoff `initialStepId` bumped from Deductions (3) → Tax Rates (4) → Wrap Up (7) as each page was
+  absorbed.
 - [x] Outer page-count/resume machinery (`activePages`, `pageIdx`, "N of M" header, resume-at-
   last-page via `resumeFormData`) confirmed generic against `PAGES.length` — required zero changes
-  across all three page additions
-- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 31 tests
-  covering all three pages, DHL Plant/Warehouse branching, resume-on-Back, and handoff targets
-- Remaining real steps not yet ad-lib-ified: Tax Rates (id 4), Wrap Up (id 7) — future work, one
-  page at a time per the established pattern
+  across all four page additions
+- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 39 tests
+  covering all four pages, DHL Plant/Warehouse branching, variable-schedule two-week paystub calc,
+  resume-on-Back, and handoff targets
+- Remaining real step not yet ad-lib-ified: Wrap Up (id 7) — future work, if requested
 
 ---
 

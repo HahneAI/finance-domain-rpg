@@ -110,35 +110,37 @@ instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off
 wizard after its own pilot pages are answered. No effect on any existing call site that omits it.
 
 **`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
-reimagining of the wizard's first four steps as three cascading mad-libs pages with inline
+reimagining of the wizard's first five steps as four cascading mad-libs pages with inline
 `<select>`/`<input>` blanks, instead of stacked form fields or a page-per-step flow — pilot for a
 friendlier onboarding feel. Page 1 (`IntakePage`) merges Welcome + Pay Structure into one
 continuous sentence; page 2 (`SchedulePage`) covers Schedule as its own page; page 3
-(`DeductionsPage`) covers Deductions as its own page — all in the same cascading style.
+(`DeductionsPage`) covers Deductions as its own page; page 4 (`TaxRatesPage`) covers Tax Rates as
+its own page — all in the same cascading style.
 Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both mobile and desktop
 copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real signup** —
 `isAdmin` gates the trigger button, and the component itself has no other entry point. Reuses the
-exact same config fields and DHL-preset defaults as real Step0/Step1/Step2/Step3 (see
+exact same config fields and DHL-preset defaults as real Step0/Step1/Step2/Step3/Step4 (see
 `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two
-experiences on the fields they share. Once all three pages are answered, `onHandoff(mergedFormData,
+experiences on the fields they share. Once all four pages are answered, `onHandoff(mergedFormData,
 initialStepId)` closes the preview and reopens the real `SetupWizard` (via `App.jsx`'s
-`adlibHandoff` state) at Tax Rates (id 4) or the jobless mini-flow (id 10) for the remaining steps
+`adlibHandoff` state) at Wrap Up (id 7) or the jobless mini-flow (id 10) for the remaining steps
 — a real, click-through continuation, not a throwaway mockup. **MOCK ONLY — nothing is ever
 saved**, including that continuation: `App.jsx`'s wizard mount's `onComplete` skips
 `handleWizardComplete` entirely whenever `adlibHandoff` is set (no `setConfig`, no
 `savePersistedStateNow`), and `onCancel` stays available the whole way through instead of
 first-run's normal "no cancel button" rule — admins can click all the way to Finish with zero risk
-to real account data. Only these 4 steps are ad-libbed today — expanding to the rest (Tax Rates,
-Wrap Up), or promoting this to a real user-facing A/B split, is a future decision pending how the
-pilot feels in practice.
+to real account data. Only these 5 steps are ad-libbed today — expanding to the rest (Wrap Up),
+or promoting this to a real user-facing A/B split, is a future decision pending how the pilot
+feels in practice.
 
-- **Three real pages, each internally cascading.** `PAGES = [{Component: IntakePage}, {Component:
-  SchedulePage}, {Component: DeductionsPage}]`, navigated with a page-level Next/Back via
-  `StepSlide` (same slide transition the real wizard uses) — but *within* each page, clauses still
-  cascade in as plain `formData`-gated conditionals (`isEmployed && (…)`, `formData.startDate &&
-  (…)`, etc.) that mount the instant their prerequisite answer is given, no click required. Jobless
-  users skip pages 2 and 3 entirely (`activePages = startedUnemployed === true ? [PAGES[0]] :
-  PAGES`), same as the real wizard's `isFirstRunJobless` gate skipping STEP_DEFS id 2/3 outright.
+- **Four real pages, each internally cascading.** `PAGES = [{Component: IntakePage}, {Component:
+  SchedulePage}, {Component: DeductionsPage}, {Component: TaxRatesPage}]`, navigated with a
+  page-level Next/Back via `StepSlide` (same slide transition the real wizard uses) — but *within*
+  each page, clauses still cascade in as plain `formData`-gated conditionals (`isEmployed && (…)`,
+  `formData.startDate && (…)`, etc.) that mount the instant their prerequisite answer is given, no
+  click required. Jobless users skip pages 2–4 entirely (`activePages = startedUnemployed === true
+  ? [PAGES[0]] : PAGES`), same as the real wizard's `isFirstRunJobless` gate skipping STEP_DEFS
+  id 2/3/4 outright.
   Back is hidden on page 1 (`pageIdx > 0`) and reappears on pages 2–3, returning to the prior page
   with its answers intact — this Back is a real page-level navigation, distinct from undoing an
   earlier answer within the current page (just re-picking that blank directly). The outer
@@ -205,18 +207,37 @@ pilot feels in practice.
   — same "v1 scope" precedent as Warehouse's custom-hours question being left off page 1.
   `InlineDate`'s `label` prop (added this round) lets the same component render both "Start date"
   and "401k enrollment date" with distinct accessible names.
-- **Back at the hand-off boundary returns to this component, not the real Step0/Step1/Step2/Step3.**
-  Without intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Tax Rates
-  id 4, or the jobless flow id 10) falls through to that component's own Welcome/Pay
-  Structure/Schedule/Deductions — the stacked-field UI for the same questions this pilot just asked
-  ad-lib style, which reads as "kicked out of the preview." `SetupWizard`'s optional
-  `onBackBeforeStart(formData)` prop fires instead, exactly once, only when `stepIdx` is still at
-  the resolved `initialStepId` index — every other Back press behaves as before. `App.jsx` wires
-  this to reopen `SetupWizardAdlib` via its `resumeFormData` prop, which skips `BLANK_PAY_FIELDS`
-  and seeds `formData` directly from the in-progress answers, resuming on the last page (Deductions
-  for an employed resume, since a handoff only ever fires once all three pages are valid) — a real
-  resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both Exit Preview and a fresh
-  forward hand-off, so a deliberate new "Preview" click always starts blank again.
+- **Tax Rates page is a deliberately narrower sentence than the real Step4** — by explicit
+  instruction, not an oversight: just "I officially file `[filing status]`, living in the state of
+  `[state]`." (`filingStatus` + `userState`, the same two fields `isTaxRatesValid()` mirrors from
+  `STEP_DEFS id 4`'s `isValid` — `d.fedRateLow > 0 && d.userState != null`), with a single
+  "Recalculate Using Paystub" button as the last thing to fade in, once both selectors are answered
+  (`formData.filingStatus && formData.userState`). Real Step4's second path to a valid rate — "Use
+  Estimate for Now" — and its DHL Missouri preset button are both intentionally left off this page;
+  only the paystub path is ad-libbed. Clicking the button reveals a small paystub calculator (one
+  box for a fixed schedule, two — "Shorter"/"Longer Week Paystub" — for `scheduleIsVariable`, same
+  as real `PaystubCalc`) with its own plain labeled number inputs (`CalcField`, not sentence blanks
+  like `InlineNumber` — this is a utility calculator, not mad-libs prose) for gross pay and
+  fed/state withheld; `dr()` (withheld ÷ gross, mirrors `PaystubCalc`'s own helper exactly) derives
+  the rate live under each box, and "Apply These Rates" (shown once the first box's fed rate is
+  computable) writes `fedRateLow`/`stateRateLow`/`fedRateHigh`/`stateRateHigh`/
+  `taxRatesEstimated: false` and collapses the calculator — satisfying `isTaxRatesValid` the same
+  way the real wizard's paystub path does. State Withheld is hidden for a no-income-tax state
+  (`STATE_TAX_TABLE[userState]?.model === "NONE"`), matching real Step4/`PaystubCalc`'s `isNoTax`
+  gate.
+- **Back at the hand-off boundary returns to this component, not the real
+  Step0/Step1/Step2/Step3/Step4.** Without intervention, hitting Back on the real `SetupWizard`'s
+  first handed-off step (Wrap Up id 7, or the jobless flow id 10) falls through to that component's
+  own Welcome/Pay Structure/Schedule/Deductions/Tax Rates — the stacked-field UI for the same
+  questions this pilot just asked ad-lib style, which reads as "kicked out of the preview."
+  `SetupWizard`'s optional `onBackBeforeStart(formData)` prop fires instead, exactly once, only
+  when `stepIdx` is still at the resolved `initialStepId` index — every other Back press behaves as
+  before. `App.jsx` wires this to reopen `SetupWizardAdlib` via its `resumeFormData` prop, which
+  skips `BLANK_PAY_FIELDS` and seeds `formData` directly from the in-progress answers, resuming on
+  the last page (Tax Rates for an employed resume, since a handoff only ever fires once all four
+  pages are valid) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
+  Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
+  blank again.
 
 ---
 

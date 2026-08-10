@@ -16,7 +16,7 @@ export function LegalDocumentModal({ open, title, markdown, onClose }) {
   return createPortal(
     <div className="fold-backdrop" data-fold={fold.fold} style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
       <div className="fold-modal" data-fold={fold.fold} style={{ width: "100%", maxWidth: "480px", maxHeight: "80vh", overflowY: "auto", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div style={{ fontSize: "17px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>
+        <div style={{ fontSize: "17px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>
           {title}
         </div>
         <ChangelogBody markdown={markdown} />

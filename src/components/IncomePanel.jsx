@@ -308,7 +308,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         Income Overview
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "14px" }}>
-        <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1 }}>
+        <div style={{ fontSize: "32px", fontWeight: 900, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "0.04em", lineHeight: 1.15 }}>
           Year Summary
         </div>
         <Pressable
@@ -339,7 +339,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "20px", opacity: 0.35 }} />
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: "6px" }}>
+            <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "6px" }}>
               {isDesktopWeekly ? "Rolling Window" : "Monthly Rolling"}
             </div>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
+import { Pressable, PanelHero, SectionHeader, SH, iS, lS } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
@@ -298,46 +298,51 @@ export function NewJobSeasonBudgetPanel({
       )}
 
       {/* ── Add expense ── */}
-      <SectionHeader>Expenses</SectionHeader>
+      <SectionHeader sub="What you're tracking and paying while you search">Expenses</SectionHeader>
       {!readOnly && (
-        <div style={{
-          background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
-          borderRadius: "12px", padding: "14px", marginBottom: "14px",
-        }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-            <div>
-              <label style={lS}>Label</label>
-              <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+        <>
+          <SH>Add a Bill</SH>
+          <div style={{
+            background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
+            borderRadius: "12px", padding: "14px", marginBottom: "14px",
+          }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div>
+                <label style={lS}>Label</label>
+                <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+              </div>
+              <div>
+                <label style={lS}>Category</label>
+                <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
+                  <option>Needs</option>
+                  <option>Lifestyle</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={lS}>Monthly amount ($)</label>
+                <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
+              </div>
             </div>
-            <div>
-              <label style={lS}>Category</label>
-              <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
-                <option>Needs</option>
-                <option>Lifestyle</option>
-              </select>
+            <div style={{ marginBottom: "10px" }}>
+              <label style={lS}>Due date</label>
+              <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
             </div>
-            <div style={{ gridColumn: "1/-1" }}>
-              <label style={lS}>Monthly amount ($)</label>
-              <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
-            </div>
+            <Pressable
+              onClick={addExpense}
+              style={{
+                width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
+                color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+                border: "none", borderRadius: "10px", padding: "10px",
+                fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              + Add Expense
+            </Pressable>
           </div>
-          <div style={{ marginBottom: "10px" }}>
-            <label style={lS}>Due date</label>
-            <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
-          </div>
-          <Pressable
-            onClick={addExpense}
-            style={{
-              width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
-              color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-              border: "none", borderRadius: "10px", padding: "10px",
-              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            + Add Expense
-          </Pressable>
-        </div>
+        </>
       )}
+
+      <SH right={`${sortedExpenses.length} tracked`}>Tracked Bills</SH>
 
       {!readOnly && flexibleActiveCount > 0 && (
         <Pressable

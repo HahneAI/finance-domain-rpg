@@ -1090,7 +1090,7 @@ the emotional and practical weight of what just happened.*
 
 ### A–C. Entry Point, Structure Overwrite Wizard, New Job Season — LIVE, see `active-systems.md` §10
 
-- **§A Entry Point** — `LifeEventMenu.jsx` (3-tile modal: Pay Structure Changed / Lost My Job /
+- **§A Entry Point** — `LifeEventMenu.jsx` (3-tile modal: Pay Structure Changed / Quit My Job /
   Quick Rate Update). Wired in `App.jsx`; also reachable from `ProfilePanel`'s "Life Events" row.
 - **§B Structure Overwrite Wizard** — `SetupWizard.jsx`'s `lifeEvent="structure_change"` path:
   brief re-entry overview at Step 0, every field pre-fills from `originalConfig`, `StructureChangeDiff`
@@ -2032,7 +2032,7 @@ optional manual pass, not a blocking item — no reason to re-run this by hand u
 §A–C regresses.*
 
 #### Entry points
-- [ ] Life Events trigger opens modal with three tiles: Pay Structure Changed, Lost My Job,
+- [ ] Life Events trigger opens modal with three tiles: Pay Structure Changed, Quit My Job,
   Quick Rate Update (Coming Soon, disabled)
 - [ ] Backdrop click and Escape close the modal
 
@@ -2048,7 +2048,7 @@ optional manual pass, not a blocking item — no reason to re-run this by hand u
 - [ ] Goals, expenses, and logs unchanged after completion
 
 #### New Job Season entry (§1.C1 + C2)
-- [ ] Lost My Job tile opens the NewJobSeasonEntry modal (not the wizard)
+- [ ] Quit My Job tile opens the NewJobSeasonEntry modal (not the wizard)
 - [ ] Y/N "Are you getting unemployment benefits?" required to enable Activate
 - [ ] Choosing Yes reveals weekly amount, duration weeks, waiting-week toggle
 - [ ] Activate flips the engine — projected weekly income drops to $0 from the date forward

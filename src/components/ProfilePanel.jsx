@@ -2962,7 +2962,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           uses (§1.H4) — as a second route to it beyond the banner. */}
       {config?.newJobSeasonMode ? (
         <>
-          <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Job Search</div>
+          <SH>Job Search</SH>
           <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid rgba(245,158,11,0.28)", overflow: "hidden", marginBottom: "20px" }}>
             <ListRow
               label="Back to Work"
@@ -2979,7 +2979,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               low-churn set of fields. Life Events is reachable from the bottom of
               that same detail view, plus the always-present sidebar/drawer nav, so
               it isn't duplicated here as a standalone card. */}
-          <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
+          <SH>Work & Pay</SH>
           <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
             <ListRow
               label="Job & Pay"
@@ -2997,7 +2997,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
       )}
 
       {/* App group */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>App</div>
+      <SH>App</SH>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
         <ListRow
           label="Account"
@@ -3053,7 +3053,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           beta_code_used): the section header itself doubles as the "badge," a
           passive acknowledgment every time this panel opens, paired with the
           feedback row. */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Beta Program</div>
+      <SH>Beta Program</SH>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
         {isBetaTester ? (
           <ListRow

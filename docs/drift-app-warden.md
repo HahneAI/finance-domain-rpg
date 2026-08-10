@@ -678,8 +678,8 @@ when the year-end simulation shape omits it — `ec53450`).
 `extraCash: huntIncome`), `saveCashOnHand:80–84` (writes `newJobSeasonCashOnHand` +
 `newJobSeasonCashOnHandAsOf`, called from the pencil-badged Cash On Hand card + its shared
 `CashOnHandSheet.jsx` editor — §1.H17), `logIncome:109–122`, `removeEntry:124–128`,
-embedded `ReemploymentTracker:284` with its `applyConfigUpdate` wrapper
-(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:328` (DW-8 fix,
+embedded `ReemploymentTracker:295` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:103–107`), embedded `CoachNetWorthCard:348` (DW-8 fix,
 `docs/BUG_FIX_TODO.md`) behind `canAccessAskCoachGeneral` — **[G→L]**
 `config.newJobSeasonMode` *replaces* HomePanel with NewJobSeasonHomePanel (post-§1.H7 architecture
 — the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
@@ -706,7 +706,18 @@ mandatory (§1.H13); `newJobSeasonCashOnHandAsOf` is re-stamped every time it's 
 > that confusion — don't "fix" it the other way by merging `huntIncome` into the
 > displayed balance, which would corrupt the `newJobSeasonCashOnHandAsOf` decay anchor.
 > `NewJobSeasonBudgetPanel.jsx` carries the equivalent caption (F44) — keep both in sync.
-> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
+> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`. **Visual hierarchy
+> (2026-08):** the page is now three umbrella `SectionHeader`s — "Your Runway" (Cash On
+> Hand + the Runway/Burn/Extra Income grid), "Log Extra Income", "Job Search"
+> (`ReemploymentTracker` +, when `canAccessAiFeatures` unlocks it, the Job Hunt Assistant
+> button/chat + `ResumeReviewCard`) — a user explicitly asked for the tracker/assistant/
+> résumé trio to read as one paired goal, not three separately-headed blocks. Each
+> component inside "Job Search" carries its own compact `SH` sub-label
+> (`ReemploymentTracker.jsx`'s own header, not `NewJobSeasonHomePanel`'s — don't add a
+> second one at the call site) rather than another full `SectionHeader` — don't restore
+> `ResumeReviewCard`'s old standalone `SectionHeader` or split the trio back into
+> separate top-level sections. `CoachNetWorthCard` deliberately has no header (it
+> renders `null` most of the time — a permanent title would sit above nothing).
 
 **F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
 threshold const `:1405`), suppression `HomePanel.jsx:117–118`
@@ -1150,9 +1161,14 @@ both quote one scenario) — **[G→L]**
 > `upcomingBills` filter, Back to Work auto-reactivation (§7 F11). F24's runway
 > quarantines are closed (`3267286`) — no filter-drift risk from that direction anymore.
 > **IF** `includeBenefits` is ever persisted, **THEN** that's a product decision reversal
-> — its session-only nature is documented intent, not an oversight. Check: toggling the
-> scenario on one panel changes the other; kill-tab keeps triage states but resets the
-> scenario toggle; editing Cash On Hand from Budget updates Home's card figure and vice
+> — its session-only nature is documented intent, not an oversight. **Visual hierarchy
+> (2026-08):** "Expenses" is one umbrella `SectionHeader` covering both the add-bill
+> form (its own `SH` "Add a Bill" sub-label) and the tracked-bills list below it (`SH`
+> "Tracked Bills", `right` shows the live count) — keep both sub-labels if this section
+> is restructured, rather than collapsing back to one bare header over both. Check:
+> toggling the scenario on one panel changes the other; kill-tab keeps triage states but
+> resets the scenario toggle; editing Cash On Hand from Budget updates Home's card figure
+> and vice
 > versa (single source of truth, `newJobSeasonFlow.test.jsx`).
 
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)

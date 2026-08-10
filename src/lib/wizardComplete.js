@@ -30,6 +30,15 @@ export function finalizeWizardConfig(formData, priorConfig = null) {
     ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
     : { ...formData };
 
+  // (1b) otMultiplier default — SetupWizard.jsx never leaves this null (its formData always
+  // starts from the account's existing config, which already carries DEFAULT_CONFIG's 1.5).
+  // SetupWizardAdlib.jsx's BLANK_PAY_FIELDS deliberately nulls it for a base user until they
+  // open Advanced Pay Rules (added alongside that card) — default here so a base user who never
+  // opens that card still finishes with the same 1.5x DEFAULT_CONFIG value real Step1 always had
+  // pre-filled, instead of a null that would NaN the direct (non-`|| 1.5`) otMultiplier
+  // multiplications in finance.js. No-op for the real wizard (already never null).
+  if (finalData.otMultiplier == null) finalData.otMultiplier = 1.5;
+
   // (2) Freedom Allowance normalize — display default is ?? 50 in the UI but formData can
   // still hold null if the field was cleared or never touched. Normalize here so the saved
   // config always carries the real value the user saw. Capped at FREEDOM_ALLOWANCE_MAX.

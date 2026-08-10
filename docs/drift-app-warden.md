@@ -635,6 +635,38 @@ gained `aria-pressed` + `aria-label`).
 > mirror the real wizard's pattern, not redesign it; an always-enabled Next button would itself be
 > a real behavioral divergence from `SetupWizard.jsx`, not a parity fix.
 
+**F133 · Advanced Pay Rules + DHL custom rotation ported into `IntakePage`, plus two
+pre-existing `isIntakeValid` gaps closed** — `SetupWizardAdlib.jsx` (`AdvancedPayRulesCard`,
+`DhlRotationCard`, `isIntakeValid`), `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Two real Step1 blocks ported as collapsible cards below the sentence (not forced into inline
+mad-libs prose, matching how they already read as `Field`/Pill form blocks in the real wizard,
+not prose): `AdvancedPayRulesCard` (base users, OT multiplier/night diff/weekend diff — same
+three fields/defaults as real `AdvancedPayRules`) and `DhlRotationCard` (DHL Plant only, Standard
+vs. Custom weekly-hours override). While adding `DhlRotationCard`'s required-field checks to
+`isIntakeValid`, found real STEP_DEFS id 1 also gates on `customWeeklyHours`/
+`customWeeklyHoursLong`/`customWeeklyHoursShort` AND on a base-user's custom OT threshold being
+positive once entered — **neither check existed in `isIntakeValid` before this round**, a
+pre-existing F7 mirror gap (the fields simply weren't reachable in `IntakePage` before, so the
+gap was latent). Both added, now a true line-for-line mirror of real STEP_DEFS id 1's `isValid`.
+`finalizeWizardConfig()` also gained an `otMultiplier` default (`?? 1.5`, `DEFAULT_CONFIG`'s own
+value) — `SetupWizardAdlib.jsx`'s `BLANK_PAY_FIELDS` nulls it for base users until
+`AdvancedPayRulesCard` is opened, whereas real `SetupWizard.jsx` never blanks it (its `formData`
+always starts from the account's existing config); without the default, a base user who never
+opens the card would finish with `otMultiplier: null`, which several direct (non-`|| 1.5`)
+multiplications in `finance.js` would turn into `NaN`. No-op for the real wizard (already never
+null there).
+> **IF** `AdvancedPayRulesCard`/`DhlRotationCard`'s fields change on the real
+> `AdvancedPayRules`/Step1 rotation block, **THEN** update both the card here and
+> `isIntakeValid`'s mirrored checks together — three places now (real component, ad-lib card,
+> ad-lib `isIntakeValid`).
+> **IF** another field gets a `?? <DEFAULT_CONFIG value>` fallback added to
+> `finalizeWizardConfig()` for the same "blanked in Adlib, never blanked in real" reason,
+> **THEN** grep `BLANK_PAY_FIELDS` for other numeric/enum fields the real wizard's `Field`
+> components don't gate as required but that a raw calculation downstream assumes non-null —
+> `otMultiplier` was found this round by inspecting `finance.js`'s direct (unguarded)
+> `cfg.otMultiplier` multiplications; not an exhaustive audit of every such field.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

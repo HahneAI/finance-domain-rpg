@@ -4250,16 +4250,28 @@ concrete, code-grounded finding, not a guess.*
 - [x] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
       — added 2026-08-10, base users only (DHL always uses the fixed 40h/1.5× override applied at
       employer-pick time, same as the real wizard). Doesn't gate `isIntakeValid` on either wizard.
-- [ ] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — OT multiplier
-      (1.5×/2×) and night-differential-rate editing (base users) still missing; DHL weekend
-      differential now covered (below). None of it gates `isValid`, but production users need a
-      way to set it.
+- [x] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — added 2026-08-10 as a
+      new `AdvancedPayRulesCard` collapsible (base users only, rendered after the OT Threshold
+      clause once `payStructureComplete`): OT multiplier (1.5×/2× via `InlineChip`), night
+      differential enable+rate, and weekend differential — same three fields/defaults as real
+      `AdvancedPayRules`, reshaped from labeled Field/Pill controls into this file's card+chip
+      idiom. `finalizeWizardConfig()` now also defaults `otMultiplier` to `1.5` when left `null`
+      (a base user who never opens the card) — see `wizardComplete.js`.
 - [x] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — added
       2026-08-10. `IntakePage` now shows an editable `InlineNumber` pre-filled with the
       `DHL_PRESET` default (1.75), once the DHL pay-schedule clause is answered.
-- [ ] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
-      (`SetupWizard.jsx:560–639`, Plant-only) — entirely missing from `IntakePage`. A DHL Plant
-      user working a non-standard schedule (pickup shifts, extended hours) has no way to say so.
+- [x] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
+      (`SetupWizard.jsx:560–639`, Plant-only) — added 2026-08-10 as a new `DhlRotationCard`
+      collapsible (Plant only, rendered after the weekend-differential clause once
+      `dhlTeamReady`): Standard-vs-Custom `InlineChip` toggle, long/short-week hour blanks with
+      draft-string state (mirrors real Step1's `longHoursDraft`/`shortHoursDraft`) once Custom is
+      picked. `isIntakeValid` gained the matching `customWeeklyHours`/`customWeeklyHoursLong`/
+      `customWeeklyHoursShort` checks (line-for-line mirror of real STEP_DEFS id 1) — a
+      pre-existing gap in `isIntakeValid` itself (it was missing this check even before today,
+      since the field was previously unreachable in `IntakePage`). Also added the matching
+      base-user "custom OT threshold must be positive once entered" check to `isIntakeValid`,
+      found while touching that function for the rotation checks — a second pre-existing gap,
+      unrelated to the rotation feature itself but caught in the same pass.
 
 *Deductions (real Step3, `SetupWizard.jsx:1204`) vs. `DeductionsPage` — most of these were
 already flagged "v1 scope" in the page's own code comment when built, on the reasoning that none

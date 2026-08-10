@@ -222,6 +222,32 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   Weekend Differential is now an editable `InlineNumber` pre-filled with the `DHL_PRESET` default,
   instead of the previous hardcoded, uneditable value. None of the three gate `isIntakeValid`. See
   `docs/drift-app-warden.md` §7 F130.
+- **`AdvancedPayRulesCard` (base users) and `DhlRotationCard` (DHL Plant only) — collapsible
+  cards below the sentence, not inline mad-libs prose** — added 2026-08-10, mirroring real
+  Step1's `AdvancedPayRules` component and its inline DHL-rotation `Field` block field-for-field,
+  reshaped into this file's card+`InlineChip` idiom (real `Pill`/`Field` have no equivalent here).
+  `AdvancedPayRulesCard` renders after the OT Threshold clause once `payStructureComplete`: OT
+  multiplier (1.5×/2×), night differential enable+rate, weekend differential. `DhlRotationCard`
+  renders after the DHL weekend-differential clause once `dhlTeamReady && isEmployerPlant`:
+  Standard-vs-Custom toggle, then long/short-week hour blanks (draft-string state, mirrors real
+  Step1's `longHoursDraft`/`shortHoursDraft`) once Custom is picked. Adding these fields exposed
+  two pre-existing gaps in `isIntakeValid` (present since before this round, just latent because
+  the fields weren't reachable yet) — now fixed: `customWeeklyHours`/`customWeeklyHoursLong`/
+  `customWeeklyHoursShort` required-when-custom checks, and the base-user custom-OT-threshold-
+  must-be-positive-once-entered check — both line-for-line mirrors of real STEP_DEFS id 1.
+  `finalizeWizardConfig()` (`wizardComplete.js`) also gained an `otMultiplier ?? 1.5` default,
+  since `BLANK_PAY_FIELDS` nulls it for base users until the card is opened (real `SetupWizard.jsx`
+  never blanks it). See `docs/drift-app-warden.md` §7 F133.
+- **`attempted`-driven required-field feedback + accessible names (2026-08-10).** `InlineSelect`/
+  `InlineNumber`/`InlineDate` gained an `error` prop (solid `--color-deduction` border +
+  `aria-invalid` + a new `RequiredNote` "↑ Required" tail) mirroring real `errBorder()`/`Field`,
+  wired via `attempted && <the same condition that page's own isXValid checks>` on every required
+  control. `InlineSelect`/`InlineNumber` also gained a contextual `ariaLabel` prop (threaded per
+  call site); `InlineChip` gained `aria-pressed`/`aria-label`. The Next/Finish button's
+  `disabled={!canProceed}` stayed unchanged — `handleNext`'s `setAttempted(true)` branch mirrors
+  `SetupWizard.jsx`'s own `handleNext` exactly, including that function's own reachability quirk
+  (a native `<button disabled>` blocks click dispatch in both wizards). See
+  `docs/drift-app-warden.md` §7 F132.
 - **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
   `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
   long real clause overflowed horizontally on narrow viewports. Now chunks into per-word

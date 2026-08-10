@@ -48,6 +48,25 @@ const BLANK_FONT = {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Mirrors SetupWizard.jsx's own local OT_MULTIPLIERS exactly (not exported there, so
+// duplicated here rather than importing — same reasoning as the rest of this file's
+// field/behavior mirrors, kept in sync manually per drift-app-warden §7's own convention).
+const OT_MULTIPLIERS = [1.5, 2];
+
+const cardShellStyle = {
+  border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+  background: "var(--color-bg-raised)", overflow: "hidden", marginTop: "14px",
+};
+const cardHeaderStyle = {
+  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+  gap: "12px", padding: "12px 14px", background: "transparent", border: "none",
+  cursor: "pointer", textAlign: "left",
+};
+const cardLabelStyle = {
+  fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+  color: "var(--color-text-secondary)", marginBottom: "6px",
+};
+
 // Typing speed for the stepped typewriter reveal — clamped so a short word
 // doesn't feel instant and a long clause doesn't feel sluggish.
 function typeDuration(text) {
@@ -275,6 +294,13 @@ function isIntakeValid(d) {
   if (!d.userPaySchedule) return false;
   if (d.employerPreset === "DHL" && !d.dhlSite) return false;
   if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
+  // DHL Plant custom-rotation hours (DhlRotationCard) — mirrors real STEP_DEFS id 1's
+  // customWeeklyHours checks exactly.
+  if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false;
+  if (d.customWeeklyHours === 0) return false;
+  // Base-user custom OT threshold (otChoice === "custom") must be a positive number once
+  // entered — mirrors real STEP_DEFS id 1's otCustom-required-positive rule exactly.
+  if (d.employerPreset !== "DHL" && d.otThreshold !== null && !((d.otThreshold ?? 0) > 0)) return false;
   if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
   return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
 }
@@ -336,6 +362,8 @@ const BLANK_PAY_FIELDS = {
   startDate: null, firstActiveIdx: null, maxWeeklyHours: null,
   hoursUnderstood: null, biweeklyPayWeekParity: null,
   tipsOrCommissionEnabled: null, tipsOrCommissionLabel: null, tipsCommissionOnlyPosition: null,
+  nightDiffEnabled: null, customWeeklyHours: null, customWeeklyHoursLong: null,
+  customWeeklyHoursShort: null, dhlCustomSchedule: null,
   // Deductions page
   selectedBenefits: null, attendanceBucketEnabled: null,
   healthPremium: null, dentalPremium: null, visionPremium: null,
@@ -351,6 +379,161 @@ const BLANK_PAY_FIELDS = {
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
 // clause rolls in as soon as the answer it depends on is given. ──
+// Advanced Pay Rules — mirrors real Step1's `AdvancedPayRules` component exactly (same
+// three fields, same defaults/clear-on-toggle behavior), reshaped from labeled Field/Pill
+// form controls into this file's card-and-chip idiom (InlineChip standing in for Pill) since
+// there's no page-level equivalent already in this file. Rendered as a collapsible card
+// below the sentence, same as it is in the real wizard, rather than forced into inline
+// mad-libs prose — none of these three fields gate isIntakeValid on either wizard (except
+// the custom-OT-threshold-must-be-positive-if-set rule already enforced in isIntakeValid).
+function AdvancedPayRulesCard({ formData, onChange }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div style={cardShellStyle}>
+      <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Advanced Pay Rules</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            OT multiplier, night differential, weekend rate — defaults work for most.
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div>
+            <div style={cardLabelStyle}>OT Multiplier</div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              {OT_MULTIPLIERS.map(m => (
+                <InlineChip key={m} label={`${m}×`} active={formData.otMultiplier === m} onClick={() => onChange({ otMultiplier: m })} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={cardLabelStyle}>Night Differential?</div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <InlineChip label="Yes" active={formData.nightDiffEnabled === true} onClick={() => onChange({ nightDiffEnabled: true })} />
+              <InlineChip label="No" active={formData.nightDiffEnabled === false} onClick={() => onChange({ nightDiffEnabled: false, nightDiffRate: 0 })} />
+            </div>
+            {formData.nightDiffEnabled === true && (
+              <div style={{ marginTop: "10px" }}>
+                <div style={cardLabelStyle}>Night Diff Rate ($/hr)</div>
+                <InlineNumber
+                  value={formData.nightDiffRate ?? ""}
+                  onChange={v => onChange({ nightDiffRate: v === "" ? null : parseFloat(v) })}
+                  placeholder="1.50"
+                  width="72px"
+                  ariaLabel="Night differential rate, dollars per hour"
+                />
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={cardLabelStyle}>Weekend Differential ($/hr, 0 = none)</div>
+            <InlineNumber
+              value={formData.diffRate ?? ""}
+              onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
+              placeholder="0"
+              width="72px"
+              ariaLabel="Weekend differential, dollars per hour"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// DHL Plant custom-rotation question — mirrors real Step1's inline `Field` block
+// (`SetupWizard.jsx` ~560–639) field-for-field: Standard vs. Custom schedule choice,
+// with long/short-week hour inputs (draft strings so a blank displays while typing, same
+// as the real page's `longHoursDraft`/`shortHoursDraft`) once Custom is picked. Plant-only
+// — Warehouse has no rotation to override. `customWeeklyHoursLong === 0` /
+// `customWeeklyHoursShort === 0` are real Step1's own "entered but blank" sentinels, and
+// isIntakeValid's mirror of real Step1's own gate on them.
+function DhlRotationCard({ formData, onChange, attempted = false }) {
+  const [expanded, setExpanded] = useState(formData.customWeeklyHours != null);
+  const [longDraft, setLongDraft] = useState(formData.customWeeklyHoursLong > 0 ? String(formData.customWeeklyHoursLong) : "");
+  const [shortDraft, setShortDraft] = useState(formData.customWeeklyHoursShort > 0 ? String(formData.customWeeklyHoursShort) : "");
+  const isCustom = formData.customWeeklyHours != null;
+  const hoursMissing = attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0);
+
+  return (
+    <div style={cardShellStyle}>
+      <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>DHL Rotation</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            {isCustom ? "Custom long/short-week hours" : "Standard rotation — tap to override"}
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <InlineChip
+              label="Standard rotation" active={!isCustom}
+              onClick={() => {
+                onChange({ customWeeklyHours: null, customWeeklyHoursLong: null, customWeeklyHoursShort: null, dhlCustomSchedule: false });
+                setLongDraft(""); setShortDraft("");
+              }}
+            />
+            <InlineChip
+              label="Custom schedule" active={isCustom}
+              onClick={() => {
+                const fallback = (formData.customWeeklyHours ?? 0) > 0 ? formData.customWeeklyHours : 60;
+                const longV = (formData.customWeeklyHoursLong ?? 0) > 0 ? formData.customWeeklyHoursLong : fallback;
+                const shortV = (formData.customWeeklyHoursShort ?? 0) > 0 ? formData.customWeeklyHoursShort : fallback;
+                onChange({ customWeeklyHours: fallback, customWeeklyHoursLong: longV, customWeeklyHoursShort: shortV, dhlCustomSchedule: false });
+                setLongDraft(String(longV)); setShortDraft(String(shortV));
+              }}
+            />
+          </div>
+          {isCustom ? (
+            <div>
+              <div style={{ ...cardLabelStyle, color: hoursMissing ? "var(--color-deduction)" : cardLabelStyle.color }}>Hours per week</div>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>Long week</div>
+              <InlineNumber
+                value={longDraft}
+                onChange={v => {
+                  setLongDraft(v);
+                  const n = parseFloat(v);
+                  onChange({ customWeeklyHoursLong: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
+                }}
+                placeholder="60"
+                width="64px"
+                ariaLabel="Long week hours"
+                error={attempted && formData.customWeeklyHoursLong === 0}
+              />
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "8px" }}>Short week</div>
+              <InlineNumber
+                value={shortDraft}
+                onChange={v => {
+                  setShortDraft(v);
+                  const n = parseFloat(v);
+                  onChange({ customWeeklyHoursShort: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
+                }}
+                placeholder="40"
+                width="64px"
+                ariaLabel="Short week hours"
+                error={attempted && formData.customWeeklyHoursShort === 0}
+              />
+              <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+              Override per-week from Income for extra shifts.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IntakePage({ formData, onChange, isInvestor = false, attempted = false }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
@@ -585,6 +768,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                       <TypedText text={perHourText} />
                     </>
                   )}
+                  {isEmployerPlant && <DhlRotationCard formData={formData} onChange={onChange} attempted={attempted} />}
                 </>
               )}
             </>
@@ -682,12 +866,14 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                       placeholder="45"
                       width="52px"
                       ariaLabel="Custom overtime threshold, hours per week"
+                      error={attempted && !((formData.otThreshold ?? 0) > 0)}
                     />
                   </FadeIn>{" "}
                   <TypedText text={otHoursWordText} />
                 </>
               )}
               {otChoice !== "custom" && <TypedText text="." />}
+              <AdvancedPayRulesCard formData={formData} onChange={onChange} />
             </>
           )}
 

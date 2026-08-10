@@ -492,8 +492,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
         }}>
           <div>
             <SH color="var(--color-teal)">Demo Account {accountNumber}</SH>
-            <div style={{
-              fontSize: "12px",
+            <div className="text-sm" style={{
               color: "var(--color-text-secondary)",
               fontFamily: "var(--font-sans)",
               marginTop: "2px",
@@ -519,19 +518,18 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", fontFamily: "var(--font-sans)" }}>
+                  <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", fontFamily: "var(--font-sans)" }}>
                     Admin · Edit
                   </span>
                 </div>
                 {/* Reconfigure button — opens SetupWizard */}
                 <Pressable
                   onClick={() => setWizardOpen(true)}
-                  style={{
+                  className="text-2xs" style={{
                     background: "rgba(0,200,150,0.10)",
                     border: "1px solid rgba(0,200,150,0.28)",
                     borderRadius: "6px",
                     padding: "4px 9px",
-                    fontSize: "9px",
                     letterSpacing: "1.5px",
                     textTransform: "uppercase",
                     color: "var(--color-accent-primary)",
@@ -557,7 +555,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
-                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>
+                <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>
                   Demo · Read Only
                 </span>
               </div>
@@ -577,12 +575,11 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             {onExit && (
               <Pressable
                 onClick={onExit}
-                style={{
+                className="text-xs" style={{
                   background: "var(--color-bg-raised)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "8px",
                   padding: "6px 12px",
-                  fontSize: "10px",
                   letterSpacing: "1px",
                   textTransform: "uppercase",
                   color: "var(--color-text-primary)",
@@ -604,12 +601,11 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             <Pressable
               onClick={handleSave}
               disabled={saveStatus === "saving" || !isDirty}
-              style={{
+              className="text-xs" style={{
                 background: isDirty ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
                 border: "none",
                 borderRadius: "8px",
                 padding: "6px 14px",
-                fontSize: "10px",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 fontWeight: "bold",
@@ -629,12 +625,11 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             {isDirty && (
               <Pressable
                 onClick={handleRevert}
-                style={{
+                className="text-xs" style={{
                   background: "transparent",
                   border: "1px solid rgba(239,68,68,0.35)",
                   borderRadius: "8px",
                   padding: "6px 12px",
-                  fontSize: "10px",
                   letterSpacing: "1px",
                   textTransform: "uppercase",
                   color: "var(--color-deduction)",
@@ -663,12 +658,11 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
               <Pressable
                 key={tab.key}
                 onClick={() => setInternalTab(tab.key)}
-                style={{
+                className="text-xs" style={{
                   background: "transparent",
                   border: "none",
                   borderBottom: active ? "2px solid var(--color-accent-primary)" : "2px solid transparent",
                   color: active ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
-                  fontSize: "11px",
                   letterSpacing: "1.5px",
                   textTransform: "uppercase",
                   fontWeight: active ? "700" : "500",
@@ -689,8 +683,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
               alignItems: "center",
               paddingBottom: "2px",
             }}>
-              <span style={{
-                fontSize: "9px",
+              <span className="text-2xs" style={{
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 padding: "2px 7px",

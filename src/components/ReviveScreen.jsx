@@ -66,26 +66,26 @@ export function ReviveScreen({ revival, checkoutReturn }) {
         )}
         <div style={{ minWidth: 0 }}>
           {revival?.displayName && (
-            <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--color-text-primary)" }}>{revival.displayName}</div>
+            <div className="text-base" style={{ fontWeight: "600", color: "var(--color-text-primary)" }}>{revival.displayName}</div>
           )}
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>{revival?.email}</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>{revival?.email}</div>
         </div>
       </div>
 
       {finalizing ? (
-        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
+        <div className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.6 }}>
           Payment received — restoring your account…
         </div>
       ) : (
         <>
-          <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
+          <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
             Pick a plan to restore your account. Your income setup, budget, goals,
             and history come back exactly as you left them — as soon as your
             payment goes through.
           </div>
 
           {checkoutReturn === "cancel" && (
-            <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-deduction)", lineHeight: 1.5, marginBottom: "16px" }}>
+            <div className="text-xs" style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", color: "var(--color-deduction)", lineHeight: 1.5, marginBottom: "16px" }}>
               Your payment didn't go through. If your card was declined, try a
               different payment method, make sure the card isn't frozen, or add
               funds to the account — then try again.
@@ -98,8 +98,8 @@ export function ReviveScreen({ revival, checkoutReturn }) {
               disabled={checkoutState.plan !== null}
               style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", textAlign: "left", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
             >
-              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Monthly</div>
-              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              <div className="text-md" style={{ fontWeight: "bold" }}>Monthly</div>
+              <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
                 {checkoutState.plan === "monthly" ? "Redirecting…" : "$14.99/mo"}
               </div>
             </Pressable>
@@ -108,15 +108,15 @@ export function ReviveScreen({ revival, checkoutReturn }) {
               disabled={checkoutState.plan !== null}
               style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--color-teal)", border: "none", color: "var(--color-bg-base)", textAlign: "left", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
             >
-              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Annual — Best Value</div>
-              <div style={{ fontSize: "12px" }}>
+              <div className="text-md" style={{ fontWeight: "bold" }}>Annual — Best Value</div>
+              <div className="text-sm" style={{ }}>
                 {checkoutState.plan === "annual" ? "Redirecting…" : "$10.00/mo billed annually ($120/yr)"}
               </div>
             </Pressable>
           </div>
 
           {checkoutState.error && (
-            <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "14px" }}>{checkoutState.error}</div>
+            <div className="text-sm" style={{ color: "var(--color-deduction)", marginTop: "14px" }}>{checkoutState.error}</div>
           )}
         </>
       )}
@@ -124,7 +124,7 @@ export function ReviveScreen({ revival, checkoutReturn }) {
       <div style={{ marginTop: "22px", textAlign: "center" }}>
         <button
           onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
-          style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
         >
           Not you? Sign out
         </button>

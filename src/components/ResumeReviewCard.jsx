@@ -5,7 +5,7 @@ import { RESUME_REVIEW_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
 import { loadResumeProfile, saveResumeProfile, saveCoachChat } from "../lib/db.js";
 
 const labelStyle = {
-  fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
+  fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
   color: "var(--color-text-secondary)", display: "block", marginBottom: "6px",
 };
 const inputStyle = {
@@ -132,7 +132,7 @@ export function ResumeReviewCard({ config }) {
           placeholder={mostRecentAppliedRole || "e.g. Warehouse Operations Lead"}
           style={{ ...inputStyle, marginBottom: "6px" }}
         />
-        <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "12px" }}>
+        <div className="text-xs" style={{ color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "12px" }}>
           {mostRecentAppliedRole && !targetRoleDraft
             ? `Defaults to your most recent application's role (${mostRecentAppliedRole}) — type here to compare against something else.`
             : "Leave blank to let Coach infer the likely target from your résumé."}
@@ -141,12 +141,12 @@ export function ResumeReviewCard({ config }) {
         <Pressable
           onClick={getReview}
           disabled={!canReview}
-          style={{
+          className="text-xs" style={{
             width: "100%",
             background: canReview ? "var(--color-teal)" : "var(--color-bg-surface)",
             color: canReview ? "var(--color-bg-base)" : "var(--color-text-disabled)",
             border: "none", borderRadius: "10px", padding: "10px",
-            fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+            letterSpacing: "1.5px", textTransform: "uppercase",
             fontWeight: 700, cursor: canReview ? "pointer" : "not-allowed",
             minHeight: "44px",
           }}
@@ -155,19 +155,18 @@ export function ResumeReviewCard({ config }) {
         </Pressable>
 
         {errored && (
-          <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--color-red)" }}>
+          <div className="text-sm" style={{ marginTop: "10px", color: "var(--color-red)" }}>
             Coach couldn't complete the review — try again.
           </div>
         )}
 
         {review && (
-          <div style={{
+          <div className="text-base" style={{
             marginTop: "14px",
             background: "var(--color-bg-surface)",
             border: "1px solid var(--color-border-subtle)",
             borderRadius: "10px",
             padding: "12px 14px",
-            fontSize: "13px",
             lineHeight: 1.6,
             color: "var(--color-text-primary)",
             whiteSpace: "pre-wrap",

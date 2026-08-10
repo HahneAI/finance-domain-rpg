@@ -84,7 +84,7 @@ export function JobHuntChatPanel({
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: "13px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
+        <span className="text-base" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
           Job Hunt Assistant
         </span>
         <Pressable
@@ -109,7 +109,7 @@ export function JobHuntChatPanel({
 
       <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
         {messages.length === 0 && (
-          <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5 }}>
+          <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
             Ask about application strategy, interview prep, salary negotiation, or how long your
             runway lets you hold out for the right offer — I've got your numbers.
           </div>
@@ -117,14 +117,13 @@ export function JobHuntChatPanel({
         {messages.map((m, i) => (
           <div
             key={i}
-            style={{
+            className="text-md" style={{
               alignSelf: m.role === "user" ? "flex-end" : "flex-start",
               maxWidth: "85%",
               background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
               border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
               borderRadius: "14px",
               padding: "10px 14px",
-              fontSize: "14px",
               lineHeight: 1.5,
               color: "var(--color-text-primary)",
               whiteSpace: "pre-wrap",
@@ -134,7 +133,7 @@ export function JobHuntChatPanel({
           </div>
         ))}
         {errored && (
-          <div style={{ color: "var(--color-red)", fontSize: "12px" }}>Coach couldn't respond — try again.</div>
+          <div className="text-sm" style={{ color: "var(--color-red)", }}>Coach couldn't respond — try again.</div>
         )}
         <div ref={listEndRef} />
       </div>
@@ -172,12 +171,11 @@ export function JobHuntChatPanel({
         <Pressable
           onClick={send}
           disabled={!draft.trim() || sending}
-          style={{
+          className="text-xs" style={{
             background: draft.trim() && !sending ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
             border: "none",
             borderRadius: "10px",
             color: draft.trim() && !sending ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-            fontSize: "11px",
             letterSpacing: "1px",
             textTransform: "uppercase",
             fontWeight: "bold",

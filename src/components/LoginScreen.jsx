@@ -70,12 +70,12 @@ function OAuthBtn({ label, icon, onClick }) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
+      className="text-sm" style={{
         display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
         width: "100%", padding: "11px 0",
         background: hovered ? "var(--color-bg-raised)" : "var(--color-bg-base)",
         border: "1px solid #2e2e2e", borderRadius: "8px",
-        color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600",
+        color: "var(--color-text-primary)", fontWeight: "600",
         cursor: "pointer", transition: "background 0.15s",
       }}
     >
@@ -106,7 +106,7 @@ function Divider({ label }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
-      <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>{label}</span>
+      <span className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>{label}</span>
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
     </div>
   );
@@ -119,9 +119,9 @@ export function Shell({ title, subtitle, children }) {
     <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
         <div style={{ marginBottom: "28px", textAlign: "center" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
+          <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
           <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
-          {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
+          {subtitle && <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
         </div>
         {children}
       </div>
@@ -354,11 +354,11 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
     screenKey = "info";
     screenTitle = "Check your email";
     screenContent = (
-      <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+      <div className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.7 }}>
         {info}
         <button
           onClick={() => { setInfo(null); setMode("signin"); }}
-          style={{ display: "block", marginTop: "20px", background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          className="text-xs" style={{ display: "block", marginTop: "20px", background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
         >
           ← Back to sign in
         </button>
@@ -390,7 +390,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       <>
         {reviveProvider === "google" ? (
           <>
-            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
+            <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
               Sign back in with Google to restore your account. You'll pick a
               plan and re-subscribe — your income setup, budget, goals, and
               history come back as soon as your payment goes through.
@@ -400,7 +400,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           </>
         ) : (
           <>
-            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
+            <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
               Set a new password for <span style={{ color: "var(--color-text-primary)" }}>{email}</span> to
               continue. You'll then pick a plan and re-subscribe — your income
               setup, budget, goals, and history come back as soon as your
@@ -477,7 +477,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
               onChange={e => setAgreedToTerms(e.target.checked)}
               style={{ marginTop: "2px", width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer", flexShrink: 0 }}
             />
-            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+            <span className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
               I have read and agree to the{" "}
               <button type="button" onClick={() => setLegalModalDoc("terms")} style={linkBtnStyle}>Terms of Service</button>
               {" "}and{" "}
@@ -503,7 +503,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       </div>
 
       {/* Mode toggle */}
-      <div style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+      <div className="text-xs" style={{ marginTop: "20px", textAlign: "center", color: "var(--color-text-secondary)" }}>
         {isSignUp ? "Already have an account?" : "No account yet?"}{" "}
         <button onClick={() => { setMode(isSignUp ? "signin" : "signup"); setError(null); }} style={linkBtnStyle}>
           {isSignUp ? "Sign in" : "Create one"}
@@ -516,7 +516,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           <style>{`@keyframes investorShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}`}</style>
           <div style={{ marginBottom: "12px" }}>
             <span style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-green)", textDecoration: "underline", letterSpacing: "1px" }}>I</span>
-            <span style={{ fontSize: "10px", fontWeight: "600", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>NVESTOR</span>
+            <span className="text-xs" style={{ fontWeight: "600", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>NVESTOR</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <input
@@ -537,18 +537,17 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
               }}
             />
             {investorError && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", letterSpacing: "0.3px" }}>{investorError}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", letterSpacing: "0.3px" }}>{investorError}</div>
             )}
             <button
               type="button"
               disabled={investorLoading || !investorCode}
               onClick={handleInvestorSubmit}
-              style={{
+              className="text-xs" style={{
                 background: investorLoading ? "var(--color-bg-raised)" : "var(--color-green)",
                 color: investorLoading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
                 border: "none", borderRadius: "8px",
-                padding: "11px 0", fontSize: "11px",
-                letterSpacing: "2px", textTransform: "uppercase",
+                padding: "11px 0", letterSpacing: "2px", textTransform: "uppercase",
                 fontWeight: "bold",
                 cursor: (investorLoading || !investorCode) ? "default" : "pointer",
                 transition: "background 0.15s", width: "100%",
@@ -617,7 +616,7 @@ const linkBtnStyle = {
 
 function ErrorBox({ children }) {
   return (
-    <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
+    <div className="text-xs" style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
       {children}
     </div>
   );
@@ -628,13 +627,12 @@ function SubmitBtn({ loading, children }) {
     <button
       type="submit"
       disabled={loading}
-      style={{
+      className="text-xs" style={{
         marginTop: "4px",
         background: loading ? "var(--color-bg-raised)" : "var(--color-teal)",
         color: loading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
         border: "none", borderRadius: "8px",
-        padding: "13px 0", fontSize: "11px",
-        letterSpacing: "2px", textTransform: "uppercase",
+        padding: "13px 0", letterSpacing: "2px", textTransform: "uppercase",
         fontWeight: "bold", cursor: loading ? "default" : "pointer",
         transition: "background 0.15s", width: "100%",
       }}

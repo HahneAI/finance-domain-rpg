@@ -217,16 +217,16 @@ export function NewJobSeasonBudgetPanel({
           onSave={saveCashOnHand}
         />
         {dash && Math.round(dash.billsDueSinceAsOf) > 0 && (
-          <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
             − ${Math.round(dash.billsDueSinceAsOf).toLocaleString()} in bills since you last updated this
           </div>
         )}
-        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+        <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
           Saved to your account — also editable from Home. Extra income logged
           on Home (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
         {dash?.pendingCheck && (
-          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ marginTop: "10px", color: "var(--color-green)", lineHeight: 1.5 }}>
             Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
             {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
             {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
@@ -244,8 +244,9 @@ export function NewJobSeasonBudgetPanel({
                   <Pressable
                     key={opt.label}
                     onClick={() => setIncludeBenefits(opt.v)}
+                    className="text-xs"
                     style={{
-                      padding: "7px 12px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                      padding: "7px 12px", letterSpacing: "1.5px", textTransform: "uppercase",
                       background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
                       color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                       border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
@@ -257,7 +258,7 @@ export function NewJobSeasonBudgetPanel({
                 );
               })}
             </div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+            <div className="text-xs" style={{ color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
               {dash.benefitsRemainingWeeks} benefit weeks remaining · ${Math.round(dash.projectedUnemploymentTotal).toLocaleString()} projected total
             </div>
           </>
@@ -278,16 +279,16 @@ export function NewJobSeasonBudgetPanel({
                 }}>
                   <div style={{ flex: "0 0 auto", minWidth: "48px", textAlign: "center", color: tierColor }}>
                     <div style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>{bill.daysUntil}</div>
-                    <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>{bill.daysUntil === 1 ? "day" : "days"}</div>
+                    <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase" }}>{bill.daysUntil === 1 ? "day" : "days"}</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{bill.label}</div>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                    <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{bill.label}</div>
+                    <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                       Due {bill.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       {bill.needsCoverage && <span style={{ color: "var(--color-deduction)", fontWeight: 700 }}> · Needs Coverage</span>}
                     </div>
                   </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  <div className="text-md" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-primary)" }}>
                     ${Math.round(bill.amount).toLocaleString()}
                   </div>
                 </div>
@@ -329,11 +330,11 @@ export function NewJobSeasonBudgetPanel({
             </div>
             <Pressable
               onClick={addExpense}
-              style={{
+              className="text-xs" style={{
                 width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
                 color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
                 border: "none", borderRadius: "10px", padding: "10px",
-                fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
+                letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
               }}
             >
               + Add Expense
@@ -347,10 +348,10 @@ export function NewJobSeasonBudgetPanel({
       {!readOnly && flexibleActiveCount > 0 && (
         <Pressable
           onClick={pauseAllFlexible}
-          style={{
+          className="text-xs" style={{
             marginBottom: "12px", background: "rgba(245,158,11,0.10)", color: "var(--color-warning)",
             border: "1px solid rgba(245,158,11,0.32)", borderRadius: "10px", padding: "8px 14px",
-            fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
+            letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
           }}
         >
           Pause all Flexible ({flexibleActiveCount})
@@ -358,7 +359,7 @@ export function NewJobSeasonBudgetPanel({
       )}
 
       {sortedExpenses.length === 0 ? (
-        <div style={{ padding: "24px 8px", textAlign: "center", color: "var(--color-text-secondary)", fontSize: "12px" }}>
+        <div className="text-sm" style={{ padding: "24px 8px", textAlign: "center", color: "var(--color-text-secondary)", }}>
           No expenses yet — add your rent, utilities, and other bills above.
         </div>
       ) : (
@@ -378,7 +379,7 @@ export function NewJobSeasonBudgetPanel({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "3px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
+                      <span className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
                       {isLoan && (
                         <span style={{
                           fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
@@ -406,7 +407,7 @@ export function NewJobSeasonBudgetPanel({
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                    <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                       {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                     </div>
                   </div>
@@ -414,7 +415,7 @@ export function NewJobSeasonBudgetPanel({
                     <Pressable
                       onClick={() => removeExpense(exp.id)}
                       aria-label="Remove expense"
-                      style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}
+                      className="text-md" style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", padding: "2px 4px" }}
                     >
                       ✕
                     </Pressable>
@@ -429,8 +430,9 @@ export function NewJobSeasonBudgetPanel({
                         <Pressable
                           key={opt.v}
                           onClick={() => setStatus(exp.id, opt.v)}
+                          className="text-xs"
                           style={{
-                            flex: 1, padding: "7px 10px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                            flex: 1, padding: "7px 10px", letterSpacing: "1.5px", textTransform: "uppercase",
                             background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)",
                             color: active ? opt.color : "var(--color-text-secondary)",
                             border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
@@ -445,7 +447,7 @@ export function NewJobSeasonBudgetPanel({
                 )}
 
                 {!readOnly && status !== "active" && (
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", fontSize: "11px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
+                  <label className="text-xs" style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
                     <input
                       type="checkbox" checked={autoReactivate} onChange={() => toggleAutoReactivate(exp.id)}
                       style={{ accentColor: "var(--color-accent-primary)", width: "14px", height: "14px", cursor: "pointer" }}

@@ -18,7 +18,7 @@ function Field({ label, children, error }) {
       <label style={{ ...lS, ...(error ? { color: "var(--color-deduction)" } : {}) }}>{label}</label>
       {children}
       {error && (
-        <div style={{ fontSize: "11px", color: "var(--color-deduction)", marginTop: "1px" }}>↑ {error}</div>
+        <div className="text-xs" style={{ color: "var(--color-deduction)", marginTop: "1px" }}>↑ {error}</div>
       )}
     </div>
   );
@@ -76,7 +76,7 @@ export function InvestorRegister({ onRegister, onBack }) {
   if (needsConfirmation) {
     return (
       <Shell title="Check your email." subtitle="Investor Account">
-        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+        <div className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.7 }}>
           A confirmation link has been sent to <strong>{form.email}</strong>.
           Click it to activate your account, then return here and sign in.
         </div>
@@ -126,10 +126,10 @@ export function InvestorRegister({ onRegister, onBack }) {
             <button
               type="button"
               onClick={() => setShowPw(v => !v)}
-              style={{
+              className="text-xs" style={{
                 position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
                 background: "none", border: "none", cursor: "pointer",
-                color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "0.5px",
+                color: "var(--color-text-secondary)", letterSpacing: "0.5px",
                 padding: "0",
               }}
             >
@@ -172,7 +172,7 @@ export function InvestorRegister({ onRegister, onBack }) {
         </Field>
 
         {error && (
-          <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
             {error}
           </div>
         )}
@@ -180,13 +180,12 @@ export function InvestorRegister({ onRegister, onBack }) {
         <button
           type="submit"
           disabled={loading}
-          style={{
+          className="text-xs" style={{
             marginTop: "4px",
             background: loading ? "var(--color-bg-raised)" : "var(--color-teal)",
             color: loading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
             border: "none", borderRadius: "8px",
-            padding: "13px 0", fontSize: "11px",
-            letterSpacing: "2px", textTransform: "uppercase",
+            padding: "13px 0", letterSpacing: "2px", textTransform: "uppercase",
             fontWeight: "bold", cursor: loading ? "default" : "pointer",
             transition: "background 0.15s", width: "100%",
           }}
@@ -195,7 +194,7 @@ export function InvestorRegister({ onRegister, onBack }) {
         </button>
       </form>
 
-      <div style={{ marginTop: "16px", textAlign: "center", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+      <div className="text-xs" style={{ marginTop: "16px", textAlign: "center", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
         Already have an investor account?{" "}
         <span style={{ color: "var(--color-text-primary)" }}>Sign in using the form above.</span>
       </div>

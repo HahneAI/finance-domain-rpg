@@ -229,7 +229,7 @@ export function MonthQuarterSelector({
             <Pressable
               key={p.id}
               onClick={() => onSelectQuarter(q)}
-              style={{
+              className="text-xs" style={{
                 flex: 1,
                 background: "transparent",
                 border: "none",
@@ -243,7 +243,6 @@ export function MonthQuarterSelector({
                   : "var(--color-text-secondary)",
                 cursor: "pointer",
                 padding: "8px 4px 9px",
-                fontSize: "10px",
                 letterSpacing: "2px",
                 textTransform: "uppercase",
                 fontWeight: isQActive ? "bold" : "500",

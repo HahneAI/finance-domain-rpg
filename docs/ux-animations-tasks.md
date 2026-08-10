@@ -599,49 +599,50 @@ each file, convert what's a clean fit, and note anything that isn't.
 | ~~`HomePanel.jsx`~~ | **0** (was 44) — ✅ converted 2026-08-10 | Home |
 | ~~`BulkEditPanel.jsx`~~ | **0** (was 35) — ✅ converted 2026-08-10 | Budget (bulk expense edit) |
 | ~~`IncomePanel.jsx`~~ | **0** (was 29) — ✅ converted 2026-08-10 | Income |
-| ~~`NewJobSeasonEntry.jsx`~~ | **0** (was 28) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`NewJobSeasonEntry.jsx`~~ | 1 shared object (was 28) — ✅ converted 2026-08-10 | New Job Season |
 | ~~`InvestorAdminPanel.jsx`~~ | **0** (was 25) — ✅ converted 2026-08-10 | Investor demo |
-| `NewJobSeasonBudgetPanel.jsx` | 17 | New Job Season |
-| `ReemploymentTracker.jsx` | 16 | New Job Season |
-| `LoginScreen.jsx` | 16 | Auth |
-| `NewJobSeasonHomePanel.jsx` | 12 | New Job Season |
-| `BetaHomebase.jsx` | 12 | Beta Homebase / Money Moves (shared exports) |
-| `ReviveScreen.jsx` | 11 | Subscription revival |
-| `DemoAccountTree.jsx` | 9 | Investor demo |
-| `ChangelogModal.jsx` | 9 | What's New modal |
-| `AskCoachPanel.jsx` | 9 | Coach |
-| `UpgradeCard.jsx` | 8 | Paywall |
-| `RateUpdateModal.jsx` | 8 | Profile (rate change) |
-| `InvestorRegister.jsx` | 7 | Investor demo |
-| `TipsCommissionCheckIn.jsx` | 6 | Home check-in card |
-| `ResumeReviewCard.jsx` | 6 | New Job Season |
-| `NetWorthHealthTips.jsx` | 6 | Home |
-| `ConsentGateModal.jsx` | 6 | Legal re-consent modal |
-| `SetupWizardAdlib.jsx` | 5 | Admin-only wizard pilot |
-| `ProductivityHub.jsx` | 5 | Money Moves |
-| `JobHuntChatPanel.jsx` | 5 | New Job Season |
-| `UpdateAvailableBanner.jsx` | 4 | PWA update banner |
-| `TrialExplainerScreen.jsx` | 4 | Trial onboarding |
-| `CashOnHandSheet.jsx` | 4 | New Job Season |
-| `TrialBanner.jsx` | 3 | Paywall |
-| `SaveFailedBanner.jsx` | 3 | Persistence error banner |
-| `LifeEventMenu.jsx` | 3 | Account |
-| `DueDatePicker.jsx` | 3 | Budget |
-| `CoachNetWorthCard.jsx` | 3 | Coach |
-| `BetaSignupNoticeBanner.jsx` | 2 | Beta program |
-| `MonthQuarterSelector.jsx` | 1 | Budget |
-| `LegalDocumentModal.jsx` | 1 | Legal document modal (title already migrated; this is body text) |
+| ~~`NewJobSeasonBudgetPanel.jsx`~~ | **0** (was 17) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`ReemploymentTracker.jsx`~~ | 1 shared object (was 16) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`LoginScreen.jsx`~~ | 1 shared object (was 16) — ✅ converted 2026-08-10 | Auth |
+| ~~`NewJobSeasonHomePanel.jsx`~~ | **0** (was 12) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`BetaHomebase.jsx`~~ | **0** (was 12) — ✅ converted 2026-08-10 | Beta Homebase / Money Moves (shared exports) |
+| ~~`ReviveScreen.jsx`~~ | **0** (was 11) — ✅ converted 2026-08-10 | Subscription revival |
+| ~~`DemoAccountTree.jsx`~~ | **0** (was 9) — ✅ converted 2026-08-10 | Investor demo |
+| ~~`ChangelogModal.jsx`~~ | **0** (was 9) — ✅ converted 2026-08-10 | What's New modal |
+| ~~`AskCoachPanel.jsx`~~ | **0** (was 9) — ✅ converted 2026-08-10 | Coach |
+| ~~`UpgradeCard.jsx`~~ | **0** (was 8) — ✅ converted 2026-08-10 | Paywall |
+| ~~`RateUpdateModal.jsx`~~ | 1 shared object (was 8) — ✅ converted 2026-08-10 | Profile (rate change) |
+| ~~`InvestorRegister.jsx`~~ | 1 shared object (was 7) — ✅ converted 2026-08-10 | Investor demo |
+| ~~`TipsCommissionCheckIn.jsx`~~ | **0** (was 6) — ✅ converted 2026-08-10 | Home check-in card |
+| ~~`ResumeReviewCard.jsx`~~ | 2 shared objects (was 6) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`NetWorthHealthTips.jsx`~~ | **0** (was 6) — ✅ converted 2026-08-10 | Home |
+| ~~`ConsentGateModal.jsx`~~ | 1 shared object (was 6) — ✅ converted 2026-08-10 | Legal re-consent modal |
+| ~~`SetupWizardAdlib.jsx`~~ | **0** (was 5) — ✅ converted 2026-08-10 | Admin-only wizard pilot |
+| ~~`ProductivityHub.jsx`~~ | **0** (was 5) — ✅ converted 2026-08-10 | Money Moves |
+| ~~`JobHuntChatPanel.jsx`~~ | **0** (was 5) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`UpdateAvailableBanner.jsx`~~ | **0** (was 4) — ✅ converted 2026-08-10 | PWA update banner |
+| ~~`TrialExplainerScreen.jsx`~~ | **0** (was 4) — ✅ converted 2026-08-10 | Trial onboarding |
+| ~~`CashOnHandSheet.jsx`~~ | **0** (was 4) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`TrialBanner.jsx`~~ | **0** (was 3) — ✅ converted 2026-08-10 | Paywall |
+| ~~`SaveFailedBanner.jsx`~~ | **0** (was 3) — ✅ converted 2026-08-10 | Persistence error banner |
+| ~~`LifeEventMenu.jsx`~~ | **0** (was 3) — ✅ converted 2026-08-10 | Account |
+| ~~`DueDatePicker.jsx`~~ | **0** (was 3) — ✅ converted 2026-08-10 | Budget |
+| ~~`CoachNetWorthCard.jsx`~~ | **0** (was 3) — ✅ converted 2026-08-10 | Coach |
+| ~~`BetaSignupNoticeBanner.jsx`~~ | **0** (was 2) — ✅ converted 2026-08-10 | Beta program |
+| ~~`MonthQuarterSelector.jsx`~~ | **0** (was 1) — ✅ converted 2026-08-10 | Budget |
+| ~~`LegalDocumentModal.jsx`~~ | **0** (was 1) — ✅ converted 2026-08-10 | Legal document modal |
 | `ui.jsx` | 1 | `Card`'s dynamic `size` prop — numeric emphasis, intentionally out of scope |
 
-**Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
-`App.jsx` ✅, `BudgetPanel` ✅, `HomePanel` ✅, `IncomePanel` ✅, `SetupWizard.jsx` ✅,
-`WeekConfirmModal.jsx` ✅, `BulkEditPanel.jsx` ✅, `NewJobSeasonEntry.jsx` ✅,
-`InvestorAdminPanel.jsx` ✅ — all 5 main panels, the app shell, onboarding, the weekly check-in
-modal, bulk expense edit, the New Job Season entry flow, and the investor demo admin panel are
-now fully converted. Remaining: the long tail of lower-traffic surfaces (`LoginScreen`,
-`ReviveScreen`, `DemoAccountTree`, `ChangelogModal`, `AskCoachPanel`, and the rest of the table
-below). Convert one file at a time, run the test suite after each, and update this table's
-count (or strike the row) as each file's cleanly-convertible instances land.
+**Status: every file in this table is converted (2026-08-10).** The only raw `fontSize` literals
+left anywhere in `src/` are: (1) `Card`'s dynamic `size` prop in `ui.jsx` — numeric emphasis,
+always out of scope; and (2) seven small shared JS style objects reused across multiple JSX call
+sites within their file (`NewJobSeasonEntry.jsx`'s `labelStyle`, `ReemploymentTracker.jsx` /
+`ResumeReviewCard.jsx`'s `inputStyle`/`labelStyle`, `RateUpdateModal.jsx`'s `labelStyle`,
+`LoginScreen.jsx` / `InvestorRegister.jsx`'s `linkBtnStyle`/`linkStyle`, `ConsentGateModal.jsx`'s
+`linkStyle`) — same DRY precedent as `ui.jsx`'s `lS`: the object is the single source of truth
+for every render site that uses it, so the value only needs to be correct in one place, not
+wrapped in a `className`. Each was checked and is already at (or bumped to) its correct
+class-equivalent size.
 
 **`SmBtn` gained an optional `className` prop (2026-08-10, default `"text-xs"`)** — one call
 site in `BulkEditPanel.jsx` needed a smaller `.text-2xs` override that the component previously
@@ -652,14 +653,19 @@ the original class.
 **Conversion method (established on `ProfilePanel.jsx`, 2026-08-10):** a scripted regex pass
 handles the mechanical bulk — locate `<Tag ... style={{ ...fontSize: "Npx"... }}>` where the tag
 has no pre-existing `className`, drop the `fontSize` entry, and inject the matching `className`
-(size→class mapping is the same table as above). Three known gaps the script doesn't safely
+(size→class mapping is the same table as above). Four known gaps the script doesn't safely
 handle and need hand-fixing per file: (1) arrow-function attributes (`onClick={() => ...}`)
 contain a literal `>` that a naive tag-boundary regex misreads as the JSX close — match `=>`
 as an allowed exception; (2) multi-line style objects containing a template literal (backtick
 `` ` ``) or nested `{}` (e.g. a conditional `border: \`1px solid ${...}\``) can break a
 brace-counting body match — worth a quick manual pass rather than fighting the regex further;
 (3) a tag that already has a `className` (e.g. `<table className="data-table" style={{
-fontSize: "12px", ... }}>`, found twice in `LogPanel.jsx`) is skipped by design — merge the size
-class into the existing string by hand (`className="data-table text-sm"`) rather than adding a
-second `className` attribute. Always finish with `npx eslint <file>`, `npm run test:run`, and a
-real `npx vite build` (lint alone won't catch every JSX malformation from a scripted edit).
+fontSize: "12px", ... }}>`, found in `LogPanel.jsx`/`BudgetPanel.jsx`/`IncomePanel.jsx`) is
+skipped by design — merge the size class into the existing string by hand
+(`className="data-table text-sm"`) rather than adding a second `className` attribute; (4) a
+shared JS style object reused across multiple JSX call sites in the same file (`const labelStyle
+= { fontSize: "10px", ... }`, used at `style={labelStyle}` in several places) isn't worth
+threading a `className` through every call site — just bump the raw value in place to its
+class-equivalent size, the same DRY treatment `ui.jsx`'s `lS` already had. Always finish with
+`npx eslint <file>`, `npm run test:run`, and a real `npx vite build` (lint alone won't catch
+every JSX malformation from a scripted edit).

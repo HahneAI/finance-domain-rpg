@@ -195,13 +195,13 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
       <div style={{ ...cardStyle, marginBottom: "10px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+            <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
               Target annual
             </div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700, color: "var(--color-text-primary)", marginTop: "2px" }}>
               ${targetAnnual.toLocaleString()}
             </div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+            <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "3px" }}>
               ≈ ${Math.round(targetWeeklyNet).toLocaleString()}/wk net at current tax config
             </div>
           </div>
@@ -216,12 +216,12 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
             <Pressable
               onClick={commitTarget}
               disabled={targetDraft === ""}
-              style={{
+              className="text-xs" style={{
                 background: targetDraft === "" ? "var(--color-bg-surface)" : "var(--color-teal)",
                 color: targetDraft === "" ? "var(--color-text-disabled)" : "var(--color-bg-base)",
                 border: "none", borderRadius: "10px",
                 padding: "8px 12px",
-                fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                letterSpacing: "1.5px", textTransform: "uppercase",
                 fontWeight: 700, cursor: targetDraft === "" ? "not-allowed" : "pointer",
               }}
             >
@@ -230,13 +230,13 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
             {config?.targetIncomeAnnual != null && (
               <Pressable
                 onClick={() => applyConfigUpdate(prev => ({ ...prev, targetIncomeAnnual: null }))}
-                style={{
+                className="text-2xs" style={{
                   background: "transparent",
                   color: "var(--color-text-secondary)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "10px",
                   padding: "7px 10px",
-                  fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+                  letterSpacing: "1.5px", textTransform: "uppercase",
                   cursor: "pointer",
                 }}
               >
@@ -251,10 +251,10 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
       <div style={{ ...cardStyle, marginBottom: "10px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+            <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
               Expected return-to-work
             </div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", maxWidth: "260px", lineHeight: 1.4 }}>
+            <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "2px", maxWidth: "260px", lineHeight: 1.4 }}>
               Setting a date resumes projected income from that week — used by Income & Goals timelines.
             </div>
           </div>
@@ -268,13 +268,13 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
             {config?.returnToWorkDate && (
               <Pressable
                 onClick={() => setReturnDate(null)}
-                style={{
+                className="text-2xs" style={{
                   background: "transparent",
                   color: "var(--color-text-secondary)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "10px",
                   padding: "7px 10px",
-                  fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+                  letterSpacing: "1.5px", textTransform: "uppercase",
                   cursor: "pointer",
                 }}
               >
@@ -288,7 +288,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
       {/* ── Application log ── */}
       <div style={cardStyle}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: apps.length > 0 || addOpen ? "10px" : "0" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+          <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
             Applications ({apps.length})
           </div>
           {!addOpen && (
@@ -298,13 +298,13 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
                 setDraft({ company: "", role: "", dateApplied: new Date().toISOString().slice(0, 10), status: "applied" });
                 setAddOpen(true);
               }}
-              style={{
+              className="text-2xs" style={{
                 background: "rgba(0,200,150,0.12)",
                 color: "var(--color-teal)",
                 border: "1px solid rgba(0,200,150,0.32)",
                 borderRadius: "10px",
                 padding: "6px 12px",
-                fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+                letterSpacing: "1.5px", textTransform: "uppercase",
                 fontWeight: 700, cursor: "pointer",
               }}
             >
@@ -359,13 +359,13 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
                   setEditingId(null);
                   setDraft({ company: "", role: "", dateApplied: "", status: "applied" });
                 }}
-                style={{
+                className="text-xs" style={{
                   background: "var(--color-bg-raised)",
                   color: "var(--color-text-secondary)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "10px",
                   padding: "6px 12px",
-                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                  letterSpacing: "1.5px", textTransform: "uppercase",
                   cursor: "pointer",
                 }}
               >
@@ -374,12 +374,12 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
               <Pressable
                 onClick={saveDraft}
                 disabled={!draft.company.trim() || !draft.role.trim() || !draft.dateApplied}
-                style={{
+                className="text-xs" style={{
                   background: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "var(--color-bg-raised)" : "var(--color-teal)",
                   color: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "var(--color-text-disabled)" : "var(--color-bg-base)",
                   border: "none", borderRadius: "10px",
                   padding: "7px 14px",
-                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                  letterSpacing: "1.5px", textTransform: "uppercase",
                   fontWeight: 700,
                   cursor: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "not-allowed" : "pointer",
                 }}
@@ -393,7 +393,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
         {/* List */}
         {apps.length === 0 ? (
           !addOpen && (
-            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", textAlign: "center", padding: "12px 0" }}>
+            <div className="text-xs" style={{ color: "var(--color-text-disabled)", textAlign: "center", padding: "12px 0" }}>
               No applications logged yet.
             </div>
           )
@@ -413,23 +413,24 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
                   }}
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
                       {app.company} <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>· {app.role}</span>
                     </div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                    <div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
                       {app.dateApplied}
                     </div>
                   </div>
                   <select
                     value={app.status}
                     onChange={(e) => setAppStatus(app.id, e.target.value)}
+                    className="text-xs"
                     style={{
                       background: TONE_BG[tone],
                       color: TONE_FG[tone],
                       border: `1px solid ${TONE_FG[tone]}`,
                       borderRadius: "8px",
                       padding: "5px 8px",
-                      fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+                      letterSpacing: "1px", textTransform: "uppercase",
                       fontWeight: 700, cursor: "pointer",
                       fontFamily: "var(--font-sans)",
                     }}

@@ -86,7 +86,7 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
         <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)", marginBottom: "4px" }}>
           Update Cash On Hand
         </div>
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "16px", lineHeight: 1.5 }}>
+        <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginBottom: "16px", lineHeight: 1.5 }}>
           Whatever you could draw on today — savings, checking. Drives your runway.
         </div>
 
@@ -109,7 +109,7 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
           }}
         />
         {attempted && !valid && (
-          <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "6px" }}>
+          <div className="text-xs" style={{ color: "var(--color-deduction)", marginTop: "6px" }}>
             ↑ Required — 0 is a fine answer, just not empty
           </div>
         )}
@@ -117,22 +117,22 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
         <div style={{ display: "flex", gap: "10px", marginTop: "18px" }}>
           <Pressable
             onClick={onClose}
-            style={{
+            className="text-xs" style={{
               flex: 1, padding: "13px",
               background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)",
               borderRadius: "12px", color: "var(--color-text-secondary)",
-              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer",
+              letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer",
             }}
           >
             Cancel
           </Pressable>
           <Pressable
             onClick={save}
-            style={{
+            className="text-xs" style={{
               flex: 2, padding: "13px",
               background: "var(--color-teal)", border: "none",
               borderRadius: "12px", color: "var(--color-bg-base)",
-              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold",
+              letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold",
               cursor: "pointer",
             }}
           >

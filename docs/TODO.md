@@ -4292,10 +4292,16 @@ of them gate `isValid`; that reasoning holds for an admin preview, not for a pro
 
 *Tax Rates (real Step4, `SetupWizard.jsx:1646`) vs. `TaxRatesPage` — scoped out by explicit user
 instruction when built ("just the paystub path"), revisit now that this is going to production:*
-- [ ] **"Use Estimate for Now"** flat-rate fallback (`PaystubCalc`'s `onEstimate`,
-      `SetupWizard.jsx:1666–1676`) — no paystub-free path to a valid tax rate exists in ad-lib. A
-      real user without a paystub handy is currently stuck unable to finish onboarding.
-- [ ] **DHL Missouri preset button** (`loadDHLPreset`, `SetupWizard.jsx:1678–1689`) — missing.
+- [x] **"Use Estimate for Now"** flat-rate fallback (`PaystubCalc`'s `onEstimate`,
+      `SetupWizard.jsx:1666–1676`) — added 2026-08-10. `handleEstimate()` is a straight copy of
+      real Step4's function (10%/12% federal flat estimate, state flat/midpoint/0 by
+      `STATE_TAX_TABLE`, `taxRatesEstimated: true`) and its button now sits alongside "Apply
+      These Rates" inside the same paystub-calculator reveal, always available regardless of
+      whether gross/withheld have been entered — matching the real wizard exactly.
+- [x] **DHL Missouri preset button** (`loadDHLPreset`, `SetupWizard.jsx:1678–1689`) — added
+      2026-08-10. Same gate as real Step4 (`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates
+      && userState === "MO"`), rendered above the "Recalculate Using Paystub" button once
+      filing status + state are answered.
 
 *Wrap Up (real Step7, `SetupWizard.jsx:2040`) vs. `WrapUpPage` — scoped out as v1 when built:*
 - [ ] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,

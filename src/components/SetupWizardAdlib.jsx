@@ -1218,8 +1218,10 @@ function CalcField({ label, value, onChange }) {
 // wizard's paystub path does. ──
 function TaxRatesPage({ formData, onChange, attempted = false }) {
   const isVariable = formData.scheduleIsVariable;
+  const isEmployerDHL = formData.employerPreset === "DHL";
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax = stateConfig?.model === "NONE";
+  const hasRates = formData.fedRateLow > 0;
   const [showCalc, setShowCalc] = useState(false);
   const [g1, setG1] = useState(""); const [f1, setF1] = useState(""); const [s1, setS1] = useState("");
   const [g2, setG2] = useState(""); const [f2, setF2] = useState(""); const [s2, setS2] = useState("");
@@ -1249,6 +1251,35 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
       fedRateHigh: isVariable && fed2 != null ? fed2 : fed1,
       stateRateHigh: isVariable && sta2 != null ? sta2 : (sta1 ?? 0),
       taxRatesEstimated: false,
+    });
+    setShowCalc(false);
+  }
+
+  // Mirrors real Step4's handleEstimate() exactly — flat-rate fallback for a user without a
+  // paystub handy. Flags taxRatesEstimated: true (unlike applyRates()'s false), same as real.
+  function handleEstimate() {
+    const stateEst = isNoTax ? 0 : (stateConfig?.flatRate ?? stateConfig?.midpointRate ?? 0.05);
+    onChange({
+      fedRateLow: 0.10,
+      fedRateHigh: isVariable ? 0.12 : 0.10,
+      stateRateLow: stateEst,
+      stateRateHigh: stateEst,
+      taxRatesEstimated: true,
+    });
+    setShowCalc(false);
+  }
+
+  // Mirrors real Step4's loadDHLPreset() exactly — DHL Missouri reference rates,
+  // paystub-derived, flagged estimated until the user confirms with their own stub.
+  function loadDHLPreset() {
+    const d = DHL_PRESET.defaults;
+    onChange({
+      fedRateLow: d.fedRateLow,
+      fedRateHigh: d.fedRateHigh,
+      stateRateLow: d.stateRateLow,
+      stateRateHigh: d.stateRateHigh,
+      userState: formData.userState || d.userState,
+      taxRatesEstimated: true,
     });
     setShowCalc(false);
   }
@@ -1289,6 +1320,31 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
       {formData.filingStatus && formData.userState && (
         <FadeIn delay={0}>
           <div style={{ marginTop: "18px" }}>
+            {isEmployerDHL && formData.dhlSite !== "WAREHOUSE" && !hasRates && formData.userState === "MO" && (
+              <div style={{
+                marginBottom: "12px", padding: "12px 14px",
+                background: "rgba(0,200,150,0.05)", border: "1px solid rgba(0,200,150,0.15)",
+                borderRadius: "10px",
+              }}>
+                <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
+                  Load DHL Missouri supply chain reference rates
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "10px" }}>
+                  Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
+                </div>
+                <Pressable
+                  onClick={loadDHLPreset}
+                  style={{
+                    background: "rgba(0,200,150,0.10)", color: "var(--color-teal)",
+                    border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
+                    padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                    textTransform: "uppercase", cursor: "pointer",
+                  }}
+                >
+                  Load DHL MO Preset
+                </Pressable>
+              </div>
+            )}
             {!showCalc ? (
               <Pressable
                 onClick={() => setShowCalc(true)}
@@ -1304,7 +1360,7 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
             ) : null}
             {!showCalc && attempted && !(formData.fedRateLow > 0) && (
               <div style={{ marginTop: "8px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--color-deduction)" }}>
-                ↑ Required — use the paystub calculator to set your tax rates
+                ↑ Required — set your tax rates from a paystub, an estimate, or the DHL preset above
               </div>
             )}
             {showCalc && (
@@ -1337,19 +1393,32 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
                     )}
                   </div>
                 )}
-                {canApply && (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {canApply && (
+                    <Pressable
+                      onClick={applyRates}
+                      style={{
+                        background: "var(--color-green)", color: "var(--color-bg-base)",
+                        border: "none", borderRadius: "12px", padding: "8px 16px",
+                        fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                        fontWeight: "bold", cursor: "pointer",
+                      }}
+                    >
+                      Apply These Rates
+                    </Pressable>
+                  )}
                   <Pressable
-                    onClick={applyRates}
+                    onClick={handleEstimate}
                     style={{
-                      background: "var(--color-green)", color: "var(--color-bg-base)",
-                      border: "none", borderRadius: "12px", padding: "8px 16px",
-                      fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
-                      fontWeight: "bold", cursor: "pointer", alignSelf: "flex-start",
+                      background: "transparent", color: "var(--color-text-primary)",
+                      border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                      padding: "8px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                      textTransform: "uppercase", cursor: "pointer",
                     }}
                   >
-                    Apply These Rates
+                    Use Estimate for Now
                   </Pressable>
-                )}
+                </div>
               </div>
             )}
           </div>

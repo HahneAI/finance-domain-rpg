@@ -667,6 +667,23 @@ null there).
 > `otMultiplier` was found this round by inspecting `finance.js`'s direct (unguarded)
 > `cfg.otMultiplier` multiplications; not an exhaustive audit of every such field.
 
+**F134 · `TaxRatesPage` fallback paths — "Use Estimate for Now" + DHL MO preset** —
+`SetupWizardAdlib.jsx` (`TaxRatesPage`) — **[L]** — *(added 2026-08-10, ad-lib field-parity
+round 4, docs/TODO.md §19.1.A)*
+Ported real Step4's two non-paystub paths to a valid tax rate, both straight function copies
+(`handleEstimate()`/`loadDHLPreset()`), previously scoped out by explicit instruction when this
+page was built ("just the paystub path") — now closed since a real user without a paystub handy
+was otherwise stuck unable to finish onboarding. `handleEstimate()` writes the same 10%/12% federal
+flat-rate estimate + state flat/midpoint/0 lookup (`STATE_TAX_TABLE`) as real Step4, flagged
+`taxRatesEstimated: true`; its button sits next to "Apply These Rates" inside the paystub reveal.
+`loadDHLPreset()` writes `DHL_PRESET.defaults`' MO reference rates, same gate as real Step4
+(`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`).
+> **IF** `STATE_TAX_TABLE`'s flat/midpoint rate shape changes, **THEN** both `handleEstimate()`
+> copies (real Step4 and this one) need the same update — same "SQL twin, one language each" risk
+> class other F-entries in this doc flag for duplicated logic, just JS-JS here instead of JS-SQL.
+> **IF** `DHL_PRESET.defaults`' rate fields change, **THEN** both `loadDHLPreset()` copies need
+> the same update.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

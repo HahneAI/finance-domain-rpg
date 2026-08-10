@@ -248,6 +248,13 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   `SetupWizard.jsx`'s own `handleNext` exactly, including that function's own reachability quirk
   (a native `<button disabled>` blocks click dispatch in both wizards). See
   `docs/drift-app-warden.md` §7 F132.
+- **`TaxRatesPage` gained the two real Step4 fallback paths (2026-08-10).** "Use Estimate for
+  Now" (`handleEstimate()`, 10%/12% federal flat + state flat/midpoint/0 via `STATE_TAX_TABLE`,
+  `taxRatesEstimated: true`) sits next to "Apply These Rates" inside the paystub reveal, always
+  available. The DHL Missouri preset button (`loadDHLPreset()`, `DHL_PRESET.defaults`' rates)
+  renders above the calculator once filing status + state are answered, same gate as real Step4
+  (`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`). Both are
+  straight function copies of the real wizard's own. See `docs/drift-app-warden.md` §7 F134.
 - **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
   `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
   long real clause overflowed horizontally on narrow viewports. Now chunks into per-word

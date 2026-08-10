@@ -369,6 +369,11 @@ const BLANK_PAY_FIELDS = {
   healthPremium: null, dentalPremium: null, visionPremium: null,
   ltd: null, stdWeekly: null, lifePremium: null, hsaWeekly: null, fsaWeekly: null,
   k401Rate: null, k401MatchRate: null, k401StartDate: null,
+  benefitsStartDate: null, otherDeductions: null,
+  attendanceUnit: null, attendanceWarnThreshold: null, attendanceTerminateThreshold: null,
+  attendanceCurrentBalance: null, attendanceIncrement: null,
+  ptoEnabled: null, ptoAccrualMethod: null, ptoAccrualRate: null,
+  ptoCurrentBalance: null, ptoCap: null,
   // Tax Rates page
   filingStatus: null, fedStdDeduction: null, userState: null,
   fedRateLow: null, fedRateHigh: null, stateRateLow: null, stateRateHigh: null,
@@ -1084,13 +1089,28 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
     onChange({ selectedBenefits: [...next] });
   }
 
+  const others = formData.otherDeductions ?? [];
+  function addOtherRow() {
+    const id = Date.now().toString(36);
+    onChange({ otherDeductions: [...others, { id, label: "", perCheckAmount: 0 }] });
+  }
+  function updateOtherRow(id, patch) {
+    onChange({ otherDeductions: others.map(r => r.id === id ? { ...r, ...patch } : r) });
+  }
+  function removeOtherRow(id) {
+    onChange({ otherDeductions: others.filter(r => r.id !== id) });
+  }
+
   const selected = new Set(formData.selectedBenefits ?? []);
   const gateText = "Right now, I";
   const paycheckText = "benefits or deductions taken from my paycheck.";
   const enrolledText = "I'm enrolled in:";
+  const benefitsStartText = "Benefits start on";
   const attendanceText = "Does my employer track attendance with a formal points or hours system?";
+  const ptoText = "Does my employer offer PTO?";
 
   return (
+    <>
     <p style={BLANK_FONT}>
       <TypedText text={gateText} />{" "}
       <FadeIn delay={typeDuration(gateText)}>
@@ -1155,6 +1175,16 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
               </span>
             );
           })}
+          {" "}<TypedText text={benefitsStartText} />{" "}
+          <FadeIn delay={typeDuration(benefitsStartText)}>
+            <InlineDate
+              value={formData.benefitsStartDate}
+              onChange={v => onChange({ benefitsStartDate: v === "" ? null : v })}
+              width="168px"
+              label="Benefits start date"
+            />
+          </FadeIn>
+          <TypedText text="(leave blank if coverage is already active)." />
         </>
       )}
       {isBaseUser && benefitsGate !== null && (
@@ -1168,10 +1198,249 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
               ariaLabel="Attendance tracking policy"
               error={attempted && formData.attendanceBucketEnabled === null}
             />
+          </FadeIn>{" "}
+          <TypedText text={ptoText} />{" "}
+          <FadeIn delay={typeDuration(ptoText)}>
+            <InlineSelect
+              value={formData.ptoEnabled === true ? "yes" : formData.ptoEnabled === false ? "no" : ""}
+              onChange={v => onChange({ ptoEnabled: v === "" ? null : v === "yes" })}
+              options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]}
+              ariaLabel="PTO offered"
+            />
           </FadeIn>
         </>
       )}
     </p>
+
+    {benefitsGate === true && <OtherDeductionsList others={others} onAdd={addOtherRow} onUpdate={updateOtherRow} onRemove={removeOtherRow} />}
+    {isBaseUser && formData.attendanceBucketEnabled === true && (
+      <AttendanceDetailsCard formData={formData} onChange={onChange} />
+    )}
+    {isBaseUser && formData.ptoEnabled === true && (
+      <PtoDetailsCard formData={formData} onChange={onChange} />
+    )}
+    </>
+  );
+}
+
+// Other Recurring Deductions — mirrors real Step3's dynamic list exactly (union dues, parking,
+// equipment, etc.), a repeating label+amount row that doesn't fit the "one blank" mad-libs
+// shape, so it's a plain block-level list below the sentence, same as the paystub calculator's
+// own block-level treatment on the Tax Rates page.
+function OtherDeductionsList({ others, onAdd, onUpdate, onRemove }) {
+  return (
+    <div style={{ ...cardShellStyle, marginTop: "18px", padding: "14px" }}>
+      <div style={cardLabelStyle}>Other Recurring Deductions (per paycheck)</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {others.length === 0 && (
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", padding: "4px 0" }}>
+            Nothing added — examples: union dues, parking, equipment.
+          </div>
+        )}
+        {others.map(row => (
+          <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 32px", gap: "8px", alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder="Label (e.g. Union Dues)"
+              aria-label="Deduction label"
+              value={row.label}
+              onChange={e => onUpdate(row.id, { label: e.target.value })}
+              style={{
+                background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)",
+                borderRadius: "8px", padding: "8px 10px", color: "var(--color-text-primary)",
+                fontFamily: "var(--font-sans)", fontSize: "13px",
+              }}
+            />
+            <input
+              type="number" min="0" step="0.01"
+              placeholder="$/check"
+              aria-label="Deduction amount per paycheck, dollars"
+              value={row.perCheckAmount ?? row.weeklyAmount ?? ""}
+              onChange={e => onUpdate(row.id, { perCheckAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              style={{
+                background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)",
+                borderRadius: "8px", padding: "8px 10px", color: "var(--color-text-primary)",
+                fontFamily: "var(--font-sans)", fontSize: "13px",
+              }}
+            />
+            <Pressable
+              onClick={() => onRemove(row.id)}
+              aria-label={`Remove ${row.label || "deduction"}`}
+              style={{
+                background: "transparent", color: "var(--color-text-primary)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "8px",
+                width: "32px", height: "36px", cursor: "pointer", fontSize: "14px", lineHeight: 1,
+              }}
+            >×</Pressable>
+          </div>
+        ))}
+        <Pressable
+          onClick={onAdd}
+          style={{
+            background: "transparent", color: "var(--color-text-primary)",
+            border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
+            padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+            textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
+          }}
+        >
+          + Add Deduction
+        </Pressable>
+      </div>
+    </div>
+  );
+}
+
+// Attendance Policy Details — mirrors real Step3's DetailsDisclosure sub-fields exactly
+// (unit, warn/terminate thresholds, current balance, per-event increment). Defaults expanded
+// if any sub-field already has a value (mirrors real DetailsDisclosure's defaultExpanded),
+// same re-entry-friendly precedent as DhlRotationCard's own expanded-by-default check.
+function AttendanceDetailsCard({ formData, onChange }) {
+  const [expanded, setExpanded] = useState(() =>
+    formData.attendanceUnit != null || formData.attendanceWarnThreshold != null ||
+    formData.attendanceTerminateThreshold != null || formData.attendanceCurrentBalance != null
+  );
+  return (
+    <div style={{ ...cardShellStyle, marginTop: "12px" }}>
+      <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Attendance Policy Details</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            Unit, thresholds, current balance — set these up once.
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div>
+            <div style={cardLabelStyle}>What unit does your policy use?</div>
+            <input
+              type="text" placeholder="e.g. points, hours, occurrences"
+              aria-label="Attendance policy unit"
+              value={formData.attendanceUnit ?? ""}
+              onChange={e => onChange({ attendanceUnit: e.target.value || null })}
+              style={{
+                width: "100%", maxWidth: "260px", background: "var(--color-bg-base)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "8px",
+                padding: "8px 10px", color: "var(--color-text-primary)",
+                fontFamily: "var(--font-sans)", fontSize: "13px", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
+            <div>
+              <div style={cardLabelStyle}>Warning Threshold</div>
+              <InlineNumber
+                value={formData.attendanceWarnThreshold ?? ""}
+                onChange={v => onChange({ attendanceWarnThreshold: v === "" ? null : parseFloat(v) })}
+                placeholder="6" width="64px"
+                ariaLabel="Attendance warning threshold"
+              />
+            </div>
+            <div>
+              <div style={cardLabelStyle}>Termination Threshold</div>
+              <InlineNumber
+                value={formData.attendanceTerminateThreshold ?? ""}
+                onChange={v => onChange({ attendanceTerminateThreshold: v === "" ? null : parseFloat(v) })}
+                placeholder="12" width="64px"
+                ariaLabel="Attendance termination threshold"
+              />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
+            <div>
+              <div style={cardLabelStyle}>Current Balance</div>
+              <InlineNumber
+                value={formData.attendanceCurrentBalance ?? ""}
+                onChange={v => onChange({ attendanceCurrentBalance: v === "" ? null : parseFloat(v) })}
+                placeholder="2" width="64px"
+                ariaLabel="Attendance current balance"
+              />
+            </div>
+            <div>
+              <div style={cardLabelStyle}>Per-Event Increment</div>
+              <InlineNumber
+                value={formData.attendanceIncrement ?? ""}
+                onChange={v => onChange({ attendanceIncrement: v === "" ? 1 : parseFloat(v) })}
+                placeholder="1" width="64px"
+                ariaLabel="Attendance per-event increment"
+              />
+              <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-secondary)" }}>Default 1 per absence</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// PTO Policy Details — mirrors real Step3's PTO DetailsDisclosure sub-fields exactly (accrual
+// method via InlineChip standing in for Pill, rate, current balance, cap).
+function PtoDetailsCard({ formData, onChange }) {
+  const [expanded, setExpanded] = useState(() =>
+    formData.ptoAccrualMethod != null || formData.ptoAccrualRate != null ||
+    formData.ptoCurrentBalance != null || formData.ptoCap != null
+  );
+  const accrualLabel =
+    formData.ptoAccrualMethod === "per_hour" ? "Accrual Rate (hrs per hour worked)" :
+    formData.ptoAccrualMethod === "per_period" ? "Accrual Rate (hrs per pay period)" :
+    "Annual Total (hrs)";
+  return (
+    <div style={{ ...cardShellStyle, marginTop: "12px" }}>
+      <Pressable onClick={() => setExpanded(e => !e)} style={cardHeaderStyle}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>PTO Policy Details</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            Accrual method, rate, current balance — set these up once.
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flexShrink: 0 }}>{expanded ? "▾" : "▸"}</div>
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "4px 14px 16px", borderTop: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div>
+            <div style={cardLabelStyle}>How does your PTO accrue?</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <InlineChip label="Per Hour Worked" active={formData.ptoAccrualMethod === "per_hour"} onClick={() => onChange({ ptoAccrualMethod: "per_hour" })} />
+              <InlineChip label="Per Pay Period" active={formData.ptoAccrualMethod === "per_period"} onClick={() => onChange({ ptoAccrualMethod: "per_period" })} />
+              <InlineChip label="Lump Sum (Annual)" active={formData.ptoAccrualMethod === "lump_sum"} onClick={() => onChange({ ptoAccrualMethod: "lump_sum" })} />
+            </div>
+          </div>
+          {formData.ptoAccrualMethod && (
+            <div>
+              <div style={cardLabelStyle}>{accrualLabel}</div>
+              <InlineNumber
+                value={formData.ptoAccrualRate ?? ""}
+                onChange={v => onChange({ ptoAccrualRate: v === "" ? null : parseFloat(v) })}
+                placeholder={formData.ptoAccrualMethod === "per_hour" ? "0.05" : "4"}
+                width="64px"
+                ariaLabel={accrualLabel}
+              />
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
+            <div>
+              <div style={cardLabelStyle}>Current Balance (hrs)</div>
+              <InlineNumber
+                value={formData.ptoCurrentBalance ?? ""}
+                onChange={v => onChange({ ptoCurrentBalance: v === "" ? null : parseFloat(v) })}
+                placeholder="40" width="64px"
+                ariaLabel="PTO current balance, hours"
+              />
+            </div>
+            <div>
+              <div style={cardLabelStyle}>Cap (hrs, optional)</div>
+              <InlineNumber
+                value={formData.ptoCap ?? ""}
+                onChange={v => onChange({ ptoCap: v === "" ? null : parseFloat(v) })}
+                placeholder="120" width="64px"
+                ariaLabel="PTO cap, hours"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

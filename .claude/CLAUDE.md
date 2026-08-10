@@ -260,6 +260,15 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   `formData.taxExemptOptIn === true`, both exact copies of real `StepWrapUp`'s components
   (nothing to ground live — the feature is a placeholder on both wizards). Doesn't gate
   `isWrapUpValid`. See `docs/drift-app-warden.md` §7 F135.
+- **`DeductionsPage` gained Benefits Start Date, Other Recurring Deductions, Attendance Policy
+  Details, and PTO (2026-08-10) — closes out §19.1.A's last Deductions gaps.** Benefits Start
+  Date is an inline `InlineDate` clause. The other three are block-level cards below the
+  sentence (don't fit one-blank mad-libs prose): `OtherDeductionsList` (add/edit/remove row
+  list), `AttendanceDetailsCard` and `PtoDetailsCard` (collapsible, default-expanded if already
+  answered, mirrors real `DetailsDisclosure`). None gate `isDeductionsValid`. Fixed two
+  pre-existing `HISTORY_SENSITIVE_FIELDS` gaps found in the process (`attendanceUnit`/
+  `attendanceCurrentBalance`/`ptoCurrentBalance` were missing even for the real wizard). See
+  `docs/drift-app-warden.md` §7 F136.
 - **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
   `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
   long real clause overflowed horizontally on narrow viewports. Now chunks into per-word

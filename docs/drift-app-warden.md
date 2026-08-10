@@ -700,6 +700,34 @@ yet on either wizard. Doesn't gate `isWrapUpValid`.
 > this one) together — same duplicated-copy risk F134 already flags for its two fallback
 > functions.
 
+**F136 · `DeductionsPage` — Benefits Start Date, Other Recurring Deductions, Attendance Policy
+Details, PTO — plus two pre-existing `HISTORY_SENSITIVE_FIELDS` gaps closed** —
+`SetupWizardAdlib.jsx` (`OtherDeductionsList`, `AttendanceDetailsCard`, `PtoDetailsCard`),
+`src/lib/configHistory.js` — **[L]** — *(added 2026-08-10, ad-lib field-parity round 4,
+docs/TODO.md §19.1.A)*
+Closes out the last of §19.1.A's Deductions gaps, previously flagged "v1 scope" when this page
+was first built. Benefits Start Date is a single inline `InlineDate` clause (fits the sentence);
+the other three don't fit "one blank" mad-libs prose, so they're block-level cards below the
+sentence, same precedent as the Tax Rates page's paystub calculator: `OtherDeductionsList` (plain
+add/edit/remove row list, same shape as real Step3's), `AttendanceDetailsCard` and
+`PtoDetailsCard` (collapsible, default-expanded-if-already-answered — mirrors real
+`DetailsDisclosure`'s own `defaultExpanded` logic). None of these four gate `isDeductionsValid`
+on either wizard (matches real STEP_DEFS id 3). While wiring these into `HISTORY_SENSITIVE_FIELDS`
+(F7's three-way rule), found **`attendanceUnit`/`attendanceCurrentBalance`/`ptoCurrentBalance`
+were missing even on the real wizard** — a pre-existing gap this round found and fixed, not
+something introduced by adding these fields to Adlib. All three now present.
+> **IF** `DeductionsPage`'s fields change again, **THEN** re-run the full `HISTORY_SENSITIVE_FIELDS`
+> sweep this round already did once (F131) — this round found a *second* round of gaps on the
+> *real* wizard's side, which F131's original sweep (scoped to what Adlib itself writes) couldn't
+> have caught, since Adlib didn't write these fields yet at that point.
+> **Known, deliberately NOT done this round:** `DIFF_FIELDS` (F7) was **not** extended with
+> `benefitsStartDate`/attendance/PTO fields — `DIFF_FIELDS` has always been a curated subset of
+> `HISTORY_SENSITIVE_FIELDS` (many pre-existing fields, e.g. `customWeeklyHours`, benefit weekly
+> amounts, were never in `DIFF_FIELDS` even before this round), and F7's "must never diverge" rule
+> has pre-existing debt across the whole list that predates both wizards' current state — F130's
+> tips fix (F131) was the one explicitly-requested exception. Widening `DIFF_FIELDS` toward true
+> parity with `HISTORY_SENSITIVE_FIELDS` is a real, separate follow-up, not attempted here.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

@@ -4200,9 +4200,12 @@ shipping or merging.
 *Status: SetupWizardAdlib.jsx is now the REAL production first-run wizard (save/completion
 wiring, entry-point/gating wiring, isInvestor support, Deductions Skip button, and a partial
 full-page conversion shipped 2026-08-10 — see docs/past-TODO-tasks.md §19). §19.1 below is kept
-as the tracking checklist for the remaining items — most of §19.1.A's field/UI parity gaps,
-the rest of §19.1.E/F's responsive polish, §19.1.G accessibility, and §19.1.H housekeeping are
-still open. See `.claude/CLAUDE.md`'s SetupWizardAdlib.jsx section for current architecture.*
+as the tracking checklist for the remaining items. As of 2026-08-10's field-parity round 3+4:
+**§19.1.A is now fully closed** (all field/UI parity gaps ported); §19.1.G accessibility and the
+first two boxes of §19.1.H housekeeping are also closed. Still open: the rest of §19.1.E/F's
+responsive polish (mobile-width verification, needs a real browser — none available in this
+sandbox), §19.1.B's flow-coverage decisions, and §19.1.H's test-coverage/account-reference boxes.
+See `.claude/CLAUDE.md`'s SetupWizardAdlib.jsx section for current architecture.*
 
 **What shipped:** the entire first-run, employed-signup SetupWizard flow (Welcome through Wrap
 Up — six real steps) reimagined as five cascading mad-libs pages with inline blanks, instead of
@@ -4276,14 +4279,25 @@ concrete, code-grounded finding, not a guess.*
 *Deductions (real Step3, `SetupWizard.jsx:1204`) vs. `DeductionsPage` — most of these were
 already flagged "v1 scope" in the page's own code comment when built, on the reasoning that none
 of them gate `isValid`; that reasoning holds for an admin preview, not for a production wizard:*
-- [ ] **Benefits Start Date** (`SetupWizard.jsx:1283–1293`) — missing.
-- [ ] **Other Recurring Deductions** dynamic list (union dues, parking, etc.,
-      `SetupWizard.jsx:1296–1347`) — missing.
-- [ ] **Attendance Policy Details** sub-fields (unit, warn/terminate thresholds, current balance,
-      per-event increment — `SetupWizard.jsx:1372–1435`) — missing.
-- [ ] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
-      balance/cap, `SetupWizard.jsx:1438–1509`) — missing entirely. Not previously called out in
-      any doc as an intentional scope-out by name; a real gap.
+- [x] **Benefits Start Date** (`SetupWizard.jsx:1283–1293`) — added 2026-08-10, an inline
+      `InlineDate` clause right after the per-benefit blanks, once `benefitsGate === true`.
+- [x] **Other Recurring Deductions** dynamic list (union dues, parking, etc.,
+      `SetupWizard.jsx:1296–1347`) — added 2026-08-10 as `OtherDeductionsList`, a block-level
+      card below the sentence (doesn't fit the one-blank mad-libs shape), same
+      add/edit/remove-row logic as real Step3.
+- [x] **Attendance Policy Details** sub-fields (unit, warn/terminate thresholds, current balance,
+      per-event increment — `SetupWizard.jsx:1372–1435`) — added 2026-08-10 as
+      `AttendanceDetailsCard`, a collapsible card (defaults expanded if any sub-field already has
+      a value, mirrors real `DetailsDisclosure`'s own `defaultExpanded` logic). Found and fixed a
+      pre-existing gap while adding these: `attendanceUnit`/`attendanceCurrentBalance` were
+      missing from `HISTORY_SENSITIVE_FIELDS` even on the real wizard (not something this round
+      introduced) — added, see drift-app-warden §7 F136.
+- [x] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
+      balance/cap, `SetupWizard.jsx:1438–1509`) — added 2026-08-10: the yes/no gate is an inline
+      clause (`ptoEnabled`) right after the attendance question; `PtoDetailsCard` (same
+      collapsible pattern) covers accrual method (`InlineChip` standing in for `Pill`)/rate/
+      current balance/cap once answered Yes. Found and fixed a second pre-existing gap:
+      `ptoCurrentBalance` was also missing from `HISTORY_SENSITIVE_FIELDS`.
 - [x] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
       button) — `DeductionsPage` has no Skip affordance at all, so a real user who wants to skip
       benefits/attendance entirely (allowed today) would be *blocked* by ad-lib's attendance gate

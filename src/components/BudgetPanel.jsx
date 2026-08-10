@@ -1581,7 +1581,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                 {/* Label */}
                 <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                   <div style={{
-                    fontSize: "13px",
+                    fontSize: "14px",
                     color: isScheduledFuture ? "var(--color-text-secondary)" : "var(--color-text-primary)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{exp.label}</div>
@@ -1589,11 +1589,11 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                 {/* Per-check amount + edit icon */}
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                   <div style={{
-                    fontSize: "14px", fontWeight: "bold",
+                    fontSize: "15px", fontWeight: "bold",
                     color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
                     whiteSpace: "nowrap",
                   }}>
-                    {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
+                    {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
                   {<Pressable
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}

@@ -525,7 +525,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
         {displayVal}
       </div>
       {sub && (
-        <div style={{ fontSize: isButton ? "10px" : "11px", color: "var(--color-text-secondary)", marginTop: isButton ? "auto" : "5px", paddingTop: isButton ? "6px" : 0, fontFamily: "var(--font-sans)" }}>
+        <div style={{ fontSize: isButton ? "11px" : "12px", color: "var(--color-text-secondary)", marginTop: isButton ? "auto" : "5px", paddingTop: isButton ? "6px" : 0, fontFamily: "var(--font-sans)" }}>
           {sub}
         </div>
       )}

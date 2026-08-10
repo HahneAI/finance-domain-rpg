@@ -1940,7 +1940,7 @@ function ListRow({ label, summary, onPress, last }) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>{label}</div>
-        {summary && <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
+        {summary && <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
       </div>
       <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
     </Pressable>

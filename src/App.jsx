@@ -3783,11 +3783,17 @@ export default function App() {
         />
       )}
       {/* ── Ad-Lib Wizard preview (admin-only experiment) — fill-in-the-blank pilot
-           for the first two steps; hands off into the real wizard above for the rest.
-           adlibResumeData reopens this pre-filled at the last-answered page when the
-           admin hit Back on the real wizard's first handed-off step (see onBackBeforeStart
-           above) — cleared on both Exit Preview and a fresh forward hand-off so the next
-           deliberate "Preview" click always starts blank again. ── */}
+           covering the whole first-run flow now (Welcome through Wrap Up for an employed
+           signup); still hands off into the real wizard above for the jobless mini-flow
+           (id 10), since that's the only real-wizard territory left. A null initialStepId
+           means Wrap Up was the last ad-lib page too — nothing left to hand off to, so this
+           just closes out MOCK ONLY (no setConfig/savePersistedStateNow) without ever
+           mounting the real SetupWizard, same as a real Finish click would but without the
+           real component in between. adlibResumeData reopens this pre-filled at the
+           last-answered page when the admin hit Back on the real wizard's first handed-off
+           step (see onBackBeforeStart above, jobless-flow only now) — cleared on both Exit
+           Preview and a fresh forward hand-off so the next deliberate "Preview" click always
+           starts blank again. ── */}
       {isAdmin && adlibPreviewOpen && (
         <SetupWizardAdlib
           config={config}
@@ -3796,6 +3802,7 @@ export default function App() {
           onHandoff={(mergedFormData, initialStepId) => {
             setAdlibPreviewOpen(false);
             setAdlibResumeData(null);
+            if (initialStepId == null) return;
             setAdlibHandoff({ config: mergedFormData, initialStepId });
             setWizardEntry(false);
           }}

@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
-import { DHL_PRESET, BENEFIT_OPTIONS } from "../constants/config.js";
+import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
+import { estimateWeeklyNet } from "../lib/finance.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for the first
-// five SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
-// page, then Schedule, Deductions, and Tax Rates each as their own page in the
-// same style. Admin-only preview, gated behind the "Ad-Lib Preview" toggle in
-// App.jsx — never shown to real users.
+// SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for all six
+// SetupWizard steps a first-run, employed signup sees: Welcome + Pay Structure
+// collapsed onto one cascading page, then Schedule, Deductions, Tax Rates, and
+// Wrap Up each as their own page, all in the same style — the entire first-run
+// flow, start to finish. Admin-only preview, gated behind the "Ad-Lib Preview"
+// toggle in App.jsx — never shown to real users.
 //
 // Each page is one continuous mad-libs sentence with inline blanks (native
 // <select>/<input> styled to sit inline in the text). Within a page, each new
@@ -230,7 +232,14 @@ function isTaxRatesValid(d) {
   return d.fedRateLow > 0 && d.userState != null;
 }
 
-// Fields these four pilot pages ask about — blanked on a fresh open (below)
+// Wrap Up has no required fields at all — mirrors STEP_DEFS id 7's
+// `isValid: () => true` exactly. It's a live summary plus two optional,
+// non-blocking settings, not a form to fill in.
+function isWrapUpValid() {
+  return true;
+}
+
+// Fields these five pilot pages ask about — blanked on a fresh open (below)
 // rather than carried over from the admin's real config, so isIntakeValid/
 // isScheduleValid/isDeductionsValid/isTaxRatesValid's mandatory-field gates
 // actually have something to gate. Pre-filling from `config` (the admin's own
@@ -254,6 +263,8 @@ const BLANK_PAY_FIELDS = {
   filingStatus: null, fedStdDeduction: null, userState: null,
   fedRateLow: null, fedRateHigh: null, stateRateLow: null, stateRateHigh: null,
   taxRatesEstimated: null,
+  // Wrap Up page
+  bufferEnabled: null, paycheckBuffer: null,
 };
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
@@ -874,21 +885,123 @@ function TaxRatesPage({ formData, onChange }) {
   );
 }
 
-// Jobless users skip Schedule, Deductions, and Tax Rates entirely — same as
-// the real wizard's isFirstRunJobless gate skipping STEP_DEFS id 2/3/4 outright.
+// ── Page 4 (final): Wrap Up. STEP_DEFS id 7's isValid is always true — there's
+// nothing to gate here, just a live paycheck summary plus the two optional,
+// non-blocking settings real Step 7 offers (Paycheck Buffer, in the same
+// inline-blank sentence style as every other page; the Tax-Exempt Week
+// Projections opt-in gate is scoped out — like every other v1 scope-out on
+// this pilot, it doesn't touch isValid, so omitting it can't break parity).
+// estimateWeeklyNet() is the same authoritative function the real Wrap Up
+// (and Home/Income) reads, so the numbers shown here are never a parallel
+// approximation — see docs/active-systems.md §6 on why that matters. ──
+function WrapUpPage({ formData, onChange }) {
+  const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
+  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+  const fmt = n => `$${Math.abs(n).toFixed(2)}`;
+  const bufferOn = formData.bufferEnabled ?? true;
+
+  const payScheduleLabel =
+    formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary"
+      ? "per-check net"
+      : formData.userPaySchedule === "monthly"
+        ? "monthly net"
+        : "weekly net";
+
+  const rows = [
+    { label: "Gross Pay", val: gross * perCheckFactor, sign: "" },
+    { label: "Federal Tax", val: fed * perCheckFactor, sign: "−" },
+    { label: "State Tax", val: state * perCheckFactor, sign: "−" },
+    { label: "FICA", val: fica * perCheckFactor, sign: "−" },
+    { label: "401(k)", val: k401k * perCheckFactor, sign: "−" },
+    { label: "Benefits", val: benefits * perCheckFactor, sign: "−" },
+    { label: "Other Deduct.", val: other * perCheckFactor, sign: "−" },
+  ];
+
+  const introText = "Here's my estimated";
+  const bufferLeadText = "I";
+  const bufferAmountText = "of $";
+
+  return (
+    <>
+      <p style={BLANK_FONT}>
+        <TypedText text={introText} />{" "}
+        <FadeIn delay={typeDuration(introText)}>
+          <span style={{ color: "var(--color-teal)", fontWeight: 700 }}>{payScheduleLabel}</span>
+        </FadeIn>.
+      </p>
+
+      <FadeIn delay={0}>
+        <div style={calcBoxStyle}>
+          {rows.map(r => (
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <span>{r.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>{r.sign} {fmt(r.val)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", marginTop: "4px", borderTop: "1px solid var(--color-border-subtle)" }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Net</span>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 700,
+              color: net >= 0 ? "var(--color-green)" : "var(--color-deduction)",
+            }}>
+              {fmt(net * perCheckFactor)}
+            </span>
+          </div>
+        </div>
+
+        <p style={{ ...BLANK_FONT, marginTop: "16px" }}>
+          <TypedText text={bufferLeadText} />{" "}
+          <FadeIn delay={typeDuration(bufferLeadText)}>
+            <InlineSelect
+              value={bufferOn ? "on" : "off"}
+              onChange={v => onChange({ bufferEnabled: v === "on" })}
+              options={[{ value: "on", label: "want" }, { value: "off", label: "don't want" }]}
+            />
+          </FadeIn>{" "}
+          <TypedText text="a paycheck buffer" />
+          {bufferOn && (
+            <>
+              {" "}<TypedText text={bufferAmountText} />
+              <FadeIn delay={typeDuration(bufferAmountText)}>
+                <InlineNumber
+                  value={formData.paycheckBuffer ?? ""}
+                  onChange={v => onChange({ paycheckBuffer: v === "" ? null : Math.min(parseFloat(v) || 0, 200) })}
+                  placeholder="50"
+                  width="56px"
+                />
+              </FadeIn>{" "}
+              <TypedText text="per check." />
+            </>
+          )}
+          {!bufferOn && <TypedText text="." />}
+        </p>
+      </FadeIn>
+    </>
+  );
+}
+
+// Jobless users skip Schedule, Deductions, Tax Rates, and Wrap Up entirely —
+// same as the real wizard's isFirstRunJobless gate skipping STEP_DEFS id
+// 2/3/4/7 outright.
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
   { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
   { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage },
   { id: "taxRates", isValid: isTaxRatesValid, Component: TaxRatesPage },
+  { id: "wrapUp", isValid: isWrapUpValid, Component: WrapUpPage },
 ];
 
 // onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
-// answered. initialStepId targets the real SetupWizard's jobless mini-flow
-// (id 10) when unemployed, else Wrap Up (id 7) — Welcome, Pay Structure,
-// Schedule, Deductions, and Tax Rates are all covered by this preview now, so
-// the real wizard picks up one step later than before. See SetupWizard.jsx's
-// initialStepId prop.
+// answered. For the jobless mini-flow, initialStepId is 10 (Unemployment
+// Benefits) — the only real-wizard steps left, since Welcome and Pay Structure
+// are the only ones a jobless first-run even shows. For an employed user,
+// initialStepId is null — Welcome, Pay Structure, Schedule, Deductions, Tax
+// Rates, and Wrap Up are now ALL covered by this preview, so there is no
+// remaining real step to hand off to at all. App.jsx treats a null
+// initialStepId as "nothing left — mock-finish and close," the same MOCK
+// ONLY, nothing-saved behavior the real Wrap Up's Finish button gets when
+// handed off to, just without ever mounting the real SetupWizard component.
 //
 // resumeFormData (optional): when the admin already answered these pages, handed off
 // into the real wizard, and then hit Back at the real wizard's very first step, App.jsx
@@ -920,7 +1033,7 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
   function handleNext() {
     if (!canProceed) return;
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    onHandoff(formData, formData.startedUnemployed === true ? 10 : 7);
+    onHandoff(formData, formData.startedUnemployed === true ? 10 : null);
   }
 
   function handleBack() {

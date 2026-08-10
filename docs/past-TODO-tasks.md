@@ -71,15 +71,32 @@ One-liner per item — see git history for full implementation detail.*
   no-income-tax state (`STATE_TAX_TABLE[userState]?.model === "NONE"`). Real Step4's "Use Estimate
   for Now" fallback and DHL Missouri preset button are intentionally not ad-libbed — only the
   paystub path, per the request.
-  Handoff `initialStepId` bumped from Deductions (3) → Tax Rates (4) → Wrap Up (7) as each page was
-  absorbed.
+- [x] **Page 5 (`WrapUpPage`)** — real Wrap Up (Step7), the final step of the whole first-run flow.
+  `isWrapUpValid()` mirrors `STEP_DEFS id 7`'s `isValid: () => true` — no required fields, just a
+  live summary. Renders the same `estimateWeeklyNet(formData)` breakdown real `StepWrapUp` shows
+  (never a parallel approximation), scaled to the pay schedule via `PAYCHECKS_PER_YEAR`. Paycheck
+  Buffer ad-libbed as an inline sentence ("I `[want/don't want]` a paycheck buffer of $`[amount]`
+  per check"), writing the same `bufferEnabled`/`paycheckBuffer` fields, same $200 cap. Tax-Exempt
+  Week Projections opt-in and the `structure_change` diff section scoped out (v1 — neither gates
+  `isValid` on either the real or ad-lib page, and this pilot has no life-event re-entry concept).
+  Because Wrap Up is the real wizard's last step for an employed user too, absorbing it changes the
+  hand-off shape: `onHandoff`'s `initialStepId` is now `null` for an employed finish — nothing left
+  to hand off to — and `App.jsx`'s `onHandoff` callback just closes the preview (still MOCK ONLY,
+  no `setConfig`/`savePersistedStateNow`) without ever mounting the real `SetupWizard`. The jobless
+  mini-flow (id 10) is unaffected — still a real hand-off, since Unemployment Benefits/Job Loss
+  Details/Jobless Wrap Up remain unconverted, separate real-wizard territory.
+  Handoff `initialStepId` bumped from Deductions (3) → Tax Rates (4) → Wrap Up (7) → `null` (nothing
+  left) as each page was absorbed.
 - [x] Outer page-count/resume machinery (`activePages`, `pageIdx`, "N of M" header, resume-at-
   last-page via `resumeFormData`) confirmed generic against `PAGES.length` — required zero changes
-  across all four page additions
-- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 39 tests
-  covering all four pages, DHL Plant/Warehouse branching, variable-schedule two-week paystub calc,
-  resume-on-Back, and handoff targets
-- Remaining real step not yet ad-lib-ified: Wrap Up (id 7) — future work, if requested
+  across all five page additions
+- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 45 tests
+  covering all five pages, DHL Plant/Warehouse branching, variable-schedule two-week paystub calc,
+  resume-on-Back, and both handoff shapes (jobless real hand-off, employed null/mock-finish)
+- Every step of the first-run, employed-signup flow (Welcome through Wrap Up) is now ad-libbed.
+  The jobless mini-flow (Unemployment Benefits, Job Loss Details, Jobless Wrap Up) and any
+  re-entry life events (changed jobs, lost job, structure change, commission job) remain
+  real-wizard-only — out of scope unless requested.
 
 ---
 

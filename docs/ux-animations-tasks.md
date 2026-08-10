@@ -591,7 +591,7 @@ each file, convert what's a clean fit, and note anything that isn't.
 | File | Raw 9–14px instances | Panel/surface |
 |---|---|---|
 | ~~`ProfilePanel.jsx`~~ | **0** (was 175) — ✅ converted 2026-08-10 | Account |
-| `LogPanel.jsx` | 130 | Log |
+| ~~`LogPanel.jsx`~~ | **0** (was 130) — ✅ converted 2026-08-10 | Log |
 | `App.jsx` | 122 | Shell / nav / admin toolkit / modals hosted at the root |
 | `BudgetPanel.jsx` | 105 | Budget |
 | `SetupWizard.jsx` | 97 | Onboarding |
@@ -633,7 +633,7 @@ each file, convert what's a clean fit, and note anything that isn't.
 | `LegalDocumentModal.jsx` | 1 | Legal document modal (title already migrated; this is body text) |
 | `ui.jsx` | 1 | `Card`'s dynamic `size` prop — numeric emphasis, intentionally out of scope |
 
-**Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel`,
+**Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
 `BudgetPanel`, `HomePanel`, `IncomePanel` — then the shell/modals (`App.jsx`, `WeekConfirmModal`),
 then the lower-traffic surfaces (New Job Season, Investor demo, admin-only screens). Convert one
 file at a time, run the test suite after each, and update this table's count (or strike the row)
@@ -642,11 +642,14 @@ as each file's cleanly-convertible instances land.
 **Conversion method (established on `ProfilePanel.jsx`, 2026-08-10):** a scripted regex pass
 handles the mechanical bulk — locate `<Tag ... style={{ ...fontSize: "Npx"... }}>` where the tag
 has no pre-existing `className`, drop the `fontSize` entry, and inject the matching `className`
-(size→class mapping is the same table as above). Two known gaps the script doesn't safely
+(size→class mapping is the same table as above). Three known gaps the script doesn't safely
 handle and need hand-fixing per file: (1) arrow-function attributes (`onClick={() => ...}`)
 contain a literal `>` that a naive tag-boundary regex misreads as the JSX close — match `=>`
 as an allowed exception; (2) multi-line style objects containing a template literal (backtick
 `` ` ``) or nested `{}` (e.g. a conditional `border: \`1px solid ${...}\``) can break a
-brace-counting body match — worth a quick manual pass rather than fighting the regex further.
-Always finish with `npx eslint <file>`, `npm run test:run`, and a real `npx vite build` (lint
-alone won't catch every JSX malformation from a scripted edit).
+brace-counting body match — worth a quick manual pass rather than fighting the regex further;
+(3) a tag that already has a `className` (e.g. `<table className="data-table" style={{
+fontSize: "12px", ... }}>`, found twice in `LogPanel.jsx`) is skipped by design — merge the size
+class into the existing string by hand (`className="data-table text-sm"`) rather than adding a
+second `className` attribute. Always finish with `npx eslint <file>`, `npm run test:run`, and a
+real `npx vite build` (lint alone won't catch every JSX malformation from a scripted edit).

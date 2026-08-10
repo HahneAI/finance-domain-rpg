@@ -684,6 +684,22 @@ flat-rate estimate + state flat/midpoint/0 lookup (`STATE_TAX_TABLE`) as real St
 > **IF** `DHL_PRESET.defaults`' rate fields change, **THEN** both `loadDHLPreset()` copies need
 > the same update.
 
+**F135 · `WrapUpPage` Tax-Exempt Week Projections opt-in** — `SetupWizardAdlib.jsx`
+(`WrapUpPage`, `TAX_EXEMPT_DISCLAIMER`, `TaxExemptPreview`) — **[G]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Real Wrap Up's optional, non-blocking Tax-Exempt Week Projections opt-in ported: static
+disclosure copy (`TAX_EXEMPT_DISCLAIMER`) plus a "coming soon" placeholder
+(`TaxExemptPreview`) shown once `formData.taxExemptOptIn === true`. Both are exact copies of
+the real components — nothing to ground against live data here (unlike every other Wrap Up
+figure on this page, which reads `estimateWeeklyNet()`), since the feature itself isn't live
+yet on either wizard. Doesn't gate `isWrapUpValid`.
+> **IF** the Tax-Exempt Week Projections feature actually ships (currently a placeholder on
+> both wizards), **THEN** `TaxExemptPreview` needs real content on both `SetupWizard.jsx` and
+> here — check both, not just the one you're working in.
+> **IF** `TAX_EXEMPT_DISCLAIMER`'s copy changes, **THEN** update both copies (real Step7 and
+> this one) together — same duplicated-copy risk F134 already flags for its two fallback
+> functions.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

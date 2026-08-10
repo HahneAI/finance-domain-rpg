@@ -374,7 +374,7 @@ const BLANK_PAY_FIELDS = {
   fedRateLow: null, fedRateHigh: null, stateRateLow: null, stateRateHigh: null,
   taxRatesEstimated: null,
   // Wrap Up page
-  freedomAllowanceEnabled: null, freedomAllowance: null,
+  freedomAllowanceEnabled: null, freedomAllowance: null, taxExemptOptIn: null,
 };
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
@@ -1437,12 +1437,45 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
 // estimateWeeklyNet() is the same authoritative function the real Wrap Up
 // (and Home/Income) reads, so the numbers shown here are never a parallel
 // approximation — see docs/active-systems.md §6 on why that matters. ──
+// Straight copies of real StepWrapUp's TAX_EXEMPT_DISCLAIMER text and TaxExemptPreview
+// placeholder component — see docs/active-systems.md §6's grounding rule for why this is a
+// copy, not a re-derivation: there's no live data to ground here, just static disclosure
+// copy, unlike every other Wrap Up figure on this page (estimateWeeklyNet()).
+const TAX_EXEMPT_DISCLAIMER = (
+  <>
+    Tax-exempt weeks show your projected gross as the full net — no federal or state withholding is
+    deducted. This is a <strong>timing benefit only</strong>. You still owe taxes at filing; these
+    weeks do not represent extra income. The dashboard will flag them clearly so you can set aside
+    the difference.
+  </>
+);
+
+function TaxExemptPreview() {
+  return (
+    <div style={{
+      background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
+      border: "1px solid var(--color-border-subtle)",
+      display: "flex", flexDirection: "column", gap: "8px",
+    }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+        Tax-Exempt Projections — Coming Soon
+      </div>
+      <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+        Thanks — we&rsquo;ve noted that you&rsquo;d like tax-exempt week projections. The feature is
+        being finalized and will be turned on for your account once it&rsquo;s ready. Until then,
+        your paychecks use standard withholding and nothing here changes.
+      </div>
+    </div>
+  );
+}
+
 function WrapUpPage({ formData, onChange }) {
   const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
   const fmt = n => `$${Math.abs(n).toFixed(2)}`;
   const bufferOn = formData.freedomAllowanceEnabled ?? true;
+  const taxExemptAccepted = formData.taxExemptOptIn === true;
 
   const payScheduleLabel =
     formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary"
@@ -1521,6 +1554,37 @@ function WrapUpPage({ formData, onChange }) {
           )}
           {!bufferOn && <TypedText text="." />}
         </p>
+
+        {/* ── Tax-Exempt Week Projections — optional, non-blocking, mirrors real
+             StepWrapUp's gate exactly (does not gate isWrapUpValid on either wizard). ── */}
+        <div style={{ marginTop: "16px" }}>
+          <div style={{ ...cardLabelStyle, marginBottom: "8px" }}>Tax-Exempt Week Projections</div>
+          {!taxExemptAccepted ? (
+            <div style={{
+              background: "var(--color-bg-raised)", borderRadius: "12px", padding: "16px",
+              border: "1px dashed rgba(0,200,150,0.3)",
+              display: "flex", flexDirection: "column", gap: "10px",
+            }}>
+              <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
+                {TAX_EXEMPT_DISCLAIMER}
+              </p>
+              <Pressable
+                onClick={() => onChange({ taxExemptOptIn: true })}
+                style={{
+                  background: "rgba(0,200,150,0.12)", color: "var(--color-teal)",
+                  border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
+                  padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                  fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
+                  alignSelf: "flex-start",
+                }}
+              >
+                Request access
+              </Pressable>
+            </div>
+          ) : (
+            <TaxExemptPreview />
+          )}
+        </div>
       </FadeIn>
     </>
   );

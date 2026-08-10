@@ -4304,9 +4304,12 @@ instruction when built ("just the paystub path"), revisit now that this is going
       filing status + state are answered.
 
 *Wrap Up (real Step7, `SetupWizard.jsx:2040`) vs. `WrapUpPage` — scoped out as v1 when built:*
-- [ ] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,
-      `SetupWizard.jsx:2144–2170`) — missing. Doesn't gate `isValid`, but it's a real, user-facing
-      feature real Wrap Up offers today.
+- [x] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,
+      `SetupWizard.jsx:2144–2170`) — added 2026-08-10. Both are straight copies (static
+      disclosure copy + a "coming soon" placeholder, not data-grounded, so nothing to
+      re-derive — see `docs/active-systems.md` §6). Renders below the buffer sentence, gated on
+      `formData.taxExemptOptIn === true` exactly like real Wrap Up's own `accepted` flag. Doesn't
+      gate `isWrapUpValid` on either wizard.
 
 *Schedule (real Step2) vs. `SchedulePage` — audited, no gaps found. Every real Step2 field/branch
 (DHL rotation vs. base-user hours ceiling + pay-period day + biweekly parity) has an ad-lib

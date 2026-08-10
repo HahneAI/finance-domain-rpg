@@ -255,6 +255,11 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   renders above the calculator once filing status + state are answered, same gate as real Step4
   (`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`). Both are
   straight function copies of the real wizard's own. See `docs/drift-app-warden.md` §7 F134.
+- **`WrapUpPage` gained the real Wrap Up's Tax-Exempt Week Projections opt-in (2026-08-10).**
+  Renders below the buffer sentence: static disclosure copy + a "coming soon" placeholder once
+  `formData.taxExemptOptIn === true`, both exact copies of real `StepWrapUp`'s components
+  (nothing to ground live — the feature is a placeholder on both wizards). Doesn't gate
+  `isWrapUpValid`. See `docs/drift-app-warden.md` §7 F135.
 - **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
   `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
   long real clause overflowed horizontally on narrow viewports. Now chunks into per-word

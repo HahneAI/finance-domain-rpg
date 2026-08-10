@@ -216,7 +216,7 @@ the normal panels — `App.jsx` renders `NewJobSeasonHomePanel`/`NewJobSeasonBud
 `ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
-  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `NewJobSeasonEntry.jsx`; Quick Rate
+  `SetupWizard(lifeEvent="structure_change")`; Quit My Job → `NewJobSeasonEntry.jsx`; Quick Rate
   Update → `RateUpdateModal.jsx`.
 - **`NewJobSeasonEntry.jsx`** — up to 4-step modal: (0) date + mandatory `newJobSeasonCashOnHand` (§1.H13,
   persisted, accepts 0; stamps `newJobSeasonCashOnHandAsOf` alongside it, §1.H17) + unemployment

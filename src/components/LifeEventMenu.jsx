@@ -7,7 +7,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
  * Replaces the inline dropdown that lived in the desktop sidebar and mobile
  * drawer. Three icon-forward tiles route to the appropriate flow:
  *  - Pay Structure Changed → SetupWizard re-entry (`structure_change`, §1.B)
- *  - Lost My Job          → NewJobSeasonEntry modal (§1.C1)
+ *  - Quit My Job          → NewJobSeasonEntry modal (§1.C1)
  *  - Quick Rate Update    → RateUpdateModal (§1.D)
  *
  * `onSelect(route)` is called with either a SetupWizard life-event string or
@@ -40,7 +40,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
     },
     {
       id: "lost_job",
-      title: "Lost My Job",
+      title: "Quit My Job",
       desc: "Switch to your New Job Season and manage your runway.",
       route: "new_job_season",
       icon: (

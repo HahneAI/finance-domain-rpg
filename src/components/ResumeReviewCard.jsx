@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, SectionHeader } from "./ui.jsx";
+import { Pressable, SH } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { RESUME_REVIEW_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
 import { loadResumeProfile, saveResumeProfile, saveCoachChat } from "../lib/db.js";
@@ -108,7 +108,7 @@ export function ResumeReviewCard({ config }) {
 
   return (
     <div style={{ marginTop: "16px" }}>
-      <SectionHeader>Résumé Review</SectionHeader>
+      <SH>Résumé Review</SH>
       <div style={{
         background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)",
         borderRadius: "10px", padding: "12px",

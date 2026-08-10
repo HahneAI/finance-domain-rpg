@@ -1355,15 +1355,15 @@ export async function fetchAllBetaContentItems(kind) {
   }
 }
 
-/** Create (no id) or update (id present) a checklist item or suggestion prompt. */
-export async function saveBetaContentItem({ id, kind, title, body, published }) {
+/** Create (no id) or update (id present) a checklist item or suggestion prompt. `employerPreset` (e.g. "DHL") restricts visibility to users with that employer preset — null/omitted means everyone. */
+export async function saveBetaContentItem({ id, kind, title, body, published, employerPreset }) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
     const res = await fetch("/api/admin-beta-hub", {
       method: "POST",
       headers,
-      body: JSON.stringify({ entity: "content", id, kind, title, body, published }),
+      body: JSON.stringify({ entity: "content", id, kind, title, body, published, employerPreset }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to save item" };
@@ -1423,6 +1423,149 @@ export async function saveBetaScore({ userId, usageScore, feedbackScore, callsSc
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to save score" };
     return { ok: true, score: payload.score };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Base-user Productivity Hub — "Money Moves" (database/migrations/
+// 039_add_base_productivity_hub.sql) — the same checklist/tips/feedback
+// flow the Beta Homebase validated, adapted for every user instead of the
+// tracked 10-week cohort. Deliberately separate tables (base_content_items,
+// base_checklist_completions, base_feedback_events) rather than reusing the
+// beta_* ones — see 039's own header and drift-app-warden.md F123's
+// addendum. No scoring here; that stays beta-program-specific.
+// Every read/write below is gated only on "signed in," never
+// isTrackedBetaTester/isTester — this is the base-user surface.
+// ─────────────────────────────────────────────────────────────
+
+export async function fetchBaseChecklistItems() {
+  const { data, error } = await supabase
+    .from("base_content_items")
+    .select("id, title, body, published_at")
+    .eq("kind", "checklist")
+    .not("published_at", "is", null)
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  return data ?? [];
+}
+
+/** Published tip/suggestion prompts, feed-style (newest first — same convention as the changelog). */
+export async function fetchBaseSuggestions() {
+  const { data, error } = await supabase
+    .from("base_content_items")
+    .select("id, title, body, published_at")
+    .eq("kind", "suggestion")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false });
+  if (error) return [];
+  return data ?? [];
+}
+
+/** The caller's own checklist completions — RLS already scopes this to `user_id = auth.uid()`. */
+export async function fetchMyBaseChecklistCompletions() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("base_checklist_completions")
+    .select("checklist_item_id")
+    .eq("user_id", userId);
+  if (error) return [];
+  return (data ?? []).map(row => row.checklist_item_id);
+}
+
+/**
+ * Toggles a single checklist item's completion for the caller. Row existence
+ * IS the "checked" state, same as toggleBetaChecklistItem — but no
+ * isTrackedBetaTester gate, since base_checklist_completions has no
+ * eligibility trigger to satisfy; any signed-in user is in scope.
+ */
+export async function toggleBaseChecklistItem({ itemId, completed }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, error: "Not signed in" };
+
+  if (completed) {
+    const { error } = await supabase
+      .from("base_checklist_completions")
+      .insert({ checklist_item_id: itemId, user_id: userId });
+    if (error && error.code !== "23505") return { ok: false, error: error.message };
+    return { ok: true };
+  }
+
+  const { error } = await supabase
+    .from("base_checklist_completions")
+    .delete()
+    .eq("checklist_item_id", itemId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Base-user feedback submission (base_feedback_events) — same "countable +
+ * readable" shape as logBetaFeedback, own table so it never mixes into the
+ * beta scoring rubric's usage aggregation. Any signed-in user, no tracked-
+ * cohort gate.
+ */
+export async function logBaseFeedback({ note }) {
+  const trimmed = (note ?? "").trim();
+  if (!trimmed) return { ok: false, error: "Feedback can't be empty" };
+
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, error: "Not signed in" };
+
+  const { error } = await supabase
+    .from("base_feedback_events")
+    .insert({ user_id: userId, note: trimmed });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Admin authoring list for one base content kind — drafts included, via api/admin-beta-hub.js's service-role GET (entity: "base_content"). */
+export async function fetchAllBaseContentItems(kind) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in", items: [] };
+  try {
+    const res = await fetch(`/api/admin-beta-hub?entity=base_content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load items", items: [] };
+    return { ok: true, items: payload.items ?? [] };
+  } catch (err) {
+    return { ok: false, error: err.message, items: [] };
+  }
+}
+
+/** Create (no id) or update (id present) a base checklist item or suggestion prompt. `employerPreset` (e.g. "DHL") restricts visibility to users with that employer preset — null/omitted means everyone. */
+export async function saveBaseContentItem({ id, kind, title, body, published, employerPreset }) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch("/api/admin-beta-hub", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ entity: "base_content", id, kind, title, body, published, employerPreset }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to save item" };
+    return { ok: true, item: payload.item };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function deleteBaseContentItem(id) {
+  const headers = await betaHubAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch(`/api/admin-beta-hub?entity=base_content&id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers,
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to delete item" };
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }

@@ -1,20 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Admin write surface for the Beta Tester Homebase (docs/TODO.md §12,
-// database/migrations/037_add_beta_homebase.sql) — two entities in one route
-// to stay under Vercel's Hobby-plan 12-Serverless-Functions-per-deployment
-// cap (this repo hit 13 once already, see CLAUDE.md), same consolidation
-// idiom api/seed.js already established (dispatch on a body field rather
-// than one file per concern):
+// database/migrations/037_add_beta_homebase.sql) AND, since
+// 039_add_base_productivity_hub.sql, the base-user "Money Moves" panel too —
+// entities in one route to stay under Vercel's Hobby-plan
+// 12-Serverless-Functions-per-deployment cap (this repo hit 13 once already,
+// see CLAUDE.md), same consolidation idiom api/seed.js already established
+// (dispatch on a body field rather than one file per concern). The file
+// keeps its original name despite now covering two audiences — renaming it
+// would just be route-path churn across every db.js call site for no
+// functional benefit; the `entity` field is what actually distinguishes them:
 //
-//   entity: "content" — checklist items + suggestion prompts (beta_content_items).
-//     Same title/body/published shape as changelog_entries — CRUD mirrors
-//     api/admin-changelog.js's GET/POST/DELETE-by-method pattern exactly.
-//   entity: "score"   — a tester's rubric score (beta_scores). Upsert only
-//     (no delete — clearing a score back to "not yet scored" is just saving
-//     nulls). Deliberately admin-entered, not computed — docs/TODO.md §12.L's
-//     "scoring stays manual, reviewed by a human" decision; this route is
-//     what makes that manual judgment tester-visible, not what automates it.
+//   entity: "content"      — beta checklist items + suggestion prompts
+//     (beta_content_items, tracked beta cohort only).
+//   entity: "base_content" — the same shape for base_content_items instead
+//     (039_add_base_productivity_hub.sql) — every user, not the tracked
+//     cohort. Both share handleContentGet/Save/Delete below, parametrized on
+//     table name — same title/body/published shape as changelog_entries,
+//     CRUD mirrors api/admin-changelog.js's GET/POST/DELETE-by-method
+//     pattern exactly. Both also carry an optional `employerPreset`
+//     (040_add_content_employer_targeting.sql) — null targets every
+//     eligible user (unchanged default), a value like "DHL" restricts
+//     visibility to users with that `config.employerPreset`, enforced by
+//     RLS via `get_user_employer_preset(uid)`, not just client-side.
+//   entity: "score"        — a tester's rubric score (beta_scores). Upsert
+//     only (no delete — clearing a score back to "not yet scored" is just
+//     saving nulls). Deliberately admin-entered, not computed —
+//     docs/TODO.md §12.L's "scoring stays manual, reviewed by a human"
+//     decision; this route is what makes that manual judgment tester-
+//     visible, not what automates it. Base users have no scoring
+//     equivalent — deliberately not ported, see 039's own header.
 //
 // Same auth pattern as admin-changelog.js/admin-beta-report.js: verify the
 // caller's Supabase session with the anon-key client, then re-check is_admin
@@ -54,26 +69,35 @@ async function authenticateAdmin(req) {
 
 const CONTENT_KINDS = ["checklist", "suggestion"];
 
-async function handleContentGet(req, res, adminClient) {
+// entity -> underlying table. Both beta_content_items and base_content_items
+// share this exact shape (kind/title/body/published_at/created_by), so one
+// set of handlers below serves either, parametrized on table name — see the
+// file header for why this stays one route instead of a second file.
+const CONTENT_TABLES = { content: "beta_content_items", base_content: "base_content_items" };
+
+async function handleContentGet(req, res, adminClient, table) {
   const kind = req.query?.kind;
   if (!CONTENT_KINDS.includes(kind)) return res.status(400).json({ error: "Missing or invalid kind" });
   const { data, error } = await adminClient
-    .from("beta_content_items")
-    .select("id, kind, title, body, published_at, created_at, updated_at")
+    .from(table)
+    .select("id, kind, title, body, published_at, employer_preset, created_at, updated_at")
     .eq("kind", kind)
     .order("created_at", { ascending: false });
   if (error) return res.status(500).json({ error: "Failed to load items" });
   return res.status(200).json({ items: data ?? [] });
 }
 
-async function handleContentSave(req, res, adminClient, adminUserId) {
-  const { id, kind, title, body, published } = req.body ?? {};
+async function handleContentSave(req, res, adminClient, adminUserId, table) {
+  const { id, kind, title, body, published, employerPreset } = req.body ?? {};
   if (!CONTENT_KINDS.includes(kind)) return res.status(400).json({ error: "Missing or invalid kind" });
   if (!title || !String(title).trim()) return res.status(400).json({ error: "Title is required" });
+  // Unconstrained on purpose (migration 040) — "DHL" today, any future
+  // preset string tomorrow, no CHECK to update when a second one is added.
+  const employerPresetValue = employerPreset ? String(employerPreset).trim() || null : null;
 
   if (id) {
     const { data: existing, error: fetchError } = await adminClient
-      .from("beta_content_items")
+      .from(table)
       .select("published_at")
       .eq("id", id)
       .single();
@@ -85,11 +109,12 @@ async function handleContentSave(req, res, adminClient, adminUserId) {
       : null;
 
     const { data, error } = await adminClient
-      .from("beta_content_items")
+      .from(table)
       .update({
         title: String(title).trim(),
         body: body != null ? String(body) : null,
         published_at: publishedAt,
+        employer_preset: employerPresetValue,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -100,12 +125,13 @@ async function handleContentSave(req, res, adminClient, adminUserId) {
   }
 
   const { data, error } = await adminClient
-    .from("beta_content_items")
+    .from(table)
     .insert({
       kind,
       title: String(title).trim(),
       body: body != null ? String(body) : null,
       published_at: published ? new Date().toISOString() : null,
+      employer_preset: employerPresetValue,
       created_by: adminUserId,
     })
     .select()
@@ -114,10 +140,10 @@ async function handleContentSave(req, res, adminClient, adminUserId) {
   return res.status(201).json({ item: data });
 }
 
-async function handleContentDelete(req, res, adminClient) {
+async function handleContentDelete(req, res, adminClient, table) {
   const id = req.query?.id;
   if (!id) return res.status(400).json({ error: "Missing id" });
-  const { error } = await adminClient.from("beta_content_items").delete().eq("id", id);
+  const { error } = await adminClient.from(table).delete().eq("id", id);
   if (error) return res.status(500).json({ error: "Failed to delete item" });
   return res.status(200).json({ ok: true });
 }
@@ -159,20 +185,23 @@ export default async function handler(req, res) {
   });
 
   if (req.method === "GET") {
-    if (req.query?.entity !== "content") return res.status(400).json({ error: "Missing or invalid entity" });
-    return handleContentGet(req, res, adminClient);
+    const table = CONTENT_TABLES[req.query?.entity];
+    if (!table) return res.status(400).json({ error: "Missing or invalid entity" });
+    return handleContentGet(req, res, adminClient, table);
   }
 
   if (req.method === "POST") {
     const entity = req.body?.entity;
-    if (entity === "content") return handleContentSave(req, res, adminClient, auth.userId);
+    const table = CONTENT_TABLES[entity];
+    if (table) return handleContentSave(req, res, adminClient, auth.userId, table);
     if (entity === "score") return handleScoreSave(req, res, adminClient, auth.userId);
     return res.status(400).json({ error: "Missing or invalid entity" });
   }
 
   if (req.method === "DELETE") {
-    if (req.query?.entity !== "content") return res.status(400).json({ error: "Missing or invalid entity" });
-    return handleContentDelete(req, res, adminClient);
+    const table = CONTENT_TABLES[req.query?.entity];
+    if (!table) return res.status(400).json({ error: "Missing or invalid entity" });
+    return handleContentDelete(req, res, adminClient, table);
   }
 
   res.setHeader("Allow", "GET, POST, DELETE");

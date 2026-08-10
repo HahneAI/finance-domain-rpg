@@ -602,6 +602,16 @@ no top-level error boundary, so an uncaught render crash anywhere blanks the who
 `npm run test:run` passing is **not sufficient evidence** this class of bug is absent; a real
 `vite build` + browser render is the only way to catch it.
 
+**Second blind spot: invalid-HTML-nesting warnings don't fail the suite either.** A `<div>`
+rendered inside a `<p>` (or similar HTML-nesting violation) surfaces only as a
+`console.error`/`console.warn` from React/testing-library, never a thrown assertion — a whole
+test file can pass 100% with the warning printed on every run. Found in production code once
+already (`SetupWizardAdlib.jsx`'s `IntakePage`, drift-app-warden §7 F137) — two card components
+were nested inside the page's sentence `<p>` and went unnoticed until an unrelated test happened
+to render far enough into the tree to trigger the console warning. Watch console output when
+adding any block-level (`<div>`-rendering) child to a component whose top-level element is a
+`<p>` or other phrasing-content element.
+
 ---
 
 ## Environment Variables

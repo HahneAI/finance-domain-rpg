@@ -4501,10 +4501,16 @@ for screen edges")*
       Tax-Exempt opt-in) are ported — `HISTORY_SENSITIVE_FIELDS` already carries their field
       names from real Step1/2/3's own writes, so no new entries are expected, but this must be
       confirmed, not assumed.
-- [ ] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
+- [x] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
       test asserting the final saved config has the correct `taxedWeeks`, `accountCreatedIdx`,
-      `setupComplete: true`, and DHL/buffer/tips-stamp normalization — today's 45 ad-lib tests all
-      assert against the *mock* `onHandoff` callback, not a real save.
+      `setupComplete: true`, and DHL/buffer/tips-stamp normalization — **done 2026-08-10.** New
+      "full ad-lib-to-production completion" describe block in `SetupWizardAdlib.test.jsx` builds
+      a base-user run through every page, touching every field added across rounds 2–4 (Advanced
+      Pay Rules, tips, benefits + start date + other deductions + attendance + PTO, Tax Rates'
+      estimate fallback, Wrap Up's buffer + Tax-Exempt opt-in), asserts against the real
+      `onComplete(finalConfig)` payload — not the old mock `onHandoff` contract. Caught and fixed
+      a real bug in the process: `DhlRotationCard`/`AdvancedPayRulesCard` (F133) were nested
+      inside `IntakePage`'s `<p>`, invalid HTML — see drift-app-warden §7 F137.
 - [ ] `docs/account-reference.json` — spot-check that the reference account's
       `computed_expectations` still line up once real signups can complete through this UI.
 

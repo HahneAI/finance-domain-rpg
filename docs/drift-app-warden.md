@@ -728,6 +728,34 @@ something introduced by adding these fields to Adlib. All three now present.
 > tips fix (F131) was the one explicitly-requested exception. Widening `DIFF_FIELDS` toward true
 > parity with `HISTORY_SENSITIVE_FIELDS` is a real, separate follow-up, not attempted here.
 
+**F137 · Bug found + fixed: `DhlRotationCard`/`AdvancedPayRulesCard` were nested inside `<p>`,
+invalid HTML** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 4 test-coverage pass, docs/TODO.md §19.1.H)*
+F133 (Advanced Pay Rules + DHL rotation) rendered both new cards — `<div>`-based components —
+*inside* `IntakePage`'s sentence `<p>`, since the `<p>...</p>` was the entire function's return
+value at the time and the cards were added as trailing children of conditional blocks already
+inside it. `<div>` cannot be a descendant of `<p>` per the HTML spec; React/testing-library
+surfaced this as a console warning ("In HTML, `<div>` cannot be a descendant of `<p>`... This
+will cause a hydration error") the moment a test exercised the DHL-Plant-custom-rotation or
+Advanced-Pay-Rules render path — caught while writing this round's full-completion test, not by
+any test written *for* F133 itself (none of F133's own assertions rendered far enough into the
+DOM to trigger it). Real-browser impact: a browser auto-closes the `<p>` early when it encounters
+the nested `<div>`, silently splitting one paragraph into two and potentially breaking the
+`BLANK_FONT` styling inheritance for everything after the split. Fixed by closing `</p>` before
+either card and rendering both as siblings after it (`IntakePage`'s return is now a Fragment,
+same pattern `DeductionsPage` already uses for its own block-level cards) — same gate conditions,
+now written explicitly at the top level (`isEmployed && isEmployerDHL && isEmployerPlant &&
+dhlTeamReady` / `isEmployed && isBaseUser && payStructureComplete`) instead of inherited by
+nesting position.
+> **IF** a future card/block-level (`<div>`-rendering) component is added inside `IntakePage`
+> (or any other page here whose top-level element is a `<p>`), **THEN** it must be a sibling
+> *after* that `<p>` closes, never nested inside it — re-derive the gate condition explicitly at
+> the top level rather than relying on the surrounding conditional's nesting position to carry it
+> for free. Check: render the new component in a test and watch for this exact console warning —
+> `npm run test:run` does not fail the suite on it (it's a `console.error`, not a thrown error),
+> so a passing suite is not proof this class of bug is absent, same caveat React Compiler
+> miscompilation (§12.4) already carries for a different reason.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

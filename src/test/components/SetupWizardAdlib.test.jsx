@@ -722,6 +722,141 @@ describe('SetupWizardAdlib — Wrap Up page (DHL Plant, variable schedule)', () 
   })
 })
 
+describe('SetupWizardAdlib — full ad-lib-to-production completion (round-4 field parity)', () => {
+  // Exercises a base-user run through every page, touching every field added across all four
+  // field-parity rounds (Advanced Pay Rules, DHL rotation is Plant-only so out of scope for a
+  // base-user run, Deductions' Benefits Start Date/Other Deductions/Attendance/PTO, Tax Rates'
+  // "Use Estimate for Now" fallback, Wrap Up's Tax-Exempt opt-in), then asserts the final config
+  // finalizeWizardConfig() hands to onComplete — grounded in that function's real, documented
+  // behavior (drift-app-warden §7 F5/F13/F128), not a parallel assumption about what it does.
+  it('completes and produces a correctly normalized final config touching every round 2-4 field', () => {
+    const { onComplete } = renderAdlib()
+
+    // ── Intake ──
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'weekly' } })
+    fireEvent.change(numbers()[0], { target: { value: '21.15' } }) // baseRate
+    fireEvent.change(numbers()[1], { target: { value: '10' } })    // shiftHours
+
+    // Base-user Overtime Threshold -> 48h
+    fireEvent.change(screen.getByLabelText('Overtime threshold'), { target: { value: '48' } })
+
+    // Advanced Pay Rules (round 4)
+    fireEvent.click(screen.getByRole('button', { name: /advanced pay rules/i }))
+    fireEvent.click(screen.getByRole('button', { name: '2×' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' })) // night differential enable
+    fireEvent.change(screen.getByLabelText('Night differential rate, dollars per hour'), { target: { value: '2.25' } })
+    fireEvent.change(screen.getByLabelText('Weekend differential, dollars per hour'), { target: { value: '3' } })
+
+    // Tips/Commission opt-in (round 3)
+    fireEvent.change(screen.getByLabelText('Tips or commission'), { target: { value: 'tips' } })
+
+    fireEvent.click(primaryBtn())
+
+    // ── Schedule ──
+    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
+    fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
+    fireEvent.click(primaryBtn())
+
+    // ── Deductions (round 4) ──
+    fireEvent.change(screen.getByLabelText('Benefits enrollment'), { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Health / Medical' }))
+    fireEvent.change(screen.getByLabelText('Health / Medical weekly cost, dollars'), { target: { value: '18.50' } })
+    fireEvent.change(screen.getByLabelText('Benefits start date'), { target: { value: '2026-04-01' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /add deduction/i }))
+    fireEvent.change(screen.getByLabelText('Deduction label'), { target: { value: 'Union Dues' } })
+    fireEvent.change(screen.getByLabelText('Deduction amount per paycheck, dollars'), { target: { value: '12.50' } })
+
+    fireEvent.change(screen.getByLabelText('Attendance tracking policy'), { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: /attendance policy details/i }))
+    fireEvent.change(screen.getByLabelText('Attendance policy unit'), { target: { value: 'points' } })
+    fireEvent.change(screen.getByLabelText('Attendance warning threshold'), { target: { value: '6' } })
+    fireEvent.change(screen.getByLabelText('Attendance termination threshold'), { target: { value: '12' } })
+    fireEvent.change(screen.getByLabelText('Attendance current balance'), { target: { value: '2' } })
+    fireEvent.change(screen.getByLabelText('Attendance per-event increment'), { target: { value: '1' } })
+
+    fireEvent.change(screen.getByLabelText('PTO offered'), { target: { value: 'yes' } })
+    fireEvent.click(screen.getByRole('button', { name: /pto policy details/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Per Hour Worked' }))
+    fireEvent.change(screen.getByLabelText('Accrual Rate (hrs per hour worked)'), { target: { value: '0.05' } })
+    fireEvent.change(screen.getByLabelText('PTO current balance, hours'), { target: { value: '40' } })
+    fireEvent.change(screen.getByLabelText('PTO cap, hours'), { target: { value: '120' } })
+
+    fireEvent.click(primaryBtn())
+
+    // ── Tax Rates — "Use Estimate for Now" fallback path (round 4) ──
+    fireEvent.change(screen.getByLabelText('Filing status'), { target: { value: 'mfj' } })
+    fireEvent.change(screen.getByLabelText('State'), { target: { value: 'CA' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    fireEvent.click(screen.getByRole('button', { name: /use estimate for now/i }))
+    fireEvent.click(primaryBtn())
+
+    // ── Wrap Up — Paycheck Buffer amount + Tax-Exempt opt-in (round 4) ──
+    fireEvent.change(screen.getByLabelText('Paycheck buffer amount, dollars'), { target: { value: '75' } })
+    fireEvent.click(screen.getByRole('button', { name: /request access/i }))
+    expect(screen.getByText(byText(/tax-exempt projections — coming soon/i))).toBeTruthy()
+
+    fireEvent.click(primaryBtn())
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    const finalConfig = onComplete.mock.calls[0][0]
+
+    // Advanced Pay Rules
+    expect(finalConfig.otMultiplier).toBe(2)
+    expect(finalConfig.nightDiffEnabled).toBe(true)
+    expect(finalConfig.nightDiffRate).toBe(2.25)
+    expect(finalConfig.diffRate).toBe(3)
+    expect(finalConfig.otThreshold).toBe(48)
+
+    // Tips/Commission — finalizeWizardConfig() stamps tipsOrCommissionEnabledAt on the
+    // false→true transition (F128), which a real first-run account (no priorConfig) always is.
+    expect(finalConfig.tipsOrCommissionEnabled).toBe(true)
+    expect(finalConfig.tipsOrCommissionLabel).toBe('tips')
+    expect(finalConfig.tipsOrCommissionEnabledAt).toBeTruthy()
+
+    // Deductions round 4
+    expect(finalConfig.selectedBenefits).toContain('health')
+    expect(finalConfig.healthPremium).toBe(18.5)
+    expect(finalConfig.benefitsStartDate).toBe('2026-04-01')
+    expect(finalConfig.otherDeductions).toEqual([
+      expect.objectContaining({ label: 'Union Dues', perCheckAmount: 12.5 }),
+    ])
+    expect(finalConfig.attendanceBucketEnabled).toBe(true)
+    expect(finalConfig.attendanceUnit).toBe('points')
+    expect(finalConfig.attendanceWarnThreshold).toBe(6)
+    expect(finalConfig.attendanceTerminateThreshold).toBe(12)
+    expect(finalConfig.attendanceCurrentBalance).toBe(2)
+    expect(finalConfig.attendanceIncrement).toBe(1)
+    expect(finalConfig.ptoEnabled).toBe(true)
+    expect(finalConfig.ptoAccrualMethod).toBe('per_hour')
+    expect(finalConfig.ptoAccrualRate).toBe(0.05)
+    expect(finalConfig.ptoCurrentBalance).toBe(40)
+    expect(finalConfig.ptoCap).toBe(120)
+
+    // Tax Rates "Use Estimate for Now" fallback
+    expect(finalConfig.taxRatesEstimated).toBe(true)
+    expect(finalConfig.fedRateLow).toBe(0.10)
+    expect(finalConfig.fedRateHigh).toBe(0.10) // fixed (non-variable) schedule
+
+    // Wrap Up — buffer + Tax-Exempt opt-in
+    expect(finalConfig.freedomAllowanceEnabled).not.toBe(false)
+    expect(finalConfig.freedomAllowance).toBe(75)
+    expect(finalConfig.taxExemptOptIn).toBe(true)
+
+    // finalizeWizardConfig()'s own normalization (F5/F13/F128) — taxExemptOptIn: true makes
+    // taxedWeeks derive to [] (finalizeWizardConfig's own "filed exempt" branch), same as it
+    // would for real SetupWizard.jsx's identical opt-in.
+    expect(finalConfig.setupComplete).toBe(true)
+    expect(finalConfig.accountCreatedIdx).not.toBeNull()
+    expect(Array.isArray(finalConfig.taxedWeeks)).toBe(true)
+    expect(finalConfig.taxedWeeks).toEqual([])
+  })
+})
+
 describe('SetupWizardAdlib — resumeFormData', () => {
   it('reopens on the Wrap Up page (page 5, the last page) pre-filled with the in-progress answers, for an employed resume', () => {
     const resumeFormData = {

@@ -650,6 +650,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
   const commissionOnlyTailText = "commission-only position.";
 
   return (
+    <>
     <p style={BLANK_FONT}>
       {isInvestor && investorFirstName && (
         <>
@@ -773,7 +774,6 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                       <TypedText text={perHourText} />
                     </>
                   )}
-                  {isEmployerPlant && <DhlRotationCard formData={formData} onChange={onChange} attempted={attempted} />}
                 </>
               )}
             </>
@@ -878,7 +878,6 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                 </>
               )}
               {otChoice !== "custom" && <TypedText text="." />}
-              <AdvancedPayRulesCard formData={formData} onChange={onChange} />
             </>
           )}
 
@@ -935,6 +934,14 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
         </>
       )}
     </p>
+
+    {isEmployed && isEmployerDHL && isEmployerPlant && dhlTeamReady && (
+      <DhlRotationCard formData={formData} onChange={onChange} attempted={attempted} />
+    )}
+    {isEmployed && isBaseUser && payStructureComplete && (
+      <AdvancedPayRulesCard formData={formData} onChange={onChange} />
+    )}
+    </>
   );
 }
 

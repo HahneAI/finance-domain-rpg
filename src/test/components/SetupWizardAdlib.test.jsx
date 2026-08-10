@@ -5,9 +5,10 @@ import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 function renderAdlib(config = DEFAULT_CONFIG) {
   const onHandoff = vi.fn()
+  const onComplete = vi.fn()
   const onCancel = vi.fn()
-  render(<SetupWizardAdlib config={config} onHandoff={onHandoff} onCancel={onCancel} />)
-  return { onHandoff, onCancel }
+  render(<SetupWizardAdlib config={config} onHandoff={onHandoff} onComplete={onComplete} onCancel={onCancel} />)
+  return { onHandoff, onComplete, onCancel }
 }
 
 function selects() {
@@ -29,7 +30,7 @@ function k401DateField() {
 // The single primary action button — its label flips between "Next" (more pages
 // ahead) and "Continue Setup →" (the last page), but there is always exactly one.
 function primaryBtn() {
-  return screen.getByRole('button', { name: /^next$|continue setup/i })
+  return screen.getByRole('button', { name: /^next$|continue setup|finish setup/i })
 }
 
 // The employment-status select stays mounted at index 0 for the whole Intake page (it
@@ -163,9 +164,9 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     expect(initialStepId).toBe(10)
   })
 
-  it('calls onCancel when Exit Preview is clicked', () => {
+  it('calls onCancel when Cancel is clicked', () => {
     const { onCancel } = renderAdlib()
-    fireEvent.click(screen.getByRole('button', { name: /exit preview/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
@@ -254,7 +255,7 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
     renderAdlib()
     advanceToSchedule_baseUser()
     expect(screen.getByText(/I started on/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 2 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 2 of 5/i)).toBeTruthy()
   })
 
   it('shows a Back button on the Schedule page that returns to Intake', () => {
@@ -263,7 +264,7 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
     expect(screen.getByRole('button', { name: /^back$/i })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
     expect(screen.getByText(/I work for/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 1 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 1 of 5/i)).toBeTruthy()
   })
 })
 
@@ -317,7 +318,7 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Ad-Lib Preview · 3 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 3 of 5/i)).toBeTruthy()
     expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
   })
 
@@ -368,7 +369,7 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
   it('is page 3 of 5 (not the last page) and reads "Next", not "Continue Setup"', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
-    expect(screen.getByText(/Ad-Lib Preview · 3 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 3 of 5/i)).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     expect(primaryBtn()).toBeDisabled() // attendance still required
   })
@@ -439,7 +440,7 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     fireEvent.change(selects()[1], { target: { value: 'yes' } }) // attendance
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Ad-Lib Preview · 4 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 4 of 5/i)).toBeTruthy()
     expect(screen.getByText(/I officially file/i)).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
   })
@@ -473,7 +474,7 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
   it('is page 4 of 5 (not the last page) and Next starts disabled', () => {
     renderAdlib()
     advanceToTaxRates_baseUser()
-    expect(screen.getByText(/Ad-Lib Preview · 4 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 4 of 5/i)).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     expect(primaryBtn()).toBeDisabled()
   })
@@ -543,9 +544,9 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
     fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
     expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
-    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(primaryBtn()).toHaveTextContent(/finish setup/i)
   })
 })
 
@@ -570,16 +571,16 @@ describe('SetupWizardAdlib — Tax Rates page (DHL Plant, variable schedule)', (
     fireEvent.change(state[1], { target: { value: '58' } })
     fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
   })
 })
 
 describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
-  it('is the last page (5 of 5) and Continue Setup is already enabled — nothing is required', () => {
+  it('is the last page (5 of 5) and Finish Setup is already enabled — nothing is required', () => {
     renderAdlib()
     advanceToWrapUp_baseUser()
-    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
-    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/finish setup/i)
     expect(primaryBtn()).not.toBeDisabled()
   })
 
@@ -607,30 +608,39 @@ describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
     expect(primaryBtn()).not.toBeDisabled() // still nothing required
   })
 
-  it('completes and calls onHandoff with a null initialStepId — nothing left to hand off to', () => {
-    const { onHandoff } = renderAdlib()
+  it('completes and calls onComplete with a fully normalized final config (finalizeWizardConfig)', () => {
+    const { onComplete, onHandoff } = renderAdlib()
     advanceToWrapUp_baseUser()
     fireEvent.click(primaryBtn())
-    expect(onHandoff).toHaveBeenCalledTimes(1)
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.filingStatus).toBe('single')
-    // bufferEnabled defaults to "on" for display (`?? true`) without being written to
-    // formData until the admin actually touches the toggle — same as real Step7.
-    expect(mergedFormData.bufferEnabled).not.toBe(false)
-    expect(initialStepId).toBeNull()
+    expect(onHandoff).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    const finalConfig = onComplete.mock.calls[0][0]
+    expect(finalConfig.filingStatus).toBe('single')
+    // freedomAllowanceEnabled defaults to "on" for display (`?? true`) without being written to
+    // formData until the user actually touches the toggle — same as real Step7 — but
+    // finalizeWizardConfig() normalizes freedomAllowance to 50 in the saved config regardless.
+    expect(finalConfig.freedomAllowanceEnabled).not.toBe(false)
+    expect(finalConfig.freedomAllowance).toBe(50)
+    expect(finalConfig.setupComplete).toBe(true)
+    expect(finalConfig.accountCreatedIdx).not.toBeNull()
+    expect(Array.isArray(finalConfig.taxedWeeks)).toBe(true)
   })
 })
 
 describe('SetupWizardAdlib — Wrap Up page (DHL Plant, variable schedule)', () => {
-  it('completes with distinct short/long tax rates carried through to the final payload', () => {
-    const { onHandoff } = renderAdlib()
+  it('completes with distinct short/long tax rates carried through to the final payload, and DHL overrides applied', () => {
+    const { onComplete } = renderAdlib()
     advanceToWrapUp_dhlPlant()
     fireEvent.click(primaryBtn())
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.fedRateLow).toBeCloseTo(82 / 1050, 4)
-    expect(mergedFormData.fedRateHigh).toBeCloseTo(186 / 1450, 4)
-    expect(mergedFormData.fedRateLow).not.toBeCloseTo(mergedFormData.fedRateHigh, 4)
-    expect(initialStepId).toBeNull()
+    const finalConfig = onComplete.mock.calls[0][0]
+    expect(finalConfig.fedRateLow).toBeCloseTo(82 / 1050, 4)
+    expect(finalConfig.fedRateHigh).toBeCloseTo(186 / 1450, 4)
+    expect(finalConfig.fedRateLow).not.toBeCloseTo(finalConfig.fedRateHigh, 4)
+    // DHL enforced overrides (finalizeWizardConfig)
+    expect(finalConfig.payPeriodEndDay).toBe(0)
+    expect(finalConfig.otThreshold).toBe(40)
+    expect(finalConfig.otMultiplier).toBe(1.5)
+    expect(finalConfig.setupComplete).toBe(true)
   })
 })
 
@@ -655,18 +665,18 @@ describe('SetupWizardAdlib — resumeFormData', () => {
       stateRateLow: 0.03,
       stateRateHigh: 0.03,
       taxRatesEstimated: false,
-      bufferEnabled: true,
-      paycheckBuffer: 50,
+      freedomAllowanceEnabled: true,
+      freedomAllowance: 50,
     }
-    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
+    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
     expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
     expect(primaryBtn()).not.toBeDisabled()
-    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(primaryBtn()).toHaveTextContent(/finish setup/i)
   })
 
   it('reopens on just the employment-status clause (page 1) for a resumed jobless answer', () => {
     const resumeFormData = { ...DEFAULT_CONFIG, startedUnemployed: true }
-    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
+    render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
     expect(screen.getByText(/right now, i am/i)).toBeTruthy()
     expect(screen.queryByText(/I work for/i)).toBeNull()
     expect(primaryBtn()).not.toBeDisabled()

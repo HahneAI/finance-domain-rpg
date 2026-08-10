@@ -480,6 +480,37 @@ model D3-safe activation.
 > tracked loan at $0 (`weeklyAmountForBurn`, §8/§10) — the UI/opt-out path was never
 > broken, only the dollar amount feeding the Runway headline once a loan was kept.
 
+**F128 · `SetupWizardAdlib.jsx` — second real surface writing F5's fields, via the same
+helper** — `SetupWizardAdlib.jsx`, `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+Ad-Lib Wizard production promotion, docs/TODO.md §19)*
+F5's normalization logic (DHL overrides, Freedom Allowance normalize, `taxedWeeks`
+derivation, `accountCreatedIdx` stamp, `setupComplete: true`) was extracted into
+`finalizeWizardConfig()` (`src/lib/wizardComplete.js`) so both `SetupWizard.jsx`'s
+`handleComplete()` and `SetupWizardAdlib.jsx`'s employed-finish path (`finishEmployed()`)
+call the *same* function instead of two hand-transcribed copies. `SetupWizardAdlib.jsx` is
+now the real production first-run wizard for an employed (or investor) signup —
+`App.jsx` mounts it whenever `wizardEntry === false` and there is no in-progress jobless
+hand-off (`adlibHandoff`); `SetupWizard.jsx` still owns every life-event re-entry
+(`structure_change`/`lost_job`/`changed_jobs`/`commission_job`) and the jobless mini-flow
+continuation (`initialStepId: 10`) unchanged.
+> **IF** `finalizeWizardConfig()`'s ordered effects change, **THEN** re-check both
+> callers — a change tuned against only one caller's field set (e.g. assuming `config` is
+> always present) silently breaks the other. `SetupWizardAdlib.jsx` passes `config` as
+> `priorConfig` for the `tipsOrCommissionEnabledAt` transition check — for a real
+> first-run account this is the pre-wizard `DEFAULT_CONFIG`-shaped config, which is
+> correct (tips were never on).
+> **IF** a field is added to `SetupWizardAdlib.jsx`'s pages, **THEN** it must also be
+> added to `DIFF_FIELDS` (F7) and `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`) —
+> same three-way rule F7's drift-trigger-map row already states, now with two real
+> writers instead of one. `BLANK_PAY_FIELDS` (`SetupWizardAdlib.jsx`) must also gain the
+> new field, or a resumed/investor account would show it pre-filled instead of blank.
+> **IF** `SetupWizardAdlib.jsx`'s `onComplete`/`onHandoff` contract changes, **THEN**
+> check `App.jsx`'s wizard mount block (the `wizardEntry === false && !adlibHandoff`
+> condition and its sibling `SetupWizard` mount for the jobless continuation) — the two
+> mounts are a matched pair; changing one prop shape without the other silently breaks
+> the hand-off. Check: `SetupWizardAdlib.test.jsx`'s completion tests assert against
+> `onComplete`, not the old mock `onHandoff` contract.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

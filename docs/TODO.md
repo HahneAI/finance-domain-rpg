@@ -4197,10 +4197,12 @@ shipping or merging.
 
 ## 19. Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment
 
-*Status: all five real first-run steps are now ad-libbed (Welcome+Pay Structure, Schedule,
-Deductions, Tax Rates, Wrap Up) — still admin-only, still MOCK ONLY. §19.1 below is the audit
-gating the next decision: wire this in as the real production wizard. Not user-facing yet — see
-`.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
+*Status: SetupWizardAdlib.jsx is now the REAL production first-run wizard (save/completion
+wiring, entry-point/gating wiring, isInvestor support, Deductions Skip button, and a partial
+full-page conversion shipped 2026-08-10 — see docs/past-TODO-tasks.md §19). §19.1 below is kept
+as the tracking checklist for the remaining items — most of §19.1.A's field/UI parity gaps,
+the rest of §19.1.E/F's responsive polish, §19.1.G accessibility, and §19.1.H housekeeping are
+still open. See `.claude/CLAUDE.md`'s SetupWizardAdlib.jsx section for current architecture.*
 
 **What shipped:** the entire first-run, employed-signup SetupWizard flow (Welcome through Wrap
 Up — six real steps) reimagined as five cascading mad-libs pages with inline blanks, instead of
@@ -4267,7 +4269,7 @@ of them gate `isValid`; that reasoning holds for an admin preview, not for a pro
 - [ ] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
       balance/cap, `SetupWizard.jsx:1438–1509`) — missing entirely. Not previously called out in
       any doc as an intentional scope-out by name; a real gap.
-- [ ] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
+- [x] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
       button) — `DeductionsPage` has no Skip affordance at all, so a real user who wants to skip
       benefits/attendance entirely (allowed today) would be *blocked* by ad-lib's attendance gate
       for base users where the real wizard would let them through. This is a **functional
@@ -4291,7 +4293,7 @@ equivalent already.*
 
 **B. Flow-coverage gaps — entire paths the ad-lib pages never touch**
 
-- [ ] **Investor first-run entry** — `SetupWizard`'s `isInvestor` prop drives: Step0's "Welcome,
+- [x] **Investor first-run entry** — `SetupWizard`'s `isInvestor` prop drives: Step0's "Welcome,
       {firstName}." greeting reading `formData.investorName`; the "Do you work for DHL?" gate
       hidden entirely (investors are always base users); a special `formData` init override
       (`SetupWizard.jsx:2499–2501`: `employerPreset: null`, `otThreshold: config.otThreshold || 40`,
@@ -4319,10 +4321,10 @@ equivalent already.*
 
 **C. Save/completion wiring — ad-lib must actually save for production; it never has**
 
-- [ ] Today, an employed finish just closes the preview with **zero save** — that's correct for a
+- [x] Today, an employed finish just closes the preview with **zero save** — that's correct for a
       mock preview and **wrong** for production. The finished `formData` must reach the real save
       pipeline.
-- [ ] **Reuse `App.jsx`'s existing `handleWizardComplete(mergedConfig)` directly** rather than
+- [x] **Reuse `App.jsx`'s existing `handleWizardComplete(mergedConfig)` directly** rather than
       reimplementing its logic — that function already owns: `configHistoryMetaRef` tagging
       (`source: "setup_wizard"`, `effectiveFrom: startDate` — required by drift-app-warden §7 F9
       or the config-history snapshot loses its attribution); the `structure_change` +
@@ -4332,22 +4334,22 @@ equivalent already.*
       production data loss, per drift-app-warden's own case law). Routing ad-lib's finish through
       this one function, instead of writing a second copy, is what keeps this a single
       source-of-truth commit point instead of a new parallel-formula risk.
-- [ ] `handleComplete()`'s own normalization must still run before `handleWizardComplete` sees the
+- [x] `handleComplete()`'s own normalization must still run before `handleWizardComplete` sees the
       data — DHL overrides (`payPeriodEndDay: 0`, `otThreshold: 40`, `otMultiplier: 1.5`), buffer
       normalize (`paycheckBuffer ?? 50` whenever `bufferEnabled !== false`), `taxedWeeks`
       derivation via `buildYear`, `accountCreatedIdx` stamp, `setupComplete: true`
       (`SetupWizard.jsx:2566–2598`). Either call the same function ad-lib-side too, or extract it
       to a shared helper both `SetupWizard.jsx` and `SetupWizardAdlib.jsx` call — do **not**
       hand-transcribe this logic a second time.
-- [ ] Confirm the `onCancel`/Exit path for a real first-run ad-lib session has **no save side
+- [x] Confirm the `onCancel`/Exit path for a real first-run ad-lib session has **no save side
       effects** — abandoning setup must leave `config.setupComplete` untouched, same as the real
       wizard today.
 
 **D. Entry-point & gating wiring**
 
-- [ ] Remove the `isAdmin` gate — production ad-lib must be reachable by real signups, not just
+- [x] Remove the `isAdmin` gate — production ad-lib must be reachable by real signups, not just
       the Admin Tools panel.
-- [ ] Route ad-lib through the **same `wizardEntry` state** `SetupWizard` uses today (or an
+- [x] Route ad-lib through the **same `wizardEntry` state** `SetupWizard` uses today (or an
       equivalent single source of truth) — this is what already gates, for free, everything a
       first-run signup must still see: the `TrialExplainerScreen` interstitial
       (`App.jsx:1866–1874`, shown once ahead of first-run entry for a real trial signup — must
@@ -4355,20 +4357,20 @@ equivalent already.*
       (`paywallBypassed`/`isExpiredReadOnly`), and the `investorSession` race guard
       (`App.jsx:712–715`). A separate, parallel `adlibPreviewOpen` state (today's admin-preview
       model) would silently skip all of this if reused as-is for production.
-- [ ] For a real first-run, non-investor signup, `onCancel` must be **`undefined`** (no escape
+- [x] For a real first-run, non-investor signup, `onCancel` must be **`undefined`** (no escape
       hatch) — matching the real wizard's own uncancelable-first-run rule
       (drift-app-warden §7.3: "`onCancel` undefined (non-investor) — no escape"). Ad-lib's
       "Exit Preview" button must not survive into production for this path; it can stay for
       investor/re-entry flows if/when those are ever ad-libbed, same as the real wizard's own
       conditional Cancel.
-- [ ] Rename/remove "Ad-Lib Preview · N of M" and "Exit Preview" copy once this isn't a preview —
+- [x] Rename/remove "Ad-Lib Preview · N of M" and "Exit Preview" copy once this isn't a preview —
       it's the wizard.
-- [ ] Remove (or explicitly repurpose) the Admin Tools "Ad-Lib Wizard" → Preview toggle — it has
+- [x] Remove (or explicitly repurpose) the Admin Tools "Ad-Lib Wizard" → Preview toggle — it has
       no reason to exist once there's nothing left to preview against.
 
 **E. Full-page conversion** *(explicit ask: "a real full page instead of a popup modal")*
 
-- [ ] Every full-screen surface in this app today — including both `SetupWizard` and
+- [x] Every full-screen surface in this app today — including both `SetupWizard` and
       `SetupWizardAdlib` — uses the same pattern: a `position: fixed; inset: 0` viewport takeover
       with a **centered, bounded card** inside it (`maxWidth`/`maxHeight`, its own `background`/
       `border`/`border-radius`). That's a modal-on-a-backdrop, not a page. Drop the card

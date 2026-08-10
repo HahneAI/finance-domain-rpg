@@ -100,6 +100,47 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19 — Ad-Lib Wizard production promotion (2026-08-10, partial — see docs/TODO.md §19.1)
+
+`SetupWizardAdlib.jsx` promoted from admin-only mock preview to the real production first-run
+onboarding wizard, per the §19.1 pre-production audit. Delivered this round:
+
+- [x] **Save/completion wiring (§19.1.C)** — `SetupWizard.jsx`'s `handleComplete()` normalization
+  extracted into a shared `finalizeWizardConfig()` helper (`src/lib/wizardComplete.js`); both
+  `SetupWizard.jsx` and `SetupWizardAdlib.jsx` now call it. `SetupWizardAdlib`'s employed-finish
+  path calls a new `onComplete(finalConfig)` prop, which `App.jsx` wires directly to
+  `handleWizardComplete()` — no reimplementation. Jobless mini-flow hand-off (`onHandoff`)
+  unchanged. Cancel has zero save side effects.
+- [x] **Real-wizard field rename fix** — ad-lib's Wrap Up buffer fields renamed
+  `bufferEnabled`/`paycheckBuffer` → `freedomAllowanceEnabled`/`freedomAllowance` to match the real
+  wizard's post-rebrand field names (were previously silently dropped by the real save path).
+- [x] **Entry-point & gating wiring (§19.1.D)** — `isAdmin`/`adlibPreviewOpen` gate removed;
+  `App.jsx` now mounts `SetupWizardAdlib` whenever `wizardEntry === false` and no jobless hand-off
+  is in progress; `SetupWizard.jsx` keeps every life-event re-entry and the jobless continuation.
+  `onCancel` is `undefined` for a real first-run, non-investor signup (no escape hatch); Admin
+  Tools "Ad-Lib Wizard" → Preview button removed (both copies). "Ad-Lib Preview · N of M"/"Exit
+  Preview" copy renamed to "Setup · N of M"/"Cancel".
+- [x] **`isInvestor` prop (decision 2)** — mirrors `SetupWizard.jsx` field-for-field: Welcome
+  greeting, DHL question hidden, `formData` init override; wired from `App.jsx`.
+- [x] **Deductions page Skip button** — added (`PAGES` entry `skippable: true`), fixing the
+  functional regression flagged in §19.1.A vs. real `STEP_DEFS id 3`'s `skippable: true`.
+- [x] **Full-page conversion, partial (§19.1.E)** — dropped the bounded centered-card modal
+  styling; content now fills the viewport with a ~720px max-width text/content column, keeping the
+  `fold-lift`/`data-fold`/safe-area-inset takeover mechanics.
+- [x] **Drift ledger** — `docs/drift-app-warden.md` §7 F128 added, documenting the shared helper
+  and `SetupWizardAdlib.jsx` as a second real surface.
+- [ ] **Not done this round** (see `docs/TODO.md` §19.1 for the remaining checklist): most of
+  §19.1.A's field/UI parity gaps (tips/commission opt-in, base-user OT threshold, Advanced Pay
+  Rules, DHL weekend differential edit, DHL custom-rotation question, Benefits Start Date, Other
+  Recurring Deductions, Attendance Policy Details, PTO section, Tax Rates "Use Estimate for Now" +
+  DHL Missouri preset, Wrap Up's Tax-Exempt Week Projections opt-in); the rest of §19.1.E/F
+  (TypedText `white-space:pre` wrap fix, `Inline*` max-width audit, `BLANK_FONT` `clamp()`,
+  `StepSlide`/mobile-picker re-tuning, `prefers-reduced-motion`); §19.1.G (attempted-gated
+  required-field feedback, screen-reader pass); §19.1.H's `DIFF_FIELDS`/`HISTORY_SENSITIVE_FIELDS`
+  three-way audit and `docs/account-reference.json` spot-check.
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

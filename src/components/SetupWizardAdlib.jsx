@@ -4,14 +4,18 @@ import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/co
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 import { estimateWeeklyNet } from "../lib/finance.js";
+import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComplete.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for all six
-// SetupWizard steps a first-run, employed signup sees: Welcome + Pay Structure
-// collapsed onto one cascading page, then Schedule, Deductions, Tax Rates, and
-// Wrap Up each as their own page, all in the same style — the entire first-run
-// flow, start to finish. Admin-only preview, gated behind the "Ad-Lib Preview"
-// toggle in App.jsx — never shown to real users.
+// SetupWizardAdlib.jsx — the REAL production first-run onboarding wizard for
+// an employed signup: Welcome + Pay Structure collapsed onto one cascading
+// page, then Schedule, Deductions, Tax Rates, and Wrap Up each as their own
+// page, all in the same "fill-in-the-blank" mad-libs style. Mounted by
+// App.jsx whenever `wizardEntry === false` (first-run) and there is no
+// in-progress jobless hand-off (`adlibHandoff`) — see App.jsx's wizard mount
+// block. SetupWizard.jsx stays mounted, completely unchanged, for every
+// life-event re-entry (`structure_change`, `lost_job`, `changed_jobs`,
+// `commission_job`) — this component owns first-run only.
 //
 // Each page is one continuous mad-libs sentence with inline blanks (native
 // <select>/<input> styled to sit inline in the text). Within a page, each new
@@ -20,14 +24,21 @@ import { estimateWeeklyNet } from "../lib/finance.js";
 // depends on is given. Between pages it's a real Next/Back page transition
 // (StepSlide), same as the real wizard. Reuses the exact same config fields
 // and DHL-preset defaults the real SetupWizard.jsx Step0/Step1/Step2 apply,
-// so onHandoff can seed the real wizard (via its initialStepId prop) for the
-// remaining steps with zero drift between the two experiences.
+// so the jobless mini-flow hand-off (via `initialStepId`) has zero drift
+// between the two experiences.
 //
-// MOCK ONLY — nothing from this preview, including the handed-off real-wizard
-// continuation, is ever saved. App.jsx's onComplete for that hand-off skips
-// handleWizardComplete entirely (no setConfig, no savePersistedStateNow) as
-// long as adlibHandoff is set, so admins can click all the way through to
-// tune the feel with zero risk to real account data.
+// Save path: on an employed finish, `formData` is run through the same
+// `finalizeWizardConfig()` helper (`src/lib/wizardComplete.js`) real
+// `SetupWizard.jsx`'s `handleComplete()` calls, then handed to the
+// `onComplete(finalConfig)` prop — App.jsx wires that straight to
+// `handleWizardComplete()`, the same function every real SetupWizard
+// completion uses (eager save, configHistory tagging, food-seed logic). The
+// jobless mini-flow still hands off into the real `SetupWizard` at
+// `initialStepId: 10`, which owns its own `handleComplete()` call.
+//
+// Investor first-run support (`isInvestor` prop) mirrors `SetupWizard.jsx`
+// field-for-field: Welcome reads `formData.investorName`, "Do you work for
+// DHL?" is hidden entirely (investors are always base users).
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BLANK_FONT = {
@@ -264,23 +275,26 @@ const BLANK_PAY_FIELDS = {
   fedRateLow: null, fedRateHigh: null, stateRateLow: null, stateRateHigh: null,
   taxRatesEstimated: null,
   // Wrap Up page
-  bufferEnabled: null, paycheckBuffer: null,
+  freedomAllowanceEnabled: null, freedomAllowance: null,
 };
 
 // ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
 // clause rolls in as soon as the answer it depends on is given. ──
-function IntakePage({ formData, onChange }) {
+function IntakePage({ formData, onChange, isInvestor = false }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
   // so track which blank the user picked as local UI state (mirrors real Step1's
   // gateTouched flag). Re-derives "OTHER" on a resumed formData that already has
-  // userPaySchedule answered without employerPreset === "DHL".
+  // userPaySchedule answered without employerPreset === "DHL". Investors are always
+  // base users — the "who do you work for" clause is skipped entirely for them,
+  // mirroring real Step1's `!isInvestor` gate.
   const [employerChoice, setEmployerChoice] = useState(() =>
-    formData.employerPreset === "DHL" ? "DHL" : formData.userPaySchedule ? "OTHER" : ""
+    isInvestor ? "OTHER" : formData.employerPreset === "DHL" ? "DHL" : formData.userPaySchedule ? "OTHER" : ""
   );
-  const isEmployerDHL = employerChoice === "DHL";
+  const isEmployerDHL = !isInvestor && employerChoice === "DHL";
   const isSalary = formData.userPaySchedule === "salary";
   const isEmployed = formData.startedUnemployed === false;
+  const investorFirstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
 
   function setEmployer(v) {
     setEmployerChoice(v);
@@ -338,6 +352,12 @@ function IntakePage({ formData, onChange }) {
 
   return (
     <p style={BLANK_FONT}>
+      {isInvestor && investorFirstName && (
+        <>
+          <TypedText text={`Welcome, ${investorFirstName}.`} />
+          <br />
+        </>
+      )}
       <TypedText text={introText} />{" "}
       <FadeIn delay={typeDuration(introText)}>
         <InlineSelect
@@ -348,14 +368,18 @@ function IntakePage({ formData, onChange }) {
       </FadeIn>.
       {isEmployed && (
         <>
-          {" "}<TypedText text={workForText} />{" "}
-          <FadeIn delay={typeDuration(workForText)}>
-            <InlineSelect
-              value={employerChoice}
-              onChange={setEmployer}
-              options={[{ value: "DHL", label: "DHL" }, { value: "OTHER", label: "someone else" }]}
-            />
-          </FadeIn>.
+          {!isInvestor && (
+            <>
+              {" "}<TypedText text={workForText} />{" "}
+              <FadeIn delay={typeDuration(workForText)}>
+                <InlineSelect
+                  value={employerChoice}
+                  onChange={setEmployer}
+                  options={[{ value: "DHL", label: "DHL" }, { value: "OTHER", label: "someone else" }]}
+                />
+              </FadeIn>.
+            </>
+          )}
           {isEmployerDHL && (
             <>
               {" "}<TypedText text={siteText} />{" "}
@@ -425,7 +449,7 @@ function IntakePage({ formData, onChange }) {
               )}
             </>
           )}
-          {employerChoice === "OTHER" && (
+          {(employerChoice === "OTHER" || isInvestor) && (
             <>
               {" "}<TypedText text={iGetPaidText} />{" "}
               <FadeIn delay={typeDuration(iGetPaidText)}>
@@ -899,7 +923,7 @@ function WrapUpPage({ formData, onChange }) {
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
   const fmt = n => `$${Math.abs(n).toFixed(2)}`;
-  const bufferOn = formData.bufferEnabled ?? true;
+  const bufferOn = formData.freedomAllowanceEnabled ?? true;
 
   const payScheduleLabel =
     formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary"
@@ -955,7 +979,7 @@ function WrapUpPage({ formData, onChange }) {
           <FadeIn delay={typeDuration(bufferLeadText)}>
             <InlineSelect
               value={bufferOn ? "on" : "off"}
-              onChange={v => onChange({ bufferEnabled: v === "on" })}
+              onChange={v => onChange({ freedomAllowanceEnabled: v === "on" })}
               options={[{ value: "on", label: "want" }, { value: "off", label: "don't want" }]}
             />
           </FadeIn>{" "}
@@ -965,8 +989,8 @@ function WrapUpPage({ formData, onChange }) {
               {" "}<TypedText text={bufferAmountText} />
               <FadeIn delay={typeDuration(bufferAmountText)}>
                 <InlineNumber
-                  value={formData.paycheckBuffer ?? ""}
-                  onChange={v => onChange({ paycheckBuffer: v === "" ? null : Math.min(parseFloat(v) || 0, 200) })}
+                  value={formData.freedomAllowance ?? ""}
+                  onChange={v => onChange({ freedomAllowance: v === "" ? null : Math.min(parseFloat(v) || 0, FREEDOM_ALLOWANCE_MAX) })}
                   placeholder="50"
                   width="56px"
                 />
@@ -987,35 +1011,53 @@ function WrapUpPage({ formData, onChange }) {
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
   { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
-  { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage },
+  // skippable: true mirrors real STEP_DEFS id 3 (Deductions) — the only step the real
+  // wizard lets a user bypass entirely (benefits/attendance answers are all optional to
+  // the account, unlike Pay Structure/Schedule/Tax Rates). Missing this affordance was a
+  // functional regression vs. the real wizard — see docs/TODO.md §19.1.A.
+  { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage, skippable: true },
   { id: "taxRates", isValid: isTaxRatesValid, Component: TaxRatesPage },
   { id: "wrapUp", isValid: isWrapUpValid, Component: WrapUpPage },
 ];
 
-// onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
-// answered. For the jobless mini-flow, initialStepId is 10 (Unemployment
-// Benefits) — the only real-wizard steps left, since Welcome and Pay Structure
-// are the only ones a jobless first-run even shows. For an employed user,
-// initialStepId is null — Welcome, Pay Structure, Schedule, Deductions, Tax
-// Rates, and Wrap Up are now ALL covered by this preview, so there is no
-// remaining real step to hand off to at all. App.jsx treats a null
-// initialStepId as "nothing left — mock-finish and close," the same MOCK
-// ONLY, nothing-saved behavior the real Wrap Up's Finish button gets when
-// handed off to, just without ever mounting the real SetupWizard component.
+// onHandoff(mergedFormData, initialStepId) — used ONLY for the jobless mini-flow now.
+// initialStepId is always 10 (Unemployment Benefits) when it fires — the only real-wizard
+// steps left, since Welcome and Pay Structure are the only ones a jobless first-run even
+// shows. App.jsx mounts the real SetupWizard at that step id; SetupWizard's own
+// handleComplete() (which also runs through finalizeWizardConfig) owns the eventual save.
 //
-// resumeFormData (optional): when the admin already answered these pages, handed off
-// into the real wizard, and then hit Back at the real wizard's very first step, App.jsx
-// reopens this component with the in-progress answers instead of the blanked defaults,
-// and resumes on the last page instead of page 0 — so Back lands them where they left
-// off in the ad-lib UI, not on the real wizard's stacked-field view of the same steps.
-export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData = null }) {
-  const [formData, setFormData] = useState(() => resumeFormData ?? { ...config, ...BLANK_PAY_FIELDS });
+// onComplete(finalConfig) — fires once an EMPLOYED user finishes Wrap Up. formData is run
+// through the same finalizeWizardConfig() helper SetupWizard.jsx's handleComplete() calls
+// (src/lib/wizardComplete.js) before this fires, so App.jsx can hand finalConfig straight to
+// handleWizardComplete() — no re-normalization needed on the App.jsx side.
+//
+// resumeFormData (optional): when the user already answered these pages, handed off into the
+// real wizard's jobless mini-flow, and then hit Back at the real wizard's very first step,
+// App.jsx reopens this component with the in-progress answers instead of the blanked
+// defaults, and resumes on the last page instead of page 0 — so Back lands them where they
+// left off in the ad-lib UI, not on the real wizard's stacked-field view of the same steps.
+//
+// isInvestor (optional): mirrors SetupWizard.jsx's investor handling field-for-field — see
+// this file's header comment and IntakePage's isInvestor branches.
+//
+// onCancel (optional): pass undefined for a real first-run, non-investor signup — no escape
+// hatch, matching SetupWizard's own uncancelable-first-run rule (drift-app-warden §7.3). The
+// Cancel button only renders when onCancel is provided (investor first-run only today).
+export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resumeFormData = null, isInvestor = false }) {
+  const [formData, setFormData] = useState(() => {
+    if (resumeFormData) return resumeFormData;
+    const base = isInvestor
+      ? { ...config, ...BLANK_PAY_FIELDS, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
+      : { ...config, ...BLANK_PAY_FIELDS };
+    return base;
+  });
   const [pageIdx, setPageIdx] = useState(() => {
     if (!resumeFormData) return 0;
     const pages = resumeFormData.startedUnemployed === true ? [PAGES[0]] : PAGES;
     return pages.length - 1;
   });
   const [stepDir, setStepDir] = useState(1);
+  const [attempted, setAttempted] = useState(false);
 
   // Skipping straight to a single-page flow once "unemployed" is chosen —
   // Schedule is irrelevant for the jobless mini-flow, same as the real
@@ -1030,65 +1072,86 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
     setFormData(prev => ({ ...prev, ...patch }));
   }
 
+  function finishEmployed() {
+    // Shared normalizer (src/lib/wizardComplete.js) — see docs/drift-app-warden.md §7 F5/F13.
+    // config is the prior/original config (undefined for a real first-run account, which is
+    // correct — finalizeWizardConfig treats a missing priorConfig as "tips were never on").
+    onComplete(finalizeWizardConfig(formData, config));
+  }
+
   function handleNext() {
-    if (!canProceed) return;
+    if (!canProceed) { setAttempted(true); return; }
+    setAttempted(false);
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    onHandoff(formData, formData.startedUnemployed === true ? 10 : null);
+    if (formData.startedUnemployed === true) { onHandoff(formData, 10); return; }
+    finishEmployed();
+  }
+
+  // Mirrors real STEP_DEFS id 3's skippable:true — only the Deductions page offers this.
+  // Bypasses the current page's required-field gate entirely (unlike handleNext, which
+  // enforces it) since a skipped page's answers are, by definition, optional.
+  function handleSkip() {
+    setAttempted(false);
+    if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
+    if (formData.startedUnemployed === true) { onHandoff(formData, 10); return; }
+    finishEmployed();
   }
 
   function handleBack() {
+    setAttempted(false);
     if (pageIdx > 0) { setStepDir(-1); setPageIdx(i => i - 1); }
   }
 
   return (
     <div className="fold-lift" data-fold="entering" style={{
       position: "fixed", inset: 0, background: "var(--color-bg-base)",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      display: "flex", flexDirection: "column", alignItems: "stretch",
       paddingTop: "max(16px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-      paddingLeft: "16px", paddingRight: "16px", zIndex: 100,
+      zIndex: 100,
     }}>
-      <div style={{
-        width: "100%", maxWidth: "560px",
-        background: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border-accent)",
-        borderRadius: "20px",
-        display: "flex", flexDirection: "column",
-        flex: 1, minHeight: 0, maxHeight: "560px",
-        overflow: "hidden",
-      }}>
-        <div style={{ padding: "24px 28px 0", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
-              Ad-Lib Preview · {pageIdx + 1} of {activePages.length}
-            </div>
-            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", padding: "2px 8px" }}>
-              Admin Only · Not Saved
-            </div>
-          </div>
-          <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)" }}>
-            <div style={{ height: "100%", borderRadius: "2px", background: "var(--color-teal)", width: `${progressPct}%`, transition: "width 0.3s ease" }} />
+      <div style={{ padding: "20px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right))", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: "720px", margin: "0 auto" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
+            Setup · {pageIdx + 1} of {activePages.length}
           </div>
         </div>
+        <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)", maxWidth: "720px", margin: "10px auto 0" }}>
+          <div style={{ height: "100%", borderRadius: "2px", background: "var(--color-teal)", width: `${progressPct}%`, transition: "width 0.3s ease" }} />
+        </div>
+      </div>
 
-        <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "center", padding: "28px 32px" }}>
+      <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "28px max(16px, env(safe-area-inset-left)) 28px max(16px, env(safe-area-inset-right))" }}>
+        <div style={{ width: "100%", maxWidth: "720px" }}>
           <StepSlide stepKey={pageIdx} direction={stepDir}>
-            {current && <current.Component formData={formData} onChange={update} />}
+            {current && <current.Component formData={formData} onChange={update} isInvestor={isInvestor} attempted={attempted} />}
           </StepSlide>
         </div>
+      </div>
 
-        <div style={{ padding: "14px 24px 20px", flexShrink: 0, display: "flex", gap: "10px", justifyContent: "flex-end", borderTop: "1px solid var(--color-border-subtle)" }}>
-          <Pressable
-            onClick={onCancel}
-            style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
-          >
-            Exit Preview
-          </Pressable>
+      <div style={{ padding: "14px max(16px, env(safe-area-inset-left)) 20px max(16px, env(safe-area-inset-right))", flexShrink: 0, display: "flex", gap: "10px", justifyContent: "center", borderTop: "1px solid var(--color-border-subtle)" }}>
+        <div style={{ display: "flex", gap: "10px", width: "100%", maxWidth: "720px" }}>
+          {onCancel && (
+            <Pressable
+              onClick={onCancel}
+              style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Cancel
+            </Pressable>
+          )}
           {pageIdx > 0 && (
             <Pressable
               onClick={handleBack}
-              style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              style={{ marginLeft: onCancel ? 0 : "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
             >
               Back
+            </Pressable>
+          )}
+          {current?.skippable && (
+            <Pressable
+              onClick={handleSkip}
+              style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Skip
             </Pressable>
           )}
           <Pressable
@@ -1100,9 +1163,10 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
               border: "none", borderRadius: "12px", padding: "8px 22px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold",
               cursor: canProceed ? "pointer" : "not-allowed",
+              marginLeft: (!onCancel && pageIdx === 0 && !current?.skippable) ? "auto" : 0,
             }}
           >
-            {isLast ? "Continue Setup →" : "Next"}
+            {!isLast ? "Next" : formData.startedUnemployed === true ? "Continue Setup →" : "Finish Setup"}
           </Pressable>
         </div>
       </div>

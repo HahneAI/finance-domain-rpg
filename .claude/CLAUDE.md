@@ -62,7 +62,7 @@ src/
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── TipsCommissionCheckIn.jsx — small daily check-in card (tips/commission opt-in, skinned bonus-log mechanism)
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
-│   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
+│   ├── SetupWizardAdlib.jsx — REAL production first-run onboarding wizard, "fill-in-the-blank" style (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   ├── BetaHomebase.jsx     — tracked-beta-tester-only page (real nav-stack view, not a modal — see App.jsx's `navigate("betaHomebase")`): rubric score, feature checklist, suggestion feed, changelog recap
 │   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same page treatment, same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
@@ -116,31 +116,47 @@ instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off
 wizard's jobless mini-flow (id 10) after its own pilot pages are answered. No effect on any
 existing call site that omits it.
 
-**`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
-reimagining of the *entire* first-run, employed-signup flow — all six real steps — as five
-cascading mad-libs pages with inline `<select>`/`<input>` blanks, instead of stacked form fields
-or a page-per-step flow — pilot for a friendlier onboarding feel. Page 1 (`IntakePage`) merges
+**`SetupWizardAdlib.jsx` — the REAL production first-run onboarding wizard.** A
+"fill-in-the-blank" reimagining of the entire first-run, employed-signup flow — all six real
+`SetupWizard.jsx` steps — as five cascading mad-libs pages with inline `<select>`/`<input>`
+blanks, instead of stacked form fields or a page-per-step flow. Page 1 (`IntakePage`) merges
 Welcome + Pay Structure into one continuous sentence; page 2 (`SchedulePage`) covers Schedule as
-its own page; page 3 (`DeductionsPage`) covers Deductions as its own page; page 4 (`TaxRatesPage`)
-covers Tax Rates as its own page; page 5 (`WrapUpPage`) covers Wrap Up as its own page — all in
-the same cascading style.
-Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both mobile and desktop
-copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real signup** —
-`isAdmin` gates the trigger button, and the component itself has no other entry point. Reuses the
-exact same config fields and DHL-preset defaults as real Step0/Step1/Step2/Step3/Step4/StepWrapUp
-(see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero drift between the two
-experiences on the fields they share. `onHandoff(mergedFormData, initialStepId)` fires once the
-active pages are answered: for the jobless mini-flow it still closes the preview and reopens the
-real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at id 10 for the remaining real steps —
-a real, click-through continuation, not a throwaway mockup; for an employed user, `initialStepId`
-is `null` — Wrap Up was the last real step too, so there's nothing left to hand off to, and
-`App.jsx` just closes the preview without ever mounting the real `SetupWizard` at all. **MOCK
-ONLY — nothing is ever saved**, either way: the jobless hand-off continuation has its
-`onComplete` skipped (`App.jsx`'s wizard mount, no `setConfig`, no `savePersistedStateNow`)
-whenever `adlibHandoff` is set, exactly like the direct-close path skips saving anything — admins
-can click all the way to Finish with zero risk to real account data. Every step from Welcome
-through Wrap Up is ad-libbed today for the employed path; promoting this to a real user-facing
-A/B split is a future decision pending how the pilot feels in practice.
+its own page; page 3 (`DeductionsPage`) covers Deductions as its own page (with a Skip button,
+mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`TaxRatesPage`) covers Tax Rates as
+its own page; page 5 (`WrapUpPage`) covers Wrap Up as its own page — all in the same cascading
+style.
+
+**Scope: first-run only.** `App.jsx` mounts `SetupWizardAdlib` whenever `wizardEntry === false`
+(first-run) and there is no in-progress jobless mini-flow hand-off (`adlibHandoff`).
+`SetupWizard.jsx` stays mounted, completely unchanged, for every life-event re-entry
+(`structure_change`, `lost_job`, `changed_jobs`, `commission_job`) — those keep using the real
+stacked-form wizard. The jobless mini-flow (unemployed at first-run) still hands off into the real
+`SetupWizard` at `STEP_DEFS` id 10 (`onHandoff(mergedFormData, 10)`, via `App.jsx`'s
+`adlibHandoff` state) for the Unemployment Benefits/Job Loss Details/Jobless Wrap Up steps — a
+real, click-through continuation, not a throwaway mockup. A Back at that first handed-off step
+returns the user to `SetupWizardAdlib`, pre-filled via `adlibResumeData`/`onBackBeforeStart`,
+resuming on the last page they were on.
+
+**Investor first-run** (`isInvestor` prop, threaded from `App.jsx` as `config.isInvestor`)
+mirrors `SetupWizard.jsx`'s investor handling field-for-field: `IntakePage`'s Welcome clause reads
+`formData.investorName`, the "who do you work for" DHL/someone-else question is skipped entirely
+(investors are always base users — the page goes straight to the "I get paid…" pay-schedule
+clause), and `formData`'s init override forces `employerPreset: null` with
+`otThreshold`/`maxWeeklyHours` seeded from the investor's existing config. Investor first-run also
+keeps a Cancel button (returns to account 1), matching `SetupWizard.jsx`'s own investor exception
+to the uncancelable-first-run rule.
+
+**Save path.** Reuses the exact same config fields and DHL-preset defaults as real
+Step0/Step1/Step2/Step3/Step4/StepWrapUp (see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so
+there's zero drift between the two experiences on the fields they share. On an employed finish,
+`formData` is run through `finalizeWizardConfig()` (`src/lib/wizardComplete.js`) — the same shared
+normalizer `SetupWizard.jsx`'s `handleComplete()` calls (DHL enforced overrides, Freedom Allowance
+normalize, `taxedWeeks` derivation, `accountCreatedIdx` stamp, `setupComplete: true` — see
+`docs/drift-app-warden.md` §7 F5/F13/F128) — then handed to the `onComplete(finalConfig)` prop,
+which `App.jsx` wires straight to `handleWizardComplete()`, the same function every real
+`SetupWizard` completion uses (eager save via `savePersistedStateNow`, configHistory tagging,
+food-seed logic). Cancel (`onCancel`, only present for investor first-run) has zero save side
+effects, matching the real wizard's uncancelable-first-run rule for everyone else.
 
 - **Five real pages, each internally cascading.** `PAGES = [{Component: IntakePage}, {Component:
   SchedulePage}, {Component: DeductionsPage}, {Component: TaxRatesPage}, {Component: WrapUpPage}]`,
@@ -164,15 +180,15 @@ A/B split is a future decision pending how the pilot feels in practice.
   so the select/input appears right as its introducing text finishes typing. All `TypedText` within
   the same clause use `delay=0` (they mount together the instant the clause becomes eligible, so
   they can type in parallel — no cumulative per-segment delay bookkeeping needed).
-- **Blank by default, not prefilled from the admin's real config.** `formData` starts as
+- **Blank by default, not prefilled from the account's existing config.** `formData` starts as
   `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field either page asks
   about, both the original Welcome/Pay Structure set (`startedUnemployed`, `employerPreset`,
   `dhlSite`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`, `userPaySchedule`, `annualSalary`,
   `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`, `payPeriodEndDay`, `scheduleIsVariable`,
   `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`, `diffRate`, `startingWeekIsLong`) and the
   Schedule additions (`startDate`, `firstActiveIdx`, `maxWeeklyHours`, `hoursUnderstood`,
-  `biweeklyPayWeekParity`). Without this, an admin whose real account already has these answered
-  (e.g. a DHL-preset admin) would land on a page fully pre-filled and instantly proceed-eligible —
+  `biweeklyPayWeekParity`). Without this, an investor re-entering first-run whose config already
+  has some of these answered would land on a page fully pre-filled and instantly proceed-eligible —
   silently skipping `isIntakeValid()`/`isScheduleValid()`'s required-field gating (already correct,
   mirrors STEP_DEFS id 0/1/2) since it never had a blank state to gate from. Every `InlineSelect`
   reselecting its blank `(select)` option must resolve to `null` (not a falsy default), or clearing
@@ -187,7 +203,7 @@ A/B split is a future decision pending how the pilot feels in practice.
   branches: Plant keeps the original Team A/B clause unchanged (`pickTeamPatch()`); Warehouse asks
   a Mon–Thu/Wed–Sat team blank (`pickWarehouseTeamPatch()`, options built from
   `DHL_PRESET.warehouseTeams`) followed by a real shift-length blank (10/12 hours, writes
-  `shiftHours` directly — the only place in this pilot a select writes a number). The shared
+  `shiftHours` directly — the only place on this page a select writes a number). The shared
   "working the [shift], paid [schedule]" clause that follows is gated on `dhlTeamReady`, which
   additionally requires `shiftHours` for Warehouse (Plant only needs `dhlTeam`) — mirrors
   `isIntakeValid()`'s own gate exactly, which mirrors STEP_DEFS id 1's `!d.dhlSite`/`!d.dhlTeam`
@@ -241,11 +257,11 @@ A/B split is a future decision pending how the pilot feels in practice.
   via `PAYCHECKS_PER_YEAR`) real `StepWrapUp` shows — never a parallel approximation, per
   `docs/active-systems.md` §6's grounding rule. Paycheck Buffer is the one interactive piece,
   ad-libbed as an inline sentence ("I `[want/don't want]` a paycheck buffer of $`[amount]` per
-  check") writing the same `bufferEnabled`/`paycheckBuffer` fields as real Step7 (`?? true`
+  check") writing the same `freedomAllowanceEnabled`/`freedomAllowance` fields as real Step7 (`?? true`
   default display, matching — not writing — until touched, and the same $200 cap real `BUFFER_MAX`
   enforces). The Tax-Exempt Week Projections opt-in gate is scoped out (v1 — it doesn't gate
   `isValid` either, on this page or the real one, so omitting it can't break required-field
-  parity), as is the `structure_change`-only diff section (this pilot has no life-event re-entry
+  parity), as is the `structure_change`-only diff section (this component has no life-event re-entry
   concept at all — it's first-run only).
 - **This is now the entire first-run flow, so the hand-off boundary changes shape for an employed
   user.** For the jobless mini-flow, Back at the real `SetupWizard`'s first handed-off step (id 10)
@@ -258,7 +274,7 @@ A/B split is a future decision pending how the pilot feels in practice.
   in-progress answers, resuming on the last page (Wrap Up for an employed resume, since resuming
   always lands on `pages.length - 1` regardless of that page's own validity — Wrap Up has none to
   satisfy anyway) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
-  Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
+  Cancel and a fresh forward hand-off, so a deliberate new investor first-run always starts
   blank again.
 
 ---

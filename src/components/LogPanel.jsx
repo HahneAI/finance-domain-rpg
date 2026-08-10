@@ -1223,7 +1223,7 @@ export function LogPanel({
                 <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
                 </div>
-                <div className="text-xs" style={{ }}>
+                <div className="text-xs">
                   <span style={{ color: "var(--color-text-primary)" }}>{monthLabel}: </span>
                   {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>Tier 1 · any unapproved absence changes tier</span>}
                   {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}

@@ -1058,10 +1058,10 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
       }}>
         <div style={{ padding: "24px 28px 0", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
+            <div className="text-xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
               Ad-Lib Preview · {pageIdx + 1} of {activePages.length}
             </div>
-            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", padding: "2px 8px" }}>
+            <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", padding: "2px 8px" }}>
               Admin Only · Not Saved
             </div>
           </div>
@@ -1079,14 +1079,14 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
         <div style={{ padding: "14px 24px 20px", flexShrink: 0, display: "flex", gap: "10px", justifyContent: "flex-end", borderTop: "1px solid var(--color-border-subtle)" }}>
           <Pressable
             onClick={onCancel}
-            style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            className="text-xs" style={{ marginRight: "auto", background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "7px 14px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
           >
             Exit Preview
           </Pressable>
           {pageIdx > 0 && (
             <Pressable
               onClick={handleBack}
-              style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              className="text-xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
             >
               Back
             </Pressable>
@@ -1094,11 +1094,11 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
           <Pressable
             onClick={handleNext}
             disabled={!canProceed}
-            style={{
+            className="text-xs" style={{
               background: canProceed ? "var(--color-teal)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 22px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold",
+              letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold",
               cursor: canProceed ? "pointer" : "not-allowed",
             }}
           >

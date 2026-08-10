@@ -53,7 +53,7 @@ function FeedbackSection() {
     <div>
       <SH>Send Feedback</SH>
       {status.success ? (
-        <div style={{ fontSize: "13px", color: "var(--color-teal)" }}>Thanks — got it.</div>
+        <div className="text-base" style={{ color: "var(--color-teal)" }}>Thanks — got it.</div>
       ) : (
         <>
           <textarea
@@ -62,15 +62,15 @@ function FeedbackSection() {
             placeholder="What's working, what's not, what would help..."
             maxLength={4000}
             rows={3}
-            style={{ width: "100%", boxSizing: "border-box", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px", color: "var(--color-text-primary)", fontSize: "13px", fontFamily: "inherit", resize: "vertical", marginBottom: "10px" }}
+            className="text-base" style={{ width: "100%", boxSizing: "border-box", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px", color: "var(--color-text-primary)", fontFamily: "inherit", resize: "vertical", marginBottom: "10px" }}
           />
           {status.error && (
-            <div style={{ fontSize: "11px", color: "var(--color-deduction)", marginBottom: "10px" }}>{status.error}</div>
+            <div className="text-xs" style={{ color: "var(--color-deduction)", marginBottom: "10px" }}>{status.error}</div>
           )}
           <Pressable
             onClick={handleSubmit}
             disabled={status.loading || !note.trim()}
-            style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
+            className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
           >
             {status.loading ? "Sending…" : "Submit"}
           </Pressable>
@@ -126,7 +126,7 @@ export function ProductivityHub() {
     <>
       <PanelHero eyebrow="For You">Money Moves</PanelHero>
       {loading ? (
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>Loading…</div>
+        <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Loading…</div>
       ) : (
         <>
           <ChecklistSection items={checklistItems} completedIds={completedIds} onToggle={handleToggle} title="Quick Wins" />

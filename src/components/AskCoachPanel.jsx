@@ -20,7 +20,7 @@ function EmptyStateArt({ children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "14px", margin: "auto", padding: "24px 12px" }}>
       <img src={coachLineartMono} alt="" style={{ width: "120px", height: "120px", opacity: 0.85 }} />
-      <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5, maxWidth: "260px" }}>
+      <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5, maxWidth: "260px" }}>
         {children}
       </div>
     </div>
@@ -326,7 +326,7 @@ export function AskCoachPanel({
           </Pressable>
         )}
 
-        <span style={{ fontSize: "13px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
+        <span className="text-base" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
           {view === "chat" ? "Ask Coach" : "Chat History"}
         </span>
 
@@ -350,7 +350,7 @@ export function AskCoachPanel({
           )}
           {groupedHistory.map((group) => (
             <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+              <div className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
                 {group.label}
               </div>
               {group.chats.map((chat) => (
@@ -371,15 +371,15 @@ export function AskCoachPanel({
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                      <span style={{ fontSize: "13px", color: "var(--color-text-primary)", fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span className="text-base" style={{ color: "var(--color-text-primary)", fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {chat.title || deriveTitle(chat.messages ?? [])}
                       </span>
-                      <span style={{ fontSize: "10px", color: "var(--color-text-disabled)", flexShrink: 0 }}>
+                      <span className="text-xs" style={{ color: "var(--color-text-disabled)", flexShrink: 0 }}>
                         {relativeDateLabel(chat.createdAt)}
                       </span>
                     </div>
                     {chat.summary && (
-                      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                      <div className="text-sm" style={{ color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
                         {chat.summary}
                       </div>
                     )}
@@ -463,12 +463,11 @@ export function AskCoachPanel({
                   </div>
                 )}
                 <div
-                  style={{
+                  className="text-md" style={{
                     background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
                     border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
                     borderRadius: "14px",
                     padding: "10px 14px",
-                    fontSize: "14px",
                     lineHeight: 1.5,
                     color: "var(--color-text-primary)",
                     whiteSpace: "pre-wrap",
@@ -479,7 +478,7 @@ export function AskCoachPanel({
               </div>
             ))}
             {errored && (
-              <div style={{ color: "var(--color-red)", fontSize: "12px" }}>Coach couldn't respond — try again.</div>
+              <div className="text-sm" style={{ color: "var(--color-red)", }}>Coach couldn't respond — try again.</div>
             )}
             <div ref={listEndRef} />
           </div>
@@ -518,12 +517,11 @@ export function AskCoachPanel({
             <Pressable
               onClick={send}
               disabled={!draft.trim() || sending}
-              style={{
+              className="text-xs" style={{
                 background: draft.trim() && !sending ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
                 border: "none",
                 borderRadius: "10px",
                 color: draft.trim() && !sending ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-                fontSize: "11px",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 fontWeight: "bold",

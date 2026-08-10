@@ -141,13 +141,13 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
           <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>
             Sharpen Your Tax Rates
           </div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
             Enter values from your paycheck stub to replace the estimated rates with exact figures.
           </div>
 
           {/* Week 1 */}
           <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
               {isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -167,7 +167,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
               </div>
             )}
             {sFed1 !== null && (
-              <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+              <div className="text-xs" style={{ color: "var(--color-green)" }}>
                 → Fed {sPct(sFed1)}{!isNoTax && sSta1 != null ? `  ·  State ${sPct(sSta1)}` : ""}
               </div>
             )}
@@ -176,7 +176,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
           {/* Week 2 — variable only */}
           {isVariable && (
             <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+              <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
                 Longer Week Paystub
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -196,7 +196,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 </div>
               )}
               {sFed2 !== null && (
-                <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                <div className="text-xs" style={{ color: "var(--color-green)" }}>
                   → Fed {sPct(sFed2)}{!isNoTax && sSta2 != null ? `  ·  State ${sPct(sSta2)}` : ""}
                 </div>
               )}
@@ -204,19 +204,19 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
           )}
 
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-            <Pressable onClick={() => setShowSharpener(false)} style={{
+            <Pressable onClick={() => setShowSharpener(false)} className="text-xs" style={{
               background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-              padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
+              padding: "8px 16px", letterSpacing: "2px",
               textTransform: "uppercase", cursor: "pointer",
             }}>
               Cancel
             </Pressable>
-            <Pressable onClick={applySharpener} disabled={!canSharpenerApply} style={{
+            <Pressable onClick={applySharpener} disabled={!canSharpenerApply} className="text-xs" style={{
               background: canSharpenerApply ? "var(--color-green)" : "var(--color-bg-raised)",
               color: canSharpenerApply ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 18px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold", cursor: canSharpenerApply ? "pointer" : "not-allowed",
             }}>
               Confirm Rates
@@ -245,10 +245,10 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
           <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>
             Missed Event Day Impact
           </div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
             Breakdown includes only take-home loss from missed event day logs.
           </div>
-          <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
+          <div className="text-sm" style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Projected net (before events)</span>
               <strong>{f(projectedAnnualNet)}</strong>
@@ -262,14 +262,14 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
               <strong style={{ color: "var(--color-teal)" }}>{f(adjustedTakeHome)}</strong>
             </div>
           </div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>
             Card and modal both use the same adjusted net event-impact source.
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Pressable onClick={() => setShowEventLossInfo(false)} style={{
+            <Pressable onClick={() => setShowEventLossInfo(false)} className="text-xs" style={{
               background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-              padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
+              padding: "8px 16px", letterSpacing: "2px",
               textTransform: "uppercase", cursor: "pointer",
             }}>
               Close
@@ -289,11 +289,11 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         border: "1px solid rgba(0,200,150,0.18)",
         borderRadius: "8px",
       }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
           Tax rates are <strong style={{ color: "var(--color-teal)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
         </div>
-        <Pressable onClick={() => setShowSharpener(true)} style={{
-          fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
+        <Pressable onClick={() => setShowSharpener(true)} className="text-2xs" style={{
+          letterSpacing: "2px", textTransform: "uppercase",
           background: "transparent", color: "var(--color-teal)",
           border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
           padding: "5px 12px", cursor: "pointer", flexShrink: 0,
@@ -304,7 +304,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
     )}
 
     <div style={{ marginBottom: "24px", textAlign: "center" }}>
-      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>
+      <div className="text-2xs" style={{ letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>
         Income Overview
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "14px" }}>
@@ -314,10 +314,10 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         <Pressable
           onClick={() => setShowEventLossInfo(true)}
           aria-label="Show missed event day loss details"
-          style={{
+          className="text-sm" style={{
             width: "24px", height: "24px", borderRadius: "999px", border: "1px solid var(--color-border-subtle)",
             background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", cursor: "pointer",
-            display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", lineHeight: 1,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
             flexShrink: 0,
           }}
         >i</Pressable>
@@ -342,7 +342,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
             <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "6px" }}>
               {isDesktopWeekly ? "Rolling Window" : "Monthly Rolling"}
             </div>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
               {isDesktopWeekly
                 ? isBiweekly
                   ? `${weeklyRows.filter(isPaycheckWeek).length} paychecks · rolling window`
@@ -350,7 +350,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 : `${rollingMonthCards.length} months`}
             </div>
           </div>
-          <Pressable onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</Pressable>
+          <Pressable onClick={() => setShowWeekDetail(true)} className="text-xs" style={{ letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</Pressable>
         </div>
       </div>
 
@@ -372,11 +372,11 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 {/* Month header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</span>
+                    <span className="text-md" style={{ fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</span>
                     {m.isCurrentMonth && <span style={{ fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                   </div>
-                  <span style={{
-                    fontSize: "9px", padding: "2px 7px", borderRadius: "12px",
+                  <span className="text-2xs" style={{
+                    padding: "2px 7px", borderRadius: "12px",
                     background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)",
                     color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-teal)",
                     border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-teal)"),
@@ -398,12 +398,12 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                   return (
                     <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1), cursor: onWeekInspect ? "pointer" : "default" }} onClick={onWeekInspect ? () => onWeekInspect(w) : undefined}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                        <div className="text-xs" style={{ color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
                           {isBiweekly ? "Pay Period ending " : "Ends "}{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "12px", fontWeight: "bold", color: netColor, fontVariantNumeric: "tabular-nums" }}>
+                          <span className="text-sm" style={{ fontWeight: "bold", color: netColor, fontVariantNumeric: "tabular-nums" }}>
                             {w.active ? f2(displayNet) : "—"}
                           </span>
                           {w.active && (
@@ -413,7 +413,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                           )}
                         </div>
                       </div>
-                      <div style={{ fontSize: "9px", color: isBiweekly ? "var(--color-text-secondary)" : rotationColor, marginTop: "2px" }}>
+                      <div className="text-2xs" style={{ color: isBiweekly ? "var(--color-text-secondary)" : rotationColor, marginTop: "2px" }}>
                         {!isBiweekly && `${rotationDisplay} · `}{isPast ? "ACTUAL" : "PROJECTED"}
                       </div>
                     </div>
@@ -422,7 +422,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
 
                 {/* Month total */}
                 <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                  <span className="text-xs" style={{ letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
                     {isMonthlyPay ? "1 Paycheck" :
                      isBiweekly ? (() => { const n = m.wks.filter(isPaycheckWeek).length; return `${n} Paycheck${n !== 1 ? "s" : ""}`; })() :
                      (m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Take Home" : "Take Home")}
@@ -437,7 +437,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         </ScrollSnapRow>
       ) : (
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
-          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <thead><tr className="text-xs" style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>{isBiweekly ? "Pay Period End" : "Wk End"}</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
@@ -487,7 +487,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
       )}
 
       {isDesktopWeekly && archivedWeeklyRows.length > 0 && (
-        <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
+        <div className="text-xs" style={{ marginTop: "8px", color: "var(--color-text-disabled)" }}>
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>
       )}
@@ -501,11 +501,11 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
     {weekDetailFold.mounted && createPortal(<div className="fold-backdrop" data-fold={weekDetailFold.fold} onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div className="fold-modal" data-fold={weekDetailFold.fold} onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", width: "100%", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: 0 }}>
-          <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
+          <span className="text-xs" style={{ letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
           <Pressable onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</Pressable>
         </div>
-        <div style={{ overflow: "auto", minHeight: 0, WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
-          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+        <div style={{ overflow: "auto", minHeight: 0, WebkitOverflowScrolling: "touch" }}><table className="data-table text-sm" style={{ width: "100%", borderCollapse: "collapse", minWidth: "680px" }}>
+          <thead><tr className="text-xs" style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px" }}>{isBiweekly ? "Period End" : "Wk End"}</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>
           <tbody>{(isBiweekly ? weeklyRows.filter(isPaycheckWeek) : weeklyRows).map(w => {
@@ -528,7 +528,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                   <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                 </td>
-                <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: rotationColor }}>{rotationDisplay}</td>
+                <td className="text-xs" style={{ padding: "7px 4px", textAlign: "center", color: rotationColor }}>{rotationDisplay}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>

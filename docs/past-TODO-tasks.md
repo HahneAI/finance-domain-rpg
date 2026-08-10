@@ -33,7 +33,70 @@ One-liner per item — see git history for full implementation detail.*
   `isHighWeek`/`requiredOtShifts` always false/0, Plant regression guard), `SetupWizard.test.jsx`
   (site question placement, Warehouse/Plant branching, full Warehouse wizard run through
   `onComplete`), `ProfilePanel.test.jsx` (site-aware Employment card)
-- [ ] Not yet done: mirroring this into `SetupWizardAdlib.jsx`'s ad-lib preview (explicit follow-up)
+- [x] **Mirrored into `SetupWizardAdlib.jsx`'s ad-lib preview** — `IntakePage` asks the same
+  "Which DHL site do you work at?" question before any team clause, branching to the unchanged
+  Plant Team A/B clause or a new Warehouse Mon–Thu/Wed–Sat team + real shift-length (10/12h)
+  clause; `SchedulePage` hides the Short/Long-Week clause for Warehouse the same way Step2 does;
+  `isIntakeValid()`/`BLANK_PAY_FIELDS` extended with `dhlSite` so the mandatory-field gating and
+  blank-by-default behavior cover it too
+
+---
+
+## Ad-Lib Wizard preview — page-by-page conversion (2026-08-09)
+
+- [x] **Page 1 (`IntakePage`)** — merged real Welcome + Pay Structure (Step0/Step1) into one
+  cascading mad-libs page; blank-by-default (`BLANK_PAY_FIELDS`), real mandatory-field gating
+  (`isIntakeValid()` mirrors `STEP_DEFS id 0/1`), typed-reveal cascading clauses
+- [x] **Page 2 (`SchedulePage`)** — real Schedule (Step2) as its own ad-lib page, same style;
+  `isScheduleValid()` mirrors `STEP_DEFS id 2`
+- [x] **Page 3 (`DeductionsPage`)** — real Deductions (Step3) as its own ad-lib page;
+  `isDeductionsValid()` mirrors `STEP_DEFS id 3` exactly (base users require the attendance
+  question, DHL users need nothing, any selected benefit needs its amount/rate+date filled in);
+  new `InlineChip` toggle component for the one multi-select field (9 `BENEFIT_OPTIONS`, since a
+  native `<select>` blank doesn't fit an independently-toggleable set inside the sentence-flow
+  metaphor); k401 shows a %-based rate blank (stored as a decimal, displayed ×100) plus an
+  enrollment-date blank reusing `InlineDate` with a new `label` prop; deselecting a chip zeroes its
+  field(s) the same way real `Step3` does; `benefitsStartDate`, the dynamic `otherDeductions` list,
+  and attendance sub-fields scoped out (v1, none of them gate real Step3's `isValid`)
+- [x] **Page 4 (`TaxRatesPage`)** — real Tax Rates (Step4), scoped down by explicit instruction to
+  one sentence — "I officially file `[filing status]`, living in the state of `[state]`." — plus a
+  single "Recalculate Using Paystub" button that fades in last, once both selectors are answered.
+  `isTaxRatesValid()` mirrors `STEP_DEFS id 4`'s `isValid` exactly (`fedRateLow > 0 && userState !=
+  null`). The button reveals a small paystub calculator (`CalcField` — plain labeled number inputs,
+  not sentence-blank styled like `InlineNumber`, since this is a utility box, not mad-libs prose):
+  one box for a fixed schedule, two ("Shorter"/"Longer Week Paystub") for `scheduleIsVariable`,
+  same shape as real `PaystubCalc`; `dr()` (withheld ÷ gross) is a straight copy of `PaystubCalc`'s
+  own helper; "Apply These Rates" writes `fedRateLow/High`/`stateRateLow/High`/
+  `taxRatesEstimated: false` and collapses the calculator. State Withheld hidden for a
+  no-income-tax state (`STATE_TAX_TABLE[userState]?.model === "NONE"`). Real Step4's "Use Estimate
+  for Now" fallback and DHL Missouri preset button are intentionally not ad-libbed — only the
+  paystub path, per the request.
+- [x] **Page 5 (`WrapUpPage`)** — real Wrap Up (Step7), the final step of the whole first-run flow.
+  `isWrapUpValid()` mirrors `STEP_DEFS id 7`'s `isValid: () => true` — no required fields, just a
+  live summary. Renders the same `estimateWeeklyNet(formData)` breakdown real `StepWrapUp` shows
+  (never a parallel approximation), scaled to the pay schedule via `PAYCHECKS_PER_YEAR`. Paycheck
+  Buffer ad-libbed as an inline sentence ("I `[want/don't want]` a paycheck buffer of $`[amount]`
+  per check"), writing the same `bufferEnabled`/`paycheckBuffer` fields, same $200 cap. Tax-Exempt
+  Week Projections opt-in and the `structure_change` diff section scoped out (v1 — neither gates
+  `isValid` on either the real or ad-lib page, and this pilot has no life-event re-entry concept).
+  Because Wrap Up is the real wizard's last step for an employed user too, absorbing it changes the
+  hand-off shape: `onHandoff`'s `initialStepId` is now `null` for an employed finish — nothing left
+  to hand off to — and `App.jsx`'s `onHandoff` callback just closes the preview (still MOCK ONLY,
+  no `setConfig`/`savePersistedStateNow`) without ever mounting the real `SetupWizard`. The jobless
+  mini-flow (id 10) is unaffected — still a real hand-off, since Unemployment Benefits/Job Loss
+  Details/Jobless Wrap Up remain unconverted, separate real-wizard territory.
+  Handoff `initialStepId` bumped from Deductions (3) → Tax Rates (4) → Wrap Up (7) → `null` (nothing
+  left) as each page was absorbed.
+- [x] Outer page-count/resume machinery (`activePages`, `pageIdx`, "N of M" header, resume-at-
+  last-page via `resumeFormData`) confirmed generic against `PAGES.length` — required zero changes
+  across all five page additions
+- [x] Tests extended in lockstep with each page (`SetupWizardAdlib.test.jsx`) — currently 45 tests
+  covering all five pages, DHL Plant/Warehouse branching, variable-schedule two-week paystub calc,
+  resume-on-Back, and both handoff shapes (jobless real hand-off, employed null/mock-finish)
+- Every step of the first-run, employed-signup flow (Welcome through Wrap Up) is now ad-libbed.
+  The jobless mini-flow (Unemployment Benefits, Job Loss Details, Jobless Wrap Up) and any
+  re-entry life events (changed jobs, lost job, structure change, commission job) remain
+  real-wizard-only — out of scope unless requested.
 
 ---
 

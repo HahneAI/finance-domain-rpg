@@ -254,7 +254,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
             <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
               Expected return-to-work
             </div>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", maxWidth: "260px", lineHeight: 1.4 }}>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "2px", maxWidth: "260px", lineHeight: 1.4 }}>
               Setting a date resumes projected income from that week — used by Income & Goals timelines.
             </div>
           </div>

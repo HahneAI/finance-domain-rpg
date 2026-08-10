@@ -74,6 +74,27 @@ cramped. Fix: move to positive tracking + slightly looser line-height, at two ti
   added to `src/index.css` for parity with the main site's system — not yet referenced by any
   component here (A:Fin builds headers as inline styles / the `PanelHero`/`SectionHeader`
   components, not via a class system).
+
+**Body-text size scale (adopted 2026-08-10).** Non-numeric text — labels, sublabels,
+descriptions, list summaries — should use one of five `text-*` utility classes in
+`src/index.css` instead of a hardcoded inline `fontSize`, so the smallest tiers have one place
+to tune instead of hundreds of scattered px literals:
+- `.text-2xs` → 10px (was 9px — bumped, read too small)
+- `.text-xs` → 11px (was 10px *and* 11px — the two raw sizes collapsed into one class once both
+  got bumped a step)
+- `.text-sm` → 12px
+- `.text-base` → 13px
+- `.text-md` → 14px
+
+Large numeric emphasis (MetricCard values, dollar totals, computed readouts) is explicitly out
+of scope — it keeps whatever per-component sizing it already had.
+
+**Migration status:** all of `ui.jsx`'s shared primitives (`Card`/`MetricCard`, `SH`,
+`PanelHero`, `SectionHeader`, `NT`, `VT`, `SmBtn`, `lS`, `InsightRow`) — the components reused
+across every panel — are converted. Most individual panels (`HomePanel`, `IncomePanel`,
+`BudgetPanel`, `LogPanel`, `ProfilePanel`, `SetupWizard`, `App.jsx`'s admin views) still have
+their own one-off inline `fontSize` declarations not yet migrated to these classes — that's a
+larger follow-up pass, panel by panel, rather than a blind repo-wide sweep.
 - Scoped to actual header/title text only — large *numeric* emphasis (MetricCard values, dollar
   totals, computed readouts) intentionally keeps its existing weight/tracking; that's data
   display, not headline text, and wasn't part of this fix.

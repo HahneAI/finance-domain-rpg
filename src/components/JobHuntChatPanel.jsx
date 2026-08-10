@@ -37,6 +37,17 @@ export function JobHuntChatPanel({
     listEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
+  // Same body.modal-open signal HomePanel.jsx/BudgetPanel.jsx already use —
+  // fades out .mobile-bottom-nav (opacity/pointer-events, index.css) so the
+  // nav can't sit on top of the fixed-position input bar at the bottom of
+  // this panel. This component is only ever mounted while open/exiting (the
+  // parent unmounts it entirely otherwise), so a plain mount/unmount toggle
+  // is enough — no `open` prop to gate on.
+  useEffect(() => {
+    document.body.classList.add("modal-open");
+    return () => document.body.classList.remove("modal-open");
+  }, []);
+
   const send = async () => {
     const text = draft.trim();
     if (!text || sending) return;

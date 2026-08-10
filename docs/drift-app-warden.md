@@ -480,6 +480,282 @@ model D3-safe activation.
 > tracked loan at $0 (`weeklyAmountForBurn`, §8/§10) — the UI/opt-out path was never
 > broken, only the dollar amount feeding the Runway headline once a loan was kept.
 
+**F128 · `SetupWizardAdlib.jsx` — second real surface writing F5's fields, via the same
+helper** — `SetupWizardAdlib.jsx`, `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+Ad-Lib Wizard production promotion, docs/TODO.md §19)*
+F5's normalization logic (DHL overrides, Freedom Allowance normalize, `taxedWeeks`
+derivation, `accountCreatedIdx` stamp, `setupComplete: true`) was extracted into
+`finalizeWizardConfig()` (`src/lib/wizardComplete.js`) so both `SetupWizard.jsx`'s
+`handleComplete()` and `SetupWizardAdlib.jsx`'s employed-finish path (`finishEmployed()`)
+call the *same* function instead of two hand-transcribed copies. `SetupWizardAdlib.jsx` is
+now the real production first-run wizard for an employed (or investor) signup —
+`App.jsx` mounts it whenever `wizardEntry === false` and there is no in-progress jobless
+hand-off (`adlibHandoff`); `SetupWizard.jsx` still owns every life-event re-entry
+(`structure_change`/`lost_job`/`changed_jobs`/`commission_job`) and the jobless mini-flow
+continuation (`initialStepId: 10`) unchanged.
+> **IF** `finalizeWizardConfig()`'s ordered effects change, **THEN** re-check both
+> callers — a change tuned against only one caller's field set (e.g. assuming `config` is
+> always present) silently breaks the other. `SetupWizardAdlib.jsx` passes `config` as
+> `priorConfig` for the `tipsOrCommissionEnabledAt` transition check — for a real
+> first-run account this is the pre-wizard `DEFAULT_CONFIG`-shaped config, which is
+> correct (tips were never on).
+> **IF** a field is added to `SetupWizardAdlib.jsx`'s pages, **THEN** it must also be
+> added to `DIFF_FIELDS` (F7) and `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`) —
+> same three-way rule F7's drift-trigger-map row already states, now with two real
+> writers instead of one. `BLANK_PAY_FIELDS` (`SetupWizardAdlib.jsx`) must also gain the
+> new field, or a resumed/investor account would show it pre-filled instead of blank.
+> **IF** `SetupWizardAdlib.jsx`'s `onComplete`/`onHandoff` contract changes, **THEN**
+> check `App.jsx`'s wizard mount block (the `wizardEntry === false && !adlibHandoff`
+> condition and its sibling `SetupWizard` mount for the jobless continuation) — the two
+> mounts are a matched pair; changing one prop shape without the other silently breaks
+> the hand-off. Check: `SetupWizardAdlib.test.jsx`'s completion tests assert against
+> `onComplete`, not the old mock `onHandoff` contract.
+
+**F129 · `TypedText` word-chunked reveal — the fix for the horizontal-overflow bug** —
+`SetupWizardAdlib.jsx:63–95`, `index.css` (`adlibType`, `.adlib-typed-word`/`.adlib-fade-in`)
+— **[G]** — *(added 2026-08-10, ad-lib field-parity/responsive round, docs/TODO.md §19.1.F)*
+`TypedText` used to render an entire clause as one `display:inline-block; white-space:pre`
+span — an atomic box that cannot wrap internally, so a long single-sentence clause (e.g.
+Deductions' attendance-tracking question) overflowed horizontally on narrow viewports.
+Fixed by chunking each clause into per-word spans (still `inline-block`/`white-space:pre`
+individually, so a single word is never long enough to need wrapping) joined by ordinary
+breakable spaces in a normal-flow wrapper — the browser now wraps between words exactly
+like plain text, while each word still steps in via the same `adlibType` clip-path
+keyframe, staggered so words appear to type left-to-right in order. `typeDuration(text)`
+still describes the *total* duration across all of a clause's words, so external delay math
+(a following `FadeIn`'s `delay={typeDuration(clauseText)}`) is unaffected — the chunking is
+internal to `TypedText`.
+> **IF** `TypedText`'s per-word rendering changes again (e.g. back to one span, or a
+> different chunking granularity), **THEN** re-verify no clause overflows at 375px width
+> (iPhone SE class) — there is no automated viewport-width test for this, only manual/visual
+> verification, so a regression here won't fail CI.
+> **IF** you add a new `TypedText` call with a long clause, **THEN** no extra care is
+> needed — the word-chunking is automatic for any string, not something each call site has
+> to opt into.
+> **IF** you change how `SetupWizardAdlib.test.jsx` queries clause text, **THEN** use the
+> file's `byText()` helper (matches full recursive `textContent`, not RTL's default
+> direct-text-node-only match) — the word-chunked spans mean a plain
+> `screen.getByText(/multi word clause/i)` no longer matches, since the clause is no longer
+> one continuous text node.
+> Reduced motion: `.adlib-typed-word`/`.adlib-fade-in` are disabled to an instant, fully
+> visible state under `prefers-reduced-motion: reduce` (`index.css`) — the stepped reveal
+> and fade/lift both skip, text just appears.
+
+**F130 · `IntakePage` field-parity round 1 — Tips/Commission, base-user OT Threshold, DHL
+Weekend Differential** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round, docs/TODO.md §19.1.A)*
+Three real Step1 fields ported into `IntakePage`'s trailing clauses, all gated on a new
+`payStructureComplete` boolean (mirrors the point in real Step1 where the core rate/hours
+questions are answered and Advanced Pay Rules/OT Threshold/tips opt-in become relevant):
+Tips/Commission opt-in (`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+`tipsCommissionOnlyPosition`, any employer), base-user Overtime Threshold
+(`otThreshold`, 40/48/custom/exempt — DHL always uses its fixed 40h/1.5× override from
+`setEmployer`, so this only renders for base users), and an editable DHL Weekend Differential
+(`diffRate`, was previously hardcoded to the `DHL_PRESET` default with no way to change it).
+None of the three gate `isIntakeValid` on either wizard.
+> **IF** `payStructureComplete`'s definition changes, **THEN** all three trailing clauses move
+> together — they share one gate, not three independent ones. Check both the DHL branch
+> (`dhlTeamReady && !!formData.userPaySchedule`) and the base/investor branch (rate or salary
+> filled) still match what real Step1 considers "core pay structure answered."
+> **IF** you touch the DHL Weekend Differential clause, **THEN** note it's nested *inside*
+> `{dhlTeamReady && (...)}` but additionally gated on `formData.userPaySchedule` — the DHL
+> pay-schedule question (weekly/every-two-weeks) must be answered first, or the differential
+> blank renders before the sentence has even reached that clause. A regression here (differential
+> appearing before pay-schedule is answered) was caught by this round's own test — see
+> `SetupWizardAdlib.test.jsx`'s "DHL reveals an editable Weekend Differential…" test.
+> **IF** the Overtime Threshold's `otChoice` local state and `formData.otThreshold` diverge
+> (e.g. a resumed formData with `otThreshold === null` meaning "Exempt" on the real wizard),
+> **THEN** know this is a known, accepted ambiguity — `otChoice` only distinguishes
+> unanswered-vs-40-vs-48-vs-custom on *initial mount*, not on every render, and null is treated
+> as "unanswered" on resume rather than "Exempt." Harmless because `otThreshold` never gates
+> `isIntakeValid` on either wizard — purely a cosmetic scope note, not a data-correctness bug.
+> **IF** a field is added to any of these three clauses, **THEN** it must also be added to
+> `BLANK_PAY_FIELDS` (done for the tips/commission trio this round) — `diffRate`/`otThreshold`
+> were already present since the schedule/DHL-pick paths wrote them before this round.
+> `DIFF_FIELDS`/`HISTORY_SENSITIVE_FIELDS` (F7) already track `diffRate`/`otThreshold` (real
+> Step1 already wrote them); `tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+> `tipsCommissionOnlyPosition` are **not** in either list today — a pre-existing gap shared by
+> *both* wizards (real Step1 has written these fields since before this round without being
+> tracked), not something this round introduced or fixed. Flagged for §19.1.H's housekeeping
+> pass, not resolved here.
+
+**F131 · F130's tips/commission tracking gap — resolved** — `src/lib/configHistory.js`
+(`HISTORY_SENSITIVE_FIELDS`), `SetupWizard.jsx` (`DIFF_FIELDS`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 3, docs/TODO.md §19.1.H)*
+`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` were writable by
+both wizards (real Step1 since before F130, `SetupWizardAdlib.jsx`'s `IntakePage` since F130)
+without being tracked by either the account-history diff whitelist or the structure-change diff
+table — flagged but deliberately left unresolved by F130 pending this round. Both lists now carry
+all three fields. A full sweep of every field `SetupWizardAdlib.jsx` currently writes (`onChange`
+call sites plus `pickTeamPatch`/`pickWarehouseTeamPatch`/`setEmployer`/`pickSite`'s returned
+patches) against `HISTORY_SENSITIVE_FIELDS` found no other gaps — everything else the ad-lib
+wizard writes was already tracked.
+> **IF** a new field is added to either wizard's pages, **THEN** it must land in
+> `HISTORY_SENSITIVE_FIELDS` in the same commit — this is the second time a field went live on
+> both wizards without history tracking; make it a checklist item, not a follow-up.
+> **IF** `SetupWizardAdlib.jsx` gains the remaining round-4 ported fields (Advanced Pay Rules,
+> DHL custom rotation, Deductions' Benefits Start Date/Other Deductions/Attendance
+> details/PTO, Tax Rates' estimate/DHL-preset fallbacks, Wrap Up's Tax-Exempt opt-in — see
+> docs/TODO.md §19.1), **THEN** re-run this same sweep — `HISTORY_SENSITIVE_FIELDS` already
+> carries `dhlCustomSchedule`/`taxExemptOptIn`/`otherDeductions`/`benefitsStartDate`/
+> `attendanceWarnThreshold`/`attendanceTerminateThreshold`/`attendanceIncrement`/`ptoEnabled`/
+> `ptoAccrualMethod`/`ptoAccrualRate`/`ptoCap` from real Step1/Step2/Step3's own writes, so no
+> new list entries are expected there, but confirm rather than assume.
+
+**F132 · `SetupWizardAdlib.jsx` — `attempted`/required-field feedback + accessible names** —
+`SetupWizardAdlib.jsx` (`InlineSelect`/`InlineNumber`/`InlineDate`/`InlineChip`, `RequiredNote`,
+`IntakePage`/`SchedulePage`/`DeductionsPage`/`TaxRatesPage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 3, docs/TODO.md §19.1.G)*
+`attempted` was threaded to every page component since the save-wiring round but never consumed —
+inert scaffolding. Now: `InlineSelect`/`InlineNumber`/`InlineDate` take an `error` boolean that
+swaps their dashed/teal border for a solid `--color-deduction` one, sets `aria-invalid`, and
+renders a small red `RequiredNote` ("↑ Required") — the same visual/semantic signal real
+`errBorder()`/`Field` give in `SetupWizard.jsx`, just adapted to an inline mad-libs blank instead
+of a labeled block-level form field (no separate `<label>` to redden, so the note sits right next
+to the blank instead). Each page wires `error={attempted && <missing-condition>}` on every control
+its own `isXValid` (F-mirrors of real `STEP_DEFS`) requires — line-for-line copies of the
+condition already inside that page's `isXValid` function, not independently re-derived. All four
+`Inline*` controls also gained/kept contextual accessible names (`InlineSelect`/`InlineNumber`
+via a new `ariaLabel` prop threaded per call site; `InlineDate` already had `label`; `InlineChip`
+gained `aria-pressed` + `aria-label`).
+> **IF** a required field's error condition is added or changed on the real wizard's matching
+> `STEP_DEFS` step, **THEN** update the mirrored `isXValid` here (already required by F7's
+> line-for-line-mirror convention) AND the matching `error={attempted && ...}` prop on this page —
+> three places in sync now (real `isValid`, ad-lib `isXValid`, ad-lib `error` prop), not two.
+> **IF** you add a new required field to any page, **THEN** its control needs `error={attempted &&
+> <the same condition isXValid checks for that field>}` plus an `ariaLabel` — omitting either is a
+> silent accessibility/UX regression that no test currently catches (no automated a11y assertions
+> exist for this file; `SetupWizardAdlib.test.jsx` doesn't query `aria-invalid` or `aria-label`
+> today).
+> **Known, accepted, NOT fixed by this round:** the Next/Finish `Pressable` stays
+> `disabled={!canProceed}` (unchanged), meaning `handleNext`'s `setAttempted(true)` branch mirrors
+> real `SetupWizard.jsx`'s own `handleNext` exactly — including that same function's own
+> reachability quirk (a native `<button disabled>` blocks click dispatch, so the branch cannot
+> fire from a literal click on a disabled button in either wizard). This round's brief was to
+> mirror the real wizard's pattern, not redesign it; an always-enabled Next button would itself be
+> a real behavioral divergence from `SetupWizard.jsx`, not a parity fix.
+
+**F133 · Advanced Pay Rules + DHL custom rotation ported into `IntakePage`, plus two
+pre-existing `isIntakeValid` gaps closed** — `SetupWizardAdlib.jsx` (`AdvancedPayRulesCard`,
+`DhlRotationCard`, `isIntakeValid`), `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Two real Step1 blocks ported as collapsible cards below the sentence (not forced into inline
+mad-libs prose, matching how they already read as `Field`/Pill form blocks in the real wizard,
+not prose): `AdvancedPayRulesCard` (base users, OT multiplier/night diff/weekend diff — same
+three fields/defaults as real `AdvancedPayRules`) and `DhlRotationCard` (DHL Plant only, Standard
+vs. Custom weekly-hours override). While adding `DhlRotationCard`'s required-field checks to
+`isIntakeValid`, found real STEP_DEFS id 1 also gates on `customWeeklyHours`/
+`customWeeklyHoursLong`/`customWeeklyHoursShort` AND on a base-user's custom OT threshold being
+positive once entered — **neither check existed in `isIntakeValid` before this round**, a
+pre-existing F7 mirror gap (the fields simply weren't reachable in `IntakePage` before, so the
+gap was latent). Both added, now a true line-for-line mirror of real STEP_DEFS id 1's `isValid`.
+`finalizeWizardConfig()` also gained an `otMultiplier` default (`?? 1.5`, `DEFAULT_CONFIG`'s own
+value) — `SetupWizardAdlib.jsx`'s `BLANK_PAY_FIELDS` nulls it for base users until
+`AdvancedPayRulesCard` is opened, whereas real `SetupWizard.jsx` never blanks it (its `formData`
+always starts from the account's existing config); without the default, a base user who never
+opens the card would finish with `otMultiplier: null`, which several direct (non-`|| 1.5`)
+multiplications in `finance.js` would turn into `NaN`. No-op for the real wizard (already never
+null there).
+> **IF** `AdvancedPayRulesCard`/`DhlRotationCard`'s fields change on the real
+> `AdvancedPayRules`/Step1 rotation block, **THEN** update both the card here and
+> `isIntakeValid`'s mirrored checks together — three places now (real component, ad-lib card,
+> ad-lib `isIntakeValid`).
+> **IF** another field gets a `?? <DEFAULT_CONFIG value>` fallback added to
+> `finalizeWizardConfig()` for the same "blanked in Adlib, never blanked in real" reason,
+> **THEN** grep `BLANK_PAY_FIELDS` for other numeric/enum fields the real wizard's `Field`
+> components don't gate as required but that a raw calculation downstream assumes non-null —
+> `otMultiplier` was found this round by inspecting `finance.js`'s direct (unguarded)
+> `cfg.otMultiplier` multiplications; not an exhaustive audit of every such field.
+
+**F134 · `TaxRatesPage` fallback paths — "Use Estimate for Now" + DHL MO preset** —
+`SetupWizardAdlib.jsx` (`TaxRatesPage`) — **[L]** — *(added 2026-08-10, ad-lib field-parity
+round 4, docs/TODO.md §19.1.A)*
+Ported real Step4's two non-paystub paths to a valid tax rate, both straight function copies
+(`handleEstimate()`/`loadDHLPreset()`), previously scoped out by explicit instruction when this
+page was built ("just the paystub path") — now closed since a real user without a paystub handy
+was otherwise stuck unable to finish onboarding. `handleEstimate()` writes the same 10%/12% federal
+flat-rate estimate + state flat/midpoint/0 lookup (`STATE_TAX_TABLE`) as real Step4, flagged
+`taxRatesEstimated: true`; its button sits next to "Apply These Rates" inside the paystub reveal.
+`loadDHLPreset()` writes `DHL_PRESET.defaults`' MO reference rates, same gate as real Step4
+(`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`).
+> **IF** `STATE_TAX_TABLE`'s flat/midpoint rate shape changes, **THEN** both `handleEstimate()`
+> copies (real Step4 and this one) need the same update — same "SQL twin, one language each" risk
+> class other F-entries in this doc flag for duplicated logic, just JS-JS here instead of JS-SQL.
+> **IF** `DHL_PRESET.defaults`' rate fields change, **THEN** both `loadDHLPreset()` copies need
+> the same update.
+
+**F135 · `WrapUpPage` Tax-Exempt Week Projections opt-in** — `SetupWizardAdlib.jsx`
+(`WrapUpPage`, `TAX_EXEMPT_DISCLAIMER`, `TaxExemptPreview`) — **[G]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Real Wrap Up's optional, non-blocking Tax-Exempt Week Projections opt-in ported: static
+disclosure copy (`TAX_EXEMPT_DISCLAIMER`) plus a "coming soon" placeholder
+(`TaxExemptPreview`) shown once `formData.taxExemptOptIn === true`. Both are exact copies of
+the real components — nothing to ground against live data here (unlike every other Wrap Up
+figure on this page, which reads `estimateWeeklyNet()`), since the feature itself isn't live
+yet on either wizard. Doesn't gate `isWrapUpValid`.
+> **IF** the Tax-Exempt Week Projections feature actually ships (currently a placeholder on
+> both wizards), **THEN** `TaxExemptPreview` needs real content on both `SetupWizard.jsx` and
+> here — check both, not just the one you're working in.
+> **IF** `TAX_EXEMPT_DISCLAIMER`'s copy changes, **THEN** update both copies (real Step7 and
+> this one) together — same duplicated-copy risk F134 already flags for its two fallback
+> functions.
+
+**F136 · `DeductionsPage` — Benefits Start Date, Other Recurring Deductions, Attendance Policy
+Details, PTO — plus two pre-existing `HISTORY_SENSITIVE_FIELDS` gaps closed** —
+`SetupWizardAdlib.jsx` (`OtherDeductionsList`, `AttendanceDetailsCard`, `PtoDetailsCard`),
+`src/lib/configHistory.js` — **[L]** — *(added 2026-08-10, ad-lib field-parity round 4,
+docs/TODO.md §19.1.A)*
+Closes out the last of §19.1.A's Deductions gaps, previously flagged "v1 scope" when this page
+was first built. Benefits Start Date is a single inline `InlineDate` clause (fits the sentence);
+the other three don't fit "one blank" mad-libs prose, so they're block-level cards below the
+sentence, same precedent as the Tax Rates page's paystub calculator: `OtherDeductionsList` (plain
+add/edit/remove row list, same shape as real Step3's), `AttendanceDetailsCard` and
+`PtoDetailsCard` (collapsible, default-expanded-if-already-answered — mirrors real
+`DetailsDisclosure`'s own `defaultExpanded` logic). None of these four gate `isDeductionsValid`
+on either wizard (matches real STEP_DEFS id 3). While wiring these into `HISTORY_SENSITIVE_FIELDS`
+(F7's three-way rule), found **`attendanceUnit`/`attendanceCurrentBalance`/`ptoCurrentBalance`
+were missing even on the real wizard** — a pre-existing gap this round found and fixed, not
+something introduced by adding these fields to Adlib. All three now present.
+> **IF** `DeductionsPage`'s fields change again, **THEN** re-run the full `HISTORY_SENSITIVE_FIELDS`
+> sweep this round already did once (F131) — this round found a *second* round of gaps on the
+> *real* wizard's side, which F131's original sweep (scoped to what Adlib itself writes) couldn't
+> have caught, since Adlib didn't write these fields yet at that point.
+> **Known, deliberately NOT done this round:** `DIFF_FIELDS` (F7) was **not** extended with
+> `benefitsStartDate`/attendance/PTO fields — `DIFF_FIELDS` has always been a curated subset of
+> `HISTORY_SENSITIVE_FIELDS` (many pre-existing fields, e.g. `customWeeklyHours`, benefit weekly
+> amounts, were never in `DIFF_FIELDS` even before this round), and F7's "must never diverge" rule
+> has pre-existing debt across the whole list that predates both wizards' current state — F130's
+> tips fix (F131) was the one explicitly-requested exception. Widening `DIFF_FIELDS` toward true
+> parity with `HISTORY_SENSITIVE_FIELDS` is a real, separate follow-up, not attempted here.
+
+**F137 · Bug found + fixed: `DhlRotationCard`/`AdvancedPayRulesCard` were nested inside `<p>`,
+invalid HTML** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 4 test-coverage pass, docs/TODO.md §19.1.H)*
+F133 (Advanced Pay Rules + DHL rotation) rendered both new cards — `<div>`-based components —
+*inside* `IntakePage`'s sentence `<p>`, since the `<p>...</p>` was the entire function's return
+value at the time and the cards were added as trailing children of conditional blocks already
+inside it. `<div>` cannot be a descendant of `<p>` per the HTML spec; React/testing-library
+surfaced this as a console warning ("In HTML, `<div>` cannot be a descendant of `<p>`... This
+will cause a hydration error") the moment a test exercised the DHL-Plant-custom-rotation or
+Advanced-Pay-Rules render path — caught while writing this round's full-completion test, not by
+any test written *for* F133 itself (none of F133's own assertions rendered far enough into the
+DOM to trigger it). Real-browser impact: a browser auto-closes the `<p>` early when it encounters
+the nested `<div>`, silently splitting one paragraph into two and potentially breaking the
+`BLANK_FONT` styling inheritance for everything after the split. Fixed by closing `</p>` before
+either card and rendering both as siblings after it (`IntakePage`'s return is now a Fragment,
+same pattern `DeductionsPage` already uses for its own block-level cards) — same gate conditions,
+now written explicitly at the top level (`isEmployed && isEmployerDHL && isEmployerPlant &&
+dhlTeamReady` / `isEmployed && isBaseUser && payStructureComplete`) instead of inherited by
+nesting position.
+> **IF** a future card/block-level (`<div>`-rendering) component is added inside `IntakePage`
+> (or any other page here whose top-level element is a `<p>`), **THEN** it must be a sibling
+> *after* that `<p>` closes, never nested inside it — re-derive the gate condition explicitly at
+> the top level rather than relying on the surrounding conditional's nesting position to carry it
+> for free. Check: render the new component in a test and watch for this exact console warning —
+> `npm run test:run` does not fail the suite on it (it's a `console.error`, not a thrown error),
+> so a passing suite is not proof this class of bug is absent, same caveat React Compiler
+> miscompilation (§12.4) already carries for a different reason.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

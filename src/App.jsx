@@ -365,16 +365,18 @@ export default function App() {
   // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
   // Allows the wizard to stay mounted during exit animation, then unmount after.
   const [wizardExiting, setWizardExiting] = useState(false);
-  // Ad-Lib Wizard preview (admin-only, TODO: experimental split-test) — toggled
-  // from the Admin Tools panel, never reachable by a real user. adlibHandoff
-  // carries the pilot's collected answers + which real STEP_DEFS id to resume
-  // at once the ad-lib pages are done; kept separate from `config` so nothing
-  // is written/autosaved until the real wizard's own onComplete actually fires.
-  const [adlibPreviewOpen, setAdlibPreviewOpen] = useState(false);
+  // SetupWizardAdlib is now the real production first-run wizard (see its own header
+  // comment + CLAUDE.md's SetupWizardAdlib.jsx section) — mounted below whenever
+  // `wizardEntry === false` and there's no in-progress jobless hand-off. adlibHandoff
+  // carries the jobless mini-flow's collected answers + which real STEP_DEFS id to
+  // resume at (always 10) once the ad-lib pages are done; kept separate from `config`
+  // so nothing is written/autosaved until the real wizard's own onComplete actually
+  // fires (that wizard's own handleComplete() owns the eventual save for this path).
   const [adlibHandoff, setAdlibHandoff] = useState(null);
-  // Set only when Back is hit on the real wizard's first handed-off step — reopens
-  // SetupWizardAdlib pre-filled with the in-progress answers instead of blank, so the
-  // admin lands back on the ad-lib page they left, not this component's own view of it.
+  // Set only when Back is hit on the real wizard's first handed-off step (jobless
+  // mini-flow only) — reopens SetupWizardAdlib pre-filled with the in-progress answers
+  // instead of blank, so the user lands back on the ad-lib page they left, not the
+  // real wizard's stacked-field view of the same steps.
   const [adlibResumeData, setAdlibResumeData] = useState(null);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
@@ -2407,15 +2409,6 @@ export default function App() {
                 >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
               </div>
 
-              {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
-              <div style={{ padding: "0 20px 10px" }}>
-                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
-                <button
-                  onClick={() => setAdlibPreviewOpen(true)}
-                  className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
-                >Preview Fill-In-The-Blank Pilot</button>
-              </div>
-
               {/* Config Raw View */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
@@ -3251,15 +3244,6 @@ export default function App() {
               >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
             </div>
 
-            {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
-            <div style={{ marginTop: "12px" }}>
-              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
-              <button
-                onClick={() => setAdlibPreviewOpen(true)}
-                className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
-              >Preview Fill-In-The-Blank Pilot</button>
-            </div>
-
             {/* Config Raw View */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -3953,15 +3937,12 @@ export default function App() {
           savePersistedStateNow({ config: nextConfig });
         }}
       />
-      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ──
-           config/initialStepId fall back to adlibHandoff when the Ad-Lib Wizard preview
-           (admin-only) handed off into this same mount — see adlibHandoff's own comment.
-           adlibHandoff being set also means this run is MOCK ONLY: onComplete below skips
-           handleWizardComplete entirely (no setConfig, no savePersistedStateNow) so admins
-           can click all the way through to tune the feel with zero risk to real account
-           data, and onCancel stays available the whole way through instead of the normal
-           first-run "no cancel button" rule. */}
-      {(wizardEntry !== null || wizardExiting) && (
+      {/* ── Setup wizard — re-entry (life event string), OR first-run's jobless mini-flow
+           continuation once SetupWizardAdlib has handed off into it (adlibHandoff set).
+           SetupWizard.jsx owns every life-event re-entry unchanged; for first-run
+           (wizardEntry===false) it only ever mounts here for the jobless continuation —
+           see the SetupWizardAdlib mount just below for the real first-run entry point. */}
+      {(wizardEntry !== null && wizardEntry !== false || (wizardEntry === false && adlibHandoff) || wizardExiting) && (
         <SetupWizard
           config={adlibHandoff?.config ?? config}
           initialStepId={adlibHandoff?.initialStepId ?? null}
@@ -3970,55 +3951,56 @@ export default function App() {
               ? (inProgressFormData) => {
                   setAdlibHandoff(null);
                   setAdlibResumeData(inProgressFormData);
-                  setAdlibPreviewOpen(true);
                   closeWizardWithAnimation();
                 }
               : undefined
           }
           onComplete={(mergedConfig) => {
-            if (adlibHandoff) { setAdlibHandoff(null); closeWizardWithAnimation(); return; }
+            setAdlibHandoff(null);
             handleWizardComplete(mergedConfig);
           }}
           onCancel={
-            adlibHandoff
-              ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); }
-              : wizardEntry !== false
-                ? () => closeWizardWithAnimation()
-                : config.isInvestor
-                  ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
-                  // Regular first-run (non-investor, no ad-lib handoff) must stay
-                  // uncancelable — undefined here (not a no-op function) is what
-                  // makes SetupWizard omit the Cancel button entirely.
-                  : undefined
+            wizardEntry !== false
+              ? () => closeWizardWithAnimation()
+              : config.isInvestor
+                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+                // Jobless mini-flow continuation (adlibHandoff set, non-investor) and
+                // regular first-run must both stay uncancelable — undefined here (not a
+                // no-op function) is what makes SetupWizard omit the Cancel button
+                // entirely. Backing out of the jobless continuation instead uses
+                // onBackBeforeStart above, which returns the user to SetupWizardAdlib.
+                : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}
           isExiting={wizardExiting}
         />
       )}
-      {/* ── Ad-Lib Wizard preview (admin-only experiment) — fill-in-the-blank pilot
-           covering the whole first-run flow now (Welcome through Wrap Up for an employed
-           signup); still hands off into the real wizard above for the jobless mini-flow
-           (id 10), since that's the only real-wizard territory left. A null initialStepId
-           means Wrap Up was the last ad-lib page too — nothing left to hand off to, so this
-           just closes out MOCK ONLY (no setConfig/savePersistedStateNow) without ever
-           mounting the real SetupWizard, same as a real Finish click would but without the
-           real component in between. adlibResumeData reopens this pre-filled at the
-           last-answered page when the admin hit Back on the real wizard's first handed-off
-           step (see onBackBeforeStart above, jobless-flow only now) — cleared on both Exit
-           Preview and a fresh forward hand-off so the next deliberate "Preview" click always
-           starts blank again. ── */}
-      {isAdmin && adlibPreviewOpen && (
+      {/* ── SetupWizardAdlib — the REAL production first-run onboarding wizard for an
+           employed (or investor) signup, mounted whenever wizardEntry===false and there's
+           no in-progress jobless hand-off. See its own header comment for the save path
+           (finalizeWizardConfig → onComplete → handleWizardComplete). The jobless mini-flow
+           still hands off into the real SetupWizard above (id 10) via onHandoff; a Back at
+           that step reopens this component pre-filled via adlibResumeData/onBackBeforeStart. */}
+      {wizardEntry === false && !adlibHandoff && (
         <SetupWizardAdlib
           config={config}
+          isInvestor={config.isInvestor}
           resumeFormData={adlibResumeData}
-          onCancel={() => { setAdlibPreviewOpen(false); setAdlibResumeData(null); }}
+          onCancel={
+            config.isInvestor
+              ? () => { setAdlibResumeData(null); closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+              // Regular first-run (non-investor) stays uncancelable — no escape hatch,
+              // matching SetupWizard's own uncancelable-first-run rule.
+              : undefined
+          }
           onHandoff={(mergedFormData, initialStepId) => {
-            setAdlibPreviewOpen(false);
             setAdlibResumeData(null);
-            if (initialStepId == null) return;
             setAdlibHandoff({ config: mergedFormData, initialStepId });
-            setWizardEntry(false);
+          }}
+          onComplete={(finalConfig) => {
+            setAdlibResumeData(null);
+            handleWizardComplete(finalConfig);
           }}
         />
       )}

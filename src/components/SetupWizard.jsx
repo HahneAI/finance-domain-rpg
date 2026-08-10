@@ -15,14 +15,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
+import { dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
+import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComplete.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
-
-const FREEDOM_ALLOWANCE_MAX = 200;
 
 // Wizard label style — promote the dim lS label (text-disabled) to primary white
 // so onboarding labels stay legible (gray-text purge, TODO §16). Mirrors ProfilePanel's lSp.
@@ -1954,6 +1953,9 @@ const DIFF_FIELDS = [
   { key: "fedRateLow",       label: "Federal rate" },
   { key: "stateRateLow",     label: "State rate" },
   { key: "k401Rate",         label: "401(k) rate" },
+  { key: "tipsOrCommissionEnabled", label: "Tips/commission" },
+  { key: "tipsOrCommissionLabel",   label: "Tips/commission type" },
+  { key: "tipsCommissionOnlyPosition", label: "Commission-only position" },
 ];
 
 function StructureChangeDiff({ originalConfig, formData }) {
@@ -2562,37 +2564,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   }
 
   function handleComplete() {
-    const today = new Date();
-    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const finalData = formData.employerPreset === "DHL"
-      ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
-      : { ...formData };
-    // Commit display defaults: freedomAllowance shows ?? 50 in the UI but formData can still hold
-    // null if the field was cleared or never touched. Normalize here so the saved config
-    // always carries the real value the user saw.
-    if (finalData.freedomAllowanceEnabled !== false) {
-      finalData.freedomAllowance = finalData.freedomAllowance ?? 50;
-    }
-    // Stamp/clear tipsOrCommissionEnabledAt on the false→true / true→false transitions
-    // only — bounds the daily check-in backlog to dates on/after opt-in (see
-    // constants/config.js) without disturbing the stamp while staying enabled across
-    // wizard re-entries (structure_change, etc.).
-    const wasTipsEnabled = config?.tipsOrCommissionEnabled === true;
-    if (finalData.tipsOrCommissionEnabled && !wasTipsEnabled) {
-      finalData.tipsOrCommissionEnabledAt = todayIso;
-    } else if (!finalData.tipsOrCommissionEnabled) {
-      finalData.tipsOrCommissionEnabledAt = null;
-    }
-    const allWeeks   = buildYear(finalData);
-    // taxExemptOptIn: true = user filed W-4 as exempt from federal/state withholding.
-    // Only FICA applies; income tax withholding is $0.
-    const taxedWeeks = finalData.taxExemptOptIn
-      ? []
-      : allWeeks.filter(w => w.idx >= (finalData.firstActiveIdx ?? 0)).map(w => w.idx);
-    // Stamp the account-creation week so weeks before today are auto-assumed worked
-    // and the weekly confirm modal only surfaces weeks from account creation onward.
-    const accountCreatedIdx = finalData.accountCreatedIdx ?? dateToWeekIdx(todayIso);
-    onComplete({ ...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true });
+    // Shared normalizer (src/lib/wizardComplete.js) — see docs/drift-app-warden.md §7 F5/F13.
+    // Also called by SetupWizardAdlib.jsx's WrapUpPage finish action; do not hand-transcribe
+    // this logic a second time.
+    onComplete(finalizeWizardConfig(formData, config));
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;

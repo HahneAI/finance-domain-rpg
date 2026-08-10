@@ -27,7 +27,7 @@ export function ConsentGateModal({ open, onAgree, onSignOut, agreeLoading = fals
             <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
               Updated Terms
             </div>
-            <div style={{ fontSize: "18px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>
               Please review and re-accept
             </div>
           </div>

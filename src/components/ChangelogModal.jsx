@@ -51,7 +51,7 @@ export function ChangelogModal({ open, entry, onClose }) {
           <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
             What's New{entry.version_label ? ` · ${entry.version_label}` : ""}
           </div>
-          <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.3px", lineHeight: 1.2 }}>
+          <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>
             {entry.title}
           </div>
           {publishedLabel && (

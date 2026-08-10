@@ -265,6 +265,17 @@ style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--
 `--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
 readouts), never form fields.
 
+**Header weight/spacing (2026-08-10, ported from the main site).** Heavy weight + negative
+letter-spacing + tight line-height reads as cramped. Two tiers, both in `src/index.css` and
+`ui.jsx`'s `PanelHero`/`SectionHeader`: hero/primary headings are `font-weight: 900`,
+`letter-spacing: 0.04em`, `line-height: 1.15`; secondary page headers are `font-weight: 800`,
+`letter-spacing: 0.02em`, `line-height: 1.15`. Letter-spacing is em-based so it scales with
+font-size. `.heading-xl`/`.heading-lg` utility classes added to `src/index.css` for parity with
+the site (unused here — A:Fin headers are inline styles or the `PanelHero`/`SectionHeader`
+components, not a class system). Does **not** apply to numeric emphasis (MetricCard values,
+dollar totals) — those are data display, not headline text, and kept their existing styling.
+See `docs/authority-design-system`'s Typography section for the full file list touched.
+
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 
 **Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.

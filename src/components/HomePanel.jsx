@@ -616,11 +616,11 @@ export function HomePanel({
         </div>
         <div style={{
           fontSize: "52px",
-          fontWeight: 800,
+          fontWeight: 900,
           fontFamily: "var(--font-display)",
           color: "var(--color-accent-primary)",
-          letterSpacing: "-1.8px",
-          lineHeight: 1,
+          letterSpacing: "0.04em",
+          lineHeight: 1.15,
           marginBottom: "16px",
         }}>
           Goals
@@ -1320,8 +1320,8 @@ export function HomePanel({
           fontWeight: 800,
           fontFamily: "var(--font-display)",
           color: "var(--color-accent-primary)",
-          letterSpacing: "-1px",
-          lineHeight: 1,
+          letterSpacing: "0.04em",
+          lineHeight: 1.15,
           marginBottom: "14px",
         }}>
           Financial Health
@@ -1383,7 +1383,7 @@ export function HomePanel({
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
         <div style={{ marginBottom: "16px" }}>
           <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
-          <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
+          <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

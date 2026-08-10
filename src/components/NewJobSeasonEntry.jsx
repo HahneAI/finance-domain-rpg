@@ -261,7 +261,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   // behavior (pre-existing gap there, not introduced here — see §1.H15).
   const nextNativeDisabled = (step === 0 || step === 1) ? false : nextDisabled;
 
-  const labelStyle = { fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
+  const labelStyle = { fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
   const inputStyle = {
     width: "100%",
     background: "var(--color-bg-base)",
@@ -298,7 +298,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         }}
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
+          <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
             Life Event{hasExpenses ? ` · Step ${step + 1} of 3` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
@@ -312,7 +312,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "18px", overflowY: "auto" }}>
           {step === 0 && (
             <>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
                 From the date below forward, projected earned income drops to $0.
                 Goals, expenses, and logs are preserved — only forward-looking finance
                 math recalculates.
@@ -348,11 +348,11 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                   }}
                 />
                 {attempted && !cashOnHandValid && (
-                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+                  <div className="text-xs" style={{ color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
                     ↑ Required — 0 is a fine answer, just not empty
                   </div>
                 )}
-                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+                <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
                   Savings, checking — whatever you could draw on today. Seeds your runway math and
                   stays editable from Home or Budget once your New Job Season is active.
                 </div>
@@ -368,9 +368,10 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                       <Pressable
                         key={opt.label}
                         onClick={() => setUnemploymentAnswered(opt.v)}
+                        className="text-xs"
                         style={{
                           padding: "8px 18px",
-                          fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          letterSpacing: "1.5px", textTransform: "uppercase",
                           background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
                           color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                           border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
@@ -418,9 +419,10 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                           <Pressable
                             key={opt.label}
                             onClick={() => setWaitingWeek(opt.v)}
+                            className="text-xs"
                             style={{
                               padding: "7px 14px",
-                              fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                              letterSpacing: "1.5px", textTransform: "uppercase",
                               background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
                               color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                               border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
@@ -434,17 +436,17 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                         );
                       })}
                     </div>
-                    <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+                    <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
                       Most states make the first week unpaid; the duration count starts after.
                     </div>
                   </div>
 
-                  <div style={{
+                  <div className="text-xs" style={{
                     background: "rgba(245,158,11,0.08)",
                     border: "1px solid rgba(245,158,11,0.28)",
                     borderRadius: "10px",
                     padding: "10px 12px",
-                    fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
+                    color: "var(--color-text-secondary)", lineHeight: 1.5,
                   }}>
                     Unemployment income is federally taxable, but withholding is optional and
                     not modeled here. Set aside ~10% if you didn't elect withholding when you filed.
@@ -452,12 +454,12 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                 </div>
               )}
 
-              <div style={{
+              <div className="text-xs" style={{
                 background: "rgba(245,158,11,0.08)",
                 border: "1px solid rgba(245,158,11,0.28)",
                 borderRadius: "10px",
                 padding: "10px 12px",
-                fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
+                color: "var(--color-text-secondary)", lineHeight: 1.5,
               }}>
                 You can exit your New Job Season anytime via the <strong style={{ color: "var(--color-warning)" }}>Back to Work</strong> button
                 in the app banner — that flow walks you through re-entering your new pay structure.
@@ -467,7 +469,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
 
           {step === 1 && (
             <>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
                 A job loss rarely lands exactly on a payday — there's often one more check owed
                 for days you already worked. Telling us about it makes your runway more accurate.
               </p>
@@ -481,9 +483,10 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                       <Pressable
                         key={opt.label}
                         onClick={() => setPendingCheckAnswered(opt.v)}
+                        className="text-xs"
                         style={{
                           padding: "8px 18px",
-                          fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          letterSpacing: "1.5px", textTransform: "uppercase",
                           background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
                           color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
                           border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
@@ -507,8 +510,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                       {DAY_NAMES.map(day => {
                         const worked = workedDays.has(day);
                         return (
-                          <Pressable key={day} aria-label={`Worked ${day}`} onClick={() => toggleWorkedDay(day)} style={{
-                            padding: "6px 10px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px",
+                          <Pressable key={day} aria-label={`Worked ${day}`} onClick={() => toggleWorkedDay(day)} className="text-xs" style={{
+                            padding: "6px 10px", borderRadius: "6px", letterSpacing: "1px",
                             textTransform: "uppercase", cursor: "pointer", fontWeight: worked ? "bold" : "normal",
                             border: `1px solid ${worked ? "rgba(34,197,94,0.5)" : "var(--color-border-subtle)"}`,
                             background: worked ? "rgba(34,197,94,0.13)" : "var(--color-bg-surface)",
@@ -520,7 +523,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                         );
                       })}
                     </div>
-                    <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+                    <div className="text-xs" style={{ marginTop: "6px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
                       0 days is fine if you'd already been paid up through your last day.
                     </div>
                   </div>
@@ -537,8 +540,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                         const dow = DAY_TO_DOW[day];
                         const active = arrivalDow === dow;
                         return (
-                          <Pressable key={day} aria-label={`Arrives ${day}`} onClick={() => setArrivalDow(dow)} style={{
-                            padding: "6px 10px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px",
+                          <Pressable key={day} aria-label={`Arrives ${day}`} onClick={() => setArrivalDow(dow)} className="text-xs" style={{
+                            padding: "6px 10px", borderRadius: "6px", letterSpacing: "1px",
                             textTransform: "uppercase", cursor: "pointer", fontWeight: active ? "bold" : "normal",
                             border: `1px solid ${active ? "rgba(0,200,150,0.5)" : "var(--color-border-subtle)"}`,
                             background: active ? "rgba(0,200,150,0.13)" : "var(--color-bg-surface)",
@@ -551,19 +554,19 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                       })}
                     </div>
                     {attempted && arrivalDow === null && (
-                      <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+                      <div className="text-xs" style={{ color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
                         ↑ Required to estimate when the check lands
                       </div>
                     )}
                   </div>
 
                   {pendingArrivalDate && (
-                    <div style={{
+                    <div className="text-sm" style={{
                       background: "rgba(0,200,150,0.08)",
                       border: "1px solid rgba(0,200,150,0.28)",
                       borderRadius: "10px",
                       padding: "10px 12px",
-                      fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.5,
+                      color: "var(--color-text-primary)", lineHeight: 1.5,
                     }}>
                       Estimated <strong>${Math.round(pendingAmountEstimate).toLocaleString()}</strong> arriving{" "}
                       <strong>
@@ -578,7 +581,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
 
           {step === 2 && (
             <>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
                 All your bills start checked. Uncheck anything you don't need to track while job
                 hunting — nothing is deleted or changed, and your normal Budget keeps every bill
                 exactly as it is.
@@ -608,7 +611,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                       />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
+                          <span className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
                           {isLoan && (
                             <span style={{
                               fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
@@ -619,7 +622,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                           <span style={{ color: catColor }}>{exp.category ?? "—"}</span>
                           {amount > 0 ? ` · $${Number(amount).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                         </div>
@@ -633,7 +636,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
 
           {step === 3 && (
             <>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
                 Pick when each bill is due so the Upcoming Bills countdown and runway line up
                 with your real due dates.
                 {keptExpenses.length > keptPickableExpenses.length && (
@@ -643,12 +646,12 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 {keptPickableExpenses.map(exp => (
                   <div key={exp.id}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "8px" }}>
+                    <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "8px" }}>
                       {exp.label ?? "Untitled"}
                     </div>
                     {exp.isFoodPrimary ? (
                       <>
-                        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: 1.5 }}>
+                        <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: 1.5 }}>
                           Food isn't a once-a-month bill — which day do you usually grocery shop?
                           We'll track it as a weekly cost instead of a single due date.
                         </div>
@@ -657,8 +660,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                             const dow = DAY_TO_DOW[day];
                             const active = foodShoppingDow === dow;
                             return (
-                              <Pressable key={day} aria-label={`Shop ${day}`} onClick={() => setFoodShoppingDow(dow)} style={{
-                                padding: "6px 10px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px",
+                              <Pressable key={day} aria-label={`Shop ${day}`} onClick={() => setFoodShoppingDow(dow)} className="text-xs" style={{
+                                padding: "6px 10px", borderRadius: "6px", letterSpacing: "1px",
                                 textTransform: "uppercase", cursor: "pointer", fontWeight: active ? "bold" : "normal",
                                 border: `1px solid ${active ? "rgba(0,200,150,0.5)" : "var(--color-border-subtle)"}`,
                                 background: active ? "rgba(0,200,150,0.13)" : "var(--color-bg-surface)",
@@ -671,7 +674,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                           })}
                         </div>
                         {attempted && foodShoppingDow === null && (
-                          <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "6px" }}>
+                          <div className="text-xs" style={{ color: "var(--color-deduction)", marginTop: "6px" }}>
                             ↑ Pick a shopping day
                           </div>
                         )}
@@ -698,12 +701,12 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
           {step > 0 && (
             <Pressable
               onClick={() => setStep(s => s - 1)}
-              style={{
+              className="text-xs" style={{
                 background: "var(--color-bg-raised)",
                 color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border-subtle)",
                 borderRadius: "12px", padding: "7px 14px",
-                fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                letterSpacing: "2px", textTransform: "uppercase",
                 cursor: "pointer",
               }}
             >
@@ -713,12 +716,12 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
           <div style={{ flex: 1 }} />
           <Pressable
             onClick={onClose}
-            style={{
+            className="text-xs" style={{
               background: "var(--color-bg-raised)",
               color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)",
               borderRadius: "12px", padding: "7px 14px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              letterSpacing: "2px", textTransform: "uppercase",
               cursor: "pointer",
             }}
           >
@@ -727,11 +730,11 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
           <Pressable
             onClick={goNext}
             disabled={nextNativeDisabled}
-            style={{
+            className="text-xs" style={{
               background: nextDisabled ? "var(--color-bg-raised)" : "var(--color-teal)",
               color: nextDisabled ? "var(--color-text-disabled)" : "var(--color-bg-base)",
               border: "none", borderRadius: "12px", padding: "8px 16px",
-              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold",
               cursor: nextDisabled ? "not-allowed" : "pointer",
             }}

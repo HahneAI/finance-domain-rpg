@@ -597,10 +597,10 @@ each file, convert what's a clean fit, and note anything that isn't.
 | ~~`SetupWizard.jsx`~~ | **0** (was 97) — ✅ converted 2026-08-10 | Onboarding |
 | ~~`WeekConfirmModal.jsx`~~ | **0** (was 75) — ✅ converted 2026-08-10 | Weekly check-in modal |
 | ~~`HomePanel.jsx`~~ | **0** (was 44) — ✅ converted 2026-08-10 | Home |
-| `BulkEditPanel.jsx` | 35 | Budget (bulk expense edit) |
+| ~~`BulkEditPanel.jsx`~~ | **0** (was 35) — ✅ converted 2026-08-10 | Budget (bulk expense edit) |
 | ~~`IncomePanel.jsx`~~ | **0** (was 29) — ✅ converted 2026-08-10 | Income |
-| `NewJobSeasonEntry.jsx` | 28 | New Job Season |
-| `InvestorAdminPanel.jsx` | 25 | Investor demo |
+| ~~`NewJobSeasonEntry.jsx`~~ | **0** (was 28) — ✅ converted 2026-08-10 | New Job Season |
+| ~~`InvestorAdminPanel.jsx`~~ | **0** (was 25) — ✅ converted 2026-08-10 | Investor demo |
 | `NewJobSeasonBudgetPanel.jsx` | 17 | New Job Season |
 | `ReemploymentTracker.jsx` | 16 | New Job Season |
 | `LoginScreen.jsx` | 16 | Auth |
@@ -635,11 +635,19 @@ each file, convert what's a clean fit, and note anything that isn't.
 
 **Suggested audit order:** highest-traffic panels first — `ProfilePanel` ✅, `LogPanel` ✅,
 `App.jsx` ✅, `BudgetPanel` ✅, `HomePanel` ✅, `IncomePanel` ✅, `SetupWizard.jsx` ✅,
-`WeekConfirmModal.jsx` ✅ — all 5 main panels, the app shell, onboarding, and the weekly
-check-in modal are now fully converted. Remaining: the lower-traffic surfaces (New Job Season,
-Investor demo, admin-only screens, remaining one-off modals). Convert one file at a time, run
-the test suite after each, and update this table's count (or strike the row) as each file's
-cleanly-convertible instances land.
+`WeekConfirmModal.jsx` ✅, `BulkEditPanel.jsx` ✅, `NewJobSeasonEntry.jsx` ✅,
+`InvestorAdminPanel.jsx` ✅ — all 5 main panels, the app shell, onboarding, the weekly check-in
+modal, bulk expense edit, the New Job Season entry flow, and the investor demo admin panel are
+now fully converted. Remaining: the long tail of lower-traffic surfaces (`LoginScreen`,
+`ReviveScreen`, `DemoAccountTree`, `ChangelogModal`, `AskCoachPanel`, and the rest of the table
+below). Convert one file at a time, run the test suite after each, and update this table's
+count (or strike the row) as each file's cleanly-convertible instances land.
+
+**`SmBtn` gained an optional `className` prop (2026-08-10, default `"text-xs"`)** — one call
+site in `BulkEditPanel.jsx` needed a smaller `.text-2xs` override that the component previously
+had no way to express (only `style` was pluggable, and inline `fontSize` would've fought the
+hardcoded `className="text-xs"`). Existing call sites are unaffected since the prop defaults to
+the original class.
 
 **Conversion method (established on `ProfilePanel.jsx`, 2026-08-10):** a scripted regex pass
 handles the mechanical bulk — locate `<Tag ... style={{ ...fontSize: "Npx"... }}>` where the tag

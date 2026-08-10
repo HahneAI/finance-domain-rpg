@@ -20,18 +20,18 @@ function BackBar({ onBack }) {
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
         onClick={onBack}
-        style={{
+        className="text-base" style={{
           background: "transparent", border: "none",
           color: "var(--color-teal)", cursor: "pointer",
-          fontSize: "13px", padding: "4px 0",
+          padding: "4px 0",
           display: "flex", alignItems: "center", gap: "5px",
         }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
+        <span className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", }}>Profile</span>
       </Pressable>
-      <div style={{
-        flex: 1, fontSize: "13px", fontWeight: "bold",
+      <div className="text-base" style={{
+        flex: 1, fontWeight: "bold",
         letterSpacing: "1px", textTransform: "uppercase",
         color: "var(--color-text-primary)",
       }}>
@@ -43,9 +43,9 @@ function BackBar({ onBack }) {
 
 function ActiveBadge({ active }) {
   return (
-    <span style={{
+    <span className="text-2xs" style={{
       display: "inline-flex", alignItems: "center", gap: "4px",
-      fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+      letterSpacing: "1.5px", textTransform: "uppercase",
       fontWeight: "600", padding: "3px 8px", borderRadius: "4px",
       background: active ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.10)",
       color: active ? "var(--color-green)" : "var(--color-red)",
@@ -58,12 +58,12 @@ function ActiveBadge({ active }) {
 
 function UsageBadge({ count }) {
   if (count === 0) return (
-    <span style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>No registrations</span>
+    <span className="text-xs" style={{ color: "var(--color-text-disabled)" }}>No registrations</span>
   );
   return (
-    <span style={{
+    <span className="text-xs" style={{
       display: "inline-flex", alignItems: "center",
-      fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+      letterSpacing: "1px", textTransform: "uppercase",
       fontWeight: "600", padding: "2px 8px", borderRadius: "4px",
       background: "rgba(0,200,150,0.10)",
       color: "var(--color-accent-primary)",
@@ -85,14 +85,14 @@ function InvestorRow({ investor }) {
       gap: "12px",
     }}>
       <div>
-        <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--color-text-primary)", marginBottom: "2px" }}>
+        <div className="text-base" style={{ fontWeight: "600", color: "var(--color-text-primary)", marginBottom: "2px" }}>
           {investor.investor_name}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
           {[investor.company_name, investor.city].filter(Boolean).join(" · ") || "No company / city"}
         </div>
       </div>
-      <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", textAlign: "right", flexShrink: 0 }}>
+      <div className="text-xs" style={{ color: "var(--color-text-disabled)", textAlign: "right", flexShrink: 0 }}>
         {date}
       </div>
     </div>
@@ -127,13 +127,13 @@ function CodeCard({ code, investors, onToggle, toggling }) {
             </div>
             {/* Label */}
             {code.label && (
-              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
+              <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginBottom: "2px" }}>
                 {code.label}
               </div>
             )}
             {/* Notes */}
             {code.notes && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", fontStyle: "italic" }}>
+              <div className="text-xs" style={{ color: "var(--color-text-disabled)", fontStyle: "italic" }}>
                 {code.notes}
               </div>
             )}
@@ -144,7 +144,7 @@ function CodeCard({ code, investors, onToggle, toggling }) {
         {/* Meta row */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <UsageBadge count={registered.length} />
-          <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>Created {createdDate}</span>
+          <span className="text-xs" style={{ color: "var(--color-text-disabled)" }}>Created {createdDate}</span>
         </div>
 
         {/* Actions row */}
@@ -153,8 +153,8 @@ function CodeCard({ code, investors, onToggle, toggling }) {
           <Pressable
             onClick={() => onToggle(code.id, !code.is_active)}
             disabled={toggling}
-            style={{
-              fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+            className="text-xs" style={{
+              letterSpacing: "1px", textTransform: "uppercase",
               fontWeight: "600", padding: "6px 12px", borderRadius: "8px",
               border: code.is_active
                 ? "1px solid rgba(239,68,68,0.35)"
@@ -173,8 +173,8 @@ function CodeCard({ code, investors, onToggle, toggling }) {
           {registered.length > 0 && (
             <Pressable
               onClick={() => setExpanded(p => !p)}
-              style={{
-                fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+              className="text-xs" style={{
+                letterSpacing: "1px", textTransform: "uppercase",
                 fontWeight: "600", padding: "6px 12px", borderRadius: "8px",
                 border: "1px solid var(--color-border-subtle)",
                 background: "transparent",
@@ -191,7 +191,7 @@ function CodeCard({ code, investors, onToggle, toggling }) {
       {/* Registration list (expanded) */}
       {expanded && registered.length > 0 && (
         <div style={{ borderTop: "1px solid var(--color-border-subtle)" }}>
-          <div style={{ padding: "8px 16px 4px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+          <div className="text-2xs" style={{ padding: "8px 16px 4px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
             Registered investors
           </div>
           {registered.map(inv => (
@@ -236,7 +236,7 @@ function AddCodeForm({ onAdd, onCancel }) {
       padding: "16px",
       marginBottom: "16px",
     }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginBottom: "14px", fontWeight: "600" }}>
+      <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginBottom: "14px", fontWeight: "600" }}>
         New Access Code
       </div>
 
@@ -249,7 +249,7 @@ function AddCodeForm({ onAdd, onCancel }) {
           autoFocus
           style={{ ...iS, width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "9px 12px", textTransform: "uppercase", letterSpacing: "2px" }}
         />
-        <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
+        <div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "4px" }}>
           Letters only — stored and matched lowercase
         </div>
       </div>
@@ -275,7 +275,7 @@ function AddCodeForm({ onAdd, onCancel }) {
       </div>
 
       {state.error && (
-        <div style={{ fontSize: "12px", color: "var(--color-red)", marginBottom: "10px" }}>
+        <div className="text-sm" style={{ color: "var(--color-red)", marginBottom: "10px" }}>
           {state.error}
         </div>
       )}
@@ -284,11 +284,11 @@ function AddCodeForm({ onAdd, onCancel }) {
         <Pressable
           type="submit"
           disabled={state.loading || !form.code.trim()}
-          style={{
+          className="text-xs" style={{
             flex: 1, padding: "9px 16px", borderRadius: "10px", border: "none",
             background: (state.loading || !form.code.trim()) ? "var(--color-bg-raised)" : "var(--color-accent-primary)",
             color: (state.loading || !form.code.trim()) ? "var(--color-text-disabled)" : "var(--color-bg-base)",
-            fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase",
+            letterSpacing: "1px", textTransform: "uppercase",
             fontWeight: "bold", cursor: (state.loading || !form.code.trim()) ? "not-allowed" : "pointer",
           }}
         >
@@ -297,12 +297,12 @@ function AddCodeForm({ onAdd, onCancel }) {
         <Pressable
           type="button"
           onClick={onCancel}
-          style={{
+          className="text-xs" style={{
             padding: "9px 16px", borderRadius: "10px",
             border: "1px solid var(--color-border-subtle)",
             background: "var(--color-bg-raised)",
             color: "var(--color-text-secondary)",
-            fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase",
+            letterSpacing: "1px", textTransform: "uppercase",
             cursor: "pointer",
           }}
         >
@@ -381,7 +381,7 @@ export function InvestorAdminPanel({ onBack }) {
               <div style={{ fontSize: "18px", fontWeight: "700", color: stat.color ?? "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
                 {stat.value}
               </div>
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginTop: "3px" }}>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginTop: "3px" }}>
                 {stat.label}
               </div>
             </div>
@@ -395,12 +395,12 @@ export function InvestorAdminPanel({ onBack }) {
       ) : (
         <Pressable
           onClick={() => setShowAddForm(true)}
-          style={{
+          className="text-xs" style={{
             width: "100%", padding: "11px 16px", borderRadius: "10px",
             border: "1px dashed rgba(0,200,150,0.4)",
             background: "rgba(0,200,150,0.06)",
             color: "var(--color-accent-primary)",
-            fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase",
+            letterSpacing: "1px", textTransform: "uppercase",
             fontWeight: "600", cursor: "pointer", marginBottom: "20px",
             display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
           }}
@@ -414,17 +414,17 @@ export function InvestorAdminPanel({ onBack }) {
 
       {/* Loading */}
       {codes === null && !loadError && (
-        <div style={{ padding: "32px 0", textAlign: "center", fontSize: "12px", color: "var(--color-text-disabled)" }}>
+        <div className="text-sm" style={{ padding: "32px 0", textAlign: "center", color: "var(--color-text-disabled)" }}>
           Loading…
         </div>
       )}
 
       {/* Error */}
       {loadError && (
-        <div style={{
+        <div className="text-sm" style={{
           padding: "14px 16px", background: "rgba(239,68,68,0.08)",
           border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px",
-          fontSize: "12px", color: "var(--color-red)", marginBottom: "16px",
+          color: "var(--color-red)", marginBottom: "16px",
         }}>
           Failed to load: {loadError}
         </div>
@@ -432,7 +432,7 @@ export function InvestorAdminPanel({ onBack }) {
 
       {/* Empty */}
       {codes !== null && codes.length === 0 && (
-        <div style={{ padding: "32px 0", textAlign: "center", fontSize: "12px", color: "var(--color-text-disabled)" }}>
+        <div className="text-sm" style={{ padding: "32px 0", textAlign: "center", color: "var(--color-text-disabled)" }}>
           No codes yet. Create one above.
         </div>
       )}

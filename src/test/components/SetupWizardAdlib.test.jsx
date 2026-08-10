@@ -88,6 +88,52 @@ function advanceToDeductions_dhlPlant() {
   fireEvent.click(primaryBtn())
 }
 
+// Fills the base-user Deductions page (no benefits, attendance answered) and advances to Tax Rates.
+function advanceToTaxRates_baseUser() {
+  advanceToDeductions_baseUser()
+  fireEvent.change(selects()[0], { target: { value: 'no' } }) // no benefits
+  fireEvent.change(selects()[1], { target: { value: 'no' } }) // attendance
+  fireEvent.click(primaryBtn())
+}
+
+// DHL Deductions is already valid with zero interaction — just click through to Tax Rates.
+function advanceToTaxRates_dhlPlant() {
+  advanceToDeductions_dhlPlant()
+  fireEvent.click(primaryBtn())
+}
+
+// Fills the base-user Tax Rates page (single/MO, paystub applied) and advances to Wrap Up.
+function advanceToWrapUp_baseUser() {
+  advanceToTaxRates_baseUser()
+  fireEvent.change(selects()[0], { target: { value: 'single' } })
+  fireEvent.change(selects()[1], { target: { value: 'MO' } })
+  fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+  fireEvent.change(screen.getByLabelText(/gross pay/i), { target: { value: '1050' } })
+  fireEvent.change(screen.getByLabelText(/fed withheld/i), { target: { value: '82' } })
+  fireEvent.change(screen.getByLabelText(/state withheld/i), { target: { value: '35' } })
+  fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
+  fireEvent.click(primaryBtn())
+}
+
+// Fills the DHL Plant Tax Rates page (both paystub weeks applied) and advances to Wrap Up.
+function advanceToWrapUp_dhlPlant() {
+  advanceToTaxRates_dhlPlant()
+  fireEvent.change(selects()[0], { target: { value: 'single' } })
+  fireEvent.change(selects()[1], { target: { value: 'MO' } })
+  fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+  const gross = screen.getAllByLabelText(/gross pay/i)
+  const fed = screen.getAllByLabelText(/fed withheld/i)
+  const state = screen.getAllByLabelText(/state withheld/i)
+  fireEvent.change(gross[0], { target: { value: '1050' } })
+  fireEvent.change(fed[0], { target: { value: '82' } })
+  fireEvent.change(state[0], { target: { value: '35' } })
+  fireEvent.change(gross[1], { target: { value: '1450' } })
+  fireEvent.change(fed[1], { target: { value: '186' } })
+  fireEvent.change(state[1], { target: { value: '58' } })
+  fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
+  fireEvent.click(primaryBtn())
+}
+
 describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', () => {
   it('disables the primary action until the employment-status blank is filled', () => {
     renderAdlib()
@@ -100,11 +146,11 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     expect(screen.getByText(/I work for/i)).toBeTruthy()
     // Still one page: the employment-status select is still present, not swapped out.
     expect(selects()[0].value).toBe('employed')
-    // More pages (Schedule, Deductions) are still ahead for an employed user.
+    // More pages (Schedule, Deductions, Tax Rates) are still ahead for an employed user.
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
   })
 
-  it('hands off directly to the jobless flow when "unemployed" is chosen, skipping Schedule/Deductions entirely', () => {
+  it('hands off directly to the jobless flow when "unemployed" is chosen, skipping Schedule/Deductions/Tax Rates entirely', () => {
     const { onHandoff } = renderAdlib()
     fireEvent.change(selects()[0], { target: { value: 'unemployed' } })
     expect(screen.queryByText(/I work for/i)).toBeNull()
@@ -204,11 +250,11 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
 })
 
 describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
-  it('lands on the Schedule page (2 of 3) after completing a base-user Intake page', () => {
+  it('lands on the Schedule page (2 of 5) after completing a base-user Intake page', () => {
     renderAdlib()
     advanceToSchedule_baseUser()
     expect(screen.getByText(/I started on/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 2 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/Ad-Lib Preview · 2 of 5/i)).toBeTruthy()
   })
 
   it('shows a Back button on the Schedule page that returns to Intake', () => {
@@ -217,7 +263,7 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
     expect(screen.getByRole('button', { name: /^back$/i })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
     expect(screen.getByText(/I work for/i)).toBeTruthy()
-    expect(screen.getByText(/Ad-Lib Preview · 1 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/Ad-Lib Preview · 1 of 5/i)).toBeTruthy()
   })
 })
 
@@ -271,7 +317,7 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Ad-Lib Preview · 3 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/Ad-Lib Preview · 3 of 5/i)).toBeTruthy()
     expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
   })
 
@@ -319,12 +365,12 @@ describe('SetupWizardAdlib — Schedule page (DHL Warehouse)', () => {
 })
 
 describe('SetupWizardAdlib — Deductions page (base user)', () => {
-  it('is the last page (3 of 3) and Continue Setup starts disabled — attendance is required', () => {
+  it('is page 3 of 5 (not the last page) and reads "Next", not "Continue Setup"', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
-    expect(screen.getByText(/Ad-Lib Preview · 3 of 3/i)).toBeTruthy()
-    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
-    expect(primaryBtn()).toBeDisabled()
+    expect(screen.getByText(/Ad-Lib Preview · 3 of 5/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/^next$/i)
+    expect(primaryBtn()).toBeDisabled() // attendance still required
   })
 
   it('reveals the attendance question once the benefits gate is answered either way', () => {
@@ -346,7 +392,7 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     expect(numbers().length).toBeGreaterThan(0)
   })
 
-  it('gates Continue Setup on the selected weekly benefit amount being filled', () => {
+  it('gates the primary action on the selected weekly benefit amount being filled', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
     fireEvent.change(selects()[0], { target: { value: 'yes' } })
@@ -384,8 +430,8 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     expect(primaryBtn()).not.toBeDisabled()
   })
 
-  it('completes with benefits + attendance and hands off to Tax Rates (step id 4)', () => {
-    const { onHandoff } = renderAdlib()
+  it('advances to the Tax Rates page (not a handoff) once Deductions is complete', () => {
+    renderAdlib()
     advanceToDeductions_baseUser()
     fireEvent.change(selects()[0], { target: { value: 'yes' } })
     fireEvent.click(screen.getByRole('button', { name: /health \/ medical/i }))
@@ -393,26 +439,20 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     fireEvent.change(selects()[1], { target: { value: 'yes' } }) // attendance
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(onHandoff).toHaveBeenCalledTimes(1)
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.selectedBenefits).toEqual(['health'])
-    expect(mergedFormData.healthPremium).toBe(18.50)
-    expect(mergedFormData.attendanceBucketEnabled).toBe(true)
-    expect(initialStepId).toBe(4)
+    expect(screen.getByText(/Ad-Lib Preview · 4 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/I officially file/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/^next$/i)
   })
 })
 
 describe('SetupWizardAdlib — Deductions page (DHL)', () => {
-  it('is already valid with zero interaction — no attendance question, no required benefits', () => {
-    const { onHandoff } = renderAdlib()
+  it('is already valid with zero interaction — advances straight to Tax Rates', () => {
+    renderAdlib()
     advanceToDeductions_dhlPlant()
     expect(screen.queryByText(/formal points or hours system/i)).toBeNull()
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
-    expect(mergedFormData.employerPreset).toBe('DHL')
-    expect(mergedFormData.dhlSite).toBe('PLANT')
-    expect(initialStepId).toBe(4)
+    expect(screen.getByText(/I officially file/i)).toBeTruthy()
   })
 
   it('does not carry over selectedBenefits/attendanceBucketEnabled from an already-answered real config', () => {
@@ -429,8 +469,173 @@ describe('SetupWizardAdlib — Deductions page (DHL)', () => {
   })
 })
 
+describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
+  it('is page 4 of 5 (not the last page) and Next starts disabled', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    expect(screen.getByText(/Ad-Lib Preview · 4 of 5/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/^next$/i)
+    expect(primaryBtn()).toBeDisabled()
+  })
+
+  it('renders the filing-status and state blanks as one sentence', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    expect(screen.getByText(/I officially file/i)).toBeTruthy()
+    expect(screen.getByText(/living in the state of/i)).toBeTruthy()
+    expect(selects().length).toBe(2)
+  })
+
+  it('does not show the Recalculate Using Paystub button until both selectors are filled', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    expect(screen.queryByRole('button', { name: /recalculate using paystub/i })).toBeNull()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    expect(screen.queryByRole('button', { name: /recalculate using paystub/i })).toBeNull()
+    fireEvent.change(selects()[1], { target: { value: 'MO' } })
+    expect(screen.getByRole('button', { name: /recalculate using paystub/i })).toBeTruthy()
+  })
+
+  it('reveals the paystub calculator when Recalculate Using Paystub is clicked, single-week for a non-variable schedule', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    fireEvent.change(selects()[1], { target: { value: 'MO' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    expect(screen.getByText(/Typical Paycheck/i)).toBeTruthy()
+    expect(screen.queryByText(/Longer Week Paystub/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /apply these rates/i })).toBeNull()
+  })
+
+  it('hides the State Withheld field for a no-income-tax state', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    fireEvent.change(selects()[1], { target: { value: 'TX' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    expect(screen.queryByLabelText(/state withheld/i)).toBeNull()
+  })
+
+  it('applies computed rates and satisfies the mandatory-field gate', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    fireEvent.change(selects()[1], { target: { value: 'MO' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    fireEvent.change(screen.getByLabelText(/gross pay/i), { target: { value: '1050' } })
+    fireEvent.change(screen.getByLabelText(/fed withheld/i), { target: { value: '82' } })
+    fireEvent.change(screen.getByLabelText(/state withheld/i), { target: { value: '35' } })
+    expect(primaryBtn()).toBeDisabled() // hasn't applied yet
+    fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
+    expect(primaryBtn()).not.toBeDisabled()
+    expect(screen.queryByText(/Typical Paycheck/i)).toBeNull() // calculator collapses after apply
+  })
+
+  it('advances to the Wrap Up page (not a handoff) once Tax Rates is complete', () => {
+    renderAdlib()
+    advanceToTaxRates_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    fireEvent.change(selects()[1], { target: { value: 'MO' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    fireEvent.change(screen.getByLabelText(/gross pay/i), { target: { value: '1050' } })
+    fireEvent.change(screen.getByLabelText(/fed withheld/i), { target: { value: '82' } })
+    fireEvent.change(screen.getByLabelText(/state withheld/i), { target: { value: '35' } })
+    fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
+    expect(primaryBtn()).not.toBeDisabled()
+    fireEvent.click(primaryBtn())
+    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
+    expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+  })
+})
+
+describe('SetupWizardAdlib — Tax Rates page (DHL Plant, variable schedule)', () => {
+  it('shows a second Longer Week Paystub box and applies distinct short/long rates, then advances to Wrap Up', () => {
+    renderAdlib()
+    advanceToTaxRates_dhlPlant()
+    fireEvent.change(selects()[0], { target: { value: 'single' } })
+    fireEvent.change(selects()[1], { target: { value: 'MO' } })
+    fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
+    expect(screen.getByText(/Shorter Week Paystub/i)).toBeTruthy()
+    expect(screen.getByText(/Longer Week Paystub/i)).toBeTruthy()
+
+    const gross = screen.getAllByLabelText(/gross pay/i)
+    const fed = screen.getAllByLabelText(/fed withheld/i)
+    const state = screen.getAllByLabelText(/state withheld/i)
+    fireEvent.change(gross[0], { target: { value: '1050' } })
+    fireEvent.change(fed[0], { target: { value: '82' } })
+    fireEvent.change(state[0], { target: { value: '35' } })
+    fireEvent.change(gross[1], { target: { value: '1450' } })
+    fireEvent.change(fed[1], { target: { value: '186' } })
+    fireEvent.change(state[1], { target: { value: '58' } })
+    fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
+    fireEvent.click(primaryBtn())
+    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
+  })
+})
+
+describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
+  it('is the last page (5 of 5) and Continue Setup is already enabled — nothing is required', () => {
+    renderAdlib()
+    advanceToWrapUp_baseUser()
+    expect(screen.getByText(/Ad-Lib Preview · 5 of 5/i)).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/continue setup/i)
+    expect(primaryBtn()).not.toBeDisabled()
+  })
+
+  it('renders a live net-estimate summary with Gross Pay and Net rows', () => {
+    renderAdlib()
+    advanceToWrapUp_baseUser()
+    expect(screen.getByText(/Gross Pay/i)).toBeTruthy()
+    expect(screen.getByText(/Federal Tax/i)).toBeTruthy()
+    expect(screen.getByText(/^Net$/i)).toBeTruthy()
+  })
+
+  it('shows the buffer amount blank by default — buffer defaults on', () => {
+    renderAdlib()
+    advanceToWrapUp_baseUser()
+    expect(screen.getByText(/a paycheck buffer/i)).toBeTruthy()
+    expect(screen.getByText(/per check\./i)).toBeTruthy()
+    expect(numbers().length).toBeGreaterThan(0)
+  })
+
+  it('hides the buffer amount blank once turned off', () => {
+    renderAdlib()
+    advanceToWrapUp_baseUser()
+    fireEvent.change(selects()[0], { target: { value: 'off' } })
+    expect(screen.queryByText(/per check\./i)).toBeNull()
+    expect(primaryBtn()).not.toBeDisabled() // still nothing required
+  })
+
+  it('completes and calls onHandoff with a null initialStepId — nothing left to hand off to', () => {
+    const { onHandoff } = renderAdlib()
+    advanceToWrapUp_baseUser()
+    fireEvent.click(primaryBtn())
+    expect(onHandoff).toHaveBeenCalledTimes(1)
+    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
+    expect(mergedFormData.filingStatus).toBe('single')
+    // bufferEnabled defaults to "on" for display (`?? true`) without being written to
+    // formData until the admin actually touches the toggle — same as real Step7.
+    expect(mergedFormData.bufferEnabled).not.toBe(false)
+    expect(initialStepId).toBeNull()
+  })
+})
+
+describe('SetupWizardAdlib — Wrap Up page (DHL Plant, variable schedule)', () => {
+  it('completes with distinct short/long tax rates carried through to the final payload', () => {
+    const { onHandoff } = renderAdlib()
+    advanceToWrapUp_dhlPlant()
+    fireEvent.click(primaryBtn())
+    const [mergedFormData, initialStepId] = onHandoff.mock.calls[0]
+    expect(mergedFormData.fedRateLow).toBeCloseTo(82 / 1050, 4)
+    expect(mergedFormData.fedRateHigh).toBeCloseTo(186 / 1450, 4)
+    expect(mergedFormData.fedRateLow).not.toBeCloseTo(mergedFormData.fedRateHigh, 4)
+    expect(initialStepId).toBeNull()
+  })
+})
+
 describe('SetupWizardAdlib — resumeFormData', () => {
-  it('reopens on the Deductions page (page 3, the last page) pre-filled with the in-progress answers, for an employed resume', () => {
+  it('reopens on the Wrap Up page (page 5, the last page) pre-filled with the in-progress answers, for an employed resume', () => {
     const resumeFormData = {
       ...DEFAULT_CONFIG,
       startedUnemployed: false,
@@ -443,9 +648,18 @@ describe('SetupWizardAdlib — resumeFormData', () => {
       hoursUnderstood: true,
       payPeriodEndDay: 0,
       attendanceBucketEnabled: true,
+      filingStatus: 'single',
+      userState: 'MO',
+      fedRateLow: 0.08,
+      fedRateHigh: 0.08,
+      stateRateLow: 0.03,
+      stateRateHigh: 0.03,
+      taxRatesEstimated: false,
+      bufferEnabled: true,
+      paycheckBuffer: 50,
     }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
-    expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
+    expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/continue setup/i)
   })

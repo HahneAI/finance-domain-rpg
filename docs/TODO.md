@@ -4197,54 +4197,260 @@ shipping or merging.
 
 ## 19. Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment
 
-*Status: live admin-only preview, awaiting a real feel-test before any further decision. Not
-user-facing — see `.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
+*Status: all five real first-run steps are now ad-libbed (Welcome+Pay Structure, Schedule,
+Deductions, Tax Rates, Wrap Up) — still admin-only, still MOCK ONLY. §19.1 below is the audit
+gating the next decision: wire this in as the real production wizard. Not user-facing yet — see
+`.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
 
-**What shipped:** the first three SetupWizard steps reimagined as two cascading mad-libs pages
-with inline blanks, instead of stacked form fields — an experiment in whether a friendlier,
-game-like onboarding reduces the setup-wizard friction point. Page 1 merges Welcome + Pay
-Structure into one continuous sentence; page 2 covers Schedule as its own page, same style.
-Admin-only (`isAdmin`-gated "Ad-Lib Wizard" → Preview button in the Admin Tools panel, both
-mobile/desktop copies). Reuses the exact same config fields/DHL-preset defaults as the real steps,
-then hands off into the real wizard (via `SetupWizard`'s new `initialStepId` prop) for
-Deductions/Tax Rates/Wrap Up (or the jobless mini-flow) — a real, click-through continuation, not
-a mockup. **Mock only — nothing is ever saved**, including that continuation (`App.jsx`'s
-`onComplete` skips `handleWizardComplete` whenever the run originated from this preview); Cancel
-also stays available the whole way through so admins can bail at any point with zero risk to real
-account data.
+**What shipped:** the entire first-run, employed-signup SetupWizard flow (Welcome through Wrap
+Up — six real steps) reimagined as five cascading mad-libs pages with inline blanks, instead of
+stacked form fields — an experiment in whether a friendlier, game-like onboarding reduces the
+setup-wizard friction point. Page 1 merges Welcome + Pay Structure into one continuous sentence;
+page 2 covers Schedule; page 3 covers Deductions; page 4 covers Tax Rates; page 5 covers Wrap Up —
+each its own page, same cascading style throughout. Admin-only (`isAdmin`-gated "Ad-Lib Wizard" →
+Preview button in the Admin Tools panel, both mobile/desktop copies). Reuses the exact same config
+fields/DHL-preset defaults as the real steps. For an employed first-run, `onHandoff` now fires with
+`initialStepId: null` once Wrap Up is answered — nothing left in the real wizard, so `App.jsx`
+closes the preview directly without ever mounting `SetupWizard`; the jobless mini-flow (ids
+10/11/12) still hands off into the real wizard, since that continuation is unconverted. **Mock
+only — nothing is ever saved** either way; Cancel/"Exit Preview" stays available the whole way
+through so admins can bail at any point with zero risk to real account data.
 
-**Since first ship:** four rounds of feel-test feedback fixed. (1) The pilot pages now start fully
-blank (`BLANK_PAY_FIELDS`) instead of pre-filling from the admin's own real config — an admin with
-an already-answered account (DHL preset, existing pay schedule) previously landed already
-proceed-eligible with zero interaction, silently defeating the pilot's own required-field gating.
-Blank selects also read `(select)` in italics instead of a bare `___`, and the blank option stays
-choosable after answering (not removed from the list) so a pick can be undone back to blank.
-(2) Hitting Back on the real wizard's first handed-off step no longer falls through into that
-component's own Step0/Step1/Step2 (confusingly showing the stacked-field UI for the same
-questions this pilot just asked ad-lib style) — `SetupWizard`'s new `onBackBeforeStart` prop
-intercepts Back at that exact boundary and `App.jsx` reopens `SetupWizardAdlib` via its
-`resumeFormData` prop, resuming with the in-progress answers intact. (3) Welcome and Pay Structure
-were merged from two separate pages into one continuous page — each clause (employment status,
-then employer, then team/shift/pay-schedule) now cascades onto the same page the instant its
-prerequisite answer is given, instead of requiring a Next click between them. Each newly-revealed
-clause plays a crisp stepped typewriter reveal (`TypedText` + the `adlibType` keyframe in
-`index.css`) combined with the existing `fadeSlideUp` fade+lift, so it both rolls onto the page and
-types itself out; the blank that follows fades in right as its introducing text finishes.
-(4) Schedule was added as a second page (`SchedulePage`) in the same cascading/typed style,
-mirroring STEP_DEFS id 2's exact required-field set (`startDate`, then `maxWeeklyHours` →
-`hoursUnderstood` → `payPeriodEndDay` → `biweeklyPayWeekParity` for base users; just `startDate`
-for DHL, with an unrequired Short/Long-Week blank to match the real Step2's own non-gating). The
-handoff target moved from Schedule (id 2) to Deductions (id 3) accordingly. Page-level navigation
-(`StepSlide`, page-level Next/Back) came back for the 2-page structure, but stays entirely separate
-from each page's own internal clause-cascade — Back on page 2 returns to page 1 with its answers
-intact; there is no Back on page 1 (nothing to page back to).
+**Build history (five rounds, each its own commit):** blank-by-default fields + real
+mandatory-field gating + resume-on-Back (`BLANK_PAY_FIELDS`, `onBackBeforeStart`) → Welcome+Pay
+Structure merged into one cascading page → Schedule added as page 2 → Deductions added as page 3
+(new `InlineChip` multi-select control) → Tax Rates added as page 4 (paystub-calculator reveal
+pattern) → Wrap Up added as page 5, completing the flow and changing the hand-off shape for an
+employed finish (`initialStepId: null`). Full narrative + code specifics for each round:
+`docs/past-TODO-tasks.md`'s "Ad-Lib Wizard preview — page-by-page conversion" entries.
 
-**Open decisions, pending how the pilot feels in practice:**
-- [ ] Expand the ad-lib treatment to the remaining 3 steps (Deductions, Tax Rates, Wrap Up), or
-      stop here if the feel doesn't hold up over a longer multi-page sentence flow
-- [ ] Decide the eventual split-test mechanism: stay admin-only-preview forever, promote to a real
-      user-facing A/B split (needs signup volume to be meaningful), or just replace the real wizard
-      outright if the pilot feels clearly better
-- [ ] If kept long-term, consider whether `IntakePage`'s local `employerChoice` UI state (see its
-      own code comment) needs a more robust remount-safe derivation, or whether that rough edge is
-      acceptable indefinitely for an admin-only tool
+### 19.1 Pre-Production Audit — Wiring Ad-Lib In As The Real Wizard
+
+*Audit pass: 2026-08-10. Read in full: `SetupWizard.jsx` (all six step components, `STEP_DEFS`,
+`handleComplete`, the render/JSX modal wrapper), `SetupWizardAdlib.jsx` (all five pages),
+`App.jsx`'s wizard integration (`wizardEntry`, `handleWizardComplete`, `handleBackToWork`,
+`handleSelectInvestorAccount`, the trial-explainer gate, the ad-lib hand-off wiring), and
+`drift-app-warden.md` §7 (SetupWizard's F1–F12 critical inventory + six-path gate matrix — cite
+this section's line numbers as approximate; the file has grown since that pass). Purpose: catch
+every gap **before** the ad-lib pages become the real production wizard, per the explicit
+requirement that nothing gets left out in the swap. Grouped by category below; each item is a
+concrete, code-grounded finding, not a guess.*
+
+**A. Field/UI parity gaps — real fields the ad-lib pages don't ask at all, yet**
+
+*Pay Structure (real Step1, `SetupWizard.jsx:339`) vs. `IntakePage`:*
+- [ ] **Tips/Commission daily check-in opt-in** (`SetupWizard.jsx:811–844`) — entirely missing
+      from `IntakePage`. Real production feature (tips/commission check-in card, `LogPanel`
+      section, `calcEventImpact` branch already built this session) has no way to be turned on
+      from the ad-lib flow at all. Also feeds `tipsOrCommissionEnabledAt` stamping in
+      `handleComplete` (`SetupWizard.jsx:2578–2587`) — a real gap, not cosmetic.
+- [ ] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
+      — missing entirely; base users can never set a non-40h OT threshold or go OT-exempt via ad-lib.
+- [ ] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — OT multiplier
+      (1.5×/2×), night differential enable+rate, weekend differential for base users — the whole
+      collapsible group is missing. None of it gates `isValid`, but production users need a way to
+      set it.
+- [ ] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — ad-lib
+      only ever uses the DHL_PRESET default (`diffRate ?? 1.75`); DHL users can't edit it.
+- [ ] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
+      (`SetupWizard.jsx:560–639`, Plant-only) — entirely missing from `IntakePage`. A DHL Plant
+      user working a non-standard schedule (pickup shifts, extended hours) has no way to say so.
+
+*Deductions (real Step3, `SetupWizard.jsx:1204`) vs. `DeductionsPage` — most of these were
+already flagged "v1 scope" in the page's own code comment when built, on the reasoning that none
+of them gate `isValid`; that reasoning holds for an admin preview, not for a production wizard:*
+- [ ] **Benefits Start Date** (`SetupWizard.jsx:1283–1293`) — missing.
+- [ ] **Other Recurring Deductions** dynamic list (union dues, parking, etc.,
+      `SetupWizard.jsx:1296–1347`) — missing.
+- [ ] **Attendance Policy Details** sub-fields (unit, warn/terminate thresholds, current balance,
+      per-event increment — `SetupWizard.jsx:1372–1435`) — missing.
+- [ ] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
+      balance/cap, `SetupWizard.jsx:1438–1509`) — missing entirely. Not previously called out in
+      any doc as an intentional scope-out by name; a real gap.
+- [ ] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
+      button) — `DeductionsPage` has no Skip affordance at all, so a real user who wants to skip
+      benefits/attendance entirely (allowed today) would be *blocked* by ad-lib's attendance gate
+      for base users where the real wizard would let them through. This is a **functional
+      regression**, not just a missing nice-to-have — fix before promoting.
+
+*Tax Rates (real Step4, `SetupWizard.jsx:1646`) vs. `TaxRatesPage` — scoped out by explicit user
+instruction when built ("just the paystub path"), revisit now that this is going to production:*
+- [ ] **"Use Estimate for Now"** flat-rate fallback (`PaystubCalc`'s `onEstimate`,
+      `SetupWizard.jsx:1666–1676`) — no paystub-free path to a valid tax rate exists in ad-lib. A
+      real user without a paystub handy is currently stuck unable to finish onboarding.
+- [ ] **DHL Missouri preset button** (`loadDHLPreset`, `SetupWizard.jsx:1678–1689`) — missing.
+
+*Wrap Up (real Step7, `SetupWizard.jsx:2040`) vs. `WrapUpPage` — scoped out as v1 when built:*
+- [ ] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,
+      `SetupWizard.jsx:2144–2170`) — missing. Doesn't gate `isValid`, but it's a real, user-facing
+      feature real Wrap Up offers today.
+
+*Schedule (real Step2) vs. `SchedulePage` — audited, no gaps found. Every real Step2 field/branch
+(DHL rotation vs. base-user hours ceiling + pay-period day + biweekly parity) has an ad-lib
+equivalent already.*
+
+**B. Flow-coverage gaps — entire paths the ad-lib pages never touch**
+
+- [ ] **Investor first-run entry** — `SetupWizard`'s `isInvestor` prop drives: Step0's "Welcome,
+      {firstName}." greeting reading `formData.investorName`; the "Do you work for DHL?" gate
+      hidden entirely (investors are always base users); a special `formData` init override
+      (`SetupWizard.jsx:2499–2501`: `employerPreset: null`, `otThreshold: config.otThreshold || 40`,
+      `maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40`). `SetupWizardAdlib`
+      has no `isInvestor` prop at all today. Real trigger: `handleSelectInvestorAccount` (`App.jsx`)
+      opens the first-run wizard for account #3 when `!config.setupComplete` — **this is a live,
+      reachable production path today**, not hypothetical. Decide: give ad-lib an `isInvestor`
+      prop with equivalent handling, or explicitly keep investor first-run on the real
+      `SetupWizard` (documented exception) — either is fine, but it must be a decision, not an
+      oversight.
+- [ ] **Life-event re-entry** (`structure_change`, `lost_job`, `changed_jobs`, `commission_job`)
+      — `SetupWizardAdlib` has no `lifeEvent` concept whatsoever: no pre-fill from
+      `originalConfig`, no `StructureChangeDiff` "What's Changing" summary, no Commission Income
+      field (`lifeEvent === "commission_job"` only, `SetupWizard.jsx:782–809`), no employer-preset
+      switch callout. **Recommended scope for this promotion:** ad-lib replaces `SetupWizard` only
+      for first-run (`wizardEntry === false`, non-investor or investor-per-decision-above);
+      `SetupWizard.jsx` stays mounted, unchanged, for every life-event string and the jobless
+      mini-flow continuation. State this decision explicitly in the PR/commit — don't let it be
+      implied.
+- [ ] **Jobless mini-flow** (STEP_DEFS ids 10/11/12: Unemployment Benefits, Job Loss Details,
+      Jobless Wrap Up) — confirm the hand-off (`initialStepId: 10`) stays the intended permanent
+      shape, not a temporary stopgap. If it's permanent, no further work; if it's meant to be
+      ad-libbed eventually too, it's out of scope for *this* promotion but should get its own
+      TODO entry once decided.
+
+**C. Save/completion wiring — ad-lib must actually save for production; it never has**
+
+- [ ] Today, an employed finish just closes the preview with **zero save** — that's correct for a
+      mock preview and **wrong** for production. The finished `formData` must reach the real save
+      pipeline.
+- [ ] **Reuse `App.jsx`'s existing `handleWizardComplete(mergedConfig)` directly** rather than
+      reimplementing its logic — that function already owns: `configHistoryMetaRef` tagging
+      (`source: "setup_wizard"`, `effectiveFrom: startDate` — required by drift-app-warden §7 F9
+      or the config-history snapshot loses its attribution); the `structure_change` +
+      `startedUnemployed` clear (N/A for first-run, harmless to leave in); `skipFoodSeed` /
+      `restoredExpenses` expense-seeding logic; and the eager `savePersistedStateNow(...)` call
+      (never a bare `setConfig` + debounce — that's the exact D3 pattern that caused real
+      production data loss, per drift-app-warden's own case law). Routing ad-lib's finish through
+      this one function, instead of writing a second copy, is what keeps this a single
+      source-of-truth commit point instead of a new parallel-formula risk.
+- [ ] `handleComplete()`'s own normalization must still run before `handleWizardComplete` sees the
+      data — DHL overrides (`payPeriodEndDay: 0`, `otThreshold: 40`, `otMultiplier: 1.5`), buffer
+      normalize (`paycheckBuffer ?? 50` whenever `bufferEnabled !== false`), `taxedWeeks`
+      derivation via `buildYear`, `accountCreatedIdx` stamp, `setupComplete: true`
+      (`SetupWizard.jsx:2566–2598`). Either call the same function ad-lib-side too, or extract it
+      to a shared helper both `SetupWizard.jsx` and `SetupWizardAdlib.jsx` call — do **not**
+      hand-transcribe this logic a second time.
+- [ ] Confirm the `onCancel`/Exit path for a real first-run ad-lib session has **no save side
+      effects** — abandoning setup must leave `config.setupComplete` untouched, same as the real
+      wizard today.
+
+**D. Entry-point & gating wiring**
+
+- [ ] Remove the `isAdmin` gate — production ad-lib must be reachable by real signups, not just
+      the Admin Tools panel.
+- [ ] Route ad-lib through the **same `wizardEntry` state** `SetupWizard` uses today (or an
+      equivalent single source of truth) — this is what already gates, for free, everything a
+      first-run signup must still see: the `TrialExplainerScreen` interstitial
+      (`App.jsx:1866–1874`, shown once ahead of first-run entry for a real trial signup — must
+      still gate ad-lib the same way), the paywall/entitlement bypass logic
+      (`paywallBypassed`/`isExpiredReadOnly`), and the `investorSession` race guard
+      (`App.jsx:712–715`). A separate, parallel `adlibPreviewOpen` state (today's admin-preview
+      model) would silently skip all of this if reused as-is for production.
+- [ ] For a real first-run, non-investor signup, `onCancel` must be **`undefined`** (no escape
+      hatch) — matching the real wizard's own uncancelable-first-run rule
+      (drift-app-warden §7.3: "`onCancel` undefined (non-investor) — no escape"). Ad-lib's
+      "Exit Preview" button must not survive into production for this path; it can stay for
+      investor/re-entry flows if/when those are ever ad-libbed, same as the real wizard's own
+      conditional Cancel.
+- [ ] Rename/remove "Ad-Lib Preview · N of M" and "Exit Preview" copy once this isn't a preview —
+      it's the wizard.
+- [ ] Remove (or explicitly repurpose) the Admin Tools "Ad-Lib Wizard" → Preview toggle — it has
+      no reason to exist once there's nothing left to preview against.
+
+**E. Full-page conversion** *(explicit ask: "a real full page instead of a popup modal")*
+
+- [ ] Every full-screen surface in this app today — including both `SetupWizard` and
+      `SetupWizardAdlib` — uses the same pattern: a `position: fixed; inset: 0` viewport takeover
+      with a **centered, bounded card** inside it (`maxWidth`/`maxHeight`, its own `background`/
+      `border`/`border-radius`). That's a modal-on-a-backdrop, not a page. Drop the card
+      boundary — the content should fill the available viewport (with safe-area-aware padding)
+      as the page itself, not a floating panel.
+- [ ] Keep the full-viewport takeover mechanics (`fold-lift` class, `data-fold`
+      entering/exiting, `env(safe-area-inset-top/bottom)` padding) — those are sound and match
+      every other full-screen surface in the app; only the *card-within-the-takeover* boundary
+      needs to go.
+- [ ] Header (step counter + progress bar) needs a full-page-appropriate treatment — decide
+      whether it's sticky/fixed at the top of the page or scrolls with content.
+- [ ] Confirm this stays a state-driven takeover (matching the rest of the app's architecture —
+      no client-side router exists anywhere else in the app today) rather than becoming a routed
+      URL — call this out as an explicit decision, don't let "full page" get silently
+      reinterpreted as "new route."
+
+**F. Screen-edge / responsive sentence handling** *(explicit ask: "clean ad lib sentence handling
+for screen edges")*
+
+- [ ] **`TypedText` uses `white-space: "pre"`** (`SetupWizardAdlib.jsx:49–61`), which blocks
+      wrapping *within* a single clause. Short clauses are fine, but several real clauses are one
+      long sentence rendered as a single `TypedText` span — e.g. Deductions' "Does my employer
+      track attendance with a formal points or hours system?" — and **will overflow horizontally**
+      on a narrow viewport instead of wrapping. Confirmed bug, not a hypothetical: reproduce at
+      375px width (iPhone SE class) on the Deductions page. Fix by breaking long clauses into
+      several shorter `TypedText` segments at natural phrase boundaries (each still typing in
+      sequence), or finding a stepped-clip-path approach compatible with `white-space: pre-wrap`.
+- [ ] Fixed pixel `width` values on `InlineDate` (168px/140px) and other `Inline*` controls don't
+      shrink on narrow screens — audit every `Inline*` usage for `max-width: 100%` / responsive
+      sizing so a control plus its surrounding text can't force horizontal overflow.
+- [ ] `BLANK_FONT`'s fixed `26px` font-size was tuned for the current ~560px-wide centered card —
+      once the card boundary is gone (§19.1.E), decide a responsive scale (e.g. `clamp()` by
+      viewport width) instead of one fixed size that may read oversized on mobile or undersized on
+      a wide desktop full-page layout.
+- [ ] A true full-page layout removes the ~560px width ceiling entirely — without a deliberate max
+      reading-width on the **text column** (e.g. ~640–720px, centered, independent of the
+      page's own full-bleed background), desktop viewers get uncomfortably long lines. Apply a
+      max-width to the sentence/text column, not to the page.
+- [ ] Verify the benefit-chip row (`DeductionsPage`) and the 50-option state-name `<select>`
+      (`TaxRatesPage`) render and remain usable on mobile widths — chip row wrapping, native
+      `<select>` dropdown behavior on iOS/Android.
+- [ ] Verify native date/select pickers (iOS/Android) don't clip against the new full-page scroll
+      container when they open.
+- [ ] Re-tune the `StepSlide` page-transition animation for full-page width/height — it was built
+      and tuned against a small centered card.
+- [ ] Add `prefers-reduced-motion` handling to `TypedText`'s stepped-reveal keyframe — every real
+      signup will see this animation on every page, unlike an admin doing a one-off preview click.
+
+**G. Accessibility & validation-feedback parity**
+
+- [ ] The real wizard shows explicit red-label + red-border + "↑ Required" text once a field is
+      `attempted` and still empty — concrete, in-page feedback for *why* the primary button is
+      disabled. Ad-lib pages only disable the button with no explanation. Real users (not admins
+      familiar with the fields) need equivalent required-field feedback before this ships.
+- [ ] Screen-reader pass on `InlineChip`/`InlineSelect`/`InlineNumber`/`InlineDate` accessible
+      names — these were built and tested for an admin-only tool; verify they hold up for a
+      real, broader signup audience.
+
+**H. Field-set completeness housekeeping**
+
+- [ ] Every field the (now-production) ad-lib pages write must be present in **both**
+      `configHistory.js`'s `HISTORY_SENSITIVE_FIELDS` and real Step1's `DIFF_FIELDS` — per
+      drift-app-warden §7 F7, these two lists must never diverge, and this is the first time
+      ad-lib's writes actually reach `account_history` (previously MOCK ONLY, so this path has
+      never been exercised for real). Diff the two lists against each other and against every
+      field `SetupWizardAdlib.jsx` touches.
+- [ ] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
+      test asserting the final saved config has the correct `taxedWeeks`, `accountCreatedIdx`,
+      `setupComplete: true`, and DHL/buffer/tips-stamp normalization — today's 45 ad-lib tests all
+      assert against the *mock* `onHandoff` callback, not a real save.
+- [ ] `docs/account-reference.json` — spot-check that the reference account's
+      `computed_expectations` still line up once real signups can complete through this UI.
+
+**I. Docs to update once wired** *(do this in the same PR — a stale drift-map entry certifies a
+false checklist per CLAUDE.md's own drift-warden philosophy)*
+
+- [ ] `.claude/CLAUDE.md` — rewrite the `SetupWizardAdlib.jsx` section: drop "EXPERIMENTAL,
+      admin-only, not for real users" and "MOCK ONLY", describe the real production entry point
+      and save path instead.
+- [ ] `docs/drift-app-warden.md` §7 — extend the F1–F12 critical inventory and the six-path gate
+      matrix to cover `SetupWizardAdlib.jsx` as a second real surface writing the same sensitive
+      fields; note the line-number drift already present in the current §7 text while in there.
+- [ ] `docs/active-systems.md` — update if it documents the wizard's live behavior.
+- [ ] `docs/past-TODO-tasks.md` — close out this entry once shipped, one-liner per the section's
+      own convention.

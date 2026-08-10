@@ -40,12 +40,12 @@ function BackBar({ onBack, title, backLabel = "Profile" }) {
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
         onClick={onBack}
-        style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
+        className="text-base" style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>{backLabel}</span>
+        <span className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", }}>{backLabel}</span>
       </Pressable>
-      <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
+      <div className="text-base" style={{ flex: 1, fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
       </div>
     </div>
@@ -68,8 +68,8 @@ function LockIcon({ style }) {
 function DetailRow({ label, value, valueColor, last }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: last ? "none" : "1px solid #1e1e1e" }}>
-      <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{label}</span>
-      <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor || "var(--color-text-primary)", textAlign: "right", maxWidth: "55%" }}>{value}</span>
+      <span className="text-base" style={{ color: "var(--color-text-primary)" }}>{label}</span>
+      <span className="text-base" style={{ fontWeight: "600", color: valueColor || "var(--color-text-primary)", textAlign: "right", maxWidth: "55%" }}>{value}</span>
     </div>
   );
 }
@@ -353,7 +353,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         {displayName && <DetailRow label="Name" value={displayName} />}
         <DetailRow label="Email" value={authedUser?.email ?? "—"} />
         <DetailRow label="Setup" last value={
-          <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
+          <span className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
             {setupLabel}
           </span>
         } />
@@ -362,12 +362,12 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>Subscription</div>
-            <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: subToneColors.bg, color: subToneColors.color, border: `1px solid ${subToneColors.border}`, borderRadius: "12px" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>Subscription</div>
+            <span className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: subToneColors.bg, color: subToneColors.color, border: `1px solid ${subToneColors.border}`, borderRadius: "12px" }}>
               {subStatusLabel}
             </span>
           </div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+          <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginBottom: "12px" }}>
             {subDetailText}
             {planLabel && ` ${planLabel} plan — ${planPrice}.`}
           </div>
@@ -376,7 +376,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
               <Pressable
                 onClick={handleManageSubscription}
                 disabled={portalState.loading}
-                style={{ width: "100%", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: portalState.loading ? "default" : "pointer" }}
+                className="text-sm" style={{ width: "100%", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontWeight: "600", cursor: portalState.loading ? "default" : "pointer" }}
               >
                 {portalState.loading ? "Opening…" : "Manage Subscription"}
               </Pressable>
@@ -385,14 +385,14 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
                 <Pressable
                   onClick={() => handleCheckout("monthly")}
                   disabled={checkoutState.plan !== null}
-                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
+                  className="text-sm" style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontWeight: "600", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
                 >
                   {checkoutState.plan === "monthly" ? "Redirecting…" : "Monthly — $14.99"}
                 </Pressable>
                 <Pressable
                   onClick={() => handleCheckout("annual")}
                   disabled={checkoutState.plan !== null}
-                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-teal)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
+                  className="text-sm" style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-teal)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
                 >
                   {checkoutState.plan === "annual" ? "Redirecting…" : "Annual — $10.00/mo"}
                 </Pressable>
@@ -400,25 +400,25 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
             )
           )}
           {checkoutState.error && (
-            <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "8px" }}>{checkoutState.error}</div>
+            <div className="text-sm" style={{ color: "var(--color-deduction)", marginTop: "8px" }}>{checkoutState.error}</div>
           )}
           {portalState.error && (
-            <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "8px" }}>{portalState.error}</div>
+            <div className="text-sm" style={{ color: "var(--color-deduction)", marginTop: "8px" }}>{portalState.error}</div>
           )}
         </div>
       </DetailCard>
 
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "10px" }}>Connected Accounts</div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {authedUser?.identities?.some(id => id.provider === "email") && (
-              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-primary)" }}>
+              <span className="text-xs" style={{ padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-primary)" }}>
                 Email / Password
               </span>
             )}
             {hasGoogleLinked && (
-              <span style={{ fontSize: "11px", padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
+              <span className="text-xs" style={{ padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
                 Google
               </span>
             )}
@@ -427,48 +427,48 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
             <Pressable
               onClick={handleLinkGoogle}
               disabled={linkState.loading}
-              style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
+              className="text-sm" style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", cursor: linkState.loading ? "default" : "pointer" }}
             >
               {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
             </Pressable>
           )}
           {linkState.error && (
-            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-deduction)" }}>{linkState.error}</div>
+            <div className="text-xs" style={{ marginTop: "8px", color: "var(--color-deduction)" }}>{linkState.error}</div>
           )}
         </div>
       </DetailCard>
 
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Security</div>
+      <div className="text-xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Security</div>
       <DetailCard>
         {!showEmailForm ? (
           <Pressable
             onClick={() => setShowEmailForm(true)}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
           >
-            <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Email</span>
+            <span className="text-md" style={{ color: "var(--color-text-primary)", fontWeight: "500" }}>Change Email</span>
             <span style={{ fontSize: "18px", color: "var(--color-text-primary)", lineHeight: 1 }}>›</span>
           </Pressable>
         ) : (
           <form onSubmit={handleChangeEmail} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Email</div>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Email</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <label style={lSp}>New Email</label>
               <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
             </div>
-            <div style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>
+            <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>
               Supabase will send a confirmation email to the new address.
             </div>
             {emailStatus.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</Pressable>
+              <Pressable type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable type="submit" disabled={emailStatus.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</Pressable>
             </div>
           </form>
         )}
         {emailStatus.success && (
-          <div style={{ padding: "0 16px 14px", fontSize: "11px", color: "var(--color-green)" }}>
+          <div className="text-xs" style={{ padding: "0 16px 14px", color: "var(--color-green)" }}>
             {emailStatus.success}
           </div>
         )}
@@ -481,12 +481,12 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
             onClick={() => setShowPwForm(true)}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
           >
-            <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Password</span>
+            <span className="text-md" style={{ color: "var(--color-text-primary)", fontWeight: "500" }}>Change Password</span>
             <span style={{ fontSize: "18px", color: "var(--color-text-primary)", lineHeight: 1 }}>›</span>
           </Pressable>
         ) : (
           <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Password</div>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Password</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               <label style={lSp}>Current Password</label>
               <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to verify" required autoComplete="current-password" style={{ ...iS, borderRadius: "8px" }} />
@@ -500,14 +500,14 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
               <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {pwError && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{pwError}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{pwError}</div>
             )}
             {pwSaved && (
-              <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
+              <div className="text-xs" style={{ color: "var(--color-green)" }}>Password updated.</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</Pressable>
+              <Pressable type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable type="submit" disabled={pwLoading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</Pressable>
             </div>
           </form>
         )}
@@ -520,13 +520,13 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
           disabled={globalSignoutState.loading}
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: globalSignoutState.loading ? "default" : "pointer" }}
         >
-          <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500", marginBottom: "4px" }}>Sign Out All Devices</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+          <div className="text-md" style={{ color: "var(--color-text-primary)", fontWeight: "500", marginBottom: "4px" }}>Sign Out All Devices</div>
+          <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             Ends active sessions on every device for this account.
           </div>
         </Pressable>
         {(globalSignoutState.error || globalSignoutState.success) && (
-          <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-deduction)" : "var(--color-green)" }}>
+          <div className="text-xs" style={{ padding: "0 16px 12px", color: globalSignoutState.error ? "var(--color-deduction)" : "var(--color-green)" }}>
             {globalSignoutState.error || globalSignoutState.success}
           </div>
         )}
@@ -537,8 +537,8 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
           onClick={() => { setDeleteText(""); setDeleteState({ error: null, loading: false }); setShowDeleteDialog(true); }}
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
         >
-          <div style={{ fontSize: "14px", color: "var(--color-deduction)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+          <div className="text-md" style={{ color: "var(--color-deduction)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
+          <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             This permanently deletes your account and dashboard data.
           </div>
         </Pressable>
@@ -551,7 +551,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         <div className="fold-backdrop" data-fold={deleteFold.fold} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div className="fold-modal" data-fold={deleteFold.fold} style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
+            <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -559,11 +559,11 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
               <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {deleteState.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</Pressable>
+              <Pressable onClick={() => setShowDeleteDialog(false)} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</Pressable>
             </div>
           </div>
         </div>,
@@ -676,12 +676,12 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
                     <Pressable
                       key={t}
                       onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
-                      style={{
+                      className="text-md" style={{
                         flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
                         borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
                         background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
                         color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
-                        fontWeight: "bold", fontSize: "14px", cursor: "pointer",
+                        fontWeight: "bold", cursor: "pointer",
                       }}
                     >
                       {label}
@@ -689,7 +689,7 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
                   ))}
                 </div>
                 {teamDirty && (
-                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "6px" }}>
                     {config.dhlSite === "WAREHOUSE" ? "Schedule will update — save to apply." : "Rotation will update — save to apply."}
                   </div>
                 )}
@@ -714,11 +714,11 @@ const PAY_SCHEDULE_LABELS = {
 function PaySectionHeader({ title, editing, onEdit }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", paddingLeft: "4px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>{title}</div>
+      <div className="text-xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>{title}</div>
       {!editing && (
         <Pressable
           onClick={onEdit}
-          style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
+          className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
         >
           Edit
         </Pressable>
@@ -731,20 +731,20 @@ function PaySectionActions({ error, onSave, onCancel }) {
   return (
     <>
       {error && (
-        <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>
+        <div className="text-xs" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>
           {error}
         </div>
       )}
       <div style={{ display: "flex", gap: "10px" }}>
         <Pressable
           onClick={onSave}
-          style={{ flex: 1, padding: "10px 0", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+          className="text-xs" style={{ flex: 1, padding: "10px 0", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
         >
           Save Changes
         </Pressable>
         <Pressable
           onClick={onCancel}
-          style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: "pointer" }}
+          className="text-xs" style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: "pointer" }}
         >
           Cancel
         </Pressable>
@@ -848,7 +848,7 @@ function BasePayCard({ config, setConfig, onSaveConfig }) {
                     onChange={e => change("annualSalary", e.target.value)}
                     style={iS}
                   />
-                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "4px" }}>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "4px" }}>
                     Hourly base pay auto-derives from salary ÷ 2080.
                   </div>
                 </div>
@@ -877,7 +877,7 @@ function BasePayCard({ config, setConfig, onSaveConfig }) {
                   onChange={e => change("shiftHours", e.target.value)}
                   style={iS}
                 />
-                <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "4px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "4px" }}>
                   Update this if you move to 10-hour shifts.
                 </div>
               </div>
@@ -974,7 +974,7 @@ function DifferentialsCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                       onChange={e => change("dhlNightShift", e.target.checked)}
                       style={{ width: "16px", height: "16px", cursor: "pointer" }}
                     />
-                    <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>Night shift applies</span>
+                    <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>Night shift applies</span>
                   </div>
                 </div>
               )}
@@ -1208,15 +1208,15 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
             {isEmployerDHL && config.dhlSite !== "WAREHOUSE" && (
               <div>
                 <SH color="var(--color-teal)" right={null}>Schedule Override</SH>
-                <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>
+                <div className="text-xs" style={{ color: "var(--color-text-primary)", marginBottom: "8px" }}>
                   {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
                 </div>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <Pressable
                     type="button"
                     onClick={() => change("customScheduleEnabled", false)}
-                    style={{
-                      padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                    className="text-xs" style={{
+                      padding: "6px 14px", borderRadius: "6px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
                       border: !draft.customScheduleEnabled ? "1px solid var(--color-teal)" : "1px solid var(--color-border-subtle)",
                       background: !draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
                       color: !draft.customScheduleEnabled ? "var(--color-teal)" : "var(--color-text-secondary)",
@@ -1228,8 +1228,8 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                   <Pressable
                     type="button"
                     onClick={() => change("customScheduleEnabled", true)}
-                    style={{
-                      padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                    className="text-xs" style={{
+                      padding: "6px 14px", borderRadius: "6px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
                       border: draft.customScheduleEnabled ? "1px solid var(--color-teal)" : "1px solid var(--color-border-subtle)",
                       background: draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
                       color: draft.customScheduleEnabled ? "var(--color-teal)" : "var(--color-text-secondary)",
@@ -1243,7 +1243,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                   <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
                     <label style={lSp}>Hours per week</label>
                     <div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Long week</div>
+                      <div className="text-xs" style={{ color: "var(--color-text-primary)", marginBottom: "4px" }}>Long week</div>
                       <input
                         type="number"
                         step="1"
@@ -1258,11 +1258,11 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                         const sh = config.shiftHours || 12;
                         if (!Number.isFinite(h) || h <= 0) return null;
                         const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
-                        return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
+                        return <div className="text-xs" style={{ marginTop: "4px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
                       })()}
                     </div>
                     <div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Short week</div>
+                      <div className="text-xs" style={{ color: "var(--color-text-primary)", marginBottom: "4px" }}>Short week</div>
                       <input
                         type="number"
                         step="1"
@@ -1277,10 +1277,10 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                         const sh = config.shiftHours || 12;
                         if (!Number.isFinite(h) || h <= 0) return null;
                         const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
-                        return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
+                        return <div className="text-xs" style={{ marginTop: "4px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
                       })()}
                     </div>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                    <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                       Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
                     </div>
                   </div>
@@ -1313,7 +1313,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
       <OvertimeCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
       <ScheduleCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} isEmployerDHL={isEmployerDHL} />
       <EmploymentCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "20px" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "20px" }}>
         Saving recalculates every paycheck, projection, and budget automatically.
       </div>
       {onOpenLifeEvents && (
@@ -1322,8 +1322,8 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}
         >
           <div>
-            <div style={{ fontSize: "14px", color: "var(--color-teal)", fontWeight: "600" }}>Life Events</div>
-            <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>Pay structure changed, new job, or lost your job</div>
+            <div className="text-md" style={{ color: "var(--color-teal)", fontWeight: "600" }}>Life Events</div>
+            <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "2px" }}>Pay structure changed, new job, or lost your job</div>
           </div>
           <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
         </Pressable>
@@ -1414,7 +1414,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           title already says "Retirement & Benefits" for this whole screen. */}
       {!editing && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-          <Pressable onClick={startEditing} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+          <Pressable onClick={startEditing} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
         </div>
       )}
 
@@ -1449,25 +1449,25 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
             <div style={{ padding: "10px 16px 14px" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                 {enrolledConfig.map(id => (
-                  <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
+                  <span key={id} className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
                     {BENEFIT_LABELS[id] ?? id}
                   </span>
                 ))}
                 {isEmployerDHL && (
                   <>
-                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
-                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
+                    <span className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
+                    <span className="text-xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
                   </>
                 )}
               </div>
-              {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
+              {isEmployerDHL && <div className="text-2xs" style={{ color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
             </div>
           )}
         </DetailCard>
       ) : (
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
               Payroll-Deduction Benefits ({BENEFIT_OPTIONS.length})
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
@@ -1475,8 +1475,8 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 <Pressable
                   key={benefit.id}
                   onClick={() => toggleBenefit(benefit.id)}
+                  className="text-xs"
                   style={{
-                    fontSize: "10px",
                     letterSpacing: "1px",
                     textTransform: "uppercase",
                     padding: "6px 8px",
@@ -1492,7 +1492,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               ))}
             </div>
             {isEmployerDHL && (
-              <div style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+              <div className="text-xs" style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
                 <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>PTO accrual</span> and <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>attendance bucket</span> are automatically enabled for all DHL employees — no enrollment needed.
               </div>
             )}
@@ -1537,8 +1537,8 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
+              <Pressable onClick={() => setEditing(false)} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleSave} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
           </div>
         </DetailCard>
@@ -1581,10 +1581,10 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
           </Pressable>
         ) : (
           <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
-            <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "10px" }}>Freedom Allowance</div>
+            <div className="text-base" style={{ color: "var(--color-text-primary)", marginBottom: "10px" }}>Freedom Allowance</div>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-              <Pressable onClick={() => setFreedomAllowanceEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</Pressable>
-              <Pressable onClick={() => setFreedomAllowanceEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</Pressable>
+              <Pressable onClick={() => setFreedomAllowanceEnabled(true)} className="text-xs" style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</Pressable>
+              <Pressable onClick={() => setFreedomAllowanceEnabled(false)} className="text-xs" style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !freedomAllowanceEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !freedomAllowanceEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</Pressable>
             </div>
             <label style={lSp}>Freedom Allowance Amount ($ / check)</label>
             <input
@@ -1598,8 +1598,8 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               disabled={!freedomAllowanceEnabled}
             />
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => { setEditingFreedomAllowance(false); setFreedomAllowanceEnabled(config.freedomAllowanceEnabled ?? true); setFreedomAllowance(config.freedomAllowance ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={handleSaveFreedomAllowance} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
+              <Pressable onClick={() => { setEditingFreedomAllowance(false); setFreedomAllowanceEnabled(config.freedomAllowanceEnabled ?? true); setFreedomAllowance(config.freedomAllowance ?? 50); }} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleSaveFreedomAllowance} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
           </div>
         )}
@@ -1615,7 +1615,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
           last
         />
       </DetailCard>
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6" }}>
         Freedom Allowance and tax settings can also be updated from setup flows and Life Events.
       </div>
     </>
@@ -1717,8 +1717,8 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <Pressable onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-teal)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-teal)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</Pressable>
+        <div className="text-xs" style={{ color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
+        <Pressable onClick={() => setShowExtra(v => !v)} className="text-2xs" style={{ letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-teal)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-teal)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</Pressable>
       </div>
 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
@@ -1730,17 +1730,17 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               moFlatRate: String(config.moFlatRate ?? ""),
               targetOwedAtFiling: String(config.targetOwedAtFiling ?? ""),
               firstActiveIdx: String(config.firstActiveIdx ?? ""),
-            })} style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</Pressable>
+            })} className="text-2xs" style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</Pressable>
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</Pressable>
-              <Pressable onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} className="text-2xs" style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</Pressable>
+              <Pressable onClick={() => setTaxDraft(null)} className="text-2xs" style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
             </div>
           )}
         </div>
 
         {taxDraft === null ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
+          <div className="text-base" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", }}>
             {[{ l: "Federal Std Deduction", v: f(config.fedStdDeduction) }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: f(config.targetOwedAtFiling) }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
           </div>
         ) : (
@@ -1763,33 +1763,33 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       {/* Tax gap analysis */}
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "12px" }}>Tax Gap Analysis</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
+        <div className="text-base" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", }}>
           {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-deduction)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-deduction)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-deduction)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-teal)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
         </div>
 
         {/* Event log pipeline indicator — always shown so user can confirm events are wired in */}
         <div style={{ marginTop: "14px", padding: "10px 12px", background: "var(--color-bg-base)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "2px" }}>Log Event Impact (live)</div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+          <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "2px" }}>Log Event Impact (live)</div>
+          <div className="text-xs" style={{ display: "flex", justifyContent: "space-between", }}>
             <span style={{ color: "var(--color-text-primary)" }}>Gross adjustment from events</span>
             <span style={{ fontWeight: "bold", color: eventGrossDelta === 0 ? "var(--color-text-disabled)" : eventGrossDelta > 0 ? "var(--color-green)" : "var(--color-red)", fontVariantNumeric: "tabular-nums" }}>
               {eventGrossDelta === 0 ? "—" : (eventGrossDelta > 0 ? "+" : "") + f2(eventGrossDelta)}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+          <div className="text-xs" style={{ display: "flex", justifyContent: "space-between", }}>
             <span style={{ color: "var(--color-text-primary)" }}>Fed liability shift from events</span>
             <span style={{ fontWeight: "bold", color: fedLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : fedLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
               {fedLiabilityEventDelta === 0 ? "—" : (fedLiabilityEventDelta > 0 ? "+" : "") + f2(fedLiabilityEventDelta)}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+          <div className="text-xs" style={{ display: "flex", justifyContent: "space-between", }}>
             <span style={{ color: "var(--color-text-primary)" }}>State liability shift from events</span>
             <span style={{ fontWeight: "bold", color: moLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : moLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
               {moLiabilityEventDelta === 0 ? "—" : (moLiabilityEventDelta > 0 ? "+" : "") + f2(moLiabilityEventDelta)}
             </span>
           </div>
           {eventGrossDelta === 0 && (
-            <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>No logged events affecting gross yet — will update as you confirm weeks.</div>
+            <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "2px" }}>No logged events affecting gross yet — will update as you confirm weeks.</div>
           )}
         </div>
       </div>
@@ -1798,21 +1798,21 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: "12px" }}>Extra Withholding Plan</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
-          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-deduction)" }, { l: "Remaining Paychecks", v: remainingPaychecks, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerPaycheck), c: "var(--color-teal)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
+          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-deduction)" }, { l: "Remaining Paychecks", v: remainingPaychecks, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerPaycheck), c: "var(--color-teal)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div className="text-2xs" style={{ letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-teal)" }}>{remainingPaychecks} remaining taxed checks</span>.</div>
+        <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-teal)" }}>{remainingPaychecks} remaining taxed checks</span>.</div>
       </div>
 
       {/* ── Check History — Past Tax Status Editor ─────────────────────────── */}
       <div style={{ marginBottom: "20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px" }}>
           <div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>Check History — Tax Status</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>
+            <div className="text-md" style={{ fontWeight: 700, color: "var(--color-text-primary)" }}>Check History — Tax Status</div>
+            <div className="text-xs" style={{ color: "var(--color-text-primary)", marginTop: "2px" }}>
               Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? "s" : ""} recorded
             </div>
           </div>
-          <span style={{ fontSize: "9px", padding: "3px 8px", borderRadius: "10px", flexShrink: 0, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <span className="text-2xs" style={{ padding: "3px 8px", borderRadius: "10px", flexShrink: 0, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
             {PAY_SCHEDULE_LABELS[paySchedule] ?? "Weekly"}
           </span>
         </div>
@@ -1825,7 +1825,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           background: "var(--color-bg-base)",
         }}>
           {sortedCheckWeeks.length === 0 ? (
-            <div style={{ padding: "24px 16px", textAlign: "center", fontSize: "11px", color: "var(--color-text-primary)" }}>
+            <div className="text-xs" style={{ padding: "24px 16px", textAlign: "center", color: "var(--color-text-primary)" }}>
               No checks recorded yet — weeks slide in here as they pass.
             </div>
           ) : sortedCheckWeeks.map((w, i) => {
@@ -1845,10 +1845,10 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "10px", color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
+                    <span className="text-xs" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
                       #{checkNum}
                     </span>
-                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <span className="text-sm" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
                       {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
                     {isConfirmed && (
@@ -1862,14 +1862,14 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>
                     {rotLabel} · {f2(w.grossPay)}
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
-                  <Pressable onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</Pressable>
+                  <Pressable onClick={() => setPastStatus(w.idx, true)} className="text-2xs" style={{ padding: "6px 10px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</Pressable>
                   <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-                  <Pressable onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</Pressable>
+                  <Pressable onClick={() => setPastStatus(w.idx, false)} className="text-2xs" style={{ padding: "6px 10px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</Pressable>
                 </div>
               </div>
             );
@@ -1880,37 +1880,37 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       {/* Per-week toggle schedule */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Future Weekly Tax Schedule</div>
-        <div style={{ display: "flex", gap: "10px", fontSize: "10px" }}>
+        <div className="text-xs" style={{ display: "flex", gap: "10px", }}>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "var(--color-deduction)" }}>{config.taxedWeeks.length}</strong></span>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "var(--color-green)", display: "inline-block" }} />Exempt weeks: <strong style={{ color: "var(--color-green)" }}>{allWeeks.filter(w => w.active).length - config.taxedWeeks.length}</strong></span>
         </div>
       </div>
 
       {scheduleByMonth.map(m => <div key={m.name} style={{ marginBottom: "20px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
+        <div className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
         {m.wks.map(w => {
           const taxed = config.taxedWeeks.includes(w.idx);
           const isPast = today ? toLocalIso(w.weekEnd) < today : false;
           return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: isPast ? "var(--color-bg-base)" : "var(--color-bg-surface)", border: `1px solid ${isPast ? "var(--color-border-subtle)" : taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px", opacity: isPast ? 0.5 : 1 }}>
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: "12px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{isPast && <span style={{ marginLeft: "6px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "normal" }}>received</span>}</div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
+                <div className="text-sm" style={{ fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{isPast && <span className="text-2xs" style={{ marginLeft: "6px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "normal" }}>received</span>}</div>
+                <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
               </div>
               <div>
-                <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>{f2(w.grossPay)} gross</div>
-                <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
+                <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>{f2(w.grossPay)} gross</div>
+                <div className="text-xs" style={{ color: isPast ? "var(--color-text-disabled)" : taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
               </div>
             </div>
             <div style={{ display: "flex", background: "var(--color-bg-base)", border: "1px solid #2a2a2a", borderRadius: "5px", overflow: "hidden" }}>
-              <Pressable disabled={isPast} onClick={() => !isPast && !taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || taxed ? "default" : "pointer", background: taxed ? (isPast ? "#15152a" : "#1e1e3a") : "transparent", color: taxed ? (isPast ? "#3a3a5a" : "#7a8bbf") : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</Pressable>
+              <Pressable disabled={isPast} onClick={() => !isPast && !taxed && toggleWeek(w.idx)} className="text-2xs" style={{ padding: "5px 12px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || taxed ? "default" : "pointer", background: taxed ? (isPast ? "#15152a" : "#1e1e3a") : "transparent", color: taxed ? (isPast ? "#3a3a5a" : "#7a8bbf") : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</Pressable>
               <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-              <Pressable disabled={isPast} onClick={() => !isPast && taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || !taxed ? "default" : "pointer", background: !taxed ? (isPast ? "#0f2a1a" : "#1e4a30") : "transparent", color: !taxed ? (isPast ? "#1f4a2a" : "var(--color-green)") : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</Pressable>
+              <Pressable disabled={isPast} onClick={() => !isPast && taxed && toggleWeek(w.idx)} className="text-2xs" style={{ padding: "5px 12px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || !taxed ? "default" : "pointer", background: !taxed ? (isPast ? "#0f2a1a" : "#1e4a30") : "transparent", color: !taxed ? (isPast ? "#1f4a2a" : "var(--color-green)") : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</Pressable>
             </div>
           </div>;
         })}
       </div>)}
-      <div style={{ padding: "12px", background: "var(--color-bg-surface)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-primary)", lineHeight: "1.9" }}>
+      <div className="text-xs" style={{ padding: "12px", background: "var(--color-bg-surface)", borderRadius: "6px", color: "var(--color-text-primary)", lineHeight: "1.9" }}>
         Toggling a week instantly recalculates projected net, tax gap, extra withholding per check, and all downstream totals.
       </div>
     </>
@@ -1939,8 +1939,8 @@ function ListRow({ label, summary, onPress, last }) {
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>{label}</div>
-        {summary && <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
+        <div className="text-md" style={{ color: "var(--color-text-primary)", fontWeight: "500" }}>{label}</div>
+        {summary && <div className="text-sm" style={{ color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
       </div>
       <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
     </Pressable>
@@ -1980,12 +1980,12 @@ function BetaRedeemDetail({ onBack }) {
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (
             <>
-              <div style={{ fontSize: "13px", color: "var(--color-teal)", marginBottom: "12px" }}>
+              <div className="text-base" style={{ color: "var(--color-teal)", marginBottom: "12px" }}>
                 Code accepted — welcome to the beta.
               </div>
               <Pressable
                 onClick={() => window.location.reload()}
-                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+                className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
               >
                 Continue
               </Pressable>
@@ -2002,12 +2002,12 @@ function BetaRedeemDetail({ onBack }) {
                 style={{ ...iS, marginTop: "6px", marginBottom: "10px" }}
               />
               {status.error && (
-                <div style={{ fontSize: "11px", color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
+                <div className="text-xs" style={{ color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
               )}
               <Pressable
                 onClick={handleRedeem}
                 disabled={status.loading || !code.trim()}
-                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !code.trim()) ? "default" : "pointer", opacity: !code.trim() ? 0.45 : 1 }}
+                className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !code.trim()) ? "default" : "pointer", opacity: !code.trim() ? 0.45 : 1 }}
               >
                 {status.loading ? "Checking…" : "Redeem"}
               </Pressable>
@@ -2052,12 +2052,12 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (
             <>
-              <div style={{ fontSize: "13px", color: "var(--color-teal)", marginBottom: "12px" }}>
+              <div className="text-base" style={{ color: "var(--color-teal)", marginBottom: "12px" }}>
                 Thanks — got it.
               </div>
               <Pressable
                 onClick={onBack}
-                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+                className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
               >
                 Done
               </Pressable>
@@ -2074,12 +2074,12 @@ export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }
                 style={{ ...iS, marginTop: "6px", marginBottom: "10px", resize: "vertical", fontFamily: "inherit" }}
               />
               {status.error && (
-                <div style={{ fontSize: "11px", color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
+                <div className="text-xs" style={{ color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
               )}
               <Pressable
                 onClick={handleSubmit}
                 disabled={status.loading || !note.trim()}
-                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
+                className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
               >
                 {status.loading ? "Sending…" : "Submit"}
               </Pressable>
@@ -2120,9 +2120,9 @@ class AdminDetailErrorBoundary extends Component {
       return (
         <>
           <BackBar onBack={this.props.onBack} title={this.props.title} />
-          <div style={{ fontSize: "13px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
+          <div className="text-base" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.12)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "12px", padding: "16px" }}>
             <div style={{ fontWeight: "bold", marginBottom: "8px" }}>Render Error</div>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)" }}>{this.state.error?.message || String(this.state.error)}</div>
+            <div className="text-sm" style={{ whiteSpace: "pre-wrap", fontFamily: "var(--font-mono)" }}>{this.state.error?.message || String(this.state.error)}</div>
           </div>
         </>
       );
@@ -2278,7 +2278,7 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
                 <label style={{ ...lSp, marginBottom: 0 }}>Body (Markdown)</label>
                 <Pressable
                   onClick={() => setShowPreview(v => !v)}
-                  style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
+                  className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
                 >
                   {showPreview ? "Edit" : "Preview"}
                 </Pressable>
@@ -2287,7 +2287,7 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
                 <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "160px" }}>
                   {draft.body.trim()
                     ? <ChangelogBody markdown={draft.body} />
-                    : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
+                    : <div className="text-sm" style={{ color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
                 </div>
               ) : (
                 <textarea
@@ -2305,12 +2305,12 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
                 onChange={e => setDraft(d => ({ ...d, published: e.target.checked }))}
                 style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
               />
-              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>
                 Published — visible to users via the update banner{draft.published ? "" : " (currently a draft)"}
               </span>
             </label>
             {saveError && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
             <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
           </div>
@@ -2322,21 +2322,21 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
   return (
     <>
       {!embedded && <BackBar onBack={onBack} title="Changelog" />}
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         Published entries appear as a "What's New" prompt alongside the update-available
         banner, the next time a user's app detects a new deploy.
       </div>
       <Pressable
         onClick={startNew}
-        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+        className="text-xs" style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
       >
         + New Entry
       </Pressable>
 
-      {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>Error: {loadError}</div>}
+      {entries === null && <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div className="text-sm" style={{ color: "var(--color-deduction)" }}>Error: {loadError}</div>}
       {entries !== null && !loadError && entries.length === 0 && (
-        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
+        <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -2347,24 +2347,24 @@ function ChangelogAdminDetail({ onBack, embedded = false }) {
             <DetailCard key={entry.id} style={{ marginBottom: 0 }}>
               <div style={{ padding: "13px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "4px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                  <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+                  <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
                     {isPublished ? "Published" : "Draft"}
                   </span>
                 </div>
                 {entry.version_label && (
-                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>{entry.version_label}</div>
+                  <div className="text-xs" style={{ color: "var(--color-text-primary)", marginBottom: "8px" }}>{entry.version_label}</div>
                 )}
                 {confirming ? (
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>Delete this entry?</span>
-                    <Pressable onClick={() => handleDelete(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
-                    <Pressable onClick={() => setConfirmDeleteId(null)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+                    <span className="text-xs" style={{ color: "var(--color-deduction)" }}>Delete this entry?</span>
+                    <Pressable onClick={() => handleDelete(entry.id)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(null)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <Pressable onClick={() => startEdit(entry)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
-                    <Pressable onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
+                    <Pressable onClick={() => startEdit(entry)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(entry.id)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
                   </div>
                 )}
               </div>
@@ -2516,7 +2516,7 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 <label style={{ ...lSp, marginBottom: 0 }}>{copy.bodyLabel}</label>
                 <Pressable
                   onClick={() => setShowPreview(v => !v)}
-                  style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
+                  className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
                 >
                   {showPreview ? "Edit" : "Preview"}
                 </Pressable>
@@ -2525,7 +2525,7 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "120px" }}>
                   {draft.body.trim()
                     ? <ChangelogBody markdown={draft.body} />
-                    : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
+                    : <div className="text-sm" style={{ color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
                 </div>
               ) : (
                 <textarea
@@ -2543,7 +2543,7 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 onChange={e => setDraft(d => ({ ...d, published: e.target.checked }))}
                 style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
               />
-              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>
                 {copy.publishedHint}{draft.published ? "" : " (currently a draft)"}
               </span>
             </label>
@@ -2558,12 +2558,12 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 onChange={e => setDraft(d => ({ ...d, employerPreset: e.target.checked ? "DHL" : null }))}
                 style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
               />
-              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>
                 DHL Employees Only{draft.employerPreset !== "DHL" ? " (unchecked = every eligible user)" : ""}
               </span>
             </label>
             {saveError && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
             <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
           </div>
@@ -2575,20 +2575,20 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
   return (
     <>
       {!embedded && <BackBar onBack={onBack} title={copy.title} />}
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         {copy.listBlurb}
       </div>
       <Pressable
         onClick={startNew}
-        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+        className="text-xs" style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
       >
         + New Entry
       </Pressable>
 
-      {items === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {items === null && <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div className="text-sm" style={{ color: "var(--color-deduction)" }}>{loadError}</div>}
       {items !== null && !loadError && items.length === 0 && (
-        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
+        <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>No entries yet.</div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -2599,28 +2599,28 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
             <DetailCard key={item.id} style={{ marginBottom: 0 }}>
               <div style={{ padding: "13px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{item.title}</div>
+                  <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{item.title}</div>
                   <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                     {item.employer_preset && (
-                      <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg-raised)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)" }}>
+                      <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: "var(--color-bg-raised)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)" }}>
                         {item.employer_preset} Only
                       </span>
                     )}
-                    <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                    <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
                       {isPublished ? "Published" : "Draft"}
                     </span>
                   </div>
                 </div>
                 {confirming ? (
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>Delete this entry?</span>
-                    <Pressable onClick={() => handleDelete(item.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
-                    <Pressable onClick={() => setConfirmDeleteId(null)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+                    <span className="text-xs" style={{ color: "var(--color-deduction)" }}>Delete this entry?</span>
+                    <Pressable onClick={() => handleDelete(item.id)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(null)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <Pressable onClick={() => startEdit(item)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
-                    <Pressable onClick={() => setConfirmDeleteId(item.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
+                    <Pressable onClick={() => startEdit(item)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(item.id)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
                   </div>
                 )}
               </div>
@@ -2718,7 +2718,7 @@ function BetaUsageBoard({ row }) {
 function BetaFeedbackList({ feedback }) {
   if (!feedback || feedback.length === 0) {
     return (
-      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
         No feedback submitted yet.
       </div>
     );
@@ -2727,10 +2727,10 @@ function BetaFeedbackList({ feedback }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       {feedback.map((entry, i) => (
         <div key={`${entry.created_at}-${i}`} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "1px", color: "var(--color-text-secondary)", marginBottom: "4px", fontFamily: "var(--font-sans)" }}>
+          <div className="text-xs" style={{ letterSpacing: "1px", color: "var(--color-text-secondary)", marginBottom: "4px", fontFamily: "var(--font-sans)" }}>
             {new Date(entry.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </div>
-          <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
+          <div className="text-base" style={{ lineHeight: 1.5, color: "var(--color-text-primary)", whiteSpace: "pre-wrap" }}>
             {entry.note || "—"}
           </div>
         </div>
@@ -2845,7 +2845,7 @@ function BetaScoresAdminDetail({ onBack }) {
               />
             </div>
             {saveError && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
             <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
           </div>
@@ -2857,15 +2857,15 @@ function BetaScoresAdminDetail({ onBack }) {
   return (
     <>
       <BackBar onBack={onBack} title="Beta Scores" />
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+      <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
         Scores are entered by hand — nothing here is auto-computed. A tester sees their own
         row live in the Homebase the moment it's saved.
       </div>
 
-      {rows === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
-      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {rows === null && <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div className="text-sm" style={{ color: "var(--color-deduction)" }}>{loadError}</div>}
       {rows !== null && !loadError && rows.length === 0 && (
-        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No tracked beta-cohort accounts found.</div>
+        <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>No tracked beta-cohort accounts found.</div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -2876,12 +2876,12 @@ function BetaScoresAdminDetail({ onBack }) {
             <DetailCard key={row.user_id} style={{ marginBottom: 0 }}>
               <div style={{ padding: "13px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{row.display_name || row.email || row.user_id}</div>
-                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{row.display_name || row.email || row.user_id}</div>
+                  <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "2px" }}>
                     {total !== null ? `${total} / 100` : "Not yet scored"} · week {row.beta_week_number || "—"}
                   </div>
                 </div>
-                <Pressable onClick={() => startEdit(row)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>
+                <Pressable onClick={() => startEdit(row)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}>
                   {total !== null ? "Edit" : "Score"}
                 </Pressable>
               </div>
@@ -3105,7 +3105,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
 
       <Pressable
         onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}
-        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+        className="text-base" style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-deduction)", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -3121,17 +3121,17 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         <div className="fold-backdrop" data-fold={signOutFold.fold} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div className="fold-modal" data-fold={signOutFold.fold} style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
+            <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               Sign out from this device now?
             </div>
             {localSignOutState.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
+              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
                 {localSignOutState.error}
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</Pressable>
+              <Pressable onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={confirmLocalSignOut} disabled={localSignOutState.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</Pressable>
             </div>
           </div>
         </div>,

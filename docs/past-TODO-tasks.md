@@ -141,6 +141,33 @@ onboarding wizard, per the §19.1 pre-production audit. Delivered this round:
 
 ---
 
+## §19.1.E/F — Ad-Lib Wizard responsive polish (2026-08-10)
+
+Follow-on to §19 above, closing out most of the remaining `docs/TODO.md` §19.1.E/F responsive
+checklist:
+
+- [x] **`TypedText` horizontal-overflow bug fixed** — the single most important item in this
+  batch per the audit. Was one `display:inline-block; white-space:pre` span per clause, which
+  cannot wrap internally; a long real clause (e.g. Deductions' attendance-tracking question)
+  overflowed at narrow widths. Now chunks each clause into per-word spans joined by ordinary
+  breakable spaces, so the browser wraps between words normally while each word still steps in
+  via the same `adlibType` keyframe. See `docs/drift-app-warden.md` §7 F129.
+- [x] `Inline*` controls (`InlineDate`/`InlineNumber`/`InlineSelect`) gained `max-width: 100%` +
+  `box-sizing: border-box` so a fixed nominal width can still shrink on narrow screens.
+- [x] `BLANK_FONT` moved from a fixed `26px` to `clamp(18px, 4.2vw, 26px)`.
+- [x] `prefers-reduced-motion` handling added for the stepped-reveal/fade-in classes
+  (`.adlib-typed-word`/`.adlib-fade-in`, `index.css`), matching the app's existing
+  class-based reduced-motion override pattern.
+- [x] `StepSlide` reviewed — no change needed (fixed-px transform distance, already shared with
+  the real wizard at full width).
+- [ ] Benefit-chip row / 50-option state select mobile usability, and native date/select picker
+  clipping — reasoned through, not empirically verified (no browser in this sandbox).
+- **Not done this round:** §19.1.A's field/UI parity gaps (unchanged from the §19 list above);
+  §19.1.G (attempted-gated required-field feedback, screen-reader pass); §19.1.H's field-set
+  housekeeping and account-reference spot-check; §19.1.I's remaining doc updates for those items.
+
+---
+
 ## §18 — Stripe Monetization (2026-07-28)
 
 ✅ **COMPLETE — all code shipped and verified in production.** Stripe subscriptions fully live with 14-day free trial (plus hidden 7-day grace). All routes verified in live mode: Checkout, portal, webhook signature verification, card declines, cancellation at period end, account deletion with Stripe subscription cancellation, and revival after non-payment deletion. Lifecycle emails (trial nudges, grace period, every-other-day deletion warnings) via Resend cron, all copy disclosure-guard tested. Trial phase gates Home/Budget to read-only on day 21+.

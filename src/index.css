@@ -272,11 +272,20 @@ code {
   to   { opacity: 1; transform: translateY(0);   }
 }
 
-/* ── Ad-Lib Wizard preview: crisp stepped typewriter reveal (SetupWizardAdlib.jsx) —
-   clip-path steps() gives discrete character-ish jumps rather than a smooth wipe. ── */
+/* ── Ad-Lib Wizard: crisp stepped typewriter reveal (SetupWizardAdlib.jsx) —
+   clip-path steps() gives discrete character-ish jumps rather than a smooth wipe.
+   Applied per-word (.adlib-typed-word) rather than to a whole clause, so normal
+   inline word-wrapping still happens between words on narrow viewports — see
+   docs/TODO.md §19.1.F / drift-app-warden §7 F129. ── */
 @keyframes adlibType {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0);   }
+}
+.adlib-typed-word, .adlib-fade-in {
+  animation-fill-mode: both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .adlib-typed-word, .adlib-fade-in { animation: none !important; opacity: 1; clip-path: none; }
 }
 
 /* ── Goal celebration animations (BudgetPanel) ── */

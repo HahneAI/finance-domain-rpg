@@ -42,7 +42,7 @@ import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComple
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BLANK_FONT = {
-  fontSize: "26px", lineHeight: 1.9, fontWeight: 600,
+  fontSize: "clamp(18px, 4.2vw, 26px)", lineHeight: 1.9, fontWeight: 600,
   color: "var(--color-text-primary)", fontFamily: "var(--font-display)",
 };
 
@@ -60,16 +60,51 @@ function typeDuration(text) {
 // types itself out. All TypedText in the same clause share delay=0 (the default)
 // since they mount together the instant the clause becomes eligible — only the
 // blank a given text introduces waits on that text's own duration (see FadeIn).
+//
+// Applied PER WORD, not to the whole clause as one inline-block span — a single
+// inline-block with white-space:"pre" cannot wrap internally, so a long clause
+// (e.g. Deductions' "Does my employer track attendance…?") overflowed
+// horizontally on narrow viewports (§19.1.F, drift-app-warden §7 F129). Each
+// word gets its own small inline-block (never itself long enough to need
+// wrapping) separated by an ordinary breakable space, so the browser wraps
+// between words exactly like normal text — while each word still steps in via
+// the same adlibType keyframe, staggered so the words appear to type in
+// left-to-right, in order. Total duration across all words equals
+// typeDuration(text), so external delay math (`typeDuration(clauseText)` used
+// by a following FadeIn) is unchanged — callers don't need to know this is
+// word-chunked internally.
 function TypedText({ text, delay = 0 }) {
-  const duration = typeDuration(text);
+  const totalDuration = typeDuration(text);
+  const totalChars = Math.max(text.length, 1);
+  const words = text.split(" ");
+  // Build (chunk, duration, startDelay) tuples without mutating a shared accumulator
+  // during the render-time .map — a bare running-total variable reassigned inside a
+  // map callback is the exact "mutation after render" shape the React Compiler
+  // flags (drift-app-warden §12.4's known trigger class), so this reduces into an
+  // immutable array first instead.
+  const chunks = words.reduce((acc, word, i) => {
+    const chunk = i === words.length - 1 ? word : `${word} `;
+    const chunkDur = Math.max((chunk.length / totalChars) * totalDuration, 0.04);
+    const prevEnd = i === 0 ? 0 : acc[i - 1].end;
+    return [...acc, { chunk, chunkDur, start: prevEnd, end: prevEnd + chunkDur }];
+  }, []);
   return (
-    <span
-      style={{
-        display: "inline-block", whiteSpace: "pre", overflow: "hidden",
-        animation: `adlibType ${duration}s steps(${Math.max(text.length, 1)}, end) ${delay}s both, fadeSlideUp 0.3s ease-out ${delay}s both`,
-      }}
-    >
-      {text}
+    <span style={{ whiteSpace: "normal", overflowWrap: "break-word" }}>
+      {chunks.map(({ chunk, chunkDur, start }, i) => {
+        const wordDelay = delay + start;
+        return (
+          <span
+            key={i}
+            className="adlib-typed-word"
+            style={{
+              display: "inline-block", whiteSpace: "pre", overflow: "hidden", maxWidth: "100%",
+              animation: `adlibType ${chunkDur}s steps(${Math.max(chunk.length, 1)}, end) ${wordDelay}s both, fadeSlideUp 0.3s ease-out ${wordDelay}s both`,
+            }}
+          >
+            {chunk}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -77,7 +112,7 @@ function TypedText({ text, delay = 0 }) {
 // Fades a blank in right after the text immediately preceding it finishes typing.
 function FadeIn({ children, delay = 0 }) {
   return (
-    <span style={{ display: "inline-block", animation: `fadeSlideUp 0.3s ease-out ${delay}s both` }}>
+    <span className="adlib-fade-in" style={{ display: "inline-block", maxWidth: "100%", animation: `fadeSlideUp 0.3s ease-out ${delay}s both` }}>
       {children}
     </span>
   );
@@ -91,7 +126,7 @@ function InlineSelect({ value, onChange, options, placeholder = "(select)" }) {
       onChange={e => onChange(e.target.value)}
       style={{
         appearance: "none", WebkitAppearance: "none", MozAppearance: "none",
-        display: "inline-block", background: "transparent",
+        display: "inline-block", maxWidth: "100%", boxSizing: "border-box", background: "transparent",
         border: "none",
         borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
         color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
@@ -116,7 +151,7 @@ function InlineNumber({ value, onChange, placeholder = "___", width = "84px" }) 
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       style={{
-        display: "inline-block", width,
+        display: "inline-block", width, maxWidth: "100%", boxSizing: "border-box",
         background: "transparent", border: "none",
         borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
         color: "var(--color-teal)", font: "inherit", fontWeight: 700,
@@ -135,7 +170,7 @@ function InlineDate({ value, onChange, width = "168px", label = "Start date" }) 
       value={value ?? ""}
       onChange={e => onChange(e.target.value)}
       style={{
-        display: "inline-block", width,
+        display: "inline-block", width, maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
         background: "transparent", border: "none",
         borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
         color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",

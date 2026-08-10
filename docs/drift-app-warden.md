@@ -511,6 +511,36 @@ continuation (`initialStepId: 10`) unchanged.
 > the hand-off. Check: `SetupWizardAdlib.test.jsx`'s completion tests assert against
 > `onComplete`, not the old mock `onHandoff` contract.
 
+**F129 · `TypedText` word-chunked reveal — the fix for the horizontal-overflow bug** —
+`SetupWizardAdlib.jsx:63–95`, `index.css` (`adlibType`, `.adlib-typed-word`/`.adlib-fade-in`)
+— **[G]** — *(added 2026-08-10, ad-lib field-parity/responsive round, docs/TODO.md §19.1.F)*
+`TypedText` used to render an entire clause as one `display:inline-block; white-space:pre`
+span — an atomic box that cannot wrap internally, so a long single-sentence clause (e.g.
+Deductions' attendance-tracking question) overflowed horizontally on narrow viewports.
+Fixed by chunking each clause into per-word spans (still `inline-block`/`white-space:pre`
+individually, so a single word is never long enough to need wrapping) joined by ordinary
+breakable spaces in a normal-flow wrapper — the browser now wraps between words exactly
+like plain text, while each word still steps in via the same `adlibType` clip-path
+keyframe, staggered so words appear to type left-to-right in order. `typeDuration(text)`
+still describes the *total* duration across all of a clause's words, so external delay math
+(a following `FadeIn`'s `delay={typeDuration(clauseText)}`) is unaffected — the chunking is
+internal to `TypedText`.
+> **IF** `TypedText`'s per-word rendering changes again (e.g. back to one span, or a
+> different chunking granularity), **THEN** re-verify no clause overflows at 375px width
+> (iPhone SE class) — there is no automated viewport-width test for this, only manual/visual
+> verification, so a regression here won't fail CI.
+> **IF** you add a new `TypedText` call with a long clause, **THEN** no extra care is
+> needed — the word-chunking is automatic for any string, not something each call site has
+> to opt into.
+> **IF** you change how `SetupWizardAdlib.test.jsx` queries clause text, **THEN** use the
+> file's `byText()` helper (matches full recursive `textContent`, not RTL's default
+> direct-text-node-only match) — the word-chunked spans mean a plain
+> `screen.getByText(/multi word clause/i)` no longer matches, since the clause is no longer
+> one continuous text node.
+> Reduced motion: `.adlib-typed-word`/`.adlib-fade-in` are disabled to an instant, fully
+> visible state under `prefers-reduced-motion: reduce` (`index.css`) — the stepped reveal
+> and fade/lift both skip, text just appears.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

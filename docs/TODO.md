@@ -4390,34 +4390,36 @@ equivalent already.*
 **F. Screen-edge / responsive sentence handling** *(explicit ask: "clean ad lib sentence handling
 for screen edges")*
 
-- [ ] **`TypedText` uses `white-space: "pre"`** (`SetupWizardAdlib.jsx:49–61`), which blocks
-      wrapping *within* a single clause. Short clauses are fine, but several real clauses are one
-      long sentence rendered as a single `TypedText` span — e.g. Deductions' "Does my employer
-      track attendance with a formal points or hours system?" — and **will overflow horizontally**
-      on a narrow viewport instead of wrapping. Confirmed bug, not a hypothetical: reproduce at
-      375px width (iPhone SE class) on the Deductions page. Fix by breaking long clauses into
-      several shorter `TypedText` segments at natural phrase boundaries (each still typing in
-      sequence), or finding a stepped-clip-path approach compatible with `white-space: pre-wrap`.
-- [ ] Fixed pixel `width` values on `InlineDate` (168px/140px) and other `Inline*` controls don't
-      shrink on narrow screens — audit every `Inline*` usage for `max-width: 100%` / responsive
-      sizing so a control plus its surrounding text can't force horizontal overflow.
-- [ ] `BLANK_FONT`'s fixed `26px` font-size was tuned for the current ~560px-wide centered card —
-      once the card boundary is gone (§19.1.E), decide a responsive scale (e.g. `clamp()` by
-      viewport width) instead of one fixed size that may read oversized on mobile or undersized on
-      a wide desktop full-page layout.
-- [ ] A true full-page layout removes the ~560px width ceiling entirely — without a deliberate max
-      reading-width on the **text column** (e.g. ~640–720px, centered, independent of the
-      page's own full-bleed background), desktop viewers get uncomfortably long lines. Apply a
-      max-width to the sentence/text column, not to the page.
+- [x] **`TypedText` uses `white-space: "pre"`** — fixed 2026-08-10: `TypedText` now chunks each
+      clause into per-word `inline-block` spans (each still `white-space:pre`, but a single word
+      never needs to wrap internally) joined by ordinary breakable spaces in a normal-flow
+      wrapper, so the browser wraps between words exactly like plain text while each word still
+      steps in via the same `adlibType` keyframe, staggered left-to-right. See
+      drift-app-warden §7 F129. `SetupWizardAdlib.test.jsx` gained a `byText()` helper (matches
+      recursive `textContent`) since the old direct-text-node `getByText(/clause/i)` calls no
+      longer match a word-chunked clause.
+- [x] Fixed pixel `width` values on `InlineDate`/`InlineNumber`/`InlineSelect` now also carry
+      `max-width: 100%` (+ `box-sizing: border-box`, `InlineDate` also `min-width: 0`) so a
+      control can shrink below its nominal width instead of forcing horizontal overflow.
+- [x] `BLANK_FONT`'s fixed `26px` replaced with `clamp(18px, 4.2vw, 26px)` — scales down on
+      narrow viewports, caps at the original 26px on wide/desktop layouts.
+- [x] Text column already carries a `max-width: 720px` (shipped in the full-page-conversion
+      commit, `0a6026d`) — confirmed still in place, no change needed here.
 - [ ] Verify the benefit-chip row (`DeductionsPage`) and the 50-option state-name `<select>`
       (`TaxRatesPage`) render and remain usable on mobile widths — chip row wrapping, native
-      `<select>` dropdown behavior on iOS/Android.
+      `<select>` dropdown behavior on iOS/Android. Reasoned through (chip row's `FadeIn` wrapper
+      has no `white-space:pre`, so `InlineChip` buttons wrap normally inside it) but **not
+      empirically verified** — no browser available in this sandbox (`VITE_SUPABASE_URL` unset,
+      no in-browser testing possible).
 - [ ] Verify native date/select pickers (iOS/Android) don't clip against the new full-page scroll
-      container when they open.
-- [ ] Re-tune the `StepSlide` page-transition animation for full-page width/height — it was built
-      and tuned against a small centered card.
-- [ ] Add `prefers-reduced-motion` handling to `TypedText`'s stepped-reveal keyframe — every real
-      signup will see this animation on every page, unlike an admin doing a one-off preview click.
+      container when they open — same caveat, reasoned but not visually verified.
+- [x] `StepSlide` (`ui.jsx`) re-tuned: reviewed — its `translateX(90px)` push/pop distance is a
+      fixed pixel offset independent of container width (not proportional to the old card's
+      bounds), and it's a shared primitive also used by the real `SetupWizard.jsx`'s own step
+      transitions at full width already. No change needed; not a full-page-conversion regression.
+- [x] Added `prefers-reduced-motion` handling: `.adlib-typed-word`/`.adlib-fade-in` (`index.css`)
+      disable to an instant, fully-visible state under `prefers-reduced-motion: reduce`, same
+      class-based override pattern the rest of the app already uses (`.step-in-right` etc.).
 
 **G. Accessibility & validation-feedback parity**
 

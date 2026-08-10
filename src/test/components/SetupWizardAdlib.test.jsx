@@ -3,6 +3,24 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { SetupWizardAdlib } from '../../components/SetupWizardAdlib.jsx'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
+// TypedText (SetupWizardAdlib.jsx) now renders each word of a clause as its own
+// span (word-chunked stepped reveal, fixing the horizontal-overflow bug — see
+// docs/TODO.md §19.1.F / drift-app-warden §7 F129), so a multi-word sentence is
+// no longer one continuous text node RTL's default getByText can match (it only
+// concatenates direct text-node children, not nested elements). This matcher
+// checks the full recursive textContent instead, picking the innermost element
+// whose own children don't already contain the match — the standard
+// testing-library recipe for text split across elements.
+function byText(regex) {
+  return (_content, node) => {
+    if (!node) return false
+    const hasText = n => regex.test(n.textContent || '')
+    const nodeHasText = hasText(node)
+    const childrenDontHaveText = Array.from(node.children || []).every(child => !hasText(child))
+    return nodeHasText && childrenDontHaveText
+  }
+}
+
 function renderAdlib(config = DEFAULT_CONFIG) {
   const onHandoff = vi.fn()
   const onComplete = vi.fn()
@@ -144,7 +162,7 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
   it('reveals the Pay Structure clause on the same page as soon as "employed" is chosen — no page navigation', () => {
     renderAdlib()
     chooseEmployed()
-    expect(screen.getByText(/I work for/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I work for/i))).toBeTruthy()
     // Still one page: the employment-status select is still present, not swapped out.
     expect(selects()[0].value).toBe('employed')
     // More pages (Schedule, Deductions, Tax Rates) are still ahead for an employed user.
@@ -154,7 +172,7 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
   it('hands off directly to the jobless flow when "unemployed" is chosen, skipping Schedule/Deductions/Tax Rates entirely', () => {
     const { onHandoff } = renderAdlib()
     fireEvent.change(selects()[0], { target: { value: 'unemployed' } })
-    expect(screen.queryByText(/I work for/i)).toBeNull()
+    expect(screen.queryByText(byText(/I work for/i))).toBeNull()
     expect(primaryBtn()).toHaveTextContent(/continue setup/i)
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
@@ -180,7 +198,7 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     renderAdlib()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
-    expect(screen.getByText(/I get paid/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I get paid/i))).toBeTruthy()
     expect(primaryBtn()).toBeDisabled()
   })
 
@@ -188,9 +206,9 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     renderAdlib()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'DHL' } })
-    expect(screen.getByText(/I work at the/i)).toBeTruthy()
-    expect(screen.queryByText(/I'm on Team/i)).toBeNull()
-    expect(screen.queryByText(/I'm on the/i)).toBeNull()
+    expect(screen.getByText(byText(/I work at the/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/I'm on Team/i))).toBeNull()
+    expect(screen.queryByText(byText(/I'm on the/i))).toBeNull()
     expect(primaryBtn()).toBeDisabled()
   })
 
@@ -199,12 +217,12 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'DHL' } })
     fireEvent.change(selects()[2], { target: { value: 'PLANT' } })
-    expect(screen.getByText(/I'm on Team/i)).toBeTruthy()
-    expect(screen.queryByText(/I'm on the/i)).toBeNull() // Warehouse-only clause
+    expect(screen.getByText(byText(/I'm on Team/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/I'm on the/i))).toBeNull() // Warehouse-only clause
     expect(primaryBtn()).toBeDisabled()
 
     fireEvent.change(selects()[3], { target: { value: 'A' } })
-    expect(screen.getByText(/working the/i)).toBeTruthy()
+    expect(screen.getByText(byText(/working the/i))).toBeTruthy()
   })
 
   it('Warehouse reveals a Mon-Thu/Wed-Sat team blank and a shift-length blank instead of Team A/B', () => {
@@ -212,17 +230,17 @@ describe('SetupWizardAdlib — Intake page (Welcome + Pay Structure merged)', ()
     chooseEmployed()
     fireEvent.change(selects()[1], { target: { value: 'DHL' } })
     fireEvent.change(selects()[2], { target: { value: 'WAREHOUSE' } })
-    expect(screen.getByText(/I'm on the/i)).toBeTruthy()
-    expect(screen.queryByText(/I'm on Team/i)).toBeNull()
+    expect(screen.getByText(byText(/I'm on the/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/I'm on Team/i))).toBeNull()
     expect(primaryBtn()).toBeDisabled()
 
     fireEvent.change(selects()[3], { target: { value: 'MT' } })
-    expect(screen.getByText(/team, on/i)).toBeTruthy()
-    expect(screen.queryByText(/working the/i)).toBeNull() // still needs shift length first
+    expect(screen.getByText(byText(/team, on/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/working the/i))).toBeNull() // still needs shift length first
     expect(primaryBtn()).toBeDisabled()
 
     fireEvent.change(selects()[4], { target: { value: '10' } })
-    expect(screen.getByText(/working the/i)).toBeTruthy()
+    expect(screen.getByText(byText(/working the/i))).toBeTruthy()
   })
 
   it('does not carry over startedUnemployed/employer/site/pay fields from an already-answered real config', () => {
@@ -254,8 +272,8 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
   it('lands on the Schedule page (2 of 5) after completing a base-user Intake page', () => {
     renderAdlib()
     advanceToSchedule_baseUser()
-    expect(screen.getByText(/I started on/i)).toBeTruthy()
-    expect(screen.getByText(/Setup · 2 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I started on/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 2 of 5/i))).toBeTruthy()
   })
 
   it('shows a Back button on the Schedule page that returns to Intake', () => {
@@ -263,8 +281,8 @@ describe('SetupWizardAdlib — advancing from Intake to Schedule', () => {
     advanceToSchedule_baseUser()
     expect(screen.getByRole('button', { name: /^back$/i })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }))
-    expect(screen.getByText(/I work for/i)).toBeTruthy()
-    expect(screen.getByText(/Setup · 1 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I work for/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 1 of 5/i))).toBeTruthy()
   })
 })
 
@@ -279,7 +297,7 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     renderAdlib()
     advanceToSchedule_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
-    expect(screen.getByText(/I work up to/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I work up to/i))).toBeTruthy()
   })
 
   it('reveals the acknowledgment clause once hours are entered, and gates on answering "do"', () => {
@@ -287,11 +305,11 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     advanceToSchedule_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(numbers()[0], { target: { value: '40' } })
-    expect(screen.getByText(/understand this hours number/i)).toBeTruthy()
-    expect(screen.queryByText(/pay period closes on/i)).toBeNull()
+    expect(screen.getByText(byText(/understand this hours number/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/pay period closes on/i))).toBeNull()
 
     fireEvent.change(selects()[0], { target: { value: 'do' } })
-    expect(screen.getByText(/pay period closes on/i)).toBeTruthy()
+    expect(screen.getByText(byText(/pay period closes on/i))).toBeTruthy()
   })
 
   it('does not carry over startDate/maxWeeklyHours/hoursUnderstood from an already-answered real config', () => {
@@ -318,8 +336,8 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Setup · 3 of 5/i)).toBeTruthy()
-    expect(screen.getByText(/benefits or deductions/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 3 of 5/i))).toBeTruthy()
+    expect(screen.getByText(byText(/benefits or deductions/i))).toBeTruthy()
   })
 
   it('requires the payday-parity answer for a biweekly/salary pay schedule before proceeding', () => {
@@ -335,7 +353,7 @@ describe('SetupWizardAdlib — Schedule page (base user)', () => {
     fireEvent.change(numbers()[0], { target: { value: '40' } })
     fireEvent.change(selects()[0], { target: { value: 'do' } })
     fireEvent.change(selects()[1], { target: { value: '1' } }) // Monday
-    expect(screen.getByText(/one of my paydays/i)).toBeTruthy()
+    expect(screen.getByText(byText(/one of my paydays/i))).toBeTruthy()
     expect(primaryBtn()).toBeDisabled()
 
     fireEvent.change(selects()[2], { target: { value: 'this' } })
@@ -348,7 +366,7 @@ describe('SetupWizardAdlib — Schedule page (DHL Plant)', () => {
     renderAdlib()
     advanceToSchedule_dhlPlant()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
-    expect(screen.getByText(/Right now I'm on my/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Right now I'm on my/i))).toBeTruthy()
     // Not required by the real Step2 gate — Next is already enabled.
     expect(primaryBtn()).not.toBeDisabled()
   })
@@ -359,8 +377,8 @@ describe('SetupWizardAdlib — Schedule page (DHL Warehouse)', () => {
     renderAdlib()
     advanceToSchedule_dhlWarehouse()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
-    expect(screen.queryByText(/Right now I'm on my/i)).toBeNull()
-    expect(screen.queryByText(/which week are you currently on/i)).toBeNull()
+    expect(screen.queryByText(byText(/Right now I'm on my/i))).toBeNull()
+    expect(screen.queryByText(byText(/which week are you currently on/i))).toBeNull()
     expect(primaryBtn()).not.toBeDisabled()
   })
 })
@@ -369,7 +387,7 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
   it('is page 3 of 5 (not the last page) and reads "Next", not "Continue Setup"', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
-    expect(screen.getByText(/Setup · 3 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 3 of 5/i))).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     expect(primaryBtn()).toBeDisabled() // attendance still required
   })
@@ -377,19 +395,19 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
   it('reveals the attendance question once the benefits gate is answered either way', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
-    expect(screen.queryByText(/formal points or hours system/i)).toBeNull()
+    expect(screen.queryByText(byText(/formal points or hours system/i))).toBeNull()
     fireEvent.change(selects()[0], { target: { value: 'no' } })
-    expect(screen.getByText(/formal points or hours system/i)).toBeTruthy()
+    expect(screen.getByText(byText(/formal points or hours system/i))).toBeTruthy()
   })
 
   it('reveals benefit chips once answered "have", and a $ blank once a weekly benefit is toggled on', () => {
     renderAdlib()
     advanceToDeductions_baseUser()
     fireEvent.change(selects()[0], { target: { value: 'yes' } })
-    expect(screen.getByText(/I'm enrolled in/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I'm enrolled in/i))).toBeTruthy()
     const healthChip = screen.getByRole('button', { name: /health \/ medical/i })
     fireEvent.click(healthChip)
-    expect(screen.getByText(/Health \/ Medical costs \$/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Health \/ Medical costs \$/i))).toBeTruthy()
     expect(numbers().length).toBeGreaterThan(0)
   })
 
@@ -411,9 +429,9 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     fireEvent.change(selects()[0], { target: { value: 'yes' } })
     const healthChip = screen.getByRole('button', { name: /health \/ medical/i })
     fireEvent.click(healthChip)
-    expect(screen.getByText(/Health \/ Medical costs \$/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Health \/ Medical costs \$/i))).toBeTruthy()
     fireEvent.click(healthChip)
-    expect(screen.queryByText(/Health \/ Medical costs \$/i)).toBeNull()
+    expect(screen.queryByText(byText(/Health \/ Medical costs \$/i))).toBeNull()
   })
 
   it('401k reveals a contribution-rate and enrollment-date blank, both required', () => {
@@ -421,7 +439,7 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     advanceToDeductions_baseUser()
     fireEvent.change(selects()[0], { target: { value: 'yes' } })
     fireEvent.click(screen.getByRole('button', { name: /401k \/ retirement/i }))
-    expect(screen.getByText(/I put/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I put/i))).toBeTruthy()
     fireEvent.change(selects()[1], { target: { value: 'no' } }) // attendance answered
     expect(primaryBtn()).toBeDisabled()
 
@@ -440,8 +458,8 @@ describe('SetupWizardAdlib — Deductions page (base user)', () => {
     fireEvent.change(selects()[1], { target: { value: 'yes' } }) // attendance
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Setup · 4 of 5/i)).toBeTruthy()
-    expect(screen.getByText(/I officially file/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 4 of 5/i))).toBeTruthy()
+    expect(screen.getByText(byText(/I officially file/i))).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
   })
 })
@@ -450,10 +468,10 @@ describe('SetupWizardAdlib — Deductions page (DHL)', () => {
   it('is already valid with zero interaction — advances straight to Tax Rates', () => {
     renderAdlib()
     advanceToDeductions_dhlPlant()
-    expect(screen.queryByText(/formal points or hours system/i)).toBeNull()
+    expect(screen.queryByText(byText(/formal points or hours system/i))).toBeNull()
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/I officially file/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I officially file/i))).toBeTruthy()
   })
 
   it('does not carry over selectedBenefits/attendanceBucketEnabled from an already-answered real config', () => {
@@ -465,7 +483,7 @@ describe('SetupWizardAdlib — Deductions page (DHL)', () => {
     }
     renderAdlib(answeredConfig)
     advanceToDeductions_dhlPlant()
-    expect(screen.queryByText(/I'm enrolled in/i)).toBeNull()
+    expect(screen.queryByText(byText(/I'm enrolled in/i))).toBeNull()
     expect(selects()[0].value).toBe('')
   })
 })
@@ -474,7 +492,7 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
   it('is page 4 of 5 (not the last page) and Next starts disabled', () => {
     renderAdlib()
     advanceToTaxRates_baseUser()
-    expect(screen.getByText(/Setup · 4 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 4 of 5/i))).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/^next$/i)
     expect(primaryBtn()).toBeDisabled()
   })
@@ -482,8 +500,8 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
   it('renders the filing-status and state blanks as one sentence', () => {
     renderAdlib()
     advanceToTaxRates_baseUser()
-    expect(screen.getByText(/I officially file/i)).toBeTruthy()
-    expect(screen.getByText(/living in the state of/i)).toBeTruthy()
+    expect(screen.getByText(byText(/I officially file/i))).toBeTruthy()
+    expect(screen.getByText(byText(/living in the state of/i))).toBeTruthy()
     expect(selects().length).toBe(2)
   })
 
@@ -503,8 +521,8 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
     fireEvent.change(selects()[0], { target: { value: 'single' } })
     fireEvent.change(selects()[1], { target: { value: 'MO' } })
     fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
-    expect(screen.getByText(/Typical Paycheck/i)).toBeTruthy()
-    expect(screen.queryByText(/Longer Week Paystub/i)).toBeNull()
+    expect(screen.getByText(byText(/Typical Paycheck/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/Longer Week Paystub/i))).toBeNull()
     expect(screen.queryByRole('button', { name: /apply these rates/i })).toBeNull()
   })
 
@@ -529,7 +547,7 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
     expect(primaryBtn()).toBeDisabled() // hasn't applied yet
     fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
     expect(primaryBtn()).not.toBeDisabled()
-    expect(screen.queryByText(/Typical Paycheck/i)).toBeNull() // calculator collapses after apply
+    expect(screen.queryByText(byText(/Typical Paycheck/i))).toBeNull() // calculator collapses after apply
   })
 
   it('advances to the Wrap Up page (not a handoff) once Tax Rates is complete', () => {
@@ -544,8 +562,8 @@ describe('SetupWizardAdlib — Tax Rates page (base user)', () => {
     fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
     expect(primaryBtn()).not.toBeDisabled()
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
-    expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 5 of 5/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Here's my estimated/i))).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/finish setup/i)
   })
 })
@@ -557,8 +575,8 @@ describe('SetupWizardAdlib — Tax Rates page (DHL Plant, variable schedule)', (
     fireEvent.change(selects()[0], { target: { value: 'single' } })
     fireEvent.change(selects()[1], { target: { value: 'MO' } })
     fireEvent.click(screen.getByRole('button', { name: /recalculate using paystub/i }))
-    expect(screen.getByText(/Shorter Week Paystub/i)).toBeTruthy()
-    expect(screen.getByText(/Longer Week Paystub/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Shorter Week Paystub/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Longer Week Paystub/i))).toBeTruthy()
 
     const gross = screen.getAllByLabelText(/gross pay/i)
     const fed = screen.getAllByLabelText(/fed withheld/i)
@@ -571,7 +589,7 @@ describe('SetupWizardAdlib — Tax Rates page (DHL Plant, variable schedule)', (
     fireEvent.change(state[1], { target: { value: '58' } })
     fireEvent.click(screen.getByRole('button', { name: /apply these rates/i }))
     fireEvent.click(primaryBtn())
-    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 5 of 5/i))).toBeTruthy()
   })
 })
 
@@ -579,7 +597,7 @@ describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
   it('is the last page (5 of 5) and Finish Setup is already enabled — nothing is required', () => {
     renderAdlib()
     advanceToWrapUp_baseUser()
-    expect(screen.getByText(/Setup · 5 of 5/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Setup · 5 of 5/i))).toBeTruthy()
     expect(primaryBtn()).toHaveTextContent(/finish setup/i)
     expect(primaryBtn()).not.toBeDisabled()
   })
@@ -587,16 +605,16 @@ describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
   it('renders a live net-estimate summary with Gross Pay and Net rows', () => {
     renderAdlib()
     advanceToWrapUp_baseUser()
-    expect(screen.getByText(/Gross Pay/i)).toBeTruthy()
-    expect(screen.getByText(/Federal Tax/i)).toBeTruthy()
-    expect(screen.getByText(/^Net$/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Gross Pay/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Federal Tax/i))).toBeTruthy()
+    expect(screen.getByText(byText(/^Net$/i))).toBeTruthy()
   })
 
   it('shows the buffer amount blank by default — buffer defaults on', () => {
     renderAdlib()
     advanceToWrapUp_baseUser()
-    expect(screen.getByText(/a paycheck buffer/i)).toBeTruthy()
-    expect(screen.getByText(/per check\./i)).toBeTruthy()
+    expect(screen.getByText(byText(/a paycheck buffer/i))).toBeTruthy()
+    expect(screen.getByText(byText(/per check\./i))).toBeTruthy()
     expect(numbers().length).toBeGreaterThan(0)
   })
 
@@ -604,7 +622,7 @@ describe('SetupWizardAdlib — Wrap Up page (base user)', () => {
     renderAdlib()
     advanceToWrapUp_baseUser()
     fireEvent.change(selects()[0], { target: { value: 'off' } })
-    expect(screen.queryByText(/per check\./i)).toBeNull()
+    expect(screen.queryByText(byText(/per check\./i))).toBeNull()
     expect(primaryBtn()).not.toBeDisabled() // still nothing required
   })
 
@@ -669,7 +687,7 @@ describe('SetupWizardAdlib — resumeFormData', () => {
       freedomAllowance: 50,
     }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
-    expect(screen.getByText(/Here's my estimated/i)).toBeTruthy()
+    expect(screen.getByText(byText(/Here's my estimated/i))).toBeTruthy()
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/finish setup/i)
   })
@@ -677,8 +695,8 @@ describe('SetupWizardAdlib — resumeFormData', () => {
   it('reopens on just the employment-status clause (page 1) for a resumed jobless answer', () => {
     const resumeFormData = { ...DEFAULT_CONFIG, startedUnemployed: true }
     render(<SetupWizardAdlib config={DEFAULT_CONFIG} onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} resumeFormData={resumeFormData} />)
-    expect(screen.getByText(/right now, i am/i)).toBeTruthy()
-    expect(screen.queryByText(/I work for/i)).toBeNull()
+    expect(screen.getByText(byText(/right now, i am/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/I work for/i))).toBeNull()
     expect(primaryBtn()).not.toBeDisabled()
     expect(primaryBtn()).toHaveTextContent(/continue setup/i)
   })

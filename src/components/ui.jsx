@@ -39,7 +39,7 @@ function useCountUp(target, duration = 1200) {
 // ─────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "'JetBrains Mono', 'Courier New', monospace", minHeight: "44px" };
+export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "var(--font-sans)", minHeight: "44px" };
 // eslint-disable-next-line react-refresh/only-export-components
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
@@ -630,7 +630,7 @@ export function PanelHero({ eyebrow, children }) {
   return (
     <div style={{ marginBottom: "28px", textAlign: "center" }}>
       <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>{eyebrow}</div>
-      <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1, marginBottom: "14px" }}>{children}</div>
+      <div style={{ fontSize: "32px", fontWeight: 900, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "0.04em", lineHeight: 1.15, marginBottom: "14px" }}>{children}</div>
       <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
     </div>
   );
@@ -642,7 +642,7 @@ export function SectionHeader({ children, sub, right }) {
       <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "16px", opacity: 0.35 }} />
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: sub ? "6px" : 0 }}>{children}</div>
+          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15, marginBottom: sub ? "6px" : 0 }}>{children}</div>
           {sub && <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{sub}</div>}
         </div>
         {right != null && <div style={{ flexShrink: 0 }}>{right}</div>}

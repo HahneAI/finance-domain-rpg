@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, SH } from "./ui.jsx";
 
 /**
  * ReemploymentTracker — embedded in NewJobSeasonDashboard (TODO §1.C6).
@@ -50,10 +50,6 @@ function genId() {
   return `app_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-const labelStyle = {
-  fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
-  color: "var(--color-text-secondary)", display: "block", marginBottom: "6px",
-};
 const inputStyle = {
   width: "100%",
   background: "var(--color-bg-raised)",
@@ -61,7 +57,7 @@ const inputStyle = {
   borderRadius: "10px",
   color: "var(--color-text-primary)",
   fontSize: "14px",
-  fontFamily: "var(--font-mono)",
+  fontFamily: "var(--font-sans)",
   padding: "9px 12px",
   colorScheme: "dark",
   boxSizing: "border-box",
@@ -191,12 +187,9 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
 
   return (
     <div style={{ marginTop: "16px" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-        <label style={{ ...labelStyle, marginBottom: 0 }}>Re-employment</label>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>
-          {counts.active} active · {counts.offers} {counts.offers === 1 ? "offer" : "offers"}
-        </div>
-      </div>
+      <SH right={`${counts.active} active · ${counts.offers} ${counts.offers === 1 ? "offer" : "offers"}`}>
+        Application Tracker
+      </SH>
 
       {/* ── Target income ── */}
       <div style={{ ...cardStyle, marginBottom: "10px" }}>

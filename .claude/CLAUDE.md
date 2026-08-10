@@ -64,7 +64,8 @@ src/
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── SetupWizardAdlib.jsx — EXPERIMENTAL admin-only "fill-in-the-blank" pilot (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
-│   ├── BetaHomebase.jsx     — tracked-beta-tester-only modal: rubric score, feature checklist, suggestion feed, changelog recap
+│   ├── BetaHomebase.jsx     — tracked-beta-tester-only page (real nav-stack view, not a modal — see App.jsx's `navigate("betaHomebase")`): rubric score, feature checklist, suggestion feed, changelog recap
+│   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same page treatment, same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
 │   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS
@@ -251,8 +252,29 @@ decision pending how the pilot feels in practice.
 | `--color-text-disabled` | `#4a645c` | Inactive / disabled |
 | `--color-border-subtle` | `#1f3b31` | Card borders |
 | `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
-| `--font-display` / `--font-sans` | `'Inter'` | Headings + body |
-| `--font-mono` | `'JetBrains Mono'` | Inputs + data cells only |
+| `--font-display` | `'Titillium Web'` | All headings (h1–h6), page/section titles, hero/headline text, large numeric emphasis on metric cards |
+| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips), and ALL form inputs/selects/textareas |
+| `--font-mono` | `'JetBrains Mono'` | Read-only numeric/data display only — data table cells, computed-value readouts (tabular-figure alignment). No longer used on any form field. |
+
+**Typography — two-font system (adopted 2026-08-09).** Titillium Web (400/600/700/900) is the
+display/headline font; Rajdhani (400/500/600/700) is the body/interactive font. Both load via
+Google Fonts `<link>` in `index.html` (same pattern as the pre-existing JetBrains Mono load).
+Never hardcode a font-family — always reference `var(--font-display)` / `var(--font-sans)` /
+`var(--font-mono)`. **2026-08-10:** all inputs/selects/textareas (global CSS rule, shared `iS`
+style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--font-mono` to
+`--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
+readouts), never form fields.
+
+**Header weight/spacing (2026-08-10, ported from the main site).** Heavy weight + negative
+letter-spacing + tight line-height reads as cramped. Two tiers, both in `src/index.css` and
+`ui.jsx`'s `PanelHero`/`SectionHeader`: hero/primary headings are `font-weight: 900`,
+`letter-spacing: 0.04em`, `line-height: 1.15`; secondary page headers are `font-weight: 800`,
+`letter-spacing: 0.02em`, `line-height: 1.15`. Letter-spacing is em-based so it scales with
+font-size. `.heading-xl`/`.heading-lg` utility classes added to `src/index.css` for parity with
+the site (unused here — A:Fin headers are inline styles or the `PanelHero`/`SectionHeader`
+components, not a class system). Does **not** apply to numeric emphasis (MetricCard values,
+dollar totals) — those are data display, not headline text, and kept their existing styling.
+See `docs/authority-design-system`'s Typography section for the full file list touched.
 
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 
@@ -359,8 +381,15 @@ Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 0
 (beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
 link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
 chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
-Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123) exist — **the next real migration
-is 039.** Verify against the folder before numbering; this note has now gone stale five times
+Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123), 039 (`base_content_items` +
+`base_checklist_completions` + `base_feedback_events` — Money Moves, the base-user counterpart
+to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route via a new
+`entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
+F125), 040 (`employer_preset` column on `beta_content_items`/`base_content_items` +
+`get_user_employer_preset(uid)` — lets admin-authored content target a single employer preset,
+e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`) exist —
+**the next real migration is 041.** Verify against the folder before numbering;
+this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
 parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).

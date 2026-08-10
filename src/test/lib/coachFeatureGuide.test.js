@@ -2,7 +2,7 @@
 // automatic trigger ("activates automatically when your Income panel shows
 // zero or negative income for a pay period") that doesn't exist anywhere in
 // the app — New Job Season only ever turns on when the user deliberately picks
-// "Lost My Job" from Life Events (NewJobSeasonEntry.jsx). The feature guide had no
+// "Quit My Job" from Life Events (NewJobSeasonEntry.jsx). The feature guide had no
 // New Job Season content at all, so Coach had nothing grounded to answer from
 // and invented a plausible-sounding mechanism instead. These assertions pin
 // the corrected, concise content in place.
@@ -10,9 +10,9 @@ import { describe, it, expect } from "vitest";
 import { COACH_FEATURE_GUIDE } from "../../lib/coachFeatureGuide.js";
 
 describe("COACH_FEATURE_GUIDE — New Job Season", () => {
-  it("states the mode is switched on deliberately via Life Events / Lost My Job", () => {
+  it("states the mode is switched on deliberately via Life Events / Quit My Job", () => {
     expect(COACH_FEATURE_GUIDE).toMatch(/Life Events/);
-    expect(COACH_FEATURE_GUIDE).toMatch(/Lost My Job/);
+    expect(COACH_FEATURE_GUIDE).toMatch(/Quit My Job/);
   });
 
   it("explicitly rules out the fabricated auto-trigger from a zero/low paycheck", () => {

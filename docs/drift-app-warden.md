@@ -679,8 +679,8 @@ when the year-end simulation shape omits it — `ec53450`).
 `extraCash: huntIncome`), `saveCashOnHand:80–84` (writes `newJobSeasonCashOnHand` +
 `newJobSeasonCashOnHandAsOf`, called from the pencil-badged Cash On Hand card + its shared
 `CashOnHandSheet.jsx` editor — §1.H17), `logIncome:109–122`, `removeEntry:124–128`,
-embedded `ReemploymentTracker:284` with its `applyConfigUpdate` wrapper
-(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:328` (DW-8 fix,
+embedded `ReemploymentTracker:295` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:103–107`), embedded `CoachNetWorthCard:348` (DW-8 fix,
 `docs/BUG_FIX_TODO.md`) behind `canAccessAskCoachGeneral` — **[G→L]**
 `config.newJobSeasonMode` *replaces* HomePanel with NewJobSeasonHomePanel (post-§1.H7 architecture
 — the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
@@ -707,7 +707,18 @@ mandatory (§1.H13); `newJobSeasonCashOnHandAsOf` is re-stamped every time it's 
 > that confusion — don't "fix" it the other way by merging `huntIncome` into the
 > displayed balance, which would corrupt the `newJobSeasonCashOnHandAsOf` decay anchor.
 > `NewJobSeasonBudgetPanel.jsx` carries the equivalent caption (F44) — keep both in sync.
-> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`.
+> Check: `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`. **Visual hierarchy
+> (2026-08):** the page is now three umbrella `SectionHeader`s — "Your Runway" (Cash On
+> Hand + the Runway/Burn/Extra Income grid), "Log Extra Income", "Job Search"
+> (`ReemploymentTracker` +, when `canAccessAiFeatures` unlocks it, the Job Hunt Assistant
+> button/chat + `ResumeReviewCard`) — a user explicitly asked for the tracker/assistant/
+> résumé trio to read as one paired goal, not three separately-headed blocks. Each
+> component inside "Job Search" carries its own compact `SH` sub-label
+> (`ReemploymentTracker.jsx`'s own header, not `NewJobSeasonHomePanel`'s — don't add a
+> second one at the call site) rather than another full `SectionHeader` — don't restore
+> `ResumeReviewCard`'s old standalone `SectionHeader` or split the trio back into
+> separate top-level sections. `CoachNetWorthCard` deliberately has no header (it
+> renders `null` most of the time — a permanent title would sit above nothing).
 
 **F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
 threshold const `:1405`), suppression `HomePanel.jsx:117–118`
@@ -1151,9 +1162,14 @@ both quote one scenario) — **[G→L]**
 > `upcomingBills` filter, Back to Work auto-reactivation (§7 F11). F24's runway
 > quarantines are closed (`3267286`) — no filter-drift risk from that direction anymore.
 > **IF** `includeBenefits` is ever persisted, **THEN** that's a product decision reversal
-> — its session-only nature is documented intent, not an oversight. Check: toggling the
-> scenario on one panel changes the other; kill-tab keeps triage states but resets the
-> scenario toggle; editing Cash On Hand from Budget updates Home's card figure and vice
+> — its session-only nature is documented intent, not an oversight. **Visual hierarchy
+> (2026-08):** "Expenses" is one umbrella `SectionHeader` covering both the add-bill
+> form (its own `SH` "Add a Bill" sub-label) and the tracked-bills list below it (`SH`
+> "Tracked Bills", `right` shows the live count) — keep both sub-labels if this section
+> is restructured, rather than collapsing back to one bare header over both. Check:
+> toggling the scenario on one panel changes the other; kill-tab keeps triage states but
+> resets the scenario toggle; editing Cash On Hand from Budget updates Home's card figure
+> and vice
 > versa (single source of truth, `newJobSeasonFlow.test.jsx`).
 
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
@@ -3078,6 +3094,17 @@ is the drift this entry exists to prevent:
   another. That's an accepted gap, not an oversight — this app has no other read-receipt/
   notification-state table, and the checklist half of the badge (the only part with real
   per-tester DB state) isn't affected by it.
+- **Modal → real nav-stack page (2026-08-09).** `BetaHomebase.jsx`/`ProductivityHub.jsx` were
+  originally `position:fixed` portal modals (backdrop, fold-in/out, own ✕ close button);
+  they're now plain pages rendered inside `App.jsx`'s `activePanel` when `currentView ===
+  "betaHomebase"`/`"moneyMoves"`, reached via `navigate("betaHomebase"/"moneyMoves")` (pushes
+  onto `viewStack`, unlike the bottom nav's `navigateDirect` which resets it) — same pattern
+  `HomePanel.jsx`'s tiles already use to drill into `log`/`income`/`budget`, just with a view
+  key that isn't one of the 5 primary tabs, so no bottom-nav item shows "active" while on
+  either page. There is no in-page back button — the bottom nav / sidebar (always visible,
+  unconditional siblings of the main content area) IS the exit, matching every other real
+  page in the app. The badge's "mark as seen" trigger moved from "modal opened" to "navigated
+  to" (`goToBetaHomebase`/`goToProductivityHub` in `App.jsx`) — same semantics, different verb.
 > **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
 > three postures above before writing a migration — do not default to "admin route" or
 > "direct client write" out of habit; the posture follows from *who legitimately produces the
@@ -3093,6 +3120,131 @@ is the drift this entry exists to prevent:
 > auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
 > scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
 > no single automated test spans the JS+SQL boundary, same gap F122 already flags.
+
+**F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
+Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,
+`api/admin-beta-hub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
+`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for nothing — there is no
+score/ledger half here, unlike F123**
+Added 2026-08-08 as the base-user counterpart to the Beta Tester Homebase (F123) — same
+checklist/tips/feedback flow, different audience (every signed-in user who ISN'T a tracked
+beta tester, per `!isTrackedBetaTester`) and different purpose (self-service productivity,
+not a scored path to a reward). Three decisions this entry exists to keep from drifting apart
+next time either surface changes:
+- **Separate tables, on purpose (`base_content_items`/`base_checklist_completions`/
+  `base_feedback_events`), not a reuse of the beta_* ones.** `beta_checklist_completions`
+  (037) and `beta_activity_events` (031) both carry `SECURITY DEFINER` triggers that
+  hard-reject any insert from a non-tracked-beta-tester — reusing them for base users would
+  have meant loosening the exact triggers protecting the live cohort's scoring data mid-
+  program. New tables cost nothing against the Vercel Hobby serverless-function cap (that cap
+  is per `api/*.js` FILE, F123 already established this) — no scarcity pressure pushed toward
+  reuse the way there was for the API route below. `base_checklist_completions` therefore has
+  **no eligibility trigger at all** — there's no "tracked cohort" concept for base users, RLS's
+  own `user_id = auth.uid()` check is the whole gate. `base_feedback_events` is its own table
+  rather than a second event_type on `beta_activity_events` (030's pattern) for the same
+  reason F123's `beta_scores.admin_notes` rule protects tester-only data: that table
+  specifically feeds `api/admin-beta-report.js`'s scoring aggregation, and mixing non-cohort
+  rows in would corrupt its "~40 known testers" scope.
+- **Admin route IS shared — `api/admin-beta-hub.js` grew an `entity: "base_content"` branch**
+  instead of a new file, the opposite call from the tables above. `CONTENT_TABLES` maps
+  `content` → `beta_content_items` and `base_content` → `base_content_items`; every handler
+  (`handleContentGet`/`Save`/`Delete`) is parametrized on `table` and shared by both. This
+  repo is at 12/12 Hobby-plan functions (CLAUDE.md) — a second near-identical route would
+  either force consolidating something else first or fail the build outright.
+- **Frontend presentation IS shared too — `ChecklistSection`/`SuggestionsSection`/
+  `WhatsNewSection` are exported from `BetaHomebase.jsx` and imported by
+  `ProductivityHub.jsx`**, not duplicated. Neither component has beta-specific logic inside;
+  `title` props let each caller relabel. `ScoreSection` is explicitly NOT reused/exported —
+  scoring stays beta-program-only, `ProductivityHub.jsx` has no score concept at all.
+- **The header badge is a fourth+fifth consumer of the "one authoritative read, called
+  twice" pattern F123's addendum already established** — `loadProductivityHubBadge` in
+  `App.jsx` calls the exact same base-audience fetchers `ProductivityHub.jsx` itself uses
+  (`fetchBaseChecklistItems`/`fetchMyBaseChecklistCompletions`/`fetchBaseSuggestions`/
+  `fetchPublishedChangelogEntries` — the last one shared verbatim with the BETA badge, since
+  the changelog is global to begin with), own `localStorage` key namespace
+  (`productivityHubLastViewedAt:<user_id>`, separate from `betaHomebaseLastViewedAt:<user_id>`
+  so the two badges' read state never collides for a user who was once a tracked tester and
+  later isn't, or vice versa). Same accepted per-device-only gap as F123's badge — no new
+  read-receipt table added to close it.
+- **The two icons are mutually exclusive in `App.jsx`, gated on the same `isTrackedTester`
+  boolean in opposite directions** (`isTrackedTester &&` for the beta icon, `!isTrackedTester
+  &&` for the Money Moves icon) — a user is never shown both, and never shown neither.
+> **IF** `base_content_items`'s shape diverges from `beta_content_items`'s (a field added to
+> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/admin-beta-hub.js`
+> break silently for whichever entity lacks the field — either add it to both tables or split
+> the handlers, don't patch around a mismatch inline. **IF** a new field is added to
+> `base_content_items`/a new base-only content kind is introduced, **THEN** decide whether
+> `ChecklistSection`/`SuggestionsSection` still fit as-is (they're generic over `items`/
+> `title` today) before extending them — don't fork a near-duplicate component. **IF** the
+> Money Moves badge's "new" definition changes, **THEN** update `loadProductivityHubBadge`
+> only, same rule F123 already states for its beta counterpart. **IF** `isTrackedBetaTester`'s
+> definition changes, **THEN** the icon-exclusivity condition in `App.jsx` (both `isTrackedTester
+> &&` and `!isTrackedTester &&`) picks up the change automatically since both read the same
+> `isTrackedTester` constant — but re-verify a user is still never shown both/neither icons.
+> Check: `dbBaseProductivityHub.test.js` (client read/write shape, no tracked-tester gating),
+> `adminBetaHub.test.js`'s `entity=base_content` block (server dispatch to the right table) —
+> no automated test covers the App.jsx icon-exclusivity/badge wiring, same gap F123 already
+> flags for its own badge.
+
+**F126 · Content employer-preset targeting — RLS-enforced, not a client-side filter** —
+`database/migrations/040_add_content_employer_targeting.sql`, `api/admin-beta-hub.js`,
+`db.js`, `ProfilePanel.jsx` (`ContentAdminDetail`'s DHL checkbox, `UserCommunicationAdminDetail`)
+— **[G] — routes admin content to the right employer's users, drift = wrong/no content shown
+to the wrong/right employer**
+Added 2026-08-08. Lets an admin scope a `beta_content_items`/`base_content_items` row to a
+single employer preset ("DHL employees only") instead of always going to every eligible user.
+Two decisions worth keeping straight:
+- **The column is an unconstrained `employer_preset TEXT`, not a boolean** (`is_dhl`-style) —
+  deliberately mirrors `config.employerPreset`'s own "DHL" | null shape (CLAUDE.md's Employer
+  Preset Naming Convention) rather than the older `is_employer_dhl` BOOLEAN column (migration
+  014) pattern. `null` = every eligible user (every pre-040 row defaults to this — the
+  migration changes nothing about what's currently live). A second preset (Amazon, etc.)
+  is a new string value in the same column, not a new column and not a new migration; the
+  admin UI's checkbox becomes a dropdown at that point, the data model doesn't change.
+- **Enforced by RLS, not just the client fetch.** `get_user_employer_preset(uid)` is a THIRD
+  SECURITY DEFINER STABLE function following `is_tracked_beta_tester(uid)`'s exact pattern
+  (F123) — reads `user_data.config->>'employerPreset'` (JSONB extraction; `employerPreset`
+  lives inside `config`, never as its own column — don't confuse it with the separate
+  `is_employer_dhl` BOOLEAN column) on behalf of the calling role. Both tables' SELECT
+  policies now require `employer_preset IS NULL OR employer_preset =
+  get_user_employer_preset(auth.uid())` — a DHL-only row is invisible to a non-DHL user even
+  via a raw Supabase client call, not merely hidden by the tester-facing fetchers choosing not
+  to show it.
+> **IF** a second employer preset is introduced (Amazon etc.), **THEN** `ContentAdminDetail`'s
+> checkbox (`draft.employerPreset === "DHL"`) needs to become a selector over the known preset
+> values — the column and RLS policies need NO change, this is a UI-only edit. **IF**
+> `config.employerPreset`'s storage location or key name ever changes, **THEN**
+> `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction breaks silently
+> (returns null for everyone, which reads as "no targeting" — a DHL-only item would start
+> showing to nobody with a preset set, not fail loudly). **IF** a third content table is added
+> that also wants employer targeting, **THEN** reuse `get_user_employer_preset(uid)` in its RLS
+> policy rather than re-deriving the JSONB extraction inline — same F122/F123 "SQL twin, one
+> shared function" precedent. Check: `adminBetaHub.test.js`'s employer_preset tests (insert/
+> update payload, GET select column) — no automated test can exercise the RLS boundary itself
+> (no live DB in this suite), same gap F122/F123 already flag; verify manually per 040's own
+> verification block before trusting a DHL-only publish in production.
+
+**F127 · User Communication — one admin page fans out to five content methods, each
+component now embedded-only** — `ProfilePanel.jsx` (`UserCommunicationAdminDetail`,
+`ChangelogAdminDetail`, `ContentAdminDetail`) — **[G] — wrong `embedded` wiring means a
+duplicate or missing BackBar, not wrong data**
+Added 2026-08-08. Consolidated five separate Account-tab rows (Changelog, Beta Checklist,
+Beta Tips, Money Moves Checklist, Money Moves Tips) into one "User Communication" row with a
+`VT` toggle switching which method is mounted. `ChangelogAdminDetail` and `ContentAdminDetail`
+both grew an `embedded` prop (default `false`) that suppresses their own list-view `BackBar` —
+their edit-view BackBar ("back to my method's list," `onBack={cancelEdit}`) is untouched and
+still renders either way. Every remaining call site passes `embedded` (there is no longer a
+standalone, non-embedded call site for either component) — Investor Codes and Beta Scores
+were deliberately left OUT of this consolidation (they're not "content pushed for a user to
+read," they don't belong here) and still route+render exactly as before.
+> **IF** a sixth content method is added to this page, **THEN** it must reuse an existing
+> `embedded`-aware component (`ChangelogAdminDetail`/`ContentAdminDetail`) or grow the same
+> `embedded` contract on its own component — a new method rendering its own list-view BackBar
+> inside this page reads as a broken nested-back-button bug, not a new feature. **IF**
+> `ChangelogAdminDetail` or `ContentAdminDetail` ever needs a standalone (non-embedded) call
+> site again, **THEN** `embedded` already defaults to `false` for that — no prop needed, just
+> don't pass `embedded` at that call site. Check: no automated test covers this page's toggle
+> wiring or the embedded/non-embedded BackBar branch — visual-only, verify by hand per method.
 
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
@@ -3117,6 +3269,10 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 | `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
 | A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
+| `beta_content_items` shape changes (column added/renamed, F125) | `api/admin-beta-hub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
+| `isTrackedBetaTester`'s eligibility condition, again (F125) | `App.jsx`'s Beta Homebase icon (`isTrackedTester &&`) and Money Moves icon (`!isTrackedTester &&`) are two ends of the same boolean — a user must never see both or neither | Toggle a test account's tracked-tester status; confirm exactly one icon renders | D4 |
+| `config.employerPreset`'s storage key/location (F126) | `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction — silently returns null (reads as "no targeting") rather than erroring | Publish a DHL-only item; confirm it's still invisible to a non-DHL test account and visible to a DHL one | D1 |
+| `ContentAdminDetail`/`ChangelogAdminDetail`'s list-view BackBar (F127) | Both are now embedded-only (mounted exclusively via `UserCommunicationAdminDetail`) — `embedded` must stay `true` at every call site or a stray back button reappears | Grep `ProfilePanel.jsx` for `<ContentAdminDetail`/`<ChangelogAdminDetail` call sites; confirm all pass `embedded` | D1 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

@@ -103,6 +103,20 @@ describe("admin-beta-hub — GET entity=content", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ items: rows });
   });
+
+  it("selects employer_preset (040_add_content_employer_targeting.sql)", async () => {
+    setupCallerAuth();
+    const order = vi.fn().mockResolvedValue({ data: [], error: null });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    mocks.adminClient.from.mockReturnValue({ select });
+
+    const res = mkRes();
+    await handler({ method: "GET", headers: { authorization: "Bearer tok" }, query: { entity: "content", kind: "checklist" } }, res);
+
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("employer_preset"));
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe("admin-beta-hub — POST entity=content", () => {
@@ -135,7 +149,42 @@ describe("admin-beta-hub — POST entity=content", () => {
 
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ kind: "suggestion", title: "Try this", created_by: "admin-7" }));
     expect(insert.mock.calls[0][0].published_at).not.toBeNull();
+    expect(insert.mock.calls[0][0].employer_preset).toBeNull();
     expect(res.statusCode).toBe(201);
+  });
+
+  it("creates with employer_preset set when employerPreset is given (040_add_content_employer_targeting.sql)", async () => {
+    setupCallerAuth();
+    const single = vi.fn().mockResolvedValue({ data: { id: "new-1" }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
+    mocks.adminClient.from.mockReturnValue({ insert });
+
+    const res = mkRes();
+    await handler({
+      method: "POST",
+      headers: { authorization: "Bearer tok" },
+      body: { entity: "content", kind: "checklist", title: "DHL-only tip", employerPreset: "DHL" },
+    }, res);
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ employer_preset: "DHL" }));
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("update writes employer_preset from the request, not the existing row", async () => {
+    setupCallerAuth();
+    const fetchSingle = vi.fn().mockResolvedValue({ data: { published_at: null }, error: null });
+    const updateSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+    const update = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: updateSingle }) }) });
+    mocks.adminClient.from.mockReturnValue({
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: fetchSingle }) }),
+      update,
+    });
+
+    const res = mkRes();
+    await handler({ method: "POST", headers: { authorization: "Bearer tok" }, body: { entity: "content", id: "c1", kind: "checklist", title: "t", employerPreset: "DHL" } }, res);
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ employer_preset: "DHL" }));
+    expect(res.statusCode).toBe(200);
   });
 
   it("update (id present) 404s when the item doesn't exist", async () => {
@@ -192,6 +241,69 @@ describe("admin-beta-hub — DELETE entity=content", () => {
     expect(eq).toHaveBeenCalledWith("id", "c1");
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+});
+
+describe("admin-beta-hub — entity=base_content (039_add_base_productivity_hub.sql)", () => {
+  it("GET targets base_content_items, not beta_content_items", async () => {
+    setupCallerAuth();
+    const rows = [{ id: "b1", kind: "checklist", title: "Add your first goal" }];
+    const order = vi.fn().mockResolvedValue({ data: rows, error: null });
+    const eq = vi.fn().mockReturnValue({ order });
+    mocks.adminClient.from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const res = mkRes();
+    await handler({ method: "GET", headers: { authorization: "Bearer tok" }, query: { entity: "base_content", kind: "checklist" } }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ items: rows });
+  });
+
+  it("POST create targets base_content_items", async () => {
+    setupCallerAuth({ userId: "admin-7" });
+    const single = vi.fn().mockResolvedValue({ data: { id: "new-1" }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
+    mocks.adminClient.from.mockReturnValue({ insert });
+
+    const res = mkRes();
+    await handler({
+      method: "POST",
+      headers: { authorization: "Bearer tok" },
+      body: { entity: "base_content", kind: "suggestion", title: "Try the Tax Plan", published: true },
+    }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("POST create writes employer_preset on base_content_items too (040_add_content_employer_targeting.sql)", async () => {
+    setupCallerAuth();
+    const single = vi.fn().mockResolvedValue({ data: { id: "new-1" }, error: null });
+    const insert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) });
+    mocks.adminClient.from.mockReturnValue({ insert });
+
+    const res = mkRes();
+    await handler({
+      method: "POST",
+      headers: { authorization: "Bearer tok" },
+      body: { entity: "base_content", kind: "checklist", title: "DHL-only Money Move", employerPreset: "DHL" },
+    }, res);
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ employer_preset: "DHL" }));
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("DELETE targets base_content_items", async () => {
+    setupCallerAuth();
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    mocks.adminClient.from.mockReturnValue({ delete: vi.fn().mockReturnValue({ eq }) });
+
+    const res = mkRes();
+    await handler({ method: "DELETE", headers: { authorization: "Bearer tok" }, query: { entity: "base_content", id: "b1" } }, res);
+
+    expect(mocks.adminClient.from).toHaveBeenCalledWith("base_content_items");
+    expect(res.statusCode).toBe(200);
   });
 });
 

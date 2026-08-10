@@ -44,10 +44,39 @@ Flow makes the product feel natural, fluid, and usable every day. It's the finte
 | `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent-highlighted borders |
 
 ### Typography
-- Headings: Inter (or General Sans)
-- Body: Inter
-- Mono: JetBrains Mono (inputs and data table cells only)
+**Adopted 2026-08-09 — two-font system** (`--font-display` / `--font-sans` in `src/index.css`):
+- Display (`--font-display`): **Titillium Web** (400/600/700/900) — all headings (h1–h6), page/section
+  titles, hero/marketing headline text, large numeric emphasis on metric cards.
+- Body (`--font-sans`): **Rajdhani** (400/500/600/700) — everything else: body copy, nav links,
+  labels, ALL interactive components (buttons, links styled as buttons, tabs, toggles, badges,
+  chips), and all form inputs/selects/textareas.
+- Mono (`--font-mono`): JetBrains Mono — reserved for **read-only** numeric/data display only
+  (data table cells, computed-value readouts; tabular-figure alignment). As of 2026-08-10 this no
+  longer includes form inputs — those moved to `--font-sans` alongside the rest of the
+  interactive layer.
+- Both loaded via Google Fonts `<link>` in `index.html`, same pattern as the existing JetBrains
+  Mono load.
 - Style: clean hierarchy, large numeric emphasis for metrics, open spacing
+
+**Header weight/spacing (adopted 2026-08-10, ported from the main Authority OS site).** Heavy
+display weights combined with negative letter-spacing and tight (1.05–1.1) line-height read as
+cramped. Fix: move to positive tracking + slightly looser line-height, at two tiers —
+- **Hero/primary headings** (page-level titles — `PanelHero` in `ui.jsx`, and the equivalent
+  inline-styled 32–52px section openers in `HomePanel.jsx`/`IncomePanel.jsx`): `font-weight: 900`,
+  `letter-spacing: 0.04em`, `line-height: 1.15`.
+- **Secondary page headers** (section/modal titles — `SectionHeader` in `ui.jsx`, modal titles in
+  `ChangelogModal`/`ConsentGateModal`/`LegalDocumentModal`, ProfilePanel's tax-section titles,
+  HomePanel's "Year-End Outlook"): `font-weight: 800`, `letter-spacing: 0.02em`,
+  `line-height: 1.15`.
+- Em-based letter-spacing (not px) so tracking scales proportionally with font-size rather than
+  staying fixed — matters most on mobile where header sizes shrink.
+- Utility classes `.heading-xl` (700 / 0.04em / 1.15) and `.heading-lg` (800 / -0.02em / 1.25)
+  added to `src/index.css` for parity with the main site's system — not yet referenced by any
+  component here (A:Fin builds headers as inline styles / the `PanelHero`/`SectionHeader`
+  components, not via a class system).
+- Scoped to actual header/title text only — large *numeric* emphasis (MetricCard values, dollar
+  totals, computed readouts) intentionally keeps its existing weight/tracking; that's data
+  display, not headline text, and wasn't part of this fix.
 
 ### Component Style
 - Cards: floating, rounded (12–16px), soft shadows, minimal borders

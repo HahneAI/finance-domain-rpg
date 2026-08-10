@@ -16,7 +16,7 @@ describe('iS — input style object', () => {
     expect(iS).toHaveProperty('fontSize', '16px')   // prevents iOS zoom
     expect(iS).toHaveProperty('width', '100%')
     expect(iS).toHaveProperty('borderRadius')
-    expect(iS.fontFamily).toMatch(/JetBrains Mono/i)
+    expect(iS.fontFamily).toBe('var(--font-sans)')
   })
 })
 

@@ -121,7 +121,7 @@ export const DEFAULT_CONFIG = {
 
   // ── New Job Season (TODO §1.C) ───────────────────────────────
   // When newJobSeasonMode is true, buildYear zeros out earned income for every
-  // week on/after newJobSeasonDate. Toggled on by the "Lost My Job" entry flow
+  // week on/after newJobSeasonDate. Toggled on by the "Quit My Job" entry flow
   // and cleared by the "Back to Work" exit (which routes into the
   // structure_change wizard).
   newJobSeasonMode: false,

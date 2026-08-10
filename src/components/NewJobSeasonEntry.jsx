@@ -12,7 +12,7 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
 
 /**
- * NewJobSeasonEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
+ * NewJobSeasonEntry — modal launched from the LifeEventMenu "Quit My Job" tile.
  *
  * Step 0 (unchanged): captures the job-loss effective date, mandatory
  * cash-on-hand (§1.H13), and the unemployment-benefit setup (§1.C1/C2).
@@ -269,7 +269,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     borderRadius: "10px",
     color: "var(--color-text-primary)",
     fontSize: "16px",
-    fontFamily: "var(--font-mono)",
+    fontFamily: "var(--font-sans)",
     padding: "10px 12px",
     colorScheme: "dark",
   };

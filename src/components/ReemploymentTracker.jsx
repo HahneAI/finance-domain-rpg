@@ -57,7 +57,7 @@ const inputStyle = {
   borderRadius: "10px",
   color: "var(--color-text-primary)",
   fontSize: "14px",
-  fontFamily: "var(--font-mono)",
+  fontFamily: "var(--font-sans)",
   padding: "9px 12px",
   colorScheme: "dark",
   boxSizing: "border-box",

@@ -44,9 +44,18 @@ Flow makes the product feel natural, fluid, and usable every day. It's the finte
 | `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent-highlighted borders |
 
 ### Typography
-- Headings: Inter (or General Sans)
-- Body: Inter
-- Mono: JetBrains Mono (inputs and data table cells only)
+**Adopted 2026-08-09 — two-font system** (`--font-display` / `--font-sans` in `src/index.css`):
+- Display (`--font-display`): **Titillium Web** (400/600/700/900) — all headings (h1–h6), page/section
+  titles, hero/marketing headline text, large numeric emphasis on metric cards.
+- Body (`--font-sans`): **Rajdhani** (400/500/600/700) — everything else: body copy, nav links,
+  labels, ALL interactive components (buttons, links styled as buttons, tabs, toggles, badges,
+  chips), and all form inputs/selects/textareas.
+- Mono (`--font-mono`): JetBrains Mono — reserved for **read-only** numeric/data display only
+  (data table cells, computed-value readouts; tabular-figure alignment). As of 2026-08-10 this no
+  longer includes form inputs — those moved to `--font-sans` alongside the rest of the
+  interactive layer.
+- Both loaded via Google Fonts `<link>` in `index.html`, same pattern as the existing JetBrains
+  Mono load.
 - Style: clean hierarchy, large numeric emphasis for metrics, open spacing
 
 ### Component Style

@@ -25,11 +25,16 @@ export const DEFAULT_CONFIG = {
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
-  startingWeekIsLong: null,    // DHL only: true = first active week is the higher-hour (long) week; null = derive from dhlTeam
+  // dhlSite: DHL schedule variant. "WAREHOUSE" | "PLANT" | null — anything other than
+  // "WAREHOUSE" behaves as Plant (today's only DHL path), so existing accounts with no
+  // dhlSite key at all need no migration — they fall through to unchanged Plant behavior.
+  dhlSite: null,
+  startingWeekIsLong: null,    // Plant only: true = first active week is the higher-hour (long) week; null = derive from dhlTeam
   // ── DHL team preset (standard rotation — not Anthony's custom schedule) ──
   // null = Anthony's custom override (hardcoded day arrays in buildYear)
-  // "A" | "B" = standard preset; startingWeekIsLong auto-derived from DHL_PRESET.teams[dhlTeam]
-  dhlTeam: null,               // "A" | "B" | null
+  // "A" | "B" (Plant) = standard preset; startingWeekIsLong auto-derived from DHL_PRESET.teams[dhlTeam]
+  // "MT" | "WS" (Warehouse) = fixed Mon-Thu / Wed-Sat team; no rotation, startingWeekIsLong unused
+  dhlTeam: null,               // "A" | "B" | "MT" | "WS" | null
   dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on short (4-day) weeks (adds diffRate)
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
   dhlNightShift: true,         // true = night shift; applies nightDiffRate on all hours in buildYear()
@@ -277,11 +282,17 @@ export const DHL_PRESET = {
       otDefaults: { weekday: 1 }, // default extension-shift day (weekday) when a custom target needs one
     },
   },
-  // While A-team works their short (4-day) week, B-team is on long (5-day).
+  // Plant only. While A-team works their short (4-day) week, B-team is on long (5-day).
   // Team selection auto-derives startingWeekIsLong.
   teams: {
     A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri core)
     B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun core)
+  },
+  // Warehouse only. No rotation — each team works the SAME fixed 4 days every single
+  // week (no long/short alternation). Day index: 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat.
+  warehouseTeams: {
+    MT: { days: [1, 2, 3, 4], label: "Mon–Thu" },
+    WS: { days: [3, 4, 5, 6], label: "Wed–Sat" },
   },
   // DHL no longer mandates a weekly OT shift. The preset rotation is core-only;
   // any extra shift is an optional pickup the worker logs through the day grid.

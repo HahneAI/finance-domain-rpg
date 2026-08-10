@@ -1,21 +1,24 @@
 import { useState } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET } from "../constants/config.js";
+import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupWizardAdlib.jsx — experimental "fill-in-the-blank" pilot for the first
-// two SetupWizard steps (Welcome + Pay Structure), collapsed onto one page.
-// Admin-only preview, gated behind the "Ad-Lib Preview" toggle in App.jsx —
-// never shown to real users.
+// three SetupWizard steps: Welcome + Pay Structure collapsed onto one cascading
+// page, then Schedule as its own second page in the same style. Admin-only
+// preview, gated behind the "Ad-Lib Preview" toggle in App.jsx — never shown
+// to real users.
 //
-// One continuous mad-libs sentence with inline blanks (native <select>/<input>
-// styled to sit inline in the text). Each new clause rolls onto the page — a
-// crisp stepped typewriter reveal on the text, then a quick fade-in on the
-// blank that follows it — the moment the answer it depends on is given,
-// instead of the usual Next-button-per-page navigation. Reuses the exact same
-// config fields and DHL-preset defaults the real SetupWizard.jsx Step0/Step1
-// apply, so onHandoff can seed the real wizard (via its initialStepId prop)
-// for the remaining steps with zero drift between the two experiences.
+// Each page is one continuous mad-libs sentence with inline blanks (native
+// <select>/<input> styled to sit inline in the text). Within a page, each new
+// clause rolls in — a crisp stepped typewriter reveal on the text, then a
+// quick fade-in on the blank that follows it — the moment the answer it
+// depends on is given. Between pages it's a real Next/Back page transition
+// (StepSlide), same as the real wizard. Reuses the exact same config fields
+// and DHL-preset defaults the real SetupWizard.jsx Step0/Step1/Step2 apply,
+// so onHandoff can seed the real wizard (via its initialStepId prop) for the
+// remaining steps with zero drift between the two experiences.
 //
 // MOCK ONLY — nothing from this preview, including the handed-off real-wizard
 // continuation, is ever saved. App.jsx's onComplete for that hand-off skips
@@ -28,6 +31,8 @@ const BLANK_FONT = {
   fontSize: "26px", lineHeight: 1.9, fontWeight: 600,
   color: "var(--color-text-primary)", fontFamily: "var(--font-display)",
 };
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Typing speed for the stepped typewriter reveal — clamped so a short word
 // doesn't feel instant and a long clause doesn't feel sluggish.
@@ -107,6 +112,27 @@ function InlineNumber({ value, onChange, placeholder = "___", width = "84px" }) 
   );
 }
 
+function InlineDate({ value, onChange, width = "168px" }) {
+  const hasValue = value !== null && value !== undefined && value !== "";
+  return (
+    <input
+      type="date"
+      aria-label="Start date"
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        display: "inline-block", width,
+        background: "transparent", border: "none",
+        borderBottom: hasValue ? "3px solid var(--color-teal)" : "3px dashed var(--color-text-disabled)",
+        color: hasValue ? "var(--color-teal)" : "var(--color-text-disabled)",
+        font: "inherit", fontWeight: 700,
+        textAlign: "center", padding: "0 2px", margin: "0 2px",
+        colorScheme: "dark",
+      }}
+    />
+  );
+}
+
 // Mirrors real Step1's pickTeam() — same field set/defaults so a handed-off
 // wizard resuming at Schedule sees an identical DHL config either way.
 function pickTeamPatch(t) {
@@ -126,9 +152,9 @@ function pickTeamPatch(t) {
   };
 }
 
-// Combined mandatory-field gate for the single merged page — mirrors STEP_DEFS
-// id 0 (Welcome) + id 1 (Pay Structure) in SetupWizard.jsx exactly.
-function isFormValid(d) {
+// Combined mandatory-field gate for the Intake page — mirrors STEP_DEFS id 0
+// (Welcome) + id 1 (Pay Structure) in SetupWizard.jsx exactly.
+function isIntakeValid(d) {
   if (d.startedUnemployed !== true && d.startedUnemployed !== false) return false;
   if (d.startedUnemployed === true) return true;
   if (!d.userPaySchedule) return false;
@@ -137,12 +163,25 @@ function isFormValid(d) {
   return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
 }
 
-// Fields this single merged page asks about — blanked on a fresh open (below)
-// rather than carried over from the admin's real config, so isFormValid's
-// mandatory-field gate actually has something to gate. Pre-filling from `config`
-// (the admin's own real answers) made every field already "answered" before
-// the admin touched anything, silently bypassing both the blank look and the
-// required-field check.
+// Mandatory-field gate for the Schedule page — mirrors STEP_DEFS id 2
+// (Schedule) in SetupWizard.jsx exactly.
+function isScheduleValid(d) {
+  if (!d.startDate) return false;
+  if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
+  if (d.employerPreset === "DHL") return true;
+  if (!((d.maxWeeklyHours ?? 0) > 0) || (d.maxWeeklyHours ?? 0) > 168) return false;
+  if (!d.hoursUnderstood) return false;
+  if (!Number.isInteger(d.payPeriodEndDay) || d.payPeriodEndDay < 0 || d.payPeriodEndDay > 6) return false;
+  if ((d.userPaySchedule === "biweekly" || d.userPaySchedule === "salary") && d.biweeklyPayWeekParity == null) return false;
+  return true;
+}
+
+// Fields these two pilot pages ask about — blanked on a fresh open (below)
+// rather than carried over from the admin's real config, so isIntakeValid/
+// isScheduleValid's mandatory-field gates actually have something to gate.
+// Pre-filling from `config` (the admin's own real answers) made every field
+// already "answered" before the admin touched anything, silently bypassing
+// both the blank look and the required-field check.
 const BLANK_PAY_FIELDS = {
   startedUnemployed: null, employerPreset: null, dhlTeam: null,
   dhlNightShift: null, nightDiffRate: null, userPaySchedule: null,
@@ -150,10 +189,12 @@ const BLANK_PAY_FIELDS = {
   otThreshold: null, otMultiplier: null, payPeriodEndDay: null,
   scheduleIsVariable: null, bucketStartBalance: null, bucketCap: null,
   bucketPayoutRate: null, diffRate: null, startingWeekIsLong: null,
+  startDate: null, firstActiveIdx: null, maxWeeklyHours: null,
+  hoursUnderstood: null, biweeklyPayWeekParity: null,
 };
 
-// The single merged sentence — Welcome + Pay Structure cascading onto one page,
-// each clause rolling in as soon as the answer it depends on is given.
+// ── Page 0: Welcome + Pay Structure merged onto one cascading sentence — each
+// clause rolls in as soon as the answer it depends on is given. ──
 function IntakePage({ formData, onChange }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
@@ -308,27 +349,162 @@ function IntakePage({ formData, onChange }) {
   );
 }
 
-// onHandoff(mergedFormData, initialStepId) — called once the page is fully
+// ── Page 1: Schedule (mirrors real Step2's core required fields) — a second
+// cascading sentence, only shown for employed users (jobless skips Schedule
+// entirely, same as the real wizard's isFirstRunJobless gate). ──
+function SchedulePage({ formData, onChange }) {
+  const isEmployerDHL = formData.employerPreset === "DHL";
+  const isBiweekly = formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary";
+
+  function handleDateChange(dateStr) {
+    onChange(dateStr === "" ? { startDate: null, firstActiveIdx: null } : { startDate: dateStr, firstActiveIdx: dateToWeekIdx(dateStr) });
+  }
+
+  // Mirrors real Step2's payday-parity helper exactly, so "this Xday / next Xday"
+  // maps to the same biweeklyPayWeekParity value either UI produces.
+  const todayWeekIdx = (() => {
+    const t = new Date();
+    const iso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    return dateToWeekIdx(iso);
+  })();
+  const payDayName = Number.isInteger(formData.payPeriodEndDay) ? DAY_LABELS[formData.payPeriodEndDay] : "";
+  const parityThisWeek = todayWeekIdx % 2;
+  const parityNextWeek = (todayWeekIdx + 1) % 2;
+
+  const startedText = "I started on";
+  const shortLongText = "Right now I'm on my";
+  const hoursText = "I work up to";
+  const hoursPerWeekText = "hours a week.";
+  const iText = "I";
+  const forecastText = "understand this hours number drives my whole forecast.";
+  const payPeriodText = "My pay period closes on";
+  const paydayQuestionText = `Is this ${payDayName} one of my paydays?`;
+
+  return (
+    <p style={BLANK_FONT}>
+      <TypedText text={startedText} />{" "}
+      <FadeIn delay={typeDuration(startedText)}>
+        <InlineDate value={formData.startDate} onChange={handleDateChange} />
+      </FadeIn>.
+      {formData.startDate && (
+        isEmployerDHL ? (
+          <>
+            {" "}<TypedText text={shortLongText} />{" "}
+            <FadeIn delay={typeDuration(shortLongText)}>
+              <InlineSelect
+                value={formData.startingWeekIsLong === true ? "long" : formData.startingWeekIsLong === false ? "short" : ""}
+                onChange={v => onChange({ startingWeekIsLong: v === "" ? null : v === "long" })}
+                options={[{ value: "short", label: "Short Week" }, { value: "long", label: "Long Week" }]}
+              />
+            </FadeIn>.
+          </>
+        ) : (
+          <>
+            {" "}<TypedText text={hoursText} />{" "}
+            <FadeIn delay={typeDuration(hoursText)}>
+              <InlineNumber
+                value={formData.maxWeeklyHours ?? ""}
+                onChange={v => onChange({ maxWeeklyHours: v === "" ? null : parseFloat(v) })}
+                placeholder="40"
+                width="56px"
+              />
+            </FadeIn>{" "}
+            <TypedText text={hoursPerWeekText} />
+            {(formData.maxWeeklyHours ?? 0) > 0 && (
+              <>
+                {" "}<TypedText text={iText} />{" "}
+                <FadeIn delay={typeDuration(iText)}>
+                  <InlineSelect
+                    value={formData.hoursUnderstood === true ? "do" : formData.hoursUnderstood === false ? "dont" : ""}
+                    onChange={v => onChange({ hoursUnderstood: v === "" ? null : v === "do" })}
+                    options={[{ value: "do", label: "do" }, { value: "dont", label: "don't" }]}
+                  />
+                </FadeIn>{" "}
+                <TypedText text={forecastText} />
+                {formData.hoursUnderstood === true && (
+                  <>
+                    {" "}<TypedText text={payPeriodText} />{" "}
+                    <FadeIn delay={typeDuration(payPeriodText)}>
+                      <InlineSelect
+                        value={Number.isInteger(formData.payPeriodEndDay) ? String(formData.payPeriodEndDay) : ""}
+                        onChange={v => onChange({ payPeriodEndDay: v === "" ? null : parseInt(v, 10), biweeklyPayWeekParity: null })}
+                        options={DAY_LABELS.map((label, i) => ({ value: String(i), label }))}
+                      />
+                    </FadeIn>.
+                    {isBiweekly && Number.isInteger(formData.payPeriodEndDay) && (
+                      <>
+                        {" "}<TypedText text={paydayQuestionText} />{" "}
+                        <FadeIn delay={typeDuration(paydayQuestionText)}>
+                          <InlineSelect
+                            value={formData.biweeklyPayWeekParity === parityThisWeek ? "this" : formData.biweeklyPayWeekParity === parityNextWeek ? "next" : ""}
+                            onChange={v => onChange({ biweeklyPayWeekParity: v === "" ? null : v === "this" ? parityThisWeek : parityNextWeek })}
+                            options={[
+                              { value: "this", label: `Yes, this ${payDayName}` },
+                              { value: "next", label: `No, next ${payDayName}` },
+                            ]}
+                          />
+                        </FadeIn>
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )
+      )}
+    </p>
+  );
+}
+
+// Jobless users skip Schedule entirely — same as the real wizard's
+// isFirstRunJobless gate skipping STEP_DEFS id 2 outright.
+const PAGES = [
+  { id: "intake", isValid: isIntakeValid, Component: IntakePage },
+  { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
+];
+
+// onHandoff(mergedFormData, initialStepId) — called once the pilot pages are
 // answered. initialStepId targets the real SetupWizard's jobless mini-flow
-// (id 10) when unemployed, else Schedule (id 2) — see SetupWizard.jsx's
-// initialStepId prop.
+// (id 10) when unemployed, else Deductions (id 3) — Welcome, Pay Structure,
+// and Schedule are all covered by this preview now, so the real wizard picks
+// up one step later than before. See SetupWizard.jsx's initialStepId prop.
 //
-// resumeFormData (optional): when the admin already answered this page, handed off
+// resumeFormData (optional): when the admin already answered these pages, handed off
 // into the real wizard, and then hit Back at the real wizard's very first step, App.jsx
-// reopens this component with the in-progress answers instead of the blanked defaults
-// — so Back lands them where they left off in the ad-lib UI, not on the real wizard's
-// stacked-field view of the same steps.
+// reopens this component with the in-progress answers instead of the blanked defaults,
+// and resumes on the last page instead of page 0 — so Back lands them where they left
+// off in the ad-lib UI, not on the real wizard's stacked-field view of the same steps.
 export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData = null }) {
   const [formData, setFormData] = useState(() => resumeFormData ?? { ...config, ...BLANK_PAY_FIELDS });
-  const canProceed = isFormValid(formData);
+  const [pageIdx, setPageIdx] = useState(() => {
+    if (!resumeFormData) return 0;
+    const pages = resumeFormData.startedUnemployed === true ? [PAGES[0]] : PAGES;
+    return pages.length - 1;
+  });
+  const [stepDir, setStepDir] = useState(1);
+
+  // Skipping straight to a single-page flow once "unemployed" is chosen —
+  // Schedule is irrelevant for the jobless mini-flow, same as the real
+  // wizard's isFirstRunJobless gate skipping it entirely.
+  const activePages = formData.startedUnemployed === true ? [PAGES[0]] : PAGES;
+  const current = activePages[pageIdx];
+  const isLast = pageIdx === activePages.length - 1;
+  const canProceed = current?.isValid(formData) ?? false;
+  const progressPct = ((pageIdx + 1) / activePages.length) * 100;
 
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
   }
 
-  function handleContinue() {
+  function handleNext() {
     if (!canProceed) return;
-    onHandoff(formData, formData.startedUnemployed === true ? 10 : 2);
+    if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
+    onHandoff(formData, formData.startedUnemployed === true ? 10 : 3);
+  }
+
+  function handleBack() {
+    if (pageIdx > 0) { setStepDir(-1); setPageIdx(i => i - 1); }
   }
 
   return (
@@ -347,19 +523,24 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
         flex: 1, minHeight: 0, maxHeight: "560px",
         overflow: "hidden",
       }}>
-        <div style={{ padding: "24px 28px 16px", flexShrink: 0 }}>
+        <div style={{ padding: "24px 28px 0", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
-              Ad-Lib Preview
+              Ad-Lib Preview · {pageIdx + 1} of {activePages.length}
             </div>
             <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", padding: "2px 8px" }}>
               Admin Only · Not Saved
             </div>
           </div>
+          <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)" }}>
+            <div style={{ height: "100%", borderRadius: "2px", background: "var(--color-teal)", width: `${progressPct}%`, transition: "width 0.3s ease" }} />
+          </div>
         </div>
 
         <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "center", padding: "28px 32px" }}>
-          <IntakePage formData={formData} onChange={update} />
+          <StepSlide stepKey={pageIdx} direction={stepDir}>
+            {current && <current.Component formData={formData} onChange={update} />}
+          </StepSlide>
         </div>
 
         <div style={{ padding: "14px 24px 20px", flexShrink: 0, display: "flex", gap: "10px", justifyContent: "flex-end", borderTop: "1px solid var(--color-border-subtle)" }}>
@@ -369,8 +550,16 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
           >
             Exit Preview
           </Pressable>
+          {pageIdx > 0 && (
+            <Pressable
+              onClick={handleBack}
+              style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Back
+            </Pressable>
+          )}
           <Pressable
-            onClick={handleContinue}
+            onClick={handleNext}
             disabled={!canProceed}
             style={{
               background: canProceed ? "var(--color-teal)" : "var(--color-bg-raised)",
@@ -380,7 +569,7 @@ export function SetupWizardAdlib({ config, onHandoff, onCancel, resumeFormData =
               cursor: canProceed ? "pointer" : "not-allowed",
             }}
           >
-            Continue Setup →
+            {isLast ? "Continue Setup →" : "Next"}
           </Pressable>
         </div>
       </div>

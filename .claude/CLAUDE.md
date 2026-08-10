@@ -89,38 +89,63 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 Multi-step onboarding (~2500 lines). Controlled steps with conditional routing based on `lifeEvent` (null/structure_change/lost_job/changed_jobs/commission_job). Covers pay structure, schedule, deductions, tax rates, and wrap-up. Full drift map: `docs/drift-app-warden.md` §7 — consult before changes. See source file for step definitions, helper components, state management, and DHL employer preset overrides.
 
+**DHL Site — Plant vs Warehouse (`dhlSite`).** DHL now has two schedule shapes, chosen in Step 1
+right after "Do you work for DHL? Yes": **Plant** (`dhlSite: "PLANT"`) is the original rotating
+Team A/B short/long-week alternation — unchanged. **Warehouse** (`dhlSite: "WAREHOUSE"`) is a
+fixed schedule with no rotation at all — a Mon–Thu team and a Wed–Sat team (`dhlTeam: "MT" | "WS"`,
+`DHL_PRESET.warehouseTeams`), each working the *same 4 days every single week*, plus a real
+user-selectable shift-length question (10 or 12 hours, not hardcoded) alongside the existing
+night/morning-shift question. Same bucket/PTO numbers, weekend differential, and night
+differential dollar amounts as Plant. `dhlSite !== "WAREHOUSE"` is the Plant fallback — every
+existing DHL account (no `dhlSite` key in its stored config at all) needs **no migration**, it
+just keeps behaving exactly as before. `finance.js`'s `getDhlPlannedDayIndexes()`/
+`getDhlPlannedPattern()` are the single shared source of the day-pattern for `buildYear()`,
+`projectedGross()`, and `calcEventImpact()` alike — a Warehouse branch there is enough to make all
+three correct, no per-caller duplication. `buildYear()` additionally forces `isHighWeek: false`
+for Warehouse weeks (financially inert — `PaystubCalc` already guarantees `fedRateHigh ===
+fedRateLow` whenever `scheduleIsVariable` is false, which Warehouse always sets). Site-gated UI:
+Step 1 (site/team/shift-length questions, custom-rotation question hidden for Warehouse), Step 2
+(Short/Long Week pills hidden for Warehouse — nothing else to ask beyond the start date), Step 4
+("Load DHL Preset" hidden for Warehouse — those rates are Plant-specific), and `ProfilePanel.jsx`'s
+T5 Employment card (DHL Team editor + Schedule Override, same field/second-editor pattern per
+`docs/drift-app-warden.md` §7). See that doc's DHL_PRESET/`dhlSite` trigger-map rows before
+touching any of this again.
+
 `initialStepId` (optional prop, default `null`) opens the wizard on a specific `STEP_DEFS` id
 instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off into the real
 wizard after its own pilot pages are answered. No effect on any existing call site that omits it.
 
 **`SetupWizardAdlib.jsx` — EXPERIMENTAL, admin-only, not for real users.** A "fill-in-the-blank"
-reimagining of the wizard's first two steps (Welcome + Pay Structure) as one continuous mad-libs
-sentence with inline `<select>`/`<input>` blanks, instead of stacked form fields or a page-per-step
-flow — pilot for a friendlier onboarding feel. Triggered from the Admin Tools panel ("Ad-Lib
-Wizard" → Preview button, both mobile and desktop copies in `App.jsx`) via `adlibPreviewOpen`
-state; **never reachable by a real signup** — `isAdmin` gates the trigger button, and the
-component itself has no other entry point. Reuses the exact same config fields and DHL-preset
-defaults as real Step0/Step1 (see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so there's zero
-drift between the two experiences on the fields they share. Once the sentence is fully answered,
-`onHandoff(mergedFormData, initialStepId)` closes the preview and reopens the real `SetupWizard`
-(via `App.jsx`'s `adlibHandoff` state) at Schedule (id 2) or the jobless mini-flow (id 10) for the
-remaining steps — a real, click-through continuation, not a throwaway mockup. **MOCK ONLY —
-nothing is ever saved**, including that continuation: `App.jsx`'s wizard mount's `onComplete` skips
-`handleWizardComplete` entirely whenever `adlibHandoff` is set (no `setConfig`, no
-`savePersistedStateNow`), and `onCancel` stays available the whole way through instead of
-first-run's normal "no cancel button" rule — admins can click all the way to Finish with zero risk
-to real account data. Only these 2 steps are ad-libbed today — expanding to the rest, or promoting
-this to a real user-facing A/B split, is a future decision pending how the pilot feels in practice.
+reimagining of the wizard's first three steps as two cascading mad-libs pages with inline
+`<select>`/`<input>` blanks, instead of stacked form fields or a page-per-step flow — pilot for a
+friendlier onboarding feel. Page 1 (`IntakePage`) merges Welcome + Pay Structure into one
+continuous sentence; page 2 (`SchedulePage`) covers Schedule as its own page, in the same style.
+Triggered from the Admin Tools panel ("Ad-Lib Wizard" → Preview button, both mobile and desktop
+copies in `App.jsx`) via `adlibPreviewOpen` state; **never reachable by a real signup** —
+`isAdmin` gates the trigger button, and the component itself has no other entry point. Reuses the
+exact same config fields and DHL-preset defaults as real Step0/Step1/Step2 (see `pickTeamPatch()`
+mirroring Step1's `pickTeam()`) so there's zero drift between the two experiences on the fields
+they share. Once both pages are answered, `onHandoff(mergedFormData, initialStepId)` closes the
+preview and reopens the real `SetupWizard` (via `App.jsx`'s `adlibHandoff` state) at Deductions
+(id 3) or the jobless mini-flow (id 10) for the remaining steps — a real, click-through
+continuation, not a throwaway mockup. **MOCK ONLY — nothing is ever saved**, including that
+continuation: `App.jsx`'s wizard mount's `onComplete` skips `handleWizardComplete` entirely
+whenever `adlibHandoff` is set (no `setConfig`, no `savePersistedStateNow`), and `onCancel` stays
+available the whole way through instead of first-run's normal "no cancel button" rule — admins can
+click all the way to Finish with zero risk to real account data. Only these 3 steps are ad-libbed
+today — expanding to the rest, or promoting this to a real user-facing A/B split, is a future
+decision pending how the pilot feels in practice.
 
-- **One page, not two — clauses cascade in as each answer unlocks the next.** Welcome + Pay
-  Structure are a single `IntakePage` component and a single sentence; there is no internal
-  Next/Back between them anymore (no `PAGES` array, no `pageIdx`). Each subsequent clause is a
-  plain `formData`-gated conditional (`isEmployed && (…)`, `isEmployerDHL && (…)`, etc.) that mounts
-  the instant its prerequisite answer is given — e.g. picking "employed" reveals "I work for ___"
-  on the same page immediately, no click required. The outer chrome keeps a single "Continue
-  Setup" button gated by `isFormValid()` (mirrors STEP_DEFS id 0 + id 1 combined) and no Back
-  button at all — with everything on one page there's nothing to page back to; undoing an earlier
-  answer is just re-picking that blank directly, still visible above.
+- **Two real pages, each internally cascading.** `PAGES = [{Component: IntakePage}, {Component:
+  SchedulePage}]`, navigated with a page-level Next/Back via `StepSlide` (same slide transition the
+  real wizard uses) — but *within* each page, clauses still cascade in as plain `formData`-gated
+  conditionals (`isEmployed && (…)`, `formData.startDate && (…)`, etc.) that mount the instant their
+  prerequisite answer is given, no click required. Jobless users skip page 2 entirely
+  (`activePages = startedUnemployed === true ? [PAGES[0]] : PAGES`), same as the real wizard's
+  `isFirstRunJobless` gate skipping STEP_DEFS id 2 outright. Back is hidden on page 1 (`pageIdx >
+  0`) and reappears on page 2, returning to page 1 with its answers intact — this Back is a real
+  page-level navigation, distinct from undoing an earlier answer within the current page (just
+  re-picking that blank directly).
 - **Each newly-revealed clause rolls in with a typed reveal, not an instant appear.** `TypedText`
   runs the clause's static wording through the `adlibType` stepped `clip-path` keyframe
   (`index.css`) — a "crisp" blocky reveal, not a smooth wipe — combined with the existing
@@ -130,28 +155,35 @@ this to a real user-facing A/B split, is a future decision pending how the pilot
   the same clause use `delay=0` (they mount together the instant the clause becomes eligible, so
   they can type in parallel — no cumulative per-segment delay bookkeeping needed).
 - **Blank by default, not prefilled from the admin's real config.** `formData` starts as
-  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field the sentence asks
-  about (`startedUnemployed`, `employerPreset`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`,
-  `userPaySchedule`, `annualSalary`, `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`,
-  `payPeriodEndDay`, `scheduleIsVariable`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`,
-  `diffRate`, `startingWeekIsLong`). Without this, an admin whose real account already has these
-  answered (e.g. a DHL-preset admin) would land on the page fully pre-filled and instantly
-  Continue-Setup-eligible — silently skipping `isFormValid()`'s required-field gating (already
-  correct, mirrors STEP_DEFS id 0/1) since it never had a blank state to gate from. Every
-  `InlineSelect` reselecting its blank `(select)` option must resolve to `null` (not a falsy
-  default), or clearing back to blank would misreport as a real answer — see the explicit
-  `v === "" ? null : …` branches in `IntakePage`'s `onChange` handlers.
-- **Back at the hand-off boundary returns to this component, not the real Step0/Step1.** Without
-  intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Schedule id 2, or
-  the jobless flow id 10) falls through to that component's own Welcome/Pay Structure — the
-  stacked-field UI for the same questions this pilot just asked ad-lib style, which reads as
-  "kicked out of the preview." `SetupWizard`'s optional `onBackBeforeStart(formData)` prop fires
-  instead, exactly once, only when `stepIdx` is still at the resolved `initialStepId` index — every
-  other Back press behaves as before. `App.jsx` wires this to reopen `SetupWizardAdlib` via its
-  `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `formData` directly from the
-  in-progress answers — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on
-  both Exit Preview and a fresh forward hand-off, so a deliberate new "Preview" click always starts
-  blank again.
+  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field either page asks
+  about, both the original Welcome/Pay Structure set (`startedUnemployed`, `employerPreset`,
+  `dhlTeam`, `dhlNightShift`, `nightDiffRate`, `userPaySchedule`, `annualSalary`, `baseRate`,
+  `shiftHours`, `otThreshold`, `otMultiplier`, `payPeriodEndDay`, `scheduleIsVariable`,
+  `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`, `diffRate`, `startingWeekIsLong`) and the
+  Schedule additions (`startDate`, `firstActiveIdx`, `maxWeeklyHours`, `hoursUnderstood`,
+  `biweeklyPayWeekParity`). Without this, an admin whose real account already has these answered
+  (e.g. a DHL-preset admin) would land on a page fully pre-filled and instantly proceed-eligible —
+  silently skipping `isIntakeValid()`/`isScheduleValid()`'s required-field gating (already correct,
+  mirrors STEP_DEFS id 0/1/2) since it never had a blank state to gate from. Every `InlineSelect`
+  reselecting its blank `(select)` option must resolve to `null` (not a falsy default), or clearing
+  back to blank would misreport as a real answer — see the explicit `v === "" ? null : …` branches
+  in both pages' `onChange` handlers. Note that a DHL user's `startingWeekIsLong`/`payPeriodEndDay`
+  legitimately stop being blank partway through page 1 (Team selection seeds them via
+  `pickTeamPatch()`), which is intentional — it mirrors the real wizard's own Step1→Step2 default
+  seeding, and `SchedulePage`'s Short/Long-Week select is deliberately not gated in
+  `isScheduleValid()` for the same reason the real Step2 doesn't require it for DHL users.
+- **Back at the hand-off boundary returns to this component, not the real Step0/Step1/Step2.**
+  Without intervention, hitting Back on the real `SetupWizard`'s first handed-off step (Deductions
+  id 3, or the jobless flow id 10) falls through to that component's own Welcome/Pay
+  Structure/Schedule — the stacked-field UI for the same questions this pilot just asked ad-lib
+  style, which reads as "kicked out of the preview." `SetupWizard`'s optional
+  `onBackBeforeStart(formData)` prop fires instead, exactly once, only when `stepIdx` is still at
+  the resolved `initialStepId` index — every other Back press behaves as before. `App.jsx` wires
+  this to reopen `SetupWizardAdlib` via its `resumeFormData` prop, which skips `BLANK_PAY_FIELDS`
+  and seeds `formData` directly from the in-progress answers, resuming on the last page (Schedule
+  for an employed resume, since a handoff only ever fires once both pages are valid) — a real
+  resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both Exit Preview and a fresh
+  forward hand-off, so a deliberate new "Preview" click always starts blank again.
 
 ---
 
@@ -220,8 +252,18 @@ this to a real user-facing A/B split, is a future decision pending how the pilot
 | `--color-text-disabled` | `#4a645c` | Inactive / disabled |
 | `--color-border-subtle` | `#1f3b31` | Card borders |
 | `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
-| `--font-display` / `--font-sans` | `'Inter'` | Headings + body |
-| `--font-mono` | `'JetBrains Mono'` | Inputs + data cells only |
+| `--font-display` | `'Titillium Web'` | All headings (h1–h6), page/section titles, hero/headline text, large numeric emphasis on metric cards |
+| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips), and ALL form inputs/selects/textareas |
+| `--font-mono` | `'JetBrains Mono'` | Read-only numeric/data display only — data table cells, computed-value readouts (tabular-figure alignment). No longer used on any form field. |
+
+**Typography — two-font system (adopted 2026-08-09).** Titillium Web (400/600/700/900) is the
+display/headline font; Rajdhani (400/500/600/700) is the body/interactive font. Both load via
+Google Fonts `<link>` in `index.html` (same pattern as the pre-existing JetBrains Mono load).
+Never hardcode a font-family — always reference `var(--font-display)` / `var(--font-sans)` /
+`var(--font-mono)`. **2026-08-10:** all inputs/selects/textareas (global CSS rule, shared `iS`
+style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--font-mono` to
+`--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
+readouts), never form fields.
 
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 

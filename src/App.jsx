@@ -2367,7 +2367,7 @@ export default function App() {
                       type="date"
                       value={adminDateDraft}
                       onChange={e => setAdminDateDraft(e.target.value)}
-                      style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "11px", padding: "4px 6px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
+                      style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "11px", padding: "4px 6px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
                     />
                     <Pressable
                       onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
@@ -3220,7 +3220,7 @@ export default function App() {
                   type="date"
                   value={adminDateDraft}
                   onChange={e => setAdminDateDraft(e.target.value)}
-                  style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
+                  style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
                 />
                 <Pressable
                   onClick={() => { if (adminDateDraft) { setTempLockDate(adminDateDraft); setDrawerOpen(false); } }}

@@ -47,8 +47,13 @@
   --color-signal-purple: #7c5cff;
   --color-signal-glow:   rgba(124, 92, 255, 0.25);
 
-  --font-display: 'Inter', system-ui, sans-serif;
-  --font-sans:    'Inter', system-ui, sans-serif;
+  /* Two-font system (adopted 2026-08-09): Titillium Web for all headings/display
+     text, Rajdhani for everything else — body, nav, labels, buttons, tabs,
+     badges, AND form inputs/textareas/selects (moved off mono 2026-08-10).
+     --font-mono stays JetBrains Mono for read-only numeric/data-table display
+     only (tabular-figure alignment) — no longer used on any form field. */
+  --font-display: 'Titillium Web', system-ui, sans-serif;
+  --font-sans:    'Rajdhani', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Courier New', monospace;
 }
 
@@ -95,7 +100,7 @@ body {
 input,
 select,
 textarea {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 
 button {
@@ -157,7 +162,11 @@ button {
 }
 
 h1,
-h2 {
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   font-weight: 500;
   color: var(--color-text-primary);
@@ -200,7 +209,9 @@ code {
   background: var(--color-bg-raised);
 }
 
-/* Data tables — JetBrains Mono per spec (only place monospace is allowed) */
+/* Data tables — JetBrains Mono (tabular-figure alignment for numeric readouts).
+   Inputs/selects/textareas moved to --font-sans (Rajdhani) 2026-08-10 — mono is
+   now reserved for read-only numeric/data display only, not form fields. */
 .data-table,
 .data-table td,
 .data-table th {

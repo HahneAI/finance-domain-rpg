@@ -1,7 +1,7 @@
 // §18.E — Job Hunt Assistant. chatWithCoach and aiContext are mocked so these
 // tests never touch the network — same isolation pattern as
 // AskCoachPanel.test.jsx.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { JobHuntChatPanel } from "../../components/JobHuntChatPanel.jsx";
 
@@ -25,6 +25,10 @@ function baseProps(overrides = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  document.body.classList.remove("modal-open");
+});
+afterEach(() => {
+  document.body.classList.remove("modal-open");
 });
 
 describe("JobHuntChatPanel", () => {
@@ -69,5 +73,16 @@ describe("JobHuntChatPanel", () => {
     render(<JobHuntChatPanel {...baseProps({ onClose })} />);
     fireEvent.click(screen.getByLabelText("Close Job Hunt Assistant"));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // The mobile bottom nav was staying visible on top of this panel's fixed
+  // input bar — same body.modal-open signal HomePanel.jsx/BudgetPanel.jsx
+  // already use to fade the nav out (index.css) was missing here.
+  it("adds body.modal-open on mount and removes it on unmount, so the mobile bottom nav fades out", () => {
+    expect(document.body.classList.contains("modal-open")).toBe(false);
+    const { unmount } = render(<JobHuntChatPanel {...baseProps()} />);
+    expect(document.body.classList.contains("modal-open")).toBe(true);
+    unmount();
+    expect(document.body.classList.contains("modal-open")).toBe(false);
   });
 });

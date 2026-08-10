@@ -15,6 +15,7 @@ export const HISTORY_SENSITIVE_FIELDS = [
   // Pay structure
   "baseRate", "annualSalary", "shiftHours", "diffRate", "nightDiffRate",
   "nightDiffEnabled", "otThreshold", "otMultiplier", "commissionMonthly",
+  "tipsOrCommissionEnabled", "tipsOrCommissionLabel", "tipsCommissionOnlyPosition",
   // Schedule
   "maxWeeklyHours", "customWeeklyHours", "customWeeklyHoursLong",
   "customWeeklyHoursShort", "scheduleIsVariable", "userPaySchedule",

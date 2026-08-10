@@ -4436,12 +4436,20 @@ for screen edges")*
 
 **H. Field-set completeness housekeeping**
 
-- [ ] Every field the (now-production) ad-lib pages write must be present in **both**
+- [x] Every field the (now-production) ad-lib pages write must be present in **both**
       `configHistory.js`'s `HISTORY_SENSITIVE_FIELDS` and real Step1's `DIFF_FIELDS` — per
       drift-app-warden §7 F7, these two lists must never diverge, and this is the first time
       ad-lib's writes actually reach `account_history` (previously MOCK ONLY, so this path has
       never been exercised for real). Diff the two lists against each other and against every
-      field `SetupWizardAdlib.jsx` touches.
+      field `SetupWizardAdlib.jsx` touches. **Resolved 2026-08-10 (drift-app-warden §7 F131):**
+      `tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` added to both
+      `HISTORY_SENSITIVE_FIELDS` and `DIFF_FIELDS`; a full sweep of every field currently written
+      by `SetupWizardAdlib.jsx` found no other gaps. **Re-check required** once §19.1.A's
+      remaining field-parity items (Advanced Pay Rules, DHL custom rotation, Deductions'
+      Benefits Start Date/Other Deductions/Attendance/PTO, Tax Rates fallbacks, Wrap Up
+      Tax-Exempt opt-in) are ported — `HISTORY_SENSITIVE_FIELDS` already carries their field
+      names from real Step1/2/3's own writes, so no new entries are expected, but this must be
+      confirmed, not assumed.
 - [ ] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
       test asserting the final saved config has the correct `taxedWeeks`, `accountCreatedIdx`,
       `setupComplete: true`, and DHL/buffer/tips-stamp normalization — today's 45 ad-lib tests all

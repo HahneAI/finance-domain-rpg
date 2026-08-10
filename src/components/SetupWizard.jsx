@@ -1953,6 +1953,9 @@ const DIFF_FIELDS = [
   { key: "fedRateLow",       label: "Federal rate" },
   { key: "stateRateLow",     label: "State rate" },
   { key: "k401Rate",         label: "401(k) rate" },
+  { key: "tipsOrCommissionEnabled", label: "Tips/commission" },
+  { key: "tipsOrCommissionLabel",   label: "Tips/commission type" },
+  { key: "tipsCommissionOnlyPosition", label: "Commission-only position" },
 ];
 
 function StructureChangeDiff({ originalConfig, formData }) {

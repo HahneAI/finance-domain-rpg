@@ -579,6 +579,29 @@ None of the three gate `isIntakeValid` on either wizard.
 > tracked), not something this round introduced or fixed. Flagged for §19.1.H's housekeeping
 > pass, not resolved here.
 
+**F131 · F130's tips/commission tracking gap — resolved** — `src/lib/configHistory.js`
+(`HISTORY_SENSITIVE_FIELDS`), `SetupWizard.jsx` (`DIFF_FIELDS`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 3, docs/TODO.md §19.1.H)*
+`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` were writable by
+both wizards (real Step1 since before F130, `SetupWizardAdlib.jsx`'s `IntakePage` since F130)
+without being tracked by either the account-history diff whitelist or the structure-change diff
+table — flagged but deliberately left unresolved by F130 pending this round. Both lists now carry
+all three fields. A full sweep of every field `SetupWizardAdlib.jsx` currently writes (`onChange`
+call sites plus `pickTeamPatch`/`pickWarehouseTeamPatch`/`setEmployer`/`pickSite`'s returned
+patches) against `HISTORY_SENSITIVE_FIELDS` found no other gaps — everything else the ad-lib
+wizard writes was already tracked.
+> **IF** a new field is added to either wizard's pages, **THEN** it must land in
+> `HISTORY_SENSITIVE_FIELDS` in the same commit — this is the second time a field went live on
+> both wizards without history tracking; make it a checklist item, not a follow-up.
+> **IF** `SetupWizardAdlib.jsx` gains the remaining round-4 ported fields (Advanced Pay Rules,
+> DHL custom rotation, Deductions' Benefits Start Date/Other Deductions/Attendance
+> details/PTO, Tax Rates' estimate/DHL-preset fallbacks, Wrap Up's Tax-Exempt opt-in — see
+> docs/TODO.md §19.1), **THEN** re-run this same sweep — `HISTORY_SENSITIVE_FIELDS` already
+> carries `dhlCustomSchedule`/`taxExemptOptIn`/`otherDeductions`/`benefitsStartDate`/
+> `attendanceWarnThreshold`/`attendanceTerminateThreshold`/`attendanceIncrement`/`ptoEnabled`/
+> `ptoAccrualMethod`/`ptoAccrualRate`/`ptoCap` from real Step1/Step2/Step3's own writes, so no
+> new list entries are expected there, but confirm rather than assume.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

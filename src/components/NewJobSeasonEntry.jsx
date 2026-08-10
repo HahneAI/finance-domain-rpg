@@ -269,7 +269,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     borderRadius: "10px",
     color: "var(--color-text-primary)",
     fontSize: "16px",
-    fontFamily: "var(--font-mono)",
+    fontFamily: "var(--font-sans)",
     padding: "10px 12px",
     colorScheme: "dark",
   };

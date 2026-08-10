@@ -87,7 +87,7 @@ export function TipsCommissionCheckIn({ label, dateIso, isYesterday, onLog, onSk
             type="number" min="0" step="0.01" autoFocus placeholder="Amount ($)"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}
+            style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}
           />
           <Pressable
             onClick={handleSaveAmount}

@@ -102,7 +102,7 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
             borderRadius: "10px",
             color: "var(--color-text-primary)",
             fontSize: "20px",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-sans)",
             padding: "14px",
             colorScheme: "dark",
             boxSizing: "border-box",

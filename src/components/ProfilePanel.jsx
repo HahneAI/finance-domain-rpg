@@ -2295,7 +2295,7 @@ function ChangelogAdminDetail({ onBack }) {
                   onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
                   placeholder="Supports **bold**, *italic*, lists, links, and headers."
                   rows={10}
-                  style={{ ...iS, height: "auto", fontFamily: "var(--font-mono)", resize: "vertical", lineHeight: 1.5 }}
+                  style={{ ...iS, height: "auto", fontFamily: "var(--font-sans)", resize: "vertical", lineHeight: 1.5 }}
                 />
               )}
             </div>
@@ -2508,7 +2508,7 @@ function BetaContentAdminDetail({ kind, onBack }) {
                   onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
                   placeholder={copy.bodyPlaceholder}
                   rows={8}
-                  style={{ ...iS, height: "auto", fontFamily: "var(--font-mono)", resize: "vertical", lineHeight: 1.5 }}
+                  style={{ ...iS, height: "auto", fontFamily: "var(--font-sans)", resize: "vertical", lineHeight: 1.5 }}
                 />
               )}
             </div>

@@ -252,14 +252,17 @@ decision pending how the pilot feels in practice.
 | `--color-border-subtle` | `#1f3b31` | Card borders |
 | `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
 | `--font-display` | `'Titillium Web'` | All headings (h1–h6), page/section titles, hero/headline text, large numeric emphasis on metric cards |
-| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, and ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips) |
-| `--font-mono` | `'JetBrains Mono'` | Inputs + data cells only (deliberate exception, not part of the display/body split — tabular-figure alignment) |
+| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips), and ALL form inputs/selects/textareas |
+| `--font-mono` | `'JetBrains Mono'` | Read-only numeric/data display only — data table cells, computed-value readouts (tabular-figure alignment). No longer used on any form field. |
 
 **Typography — two-font system (adopted 2026-08-09).** Titillium Web (400/600/700/900) is the
 display/headline font; Rajdhani (400/500/600/700) is the body/interactive font. Both load via
 Google Fonts `<link>` in `index.html` (same pattern as the pre-existing JetBrains Mono load).
 Never hardcode a font-family — always reference `var(--font-display)` / `var(--font-sans)` /
-`var(--font-mono)`.
+`var(--font-mono)`. **2026-08-10:** all inputs/selects/textareas (global CSS rule, shared `iS`
+style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--font-mono` to
+`--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
+readouts), never form fields.
 
 **Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 

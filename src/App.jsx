@@ -2632,27 +2632,22 @@ export default function App() {
           </Pressable>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-                <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
-                {isAdmin && tempLockDate && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
-                      {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
-                      aria-label="Clear lock date"
-                    >×</Pressable>
-                  </div>
-                )}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div className="text-md" style={{ fontWeight: "bold", flexShrink: 0 }}>A:Fin</div>
+            {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
+            {isAdmin && tempLockDate && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                  {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <Pressable
+                  onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                  className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
+                  aria-label="Clear lock date"
+                >×</Pressable>
               </div>
-              <div className="text-md" style={{ fontWeight: "bold" }}>Authority Finance</div>
-            </div>
+            )}
           </div>
 
           {/* ── Beta Tester Homebase — tracked beta testers only, sits directly

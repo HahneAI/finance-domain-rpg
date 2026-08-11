@@ -1913,6 +1913,14 @@ export default function App() {
       // re-employed via the wizard. Job application log stays as
       // user history.
       returnToWorkDate: null,
+      // Gig/odd-job income logged for *this* job-loss episode's runway
+      // (sumJobHuntIncome, jobLossRunway.js) has no meaning once it's over —
+      // unlike jobApplications, this isn't a record worth keeping across a
+      // later, separate occurrence of New Job Season. Without this reset it
+      // sat invisible (NewJobSeasonHomePanel only mounts while
+      // newJobSeasonMode is true) until the *next* job loss, then reappeared
+      // and got summed into a runway it has nothing to do with.
+      jobHuntIncomeLog: [],
     }));
     setWizardEntry("structure_change");
   }

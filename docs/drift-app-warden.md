@@ -756,6 +756,31 @@ nesting position.
 > so a passing suite is not proof this class of bug is absent, same caveat React Compiler
 > miscompilation (§12.4) already carries for a different reason.
 
+**F138 · Bug found + fixed: `TypedText`'s clip-path `steps()` reveal got stuck mid-word on real
+iOS Safari** — `SetupWizardAdlib.jsx` (`TypedText`), `index.css` (`.adlib-typed-word`) — **[G]** —
+*(added 2026-08-11, live device report)*
+F129's fix for the horizontal-overflow bug (word-chunked `TypedText`, still `clip-path: inset()`
+animated via `steps()` per word) shipped clean through Vitest + a production build, but a real
+user on a real iPhone (Safari) hit words getting visually stuck mid-reveal — several characters
+into a word, permanently, not just mid-animation-frame — confirmed via screenshots on two separate
+pages of the wizard. `clip-path` animated with a `steps()` timing function across many
+concurrently-animating per-word layers is an unusual combination that WebKit does not repaint
+reliably; no sandbox in this repo has a real browser, so this class of bug is invisible to every
+automated gate here (Vitest, ESLint, `vite build`) — same blind-spot shape as F137's `<p>`-nesting
+warning and the React-Compiler miscompilation (§12.4), a third distinct category of "passes every
+check, breaks on a real device." Fixed by dropping the clip-path/`steps()` character-stepping
+entirely and using the same `fadeSlideUp` opacity+transform stagger every other entrance animation
+in this app already relies on, applied per word for the same left-to-right cascading feel (loses
+the literal character-by-character "typing" look, keeps the word-by-word reveal). `@keyframes
+adlibType` removed from `index.css` as dead code.
+> **IF** a future animation in this app needs to animate `clip-path` (or any other property poorly
+> supported for animation on WebKit) with a `steps()` timing function, especially across many
+> simultaneously-animating elements, **THEN** treat it as unverified until checked on a real iOS
+> Safari device — this sandbox has no browser, and Vitest/`vite build` both passed cleanly on the
+> broken version. Prefer `opacity`/`transform` (the two properties every browser reliably
+> compositor-animates) over `clip-path` for any new per-element reveal animation, unless a real
+> device check confirms otherwise.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

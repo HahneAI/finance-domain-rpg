@@ -45,8 +45,21 @@ const inputStyle = {
  * migration 036) so it isn't lost — no history-browser UI for past reviews
  * yet, that's a follow-up pass, same as Ask Coach's history list arrived
  * after its own v1.
+ *
+ * `showReview` (default true) and `embedded` (default false) exist for the
+ * second mount site — `ProfilePanel.jsx`'s Preferences card (2026-08-11) —
+ * where any employed user (not just AI-gated admin/tester/investor accounts
+ * in New Job Season mode) can save/view a résumé but shouldn't see the
+ * AI skill-gap review UI at all: `showReview={false}` hides the target-role
+ * field, "Get Skill-Gap Review" button, and review output, leaving only
+ * upload/paste/view/remove; `embedded={true}` drops the outer `<SH>` heading
+ * and top margin so the caller can supply its own row/heading treatment.
+ * `onProfileChange` fires after any save that changes what's stored (file
+ * upload, file remove, résumé text committed) with a small summary shape —
+ * `{ hasFile, filename, hasText }` — so an embedding caller can keep its own
+ * collapsed-row summary in sync without re-fetching the profile itself.
  */
-export function ResumeReviewCard({ config }) {
+export function ResumeReviewCard({ config, showReview = true, embedded = false, onProfileChange }) {
   const [loading, setLoading] = useState(true);
   const [resumeText, setResumeText] = useState("");
   const [targetRoleDraft, setTargetRoleDraft] = useState("");
@@ -91,8 +104,20 @@ export function ResumeReviewCard({ config }) {
   const effectiveTargetRole = (targetRoleDraft || savedTargetRole || mostRecentAppliedRole || "").trim();
   const canReview = resumeText.trim().length > 0 && !reviewing;
 
+  // Reports { hasFile, filename, hasText } to an embedding caller (ProfilePanel's
+  // Preferences row) after any save that changes what's stored, so it can keep its
+  // own collapsed-row summary current without re-fetching the profile itself.
+  const notifyProfileChange = (fileMeta, nextResumeText) => {
+    onProfileChange?.({
+      hasFile: !!fileMeta?.storagePath,
+      filename: fileMeta?.originalFilename ?? null,
+      hasText: !!nextResumeText?.trim(),
+    });
+  };
+
   const commitResumeText = () => {
     saveResumeProfile({ resumeText, targetRole: savedTargetRole });
+    notifyProfileChange(savedFile, resumeText);
   };
 
   const handleFileChange = async (e) => {
@@ -125,6 +150,7 @@ export function ResumeReviewCard({ config }) {
       };
       setSavedFile(fileMeta);
       saveResumeProfile({ resumeText: nextResumeText, targetRole: savedTargetRole, ...fileMeta });
+      notifyProfileChange(fileMeta, nextResumeText);
 
       if (!extractable) {
         setExtractionNotice(extractError
@@ -158,6 +184,7 @@ export function ResumeReviewCard({ config }) {
         resumeText, targetRole: savedTargetRole,
         storagePath: null, originalFilename: null, mimeType: null, fileSizeBytes: null,
       });
+      notifyProfileChange(null, resumeText);
     } finally {
       setFileActionBusy(false);
     }
@@ -198,8 +225,8 @@ export function ResumeReviewCard({ config }) {
   if (loading) return null;
 
   return (
-    <div style={{ marginTop: "16px" }}>
-      <SH>Résumé Review</SH>
+    <div style={embedded ? undefined : { marginTop: "16px" }}>
+      {!embedded && <SH>Résumé Review</SH>}
       <div style={{
         background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)",
         borderRadius: "10px", padding: "12px",
@@ -282,56 +309,60 @@ export function ResumeReviewCard({ config }) {
           style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, marginBottom: "12px" }}
         />
 
-        <label style={labelStyle}>Target role</label>
-        <input
-          type="text"
-          value={targetRoleDraft}
-          onChange={(e) => setTargetRoleDraft(e.target.value)}
-          onBlur={() => { setSavedTargetRole(effectiveTargetRole); saveResumeProfile({ resumeText, targetRole: effectiveTargetRole }); }}
-          placeholder={mostRecentAppliedRole || "e.g. Warehouse Operations Lead"}
-          style={{ ...inputStyle, marginBottom: "6px" }}
-        />
-        <div className="text-xs" style={{ color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "12px" }}>
-          {mostRecentAppliedRole && !targetRoleDraft
-            ? `Defaults to your most recent application's role (${mostRecentAppliedRole}) — type here to compare against something else.`
-            : "Leave blank to let Coach infer the likely target from your résumé."}
-        </div>
+        {showReview && (
+          <>
+            <label style={labelStyle}>Target role</label>
+            <input
+              type="text"
+              value={targetRoleDraft}
+              onChange={(e) => setTargetRoleDraft(e.target.value)}
+              onBlur={() => { setSavedTargetRole(effectiveTargetRole); saveResumeProfile({ resumeText, targetRole: effectiveTargetRole }); }}
+              placeholder={mostRecentAppliedRole || "e.g. Warehouse Operations Lead"}
+              style={{ ...inputStyle, marginBottom: "6px" }}
+            />
+            <div className="text-xs" style={{ color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "12px" }}>
+              {mostRecentAppliedRole && !targetRoleDraft
+                ? `Defaults to your most recent application's role (${mostRecentAppliedRole}) — type here to compare against something else.`
+                : "Leave blank to let Coach infer the likely target from your résumé."}
+            </div>
 
-        <Pressable
-          onClick={getReview}
-          disabled={!canReview}
-          className="text-xs" style={{
-            width: "100%",
-            background: canReview ? "var(--color-teal)" : "var(--color-bg-surface)",
-            color: canReview ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-            border: "none", borderRadius: "10px", padding: "10px",
-            letterSpacing: "1.5px", textTransform: "uppercase",
-            fontWeight: 700, cursor: canReview ? "pointer" : "not-allowed",
-            minHeight: "44px",
-          }}
-        >
-          {reviewing ? "Reviewing…" : "Get Skill-Gap Review"}
-        </Pressable>
+            <Pressable
+              onClick={getReview}
+              disabled={!canReview}
+              className="text-xs" style={{
+                width: "100%",
+                background: canReview ? "var(--color-teal)" : "var(--color-bg-surface)",
+                color: canReview ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+                border: "none", borderRadius: "10px", padding: "10px",
+                letterSpacing: "1.5px", textTransform: "uppercase",
+                fontWeight: 700, cursor: canReview ? "pointer" : "not-allowed",
+                minHeight: "44px",
+              }}
+            >
+              {reviewing ? "Reviewing…" : "Get Skill-Gap Review"}
+            </Pressable>
 
-        {errored && (
-          <div className="text-sm" style={{ marginTop: "10px", color: "var(--color-red)" }}>
-            Coach couldn't complete the review — try again.
-          </div>
-        )}
+            {errored && (
+              <div className="text-sm" style={{ marginTop: "10px", color: "var(--color-red)" }}>
+                Coach couldn't complete the review — try again.
+              </div>
+            )}
 
-        {review && (
-          <div className="text-base" style={{
-            marginTop: "14px",
-            background: "var(--color-bg-surface)",
-            border: "1px solid var(--color-border-subtle)",
-            borderRadius: "10px",
-            padding: "12px 14px",
-            lineHeight: 1.6,
-            color: "var(--color-text-primary)",
-            whiteSpace: "pre-wrap",
-          }}>
-            {review}
-          </div>
+            {review && (
+              <div className="text-base" style={{
+                marginTop: "14px",
+                background: "var(--color-bg-surface)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                lineHeight: 1.6,
+                color: "var(--color-text-primary)",
+                whiteSpace: "pre-wrap",
+              }}>
+                {review}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

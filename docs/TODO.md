@@ -497,6 +497,15 @@ integration, rewrite mode, cover letters) are still documentation only as of thi
       cache) and **Remove** (`deleteResumeFile()` + clears the four metadata columns) actions.
       Not yet wired into Job Hunt Assistant or a per-application cover letter flow — that's v4/v6
       below, both still open.
+    - [x] **Reachable outside New Job Season entirely — built 2026-08-11 (user directive,
+      same-day follow-up).** `ProfilePanel.jsx`'s App Preferences → Résumé row (directly under
+      Freedom Allowance) mounts the same `ResumeReviewCard.jsx` with `showReview={false}` (hides
+      target role + Get Skill-Gap Review + review output — the AI review stays admin/tester/
+      investor-gated in New Job Season) and `embedded` (drops the outer section heading). Any
+      employed user can now upload/paste/view/remove a résumé without faking a job loss to reach
+      `NewJobSeasonHomePanel`. `onProfileChange` keeps the collapsed row's summary ("Saved —
+      resume.pdf" / "Saved — pasted text" / "Not saved") live after an edit. See drift-app-warden
+      §21 F124's "second mount site" note for the gating split this creates.
   - **v3 — Coach "breaks it down": structured extraction, not just a written review.** A second AI
     pass (or the same call, restructured) turns `resume_text` into a structured shape — work
     experience entries (title, company, dates, bullet points), education, skills/certifications —

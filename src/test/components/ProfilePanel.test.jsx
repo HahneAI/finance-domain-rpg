@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 // AccountDetail imports the supabase client (created at module load from env vars).
@@ -8,7 +8,39 @@ vi.mock('../../lib/supabase.js', () => ({
   supabase: { auth: {} },
 }))
 
+// §2.E1 v2 — PreferencesDetail's Résumé row (and the embedded ResumeReviewCard it
+// mounts on expand) both go through db.js's résumé functions. Every other db.js
+// export used elsewhere in ProfilePanel is left as the real implementation — none
+// of those are exercised by these tests — only the résumé family needs stubbing
+// since it'd otherwise hit the minimally-mocked supabase.js above and throw.
+const { mocks } = vi.hoisted(() => ({
+  mocks: {
+    loadResumeProfile: vi.fn(),
+    saveResumeProfile: vi.fn(),
+    uploadResumeFile: vi.fn(),
+    getResumeFileUrl: vi.fn(),
+    deleteResumeFile: vi.fn(),
+  },
+}))
+vi.mock('../../lib/db.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    loadResumeProfile: mocks.loadResumeProfile,
+    saveResumeProfile: mocks.saveResumeProfile,
+    uploadResumeFile: mocks.uploadResumeFile,
+    getResumeFileUrl: mocks.getResumeFileUrl,
+    deleteResumeFile: mocks.deleteResumeFile,
+  }
+})
+
 const { AccountDetail, ProfilePanel } = await import('../../components/ProfilePanel.jsx')
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.loadResumeProfile.mockResolvedValue(null)
+  mocks.saveResumeProfile.mockResolvedValue(true)
+})
 
 const baseUser = (identities) => ({
   email: 'anthony@example.com',
@@ -229,5 +261,53 @@ describe('AccountDetail — Change Password visibility by identity', () => {
       />
     )
     expect(screen.queryByText('Change Password')).not.toBeInTheDocument()
+  })
+})
+
+// §2.E1 v2 (2026-08-11) — résumé upload/view reachable from App Preferences,
+// under the Freedom Allowance row, so an employed user (not in New Job Season,
+// not necessarily admin/tester/investor) can still save/view a résumé without
+// entering New Job Season mode. Deliberately AI-review-free here — the
+// admin/tester/investor-gated skill-gap review stays in NewJobSeasonHomePanel.
+describe('ProfilePanel — App Preferences Résumé row', () => {
+  it('renders under Freedom Allowance, before Tax Exempt, showing "Not saved" once loaded', async () => {
+    renderMainProfile()
+    fireEvent.click(screen.getByText('App Preferences'))
+
+    const resumeRow = await screen.findByText('Résumé')
+    expect(resumeRow).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('Not saved')).toBeTruthy())
+
+    // Order: Freedom Allowance, then Résumé, then Tax Exempt.
+    const labels = screen.getAllByText(/^(Freedom Allowance|Résumé|Tax Exempt)$/).map(el => el.textContent)
+    expect(labels).toEqual(['Freedom Allowance', 'Résumé', 'Tax Exempt'])
+  })
+
+  it('shows the saved filename once a résumé profile with a file is loaded', async () => {
+    mocks.loadResumeProfile.mockResolvedValue({
+      resumeText: 'Warehouse lead...', targetRole: '',
+      storagePath: 'test-user-id/resume.pdf', originalFilename: 'resume.pdf',
+      mimeType: 'application/pdf', fileSizeBytes: 204800,
+    })
+    renderMainProfile()
+    fireEvent.click(screen.getByText('App Preferences'))
+
+    await waitFor(() => expect(screen.getByText('Saved — resume.pdf')).toBeTruthy())
+  })
+
+  it('expands to upload/paste controls without the AI review UI, and collapses on Done', async () => {
+    renderMainProfile()
+    fireEvent.click(screen.getByText('App Preferences'))
+    await screen.findByText('Résumé')
+
+    fireEvent.click(screen.getByText('Résumé'))
+
+    expect(await screen.findByText('Choose File')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Paste your résumé text here…')).toBeTruthy()
+    expect(screen.queryByText('Target role')).toBeNull()
+    expect(screen.queryByText('Get Skill-Gap Review')).toBeNull()
+
+    fireEvent.click(screen.getByText('Done'))
+    expect(screen.queryByText('Choose File')).toBeNull()
   })
 })

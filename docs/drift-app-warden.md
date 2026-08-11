@@ -4008,7 +4008,9 @@ scoping holds).
 > spares the active chat, resume-from-history, and delete.
 
 **F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
-(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `lib/resumeFile.js` (v2),
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx` (mounted in both
+`NewJobSeasonHomePanel.jsx`, gated, and `ProfilePanel.jsx`'s `PreferencesDetail`, ungated — see
+the "second mount site" note below), `lib/resumeFile.js` (v2),
 `aiContext.js` (`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
 `RESUME_REVIEW_SYSTEM_PROMPT`), migrations `036_add_resume_profile.sql` (this entry previously
 cited `032` — corrected 2026-08-11; `032` is `changelog_entries`, unrelated) and
@@ -4059,6 +4061,20 @@ existing call shape, still used verbatim by the paste textarea and target-role f
 keys entirely, so Postgres upsert leaves a previously uploaded file's metadata untouched instead
 of nulling it out on every keystroke-triggered save. Removing a file explicitly passes
 `{ storagePath: null, ... }` to distinguish "clear this" from "don't touch this."
+
+**Second mount site, 2026-08-11 — `ProfilePanel.jsx`'s `PreferencesDetail`, deliberately
+*outside* the `canAccessAiFeatures` gate.** Résumé storage (upload/paste/view/remove) is now also
+reachable from App Preferences → the Résumé row directly under Freedom Allowance, for *every*
+employed user — not just admin/tester/investor, and not gated on `newJobSeasonMode` either, since
+the whole point is letting a currently-employed user save a résumé without faking a job loss to
+reach `NewJobSeasonHomePanel`. This is intentionally **not** a second copy of F124's
+`canAccessAiFeatures` gate lifted onto a new surface — it's the same `ResumeReviewCard.jsx`
+component reused with two new props (`showReview={false}` hides the target-role field/Get
+Skill-Gap Review button/review output; `embedded={true}` drops the outer `<SH>` heading) so the
+AI-gated skill-gap review and the ungated file storage stay one component with one save path
+instead of forking into a duplicate. `onProfileChange` (new prop) reports `{ hasFile, filename,
+hasText }` back up after any save so `PreferencesDetail`'s own collapsed-row summary ("Saved —
+resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetching the profile.
 > **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
 > decision (`coach-entry-points.md`, 2026-07-25) is **paid-only for everyone else, not
 > trial-included** — a real post-card-charge subscription (`entitlement.state === "active"`) for
@@ -4077,7 +4093,14 @@ of nulling it out on every keystroke-triggered save. Removing a file explicitly 
 > and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
 > this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
 > `ResumeReviewCard.test.jsx`, `newJobSeasonFlow.test.jsx`'s gate-verification block (confirms a real
-> trial entitlement, not just admin/tester, is correctly refused). **IF** `saveResumeProfile`'s
+> trial entitlement, not just admin/tester, is correctly refused). **IF** `ResumeReviewCard.jsx`
+> is edited, **THEN** it now has two mount sites with opposite gating — `NewJobSeasonHomePanel`
+> (behind `canAccessAiFeatures`, `showReview` defaults true) and `ProfilePanel`'s Preferences row
+> (ungated, `showReview={false}`) — verify a change doesn't leak the AI review UI into the ungated
+> site (e.g. `showReview`'s default silently flipping, or new review-only markup added outside the
+> `{showReview && (...)}` block) or hide storage-only functionality from the New Job Season site.
+> `ProfilePanel.test.jsx`'s Résumé-row block asserts "Target role"/"Get Skill-Gap Review" are
+> absent there specifically. **IF** `saveResumeProfile`'s
 > row-building loop (the `RESUME_FILE_META_COLUMNS` list in `db.js`) is touched, **THEN** verify
 > the "key omitted vs. key explicitly null" distinction still holds — a regression here nulls out
 > every user's uploaded résumé file the next time they edit the target-role field, silently, with
@@ -4113,7 +4136,7 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 | `buildJobHuntContext`'s source functions (F124) — `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `NewJobSeasonHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
-| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral` | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either | D4 |
+| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` in `NewJobSeasonHomePanel` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral`; does **not** apply to `ResumeReviewCard`'s second mount site in `ProfilePanel`'s Preferences row, which is deliberately ungated storage-only (`showReview={false}`) | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either at the New Job Season site; `ProfilePanel.test.jsx`'s Résumé-row block confirms the Preferences site renders for any account, with no review UI | D4 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
 

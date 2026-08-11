@@ -1,21 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 import { estimateWeeklyNet } from "../lib/finance.js";
 import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComplete.js";
+// LIFE_EVENTS/DIFF_FIELDS/StructureChangeDiff are shared with SetupWizard.jsx rather than
+// duplicated (drift-app-warden §7 F7's "these two lists must never diverge" note — DIFF_FIELDS
+// specifically) — see drift-app-warden §7 F140.
+import { LIFE_EVENTS, StructureChangeDiff } from "./SetupWizard.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SetupWizardAdlib.jsx — the REAL production first-run onboarding wizard for
-// an employed signup: Welcome + Pay Structure collapsed onto one cascading
-// page, then Schedule, Deductions, Tax Rates, and Wrap Up each as their own
-// page, all in the same "fill-in-the-blank" mad-libs style. Mounted by
-// App.jsx whenever `wizardEntry === false` (first-run) and there is no
-// in-progress jobless hand-off (`adlibHandoff`) — see App.jsx's wizard mount
-// block. SetupWizard.jsx stays mounted, completely unchanged, for every
-// life-event re-entry (`structure_change`, `lost_job`, `changed_jobs`,
-// `commission_job`) — this component owns first-run only.
+// SetupWizardAdlib.jsx — the REAL production wizard for the ENTIRE first-run
+// flow (employed AND jobless — drift-app-warden §7 F141) plus every
+// life-event re-entry path (`lost_job`/`commission_job`/`structure_change`/
+// `changed_jobs`, F139/F140): Welcome + Pay Structure collapsed onto one
+// cascading page, then either Schedule/Deductions/Tax Rates/Wrap Up (employed)
+// or three native jobless pages (Unemployment Benefits/New Job Season
+// Details/Jobless Wrap Up, F141) — all in the same "fill-in-the-blank"
+// mad-libs style. Mounted by App.jsx whenever `wizardEntry === false`
+// (first-run, `lifeEvent={null}`) or `wizardEntry` is a life-event string —
+// see App.jsx's wizard mount block. `SetupWizard.jsx` is no longer mounted
+// for any user-facing path; it's retained only as the source components
+// (`StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`,
+// `STEP_DEFS` ids 10-12) this file's jobless pages were ported from, and as
+// `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared export home.
 //
 // Each page is one continuous mad-libs sentence with inline blanks (native
 // <select>/<input> styled to sit inline in the text). Within a page, each new
@@ -24,17 +33,31 @@ import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComple
 // depends on is given. Between pages it's a real Next/Back page transition
 // (StepSlide), same as the real wizard. Reuses the exact same config fields
 // and DHL-preset defaults the real SetupWizard.jsx Step0/Step1/Step2 apply,
-// so the jobless mini-flow hand-off (via `initialStepId`) has zero drift
-// between the two experiences.
+// so there's zero drift between the two experiences on the fields they share.
 //
-// Save path: on an employed finish, `formData` is run through the same
-// `finalizeWizardConfig()` helper (`src/lib/wizardComplete.js`) real
-// `SetupWizard.jsx`'s `handleComplete()` calls, then handed to the
-// `onComplete(finalConfig)` prop — App.jsx wires that straight to
-// `handleWizardComplete()`, the same function every real SetupWizard
-// completion uses (eager save, configHistory tagging, food-seed logic). The
-// jobless mini-flow still hands off into the real `SetupWizard` at
-// `initialStepId: 10`, which owns its own `handleComplete()` call.
+// `lifeEvent` prop (default `null`) — see the exported component's own header
+// comment just above its definition for the full contract. In short: `null`
+// keeps every existing first-run behavior unchanged (BLANK_PAY_FIELDS, the
+// employment-status question, all five employed pages, or the three native
+// jobless pages if unemployed); `"lost_job"`/`"commission_job"` pre-fill
+// formData from the real account config instead of blanking it, skip the
+// employment-status question entirely, and drop Wrap Up from the page set
+// (both paths commit through `finalizeWizardConfig()` at the end of Tax Rates
+// instead) — mirrors real `STEP_DEFS`' `showIf`/`isValid` gating for those two
+// life events exactly (drift-app-warden §7.3's gate matrix). `"structure_change"`/
+// `"changed_jobs"` are only reachable via this component's own internal
+// `LifeEventPivot` picker (F140).
+//
+// Save path: on a finish (Wrap Up for employed first-run/structure_change/
+// changed_jobs, the native Jobless Wrap Up for first-run jobless, Tax Rates
+// for lost_job/commission_job), `formData` is run through the shared
+// `finalizeWizardConfig()` helper (`src/lib/wizardComplete.js`) — the same
+// normalizer real `SetupWizard.jsx`'s `handleComplete()` calls — then handed
+// to the `onComplete(finalConfig)` prop, which App.jsx wires straight to
+// `handleWizardComplete()`, the same function every wizard completion uses
+// (eager save, configHistory tagging, food-seed logic). There is no more
+// hand-off to a second component on any path — see F141 for what this
+// replaced.
 //
 // Investor first-run support (`isInvestor` prop) mirrors `SetupWizard.jsx`
 // field-for-field: Welcome reads `formData.investorName`, "Do you work for
@@ -287,10 +310,15 @@ function pickWarehouseTeamPatch(t) {
 }
 
 // Combined mandatory-field gate for the Intake page — mirrors STEP_DEFS id 0
-// (Welcome) + id 1 (Pay Structure) in SetupWizard.jsx exactly.
-function isIntakeValid(d) {
-  if (d.startedUnemployed !== true && d.startedUnemployed !== false) return false;
-  if (d.startedUnemployed === true) return true;
+// (Welcome) + id 1 (Pay Structure) in SetupWizard.jsx exactly. For a life-event
+// re-entry (lifeEvent !== null) real STEP_DEFS id 0's own isValid is
+// unconditionally true (`ev !== null || ...`) — there's no employment-status
+// question on re-entry at all, so that check is skipped entirely here too.
+function isIntakeValid(d, lifeEvent = null) {
+  if (lifeEvent === null) {
+    if (d.startedUnemployed !== true && d.startedUnemployed !== false) return false;
+    if (d.startedUnemployed === true) return true;
+  }
   if (!d.userPaySchedule) return false;
   if (d.employerPreset === "DHL" && !d.dhlSite) return false;
   if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
@@ -343,6 +371,22 @@ function isTaxRatesValid(d) {
 // `isValid: () => true` exactly. It's a live summary plus two optional,
 // non-blocking settings, not a form to fill in.
 function isWrapUpValid() {
+  return true;
+}
+
+// ── Jobless mini-flow validity gates — line-for-line mirrors of real
+// STEP_DEFS ids 10/11/12 (SetupWizard.jsx's StepJoblessBenefits/Details/WrapUp).
+// See docs/drift-app-warden.md §7 F141 — these three native pages replace the
+// former onHandoff(formData, 10) real-wizard hand-off entirely.
+function isJoblessBenefitsValid(d) {
+  return d.unemploymentEnabled === true
+    ? (d.unemploymentWeekly ?? 0) > 0 && (d.unemploymentDurationWeeks ?? 0) > 0
+    : d.unemploymentEnabled === false;
+}
+function isJoblessDetailsValid(d) {
+  return !!d.newJobSeasonDate;
+}
+function isJoblessWrapUpValid() {
   return true;
 }
 
@@ -539,7 +583,88 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
   );
 }
 
-function IntakePage({ formData, onChange, isInvestor = false, attempted = false }) {
+// ── Life-event pivot picker (drift-app-warden §7 F140) — ported from real
+// SetupWizard.jsx's Step0 re-entry picker (~line 40-178). Only ever rendered when this
+// wizard's ORIGINAL entry point was "structure_change" (the only real entry point,
+// App.jsx item 5) — `onLifeEventChange` is only threaded down by the parent in that case,
+// so its mere presence is the render gate IntakePage checks. `curLifeEvent` is the
+// pivoted-or-not life event currently in effect; `onLifeEventChange` updates it.
+//
+// Two branches, mirroring real Step0 exactly for their respective states:
+//   - curLifeEvent === "structure_change" (not yet pivoted): the structure_change-specific
+//     intro copy (item 2, ported verbatim from SetupWizard.jsx:109-136), PLUS the picker
+//     below it — real Step0 returns early here with no picker at all, but since ad-lib has
+//     no separate "step" to advance into first, the picker has to live on this same screen
+//     or pivoting would be permanently unreachable. This is the one deliberate deviation
+//     from a line-for-line Step0 port — see the session report's judgment-call note.
+//   - curLifeEvent is one of the other three (already pivoted): the generic "What changed?"
+//     picker only, active option highlighted — a verbatim port of real Step0's else branch.
+// Matches real LIFE_EVENTS' own filter: the list never includes "structure_change" as a
+// selectable option (no way to pivot back once moved away, same as the real wizard).
+function LifeEventPivot({ curLifeEvent, onLifeEventChange }) {
+  const picker = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {LIFE_EVENTS.filter(ev => ev.value !== "structure_change").map(ev => {
+        const active = curLifeEvent === ev.value;
+        return (
+          <Pressable
+            key={ev.value}
+            onClick={() => onLifeEventChange(ev.value)}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start",
+              gap: "3px", textAlign: "left",
+              background: active ? "rgba(0,200,150,0.08)" : "var(--color-bg-raised)",
+              border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
+              borderRadius: "12px", padding: "12px 14px", cursor: "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            <span className="text-base" style={{ fontWeight: "600", color: active ? "var(--color-teal)" : "var(--color-text-primary)" }}>
+              {active && "✓ "}{ev.label}
+            </span>
+            <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{ev.sub}</span>
+          </Pressable>
+        );
+      })}
+    </div>
+  );
+
+  if (curLifeEvent === "structure_change") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
+        <p className="text-md" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0, fontWeight: 600 }}>
+          Update your pay structure.
+        </p>
+        <p className="text-base" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0 }}>
+          The next steps are pre-filled with your current settings — only edit what actually
+          changed (rate, schedule, employer, deductions, or tax setup). Goals, expenses, logs,
+          and historical week confirmations stay put.
+        </p>
+        <p className="text-sm" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0 }}>
+          On the Schedule step, set the start date to the day your new pay structure takes
+          effect. Forward-looking projections recalculate from that week onward.
+        </p>
+        <div>
+          <p className="text-xs" style={{ color: "var(--color-text-secondary)", margin: "4px 0 8px" }}>
+            Something else changed instead?
+          </p>
+          {picker}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <p className="text-base" style={{ color: "var(--color-text-primary)", margin: "0 0 12px" }}>
+        What changed? Only the affected steps will be updated — everything else stays as-is.
+      </p>
+      {picker}
+    </div>
+  );
+}
+
+function IntakePage({ formData, onChange, isInvestor = false, attempted = false, lifeEvent = null, onLifeEventChange = null }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
   // so track which blank the user picked as local UI state (mirrors real Step1's
@@ -553,8 +678,25 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
   const isEmployerDHL = !isInvestor && employerChoice === "DHL";
   const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
-  const isEmployed = formData.startedUnemployed === false;
+  // Life-event re-entry has no employment-status question at all (real STEP_DEFS id 0's
+  // isValid is unconditionally true for ev !== null) — always employed from the moment the
+  // page mounts, mirroring isIntakeValid's own lifeEvent-gated skip of this check.
+  const isEmployed = lifeEvent !== null ? true : formData.startedUnemployed === false;
   const investorFirstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
+
+  // Commission toggle (lifeEvent === "commission_job" only) — mirrors real Step1's
+  // hasCommission local state exactly (commissionMonthly is the only stored field; the
+  // on/off state itself is UI-local, same as real Step1's own useState). Also re-synced
+  // via useEffect (not just the lazy initializer) — a pivot from "structure_change" to
+  // "commission_job" (drift-app-warden §7 F140's pivot mechanism) changes `lifeEvent` well
+  // after mount, when the lazy initializer has already run and evaluated false.
+  const [hasCommission, setHasCommission] = useState(
+    lifeEvent === "commission_job" && (formData.commissionMonthly ?? 0) > 0
+  );
+  useEffect(() => {
+    if (lifeEvent === "commission_job") setHasCommission((formData.commissionMonthly ?? 0) > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lifeEvent]);
 
   // Overtime Threshold local UI choice — mirrors real Step1's otCustom flag, plus a
   // separate "have they answered at all" tracked as its own string state so a
@@ -626,6 +768,16 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
       (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0);
 
   const introText = "Let's set you up. Right now, I am";
+  // Life-event re-entry intro copy — there's no real Step0 branch specific to lost_job/
+  // commission_job to port field-for-field (only structure_change gets its own Step0
+  // copy in the real wizard; the generic re-entry branch there is the LIFE_EVENTS picker
+  // itself, out of scope this round per docs/drift-app-warden.md §7 F139) — this is new
+  // copy written in the same tone as structure_change's own re-entry intro.
+  const introTextLostJob = "Let's rebuild your pay for the new job.";
+  const introTextCommission = "Let's add your commission job to your pay structure.";
+  // changed_jobs has no bespoke real-Step0 copy either (same as lost_job/commission_job) —
+  // new copy in the same tone, distinct wording so it doesn't read as a lost-job re-hire.
+  const introTextChangedJobs = "Let's set up your pay for the new job.";
   const workForText = "I work for";
   const siteText = "I work at the";
   const onTeamText = "I'm on Team";
@@ -648,9 +800,20 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
   const tipsLeadText = "On top of that, I";
   const commissionOnlyLeadText = "This is";
   const commissionOnlyTailText = "commission-only position.";
+  // Commission Income (lifeEvent === "commission_job" only) — mirrors real Step1's
+  // Commission Income Field exactly (Pill toggle + Monthly Average, gated on gateTouched
+  // only, applies to both DHL and base users): src/components/SetupWizard.jsx ~782-808.
+  const commissionLeadText = "My pay also";
+  const commissionAmountText = "averaging $";
 
   return (
     <>
+    {/* Life-event pivot picker (drift-app-warden §7 F140) — only rendered when the
+        wizard's original entry point was "structure_change" (the sole real entry point,
+        App.jsx item 5); onLifeEventChange is only threaded down in that case. */}
+    {onLifeEventChange && (
+      <LifeEventPivot curLifeEvent={lifeEvent} onLifeEventChange={onLifeEventChange} />
+    )}
     <p style={BLANK_FONT}>
       {isInvestor && investorFirstName && (
         <>
@@ -658,16 +821,46 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
           <br />
         </>
       )}
-      <TypedText text={introText} />{" "}
-      <FadeIn delay={typeDuration(introText)}>
-        <InlineSelect
-          value={formData.startedUnemployed === true ? "unemployed" : formData.startedUnemployed === false ? "employed" : ""}
-          onChange={v => onChange({ startedUnemployed: v === "" ? null : v === "unemployed" })}
-          options={[{ value: "employed", label: "employed" }, { value: "unemployed", label: "unemployed" }]}
-          ariaLabel="Employment status"
-          error={attempted && formData.startedUnemployed !== true && formData.startedUnemployed !== false}
-        />
-      </FadeIn>.
+      {lifeEvent === null ? (
+        <>
+          <TypedText text={introText} />{" "}
+          <FadeIn delay={typeDuration(introText)}>
+            <InlineSelect
+              value={formData.startedUnemployed === true ? "unemployed" : formData.startedUnemployed === false ? "employed" : ""}
+              onChange={v => {
+                // Mirrors real SetupWizard.jsx's Step0 pill handler exactly (drift-app-warden
+                // §7 F141) — seeds newJobSeasonMode/newJobSeasonDate/startDate/firstActiveIdx
+                // the same way, now load-bearing here since the jobless mini-flow is native
+                // (no more hand-off into the real wizard, whose own Step0 used to seed these).
+                if (v === "unemployed") {
+                  const today = new Date();
+                  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                  onChange({
+                    startedUnemployed: true,
+                    newJobSeasonMode: true,
+                    newJobSeasonDate: formData.newJobSeasonDate ?? todayIso,
+                    startDate: todayIso,
+                    firstActiveIdx: dateToWeekIdx(todayIso),
+                  });
+                } else if (v === "employed") {
+                  onChange({ startedUnemployed: false, newJobSeasonMode: false, newJobSeasonDate: null });
+                } else {
+                  onChange({ startedUnemployed: null });
+                }
+              }}
+              options={[{ value: "employed", label: "employed" }, { value: "unemployed", label: "unemployed" }]}
+              ariaLabel="Employment status"
+              error={attempted && formData.startedUnemployed !== true && formData.startedUnemployed !== false}
+            />
+          </FadeIn>.
+        </>
+      ) : lifeEvent === "lost_job" ? (
+        <TypedText text={introTextLostJob} />
+      ) : lifeEvent === "commission_job" ? (
+        <TypedText text={introTextCommission} />
+      ) : lifeEvent === "changed_jobs" ? (
+        <TypedText text={introTextChangedJobs} />
+      ) : null /* structure_change: intro already rendered above via LifeEventPivot */}
       {isEmployed && (
         <>
           {!isInvestor && (
@@ -878,6 +1071,44 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false 
                 </>
               )}
               {otChoice !== "custom" && <TypedText text="." />}
+            </>
+          )}
+
+          {/* ── Commission Income (real Step1 ~782–809, lifeEvent === "commission_job" only)
+               — applies to both DHL and base users, gated only on payStructureComplete
+               (mirrors real Step1's gateTouched gate). ── */}
+          {lifeEvent === "commission_job" && payStructureComplete && (
+            <>
+              {" "}<TypedText text={commissionLeadText} />{" "}
+              <FadeIn delay={typeDuration(commissionLeadText)}>
+                <InlineSelect
+                  value={hasCommission ? "yes" : "no"}
+                  onChange={v => {
+                    const next = v === "yes";
+                    setHasCommission(next);
+                    if (!next) onChange({ commissionMonthly: 0 });
+                  }}
+                  options={[{ value: "yes", label: "includes commission" }, { value: "no", label: "doesn't include commission" }]}
+                  ariaLabel="Commission income"
+                />
+              </FadeIn>
+              {hasCommission ? (
+                <>
+                  , <TypedText text={commissionAmountText} />
+                  <FadeIn delay={typeDuration(commissionAmountText)}>
+                    <InlineNumber
+                      value={formData.commissionMonthly ?? ""}
+                      onChange={v => onChange({ commissionMonthly: v === "" ? null : parseFloat(v) })}
+                      placeholder="800"
+                      width="72px"
+                      ariaLabel="Commission monthly average, dollars"
+                    />
+                  </FadeIn>{" "}
+                  <TypedText text="a month." />
+                </>
+              ) : (
+                <TypedText text="." />
+              )}
             </>
           )}
 
@@ -1773,7 +2004,7 @@ function TaxExemptPreview() {
   );
 }
 
-function WrapUpPage({ formData, onChange }) {
+function WrapUpPage({ formData, onChange, lifeEvent = null, originalConfig = null }) {
   const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
@@ -1804,6 +2035,18 @@ function WrapUpPage({ formData, onChange }) {
 
   return (
     <>
+      {/* ── Structure-change diff (drift-app-warden §7 F140) — shown only on the
+           structure_change flow, ported from real SetupWizard.jsx's own StepWrapUp gate
+           (`lifeEvent === "structure_change"`). Never shows for changed_jobs, which reaches
+           Wrap Up too but has no diff summary per the gate matrix. Reuses the exact same
+           StructureChangeDiff component/DIFF_FIELDS list the real wizard renders — see this
+           file's top-of-module import comment. ── */}
+      {lifeEvent === "structure_change" && (
+        <div style={{ marginBottom: "22px" }}>
+          <StructureChangeDiff originalConfig={originalConfig} formData={formData} />
+        </div>
+      )}
+
       <p style={BLANK_FONT}>
         <TypedText text={introText} />{" "}
         <FadeIn delay={typeDuration(introText)}>
@@ -1895,9 +2138,190 @@ function WrapUpPage({ formData, onChange }) {
   );
 }
 
-// Jobless users skip Schedule, Deductions, Tax Rates, and Wrap Up entirely —
-// same as the real wizard's isFirstRunJobless gate skipping STEP_DEFS id
-// 2/3/4/7 outright.
+// ── Jobless mini-flow (drift-app-warden §7 F141) — native ports of real
+// StepJoblessBenefits/StepJoblessDetails/StepJoblessWrapUp (SetupWizard.jsx
+// ~2188-2325, STEP_DEFS ids 10/11/12), replacing the former
+// onHandoff(formData, 10) hand-off into the real wizard. Only ever shown for
+// lifeEvent === null && startedUnemployed === true (computeActivePages below)
+// — same isFirstRunJobless gate the real wizard used, just native now instead
+// of a cross-component jump. ──
+
+// Page A: Unemployment Benefits — mirrors real StepJoblessBenefits exactly
+// (Yes/No, then weekly amount + duration + waiting-week once Yes is chosen).
+function JoblessBenefitsPage({ formData, onChange, attempted = false }) {
+  const answered = formData.unemploymentEnabled;
+  const hasUnemployment = answered === true;
+  const weeklyMissing = attempted && hasUnemployment && !((formData.unemploymentWeekly ?? 0) > 0);
+  const durationMissing = attempted && hasUnemployment && !((formData.unemploymentDurationWeeks ?? 0) > 0);
+
+  const leadText = "I";
+  const gettingText = "getting unemployment benefits.";
+  const amountText = "My weekly benefit is $";
+  const forText = "for";
+  const weeksText = "weeks,";
+  const waitingText = "a waiting week.";
+
+  return (
+    <p style={BLANK_FONT}>
+      <TypedText text={leadText} />{" "}
+      <FadeIn delay={typeDuration(leadText)}>
+        <InlineSelect
+          value={answered === true ? "yes" : answered === false ? "no" : ""}
+          onChange={v => onChange({
+            unemploymentEnabled: v === "" ? null : v === "yes",
+            ...(v === "no" ? { unemploymentWeekly: null, unemploymentDurationWeeks: null, unemploymentWaitingWeek: false } : {}),
+          })}
+          options={[{ value: "yes", label: "am" }, { value: "no", label: "am not" }]}
+          ariaLabel="Unemployment benefits"
+          error={attempted && answered !== true && answered !== false}
+        />
+      </FadeIn>{" "}
+      <TypedText text={gettingText} />
+      {hasUnemployment && (
+        <>
+          {" "}<TypedText text={amountText} />
+          <FadeIn delay={typeDuration(amountText)}>
+            <InlineNumber
+              value={formData.unemploymentWeekly ?? ""}
+              onChange={v => onChange({ unemploymentWeekly: v === "" ? null : parseFloat(v) })}
+              placeholder="400"
+              width="72px"
+              ariaLabel="Weekly unemployment benefit, dollars"
+              error={weeklyMissing}
+            />
+          </FadeIn>{" "}
+          <TypedText text={forText} />{" "}
+          <FadeIn delay={typeDuration(forText)}>
+            <InlineNumber
+              value={formData.unemploymentDurationWeeks ?? ""}
+              onChange={v => onChange({ unemploymentDurationWeeks: v === "" ? null : parseInt(v, 10) })}
+              placeholder="26"
+              width="52px"
+              ariaLabel="Unemployment benefit duration, weeks"
+              error={durationMissing}
+            />
+          </FadeIn>{" "}
+          <TypedText text={weeksText} />{" "}
+          <FadeIn delay={typeDuration(weeksText)}>
+            <InlineSelect
+              value={(formData.unemploymentWaitingWeek ?? true) === true ? "with" : "without"}
+              onChange={v => onChange({ unemploymentWaitingWeek: v === "with" })}
+              options={[{ value: "with", label: "with" }, { value: "without", label: "without" }]}
+              ariaLabel="Waiting week"
+            />
+          </FadeIn>{" "}
+          <TypedText text={waitingText} />
+        </>
+      )}
+    </p>
+  );
+}
+
+// Page B: New Job Season Details — mirrors real StepJoblessDetails exactly
+// (required job-loss date, optional prior hourly rate → targetIncomeAnnual,
+// same draft-string commit-only-on-parse pattern as the real page's own
+// priorRateDraft local state / this file's Numeric Input Standard).
+function JoblessDetailsPage({ formData, onChange, attempted = false }) {
+  const [priorRateDraft, setPriorRateDraft] = useState(
+    formData.targetIncomeAnnual ? String(+(formData.targetIncomeAnnual / (40 * 52)).toFixed(2)) : ""
+  );
+
+  const lostText = "I lost my job on";
+  const rateLeadText = "My prior rate was $";
+  const rateTailText = "an hour.";
+
+  return (
+    <p style={BLANK_FONT}>
+      <TypedText text={lostText} />{" "}
+      <FadeIn delay={typeDuration(lostText)}>
+        <InlineDate
+          value={formData.newJobSeasonDate}
+          onChange={v => onChange({ newJobSeasonDate: v === "" ? null : v })}
+          label="Job loss date"
+          error={attempted && !formData.newJobSeasonDate}
+        />
+      </FadeIn>.
+      {formData.newJobSeasonDate && (
+        <>
+          {" "}<TypedText text={rateLeadText} />
+          <FadeIn delay={typeDuration(rateLeadText)}>
+            <InlineNumber
+              value={priorRateDraft}
+              onChange={v => {
+                setPriorRateDraft(v);
+                const rate = v === "" ? null : parseFloat(v);
+                onChange({ targetIncomeAnnual: rate != null && rate > 0 ? Math.round(rate * 40 * 52) : null });
+              }}
+              placeholder="22.00"
+              width="72px"
+              ariaLabel="Prior hourly rate, dollars (optional)"
+            />
+          </FadeIn>{" "}
+          <TypedText text={rateTailText} />
+          <div className="text-sm" style={{ marginTop: "8px", lineHeight: 1.5, color: "var(--color-text-secondary)" }}>
+            Optional — used only to suggest a target income goal on your Re-employment Tracker
+            (assumes a standard 40hr week). Skip this if you&rsquo;d rather set a target manually later.
+          </div>
+        </>
+      )}
+    </p>
+  );
+}
+
+// Page C (final, jobless path): Wrap Up — mirrors real StepJoblessWrapUp's
+// read-only recap exactly (job loss date, unemployment benefits, target
+// income goal if set), reusing this file's own calcBoxStyle summary-card
+// treatment (WrapUpPage's net-breakdown card) rather than inventing new CSS.
+// No live net preview — there's no pay structure to preview yet, same as the
+// real page's own comment. isJoblessWrapUpValid is always true, so the
+// closing copy references the shared Finish Setup button directly.
+function JoblessWrapUpPage({ formData }) {
+  const fmt = n => `$${Number(n).toLocaleString()}`;
+  const readyText = "Ready to go — here's what we've got.";
+
+  return (
+    <>
+      <p style={{ ...BLANK_FONT, fontSize: "clamp(16px, 3.6vw, 20px)" }}>
+        <TypedText text={readyText} />
+      </p>
+      <FadeIn delay={typeDuration(readyText)}>
+        <div style={calcBoxStyle}>
+          <div className="text-sm" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)" }}>
+            <span>Job loss date</span>
+            <span style={{ fontFamily: "var(--font-mono)" }}>{formData.newJobSeasonDate ?? "—"}</span>
+          </div>
+          <div className="text-sm" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)" }}>
+            <span>Unemployment benefits</span>
+            <span style={{ fontFamily: "var(--font-mono)" }}>
+              {formData.unemploymentEnabled
+                ? `${fmt(formData.unemploymentWeekly ?? 0)}/wk × ${formData.unemploymentDurationWeeks ?? 0}wk`
+                : "None"}
+            </span>
+          </div>
+          {formData.targetIncomeAnnual != null && (
+            <div className="text-sm" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-primary)" }}>
+              <span>Target income goal</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>{fmt(formData.targetIncomeAnnual)}/yr</span>
+            </div>
+          )}
+        </div>
+        <p className="text-sm" style={{ marginTop: "16px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+          Tap Finish Setup to start your New Job Season. Whenever you&rsquo;re back to work, use Life
+          Events → Pay Structure Changed to fill in your real pay for the first time.
+        </p>
+      </FadeIn>
+    </>
+  );
+}
+
+// IDs of the three jobless-only pages, factored out so computeActivePages can filter
+// them in/out without repeating the literal list — see its own comment below.
+const JOBLESS_PAGE_IDS = ["joblessBenefits", "joblessDetails", "joblessWrapUp"];
+
+// Jobless users skip Schedule, Deductions, Tax Rates, and the employed Wrap Up
+// entirely — same as the real wizard's isFirstRunJobless gate skipping
+// STEP_DEFS id 2/3/4/7 outright — and instead get the three native jobless
+// pages below (STEP_DEFS id 10/11/12's ad-lib ports).
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
   { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
@@ -1908,34 +2332,94 @@ const PAGES = [
   { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage, skippable: true },
   { id: "taxRates", isValid: isTaxRatesValid, Component: TaxRatesPage },
   { id: "wrapUp", isValid: isWrapUpValid, Component: WrapUpPage },
+  { id: "joblessBenefits", isValid: isJoblessBenefitsValid, Component: JoblessBenefitsPage },
+  { id: "joblessDetails", isValid: isJoblessDetailsValid, Component: JoblessDetailsPage },
+  { id: "joblessWrapUp", isValid: isJoblessWrapUpValid, Component: JoblessWrapUpPage },
 ];
 
-// onHandoff(mergedFormData, initialStepId) — used ONLY for the jobless mini-flow now.
-// initialStepId is always 10 (Unemployment Benefits) when it fires — the only real-wizard
-// steps left, since Welcome and Pay Structure are the only ones a jobless first-run even
-// shows. App.jsx mounts the real SetupWizard at that step id; SetupWizard's own
-// handleComplete() (which also runs through finalizeWizardConfig) owns the eventual save.
+// Which pages are shown for a given formData + lifeEvent — mirrors real STEP_DEFS'
+// showIf/isFirstRunJobless gating (drift-app-warden §7 F141's gate-matrix update):
+//   - lifeEvent === null && startedUnemployed === true → the three native jobless pages
+//     (real wizard: STEP_DEFS id 0 → 10/11/12, now ported in-place instead of handed off).
+//     Gated on lifeEvent === null specifically — a lost_job/commission_job re-entry account
+//     can carry a stale startedUnemployed: true from a prior first-run jobless answer
+//     without that meaning anything on THIS re-entry (that field isn't asked/touched on any
+//     life-event path).
+//   - lost_job / commission_job → every page except Wrap Up and the jobless pages (real
+//     wizard: STEP_DEFS id 7's showIf excludes both — §7.3's gate matrix, "No" Wrap Up
+//     column).
+//   - everything else (first-run employed, structure_change, changed_jobs) → all five
+//     employed pages, jobless pages excluded.
+function computeActivePages(d, lifeEvent) {
+  if (lifeEvent === null && d.startedUnemployed === true) {
+    return [PAGES[0], ...PAGES.filter(p => JOBLESS_PAGE_IDS.includes(p.id))];
+  }
+  if (lifeEvent === "lost_job" || lifeEvent === "commission_job") {
+    return PAGES.filter(p => p.id !== "wrapUp" && !JOBLESS_PAGE_IDS.includes(p.id));
+  }
+  return PAGES.filter(p => !JOBLESS_PAGE_IDS.includes(p.id));
+}
+
+// onComplete(finalConfig) — fires once the wizard's last page (Wrap Up for an employed
+// user, the native Jobless Wrap Up for a first-run jobless user) is finished. formData is
+// run through the same finalizeWizardConfig() helper SetupWizard.jsx's handleComplete()
+// calls (src/lib/wizardComplete.js) before this fires, so App.jsx can hand finalConfig
+// straight to handleWizardComplete() — no re-normalization needed on the App.jsx side.
+// finalizeWizardConfig()'s buildYear() call tolerates a jobless config with no pay
+// structure at all (drift-app-warden §7 F5's standing invariant) — see F141.
 //
-// onComplete(finalConfig) — fires once an EMPLOYED user finishes Wrap Up. formData is run
-// through the same finalizeWizardConfig() helper SetupWizard.jsx's handleComplete() calls
-// (src/lib/wizardComplete.js) before this fires, so App.jsx can hand finalConfig straight to
-// handleWizardComplete() — no re-normalization needed on the App.jsx side.
-//
-// resumeFormData (optional): when the user already answered these pages, handed off into the
-// real wizard's jobless mini-flow, and then hit Back at the real wizard's very first step,
-// App.jsx reopens this component with the in-progress answers instead of the blanked
-// defaults, and resumes on the last page instead of page 0 — so Back lands them where they
-// left off in the ad-lib UI, not on the real wizard's stacked-field view of the same steps.
+// resumeFormData (optional): generic mid-wizard resume support — nothing in App.jsx feeds
+// this today (the jobless hand-off it was originally built for, F141, is gone — this
+// component owns its own three-page jobless mini-flow start to finish now), but the prop
+// and its pageIdx-at-last-page resume behavior stay, since a future resume entry point
+// (e.g. a saved-but-abandoned wizard session) could still use it.
 //
 // isInvestor (optional): mirrors SetupWizard.jsx's investor handling field-for-field — see
 // this file's header comment and IntakePage's isInvestor branches.
 //
+// lifeEvent (optional, default null): null (first-run) | "structure_change" | "lost_job" |
+// "changed_jobs" | "commission_job" — mirrors SetupWizard.jsx's own lifeEvent prop contract
+// (drift-app-warden §7 F139/F140). App.jsx only ever passes null or "structure_change"
+// directly (the only real entry points); "lost_job"/"commission_job"/"changed_jobs" are
+// reachable only via this component's own internal LifeEventPivot picker (curLifeEvent,
+// F140), never as the original `lifeEvent` prop value. Passing a non-null lifeEvent changes formData
+// init (no BLANK_PAY_FIELDS — pre-filled from the real config, matching SetupWizard.jsx's own
+// re-entry behavior), skips the employment-status question entirely (isIntakeValid/IntakePage
+// both gate on lifeEvent === null for that check), and excludes Wrap Up from activePages for
+// lost_job/commission_job specifically (both end after Tax Rates per the gate matrix).
+//
 // onCancel (optional): pass undefined for a real first-run, non-investor signup — no escape
-// hatch, matching SetupWizard's own uncancelable-first-run rule (drift-app-warden §7.3). The
-// Cancel button only renders when onCancel is provided (investor first-run only today).
-export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resumeFormData = null, isInvestor = false }) {
+// hatch, matching SetupWizard's own uncancelable-first-run rule (drift-app-warden §7.3). Every
+// life-event re-entry (lifeEvent !== null) IS cancelable, same as the real wizard — App.jsx
+// must pass a real closing function, not undefined, for those. The Cancel button only renders
+// when onCancel is provided.
+export function SetupWizardAdlib({ config, onComplete, onCancel, resumeFormData = null, isInvestor = false, lifeEvent = null }) {
+  // Internal life-event pivot (drift-app-warden §7 F140) — mirrors real SetupWizard.jsx's own
+  // local `[lifeEvent, setLifeEvent]` state (there seeded from its own `initialLifeEvent` prop).
+  // `lifeEvent` (the prop above) never changes after mount — it's the wizard's original entry
+  // point, used only for formData init (pre-fill vs. blank) and the jobless-mini-flow gates
+  // below, both of which are invariant across a pivot. `curLifeEvent` is what every page/gate
+  // downstream actually reacts to once the wizard is open — it starts equal to `lifeEvent` and
+  // changes only via LifeEventPivot's picker (IntakePage, gated on `onLifeEventChange` being
+  // passed at all, which only happens when the original entry was "structure_change").
+  const [curLifeEvent, setCurLifeEvent] = useState(lifeEvent);
+  // Frozen baseline for the structure_change "What's Changing" diff (item 3) — captured once
+  // at mount, before any edits, exactly like real SetupWizard.jsx's `originalConfig` useMemo.
+  // Irrelevant (never read) for any other lifeEvent value.
+  const [originalConfig] = useState(() => config);
   const [formData, setFormData] = useState(() => {
     if (resumeFormData) return resumeFormData;
+    if (lifeEvent !== null) {
+      // Re-entry: pre-filled from the account's real existing config — NOT blanked. Mirrors
+      // real SetupWizard.jsx's own re-entry formData init exactly, including its
+      // firstActiveIdx recompute (real wizard does this unconditionally on every open; a
+      // no-op here for first-run since BLANK_PAY_FIELDS already nulls startDate).
+      const base = isInvestor
+        ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
+        : { ...config };
+      if (base.startDate) base.firstActiveIdx = dateToWeekIdx(base.startDate);
+      return base;
+    }
     const base = isInvestor
       ? { ...config, ...BLANK_PAY_FIELDS, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
       : { ...config, ...BLANK_PAY_FIELDS };
@@ -1943,29 +2427,38 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
   });
   const [pageIdx, setPageIdx] = useState(() => {
     if (!resumeFormData) return 0;
-    const pages = resumeFormData.startedUnemployed === true ? [PAGES[0]] : PAGES;
+    const pages = computeActivePages(resumeFormData, lifeEvent);
     return pages.length - 1;
   });
   const [stepDir, setStepDir] = useState(1);
   const [attempted, setAttempted] = useState(false);
 
-  // Skipping straight to a single-page flow once "unemployed" is chosen —
-  // Schedule is irrelevant for the jobless mini-flow, same as the real
-  // wizard's isFirstRunJobless gate skipping it entirely.
-  const activePages = formData.startedUnemployed === true ? [PAGES[0]] : PAGES;
+  // Switching to the three native jobless pages once "unemployed" is chosen — Schedule/
+  // Deductions/Tax Rates/employed-Wrap-Up are irrelevant for the jobless mini-flow, same
+  // as the real wizard's isFirstRunJobless gate skipping them entirely. lost_job/
+  // commission_job exclude Wrap Up (and the jobless pages) instead — see
+  // computeActivePages. Gated on curLifeEvent, not the original lifeEvent prop, so a
+  // structure_change → lost_job/commission_job pivot immediately reshapes the page set
+  // (drift-app-warden §7 F140).
+  const activePages = computeActivePages(formData, curLifeEvent);
   const current = activePages[pageIdx];
   const isLast = pageIdx === activePages.length - 1;
-  const canProceed = current?.isValid(formData) ?? false;
+  const canProceed = current?.isValid(formData, curLifeEvent) ?? false;
   const progressPct = ((pageIdx + 1) / activePages.length) * 100;
 
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
   }
 
-  function finishEmployed() {
-    // Shared normalizer (src/lib/wizardComplete.js) — see docs/drift-app-warden.md §7 F5/F13.
-    // config is the prior/original config (undefined for a real first-run account, which is
-    // correct — finalizeWizardConfig treats a missing priorConfig as "tips were never on").
+  // Fires on the last page of ANY path — employed Wrap Up, the native Jobless Wrap Up
+  // (drift-app-warden §7 F141 — no more onHandoff hand-off into the real SetupWizard),
+  // or lost_job/commission_job's Tax Rates. Shared normalizer (src/lib/wizardComplete.js)
+  // — see docs/drift-app-warden.md §7 F5/F13. config is the prior/original config
+  // (undefined for a real first-run account, which is correct — finalizeWizardConfig
+  // treats a missing priorConfig as "tips were never on"). finalizeWizardConfig()'s
+  // buildYear() call tolerates the jobless path's no-pay-structure config shape (F5's
+  // standing invariant, re-confirmed for this native path by F141).
+  function finish() {
     onComplete(finalizeWizardConfig(formData, config));
   }
 
@@ -1973,8 +2466,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
     if (!canProceed) { setAttempted(true); return; }
     setAttempted(false);
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    if (formData.startedUnemployed === true) { onHandoff(formData, 10); return; }
-    finishEmployed();
+    finish();
   }
 
   // Mirrors real STEP_DEFS id 3's skippable:true — only the Deductions page offers this.
@@ -1983,8 +2475,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
   function handleSkip() {
     setAttempted(false);
     if (!isLast) { setStepDir(1); setPageIdx(i => i + 1); return; }
-    if (formData.startedUnemployed === true) { onHandoff(formData, 10); return; }
-    finishEmployed();
+    finish();
   }
 
   function handleBack() {
@@ -2002,7 +2493,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
       <div style={{ padding: "20px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right))", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: "720px", margin: "0 auto" }}>
           <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
-            Setup · {pageIdx + 1} of {activePages.length}
+            {curLifeEvent === null ? "Setup" : "Life Event"} · {pageIdx + 1} of {activePages.length}
           </div>
         </div>
         <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)", maxWidth: "720px", margin: "10px auto 0" }}>
@@ -2013,7 +2504,17 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
       <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "28px max(16px, env(safe-area-inset-left)) 28px max(16px, env(safe-area-inset-right))" }}>
         <div style={{ width: "100%", maxWidth: "720px" }}>
           <StepSlide stepKey={pageIdx} direction={stepDir}>
-            {current && <current.Component formData={formData} onChange={update} isInvestor={isInvestor} attempted={attempted} />}
+            {current && (
+              <current.Component
+                formData={formData}
+                onChange={update}
+                isInvestor={isInvestor}
+                attempted={attempted}
+                lifeEvent={curLifeEvent}
+                onLifeEventChange={lifeEvent === "structure_change" ? setCurLifeEvent : null}
+                originalConfig={originalConfig}
+              />
+            )}
           </StepSlide>
         </div>
       </div>
@@ -2056,7 +2557,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
               marginLeft: (!onCancel && pageIdx === 0 && !current?.skippable) ? "auto" : 0,
             }}
           >
-            {!isLast ? "Next" : formData.startedUnemployed === true ? "Continue Setup →" : "Finish Setup"}
+            {!isLast ? "Next" : "Finish Setup"}
           </Pressable>
         </div>
       </div>

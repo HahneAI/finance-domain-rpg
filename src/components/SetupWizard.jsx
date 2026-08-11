@@ -30,7 +30,8 @@ const lSp = { ...lS, color: "var(--color-text-primary)" };
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
 // ─────────────────────────────────────────────────────────────────────────────
-const LIFE_EVENTS = [
+// eslint-disable-next-line react-refresh/only-export-components -- shared with SetupWizardAdlib.jsx, drift-app-warden §7 F140
+export const LIFE_EVENTS = [
   { value: "structure_change", label: "Pay structure changed",  sub: "New rate, schedule, employer, or commission — rate-up wizard" },
   { value: "lost_job",         label: "Lost my job",            sub: "Updates pay structure, schedule, deductions, and tax rates" },
   { value: "changed_jobs",     label: "Changed jobs",           sub: "Full re-setup — FICA and tax strategy pre-filled from current config" },
@@ -1937,7 +1938,8 @@ function fmtDiffValue(field, val) {
   return String(val);
 }
 
-const DIFF_FIELDS = [
+// eslint-disable-next-line react-refresh/only-export-components -- shared with SetupWizardAdlib.jsx, drift-app-warden §7 F140/F7
+export const DIFF_FIELDS = [
   { key: "employerPreset",   label: "Employer" },
   { key: "userPaySchedule",  label: "Pay schedule" },
   { key: "baseRate",         label: "Base rate" },
@@ -1958,7 +1960,7 @@ const DIFF_FIELDS = [
   { key: "tipsCommissionOnlyPosition", label: "Commission-only position" },
 ];
 
-function StructureChangeDiff({ originalConfig, formData }) {
+export function StructureChangeDiff({ originalConfig, formData }) {
   // TODO §1.H4: a user who started jobless (never filled in real pay structure)
   // running Back to Work hits this same structure_change flow, but originalConfig's
   // pay fields are still DEFAULT_CONFIG placeholders (e.g. baseRate: 19.65) — not a

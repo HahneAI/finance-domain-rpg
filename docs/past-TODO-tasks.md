@@ -5,6 +5,117 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.3 — Ad-Lib Wizard jobless mini-flow ad-libbed, last hand-off removed (2026-08-11)
+
+*Closes the entire "wire ad-lib in as production" saga: §19.1 (field parity) → §19.2 (life-event
+re-entry) → §19.3 (this). `SetupWizardAdlib.jsx` is now the whole first-run (employed and jobless)
+and life-event-re-entry onboarding experience; `SetupWizard.jsx` is retained only as unmounted
+source/shared-export material. Drift-app-warden §7 F141.*
+
+- [x] **Three native jobless pages** — `JoblessBenefitsPage`/`JoblessDetailsPage`/
+  `JoblessWrapUpPage`, ported line-for-line from real `StepJoblessBenefits`/`StepJoblessDetails`/
+  `StepJoblessWrapUp` (`STEP_DEFS` ids 10/11/12), with matching `isJoblessBenefitsValid`/
+  `isJoblessDetailsValid`/`isJoblessWrapUpValid` gates. `computeActivePages` returns Intake + the
+  three jobless pages for the jobless gate instead of Intake-only + a hand-off.
+- [x] **Hand-off mechanism fully removed** — `onHandoff` prop, `App.jsx`'s
+  `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/`setWizardExiting` (dead once
+  `SetupWizard.jsx` stopped being mounted) all deleted; `closeWizardWithAnimation()` simplified to
+  a synchronous `setWizardEntry(null)`. `SetupWizard.jsx` is no longer mounted anywhere in
+  `App.jsx`. `initialStepId`/`onBackBeforeStart`/`resumeFormData` kept as generic, still-tested
+  wizard-navigation props even with no current caller.
+- [x] **Real latent bug found and fixed** — `IntakePage`'s employment-status select never seeded
+  `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` (only real `Step0`'s handler
+  did, which the old hand-off skipped past); ported `Step0`'s pill handler verbatim into
+  `IntakePage` once a full native completion test surfaced the gap.
+- [x] Full jobless-first-run completion test added (`SetupWizardAdlib.test.jsx`); `npm run
+  test:run` (1599 tests) and `vite build --mode production` both pass.
+- [x] `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7/§7.3, `docs/TODO.md` updated in the same
+  round.
+
+---
+
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 2: `structure_change` + `changed_jobs` (2026-08-11)
+
+- [x] **Reachability fix (the actual point of this round)** — round 1's `App.jsx` routing for
+  `wizardEntry === "lost_job" | "commission_job"` was real, correct plumbing for a state nothing
+  ever set: `LifeEventMenu.jsx` has no tile for either value, and the only real entry point,
+  `wizardEntry === "structure_change"` (the "Pay Structure Changed" tile), was still routed to
+  `SetupWizard.jsx`. Fixed by routing `wizardEntry === "structure_change"` to `SetupWizardAdlib`
+  too, and giving `SetupWizardAdlib` the internal life-event pivot picker
+  (`IntakePage`'s `LifeEventPivot`) real `SetupWizard.jsx`'s own `Step0` picker was always meant
+  to provide — `lost_job`/`changed_jobs`/`commission_job` are now reachable in practice, the same
+  way real `Step0`'s picker was designed to make them reachable
+- [x] **`LifeEventPivot`** — local `curLifeEvent` state (mirrors real `SetupWizard.jsx`'s own
+  local `lifeEvent` state, seeded from the `lifeEvent` prop); shows the real `structure_change`
+  Step0 intro copy ported verbatim (`"Update your pay structure."` + goals/expenses/logs-stay-put
+  explanation + start-date guidance) plus a "Something else changed instead?" picker beneath it —
+  the one deliberate deviation from a line-for-line Step0 port, since ad-lib has no separate first
+  "step" to show the intro on before a picker could appear; only rendered when the wizard's
+  original entry was `structure_change` (`onLifeEventChange` only threaded down in that case).
+  Every downstream page/gate (`computeActivePages`, `isXValid`, `WrapUpPage`'s diff gate, the
+  Commission Income clause) reacts to `curLifeEvent`, not the immutable `lifeEvent` prop
+- [x] **`StructureChangeDiff` + `DIFF_FIELDS` + `LIFE_EVENTS` now exported from `SetupWizard.jsx`**
+  and imported into `SetupWizardAdlib.jsx` — one source of truth on both wizards (drift-app-warden
+  §7 F7's "must never diverge" rule), not a second copy
+- [x] **`WrapUpPage` structure_change diff** — frozen `originalConfig` baseline captured once at
+  `SetupWizardAdlib` mount (`useState(() => config)`, mirrors real `useMemo(() => config, [])`),
+  threaded down and rendered via the shared `StructureChangeDiff` component, gated on
+  `curLifeEvent === "structure_change"` exactly like real `StepWrapUp`; the jobless-started
+  "no prior pay structure to diff" guard comes along for free since it's the same component
+- [x] **`changed_jobs` verified** — no changes needed beyond the shared pivot/pre-fill plumbing;
+  `computeActivePages` already returns the full 5-page set (default branch) for any lifeEvent
+  besides the jobless mini-flow/`lost_job`/`commission_job`; confirmed via `git grep changed_jobs`
+  across `SetupWizard.jsx` that nothing else is life-event-specific for this path
+- [x] **`App.jsx`** — `isAdlibLifeEvent` now also includes `"structure_change"`; `SetupWizard.jsx`
+  now only ever mounts for the jobless mini-flow's `initialStepId: 10` hand-off continuation.
+  `handleWizardComplete` needed no changes — confirmed it already reads `wizardEntry` (not a
+  pivot-aware param) for its `life_event:${wizardEntry}` tag, exactly matching real
+  `SetupWizard.jsx`'s own behavior (its internal `Step0` pivot never notified `App.jsx` either) —
+  see the session report's judgment-call note
+- [x] Tests: 5 new cases in `SetupWizardAdlib.test.jsx` — `structure_change` intro + picker
+  render, pivot to `commission_job` (page set shrinks, Commission field appears), pivot to
+  `changed_jobs` (stays 5 pages, no diff), `structure_change` completion with a real diff render,
+  `changed_jobs` direct-entry completion with no diff
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F140 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.2 (all four life-event paths now closed)
+- [x] Field housekeeping (F7) — `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS`; every key
+  already present, no new fields introduced by the diff mechanism itself, no gaps found
+
+---
+
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 1: `lost_job` + `commission_job` (2026-08-11)
+
+- [x] **`SetupWizardAdlib.jsx` gains a `lifeEvent` prop** — mirrors `SetupWizard.jsx`'s own
+  contract (`null | "structure_change" | "lost_job" | "changed_jobs" | "commission_job"`); default
+  `null` preserves every existing first-run behavior unchanged
+- [x] **Shared re-entry plumbing** — `formData` pre-fills from the real config instead of
+  `BLANK_PAY_FIELDS` when `lifeEvent !== null`; employment-status question skipped entirely
+  (`isIntakeValid`/`IntakePage` gate on `lifeEvent === null`, `isEmployed` forced `true`); new
+  `computeActivePages()` helper drops Wrap Up from the page set for `lost_job`/`commission_job`
+  specifically (both commit through `finalizeWizardConfig()` at the end of Tax Rates instead);
+  jobless single-page shortcut and hand-off both explicitly re-gated on `lifeEvent === null`
+- [x] **`commission_job` Commission Income field** — ported from real Step1
+  (`SetupWizard.jsx:782–809`) into `IntakePage`, gated on `payStructureComplete`; writes the
+  pre-existing `commissionMonthly` field (already fully covered in `DEFAULT_CONFIG`/
+  `HISTORY_SENSITIVE_FIELDS`/`finance.js` — no housekeeping gap)
+- [x] **`lost_job`** verified to need no fields beyond the shared plumbing — legacy wizard route,
+  primary entry is now `NewJobSeasonEntry`
+- [x] **`App.jsx` routing** — `wizardEntry === "lost_job" | "commission_job"` now mounts
+  `SetupWizardAdlib` (cancelable, unlike first-run) instead of `SetupWizard.jsx`; `SetupWizard.jsx`'s
+  own mount condition excludes both values, including from its `wizardExiting` close-animation
+  fallback, to prevent a transient double-mount
+- [x] Tests: 4 new cases in `SetupWizardAdlib.test.jsx` (`lost_job` completion — 4 pages, no Wrap
+  Up, cancelable; `commission_job` completion incl. `commissionMonthly`; Commission Income clause
+  absent on `lost_job`; first-run behavior unchanged)
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F139 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.1.B/§19.2
+- [ ] **Not done this round** — `structure_change` (needs frozen `originalConfigRef` baseline +
+  `StructureChangeDiff` summary + jobless-Back-to-Work special case + real Step0 copy ported
+  verbatim) and `changed_jobs` (full re-run, same page set as first-run) both still route to
+  `SetupWizard.jsx` — tracked in `docs/TODO.md` §19.2
+
+---
+
 ## DHL Warehouse Site (2026-08-09)
 
 - [x] **`dhlSite` field ("WAREHOUSE" | "PLANT" | null)** — Plant is the fallback for anything but

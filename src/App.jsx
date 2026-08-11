@@ -15,7 +15,6 @@ import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
-import { SetupWizard } from "./components/SetupWizard.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -362,22 +361,14 @@ export default function App() {
   const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
-  // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
-  // Allows the wizard to stay mounted during exit animation, then unmount after.
-  const [wizardExiting, setWizardExiting] = useState(false);
-  // SetupWizardAdlib is now the real production first-run wizard (see its own header
-  // comment + CLAUDE.md's SetupWizardAdlib.jsx section) — mounted below whenever
-  // `wizardEntry === false` and there's no in-progress jobless hand-off. adlibHandoff
-  // carries the jobless mini-flow's collected answers + which real STEP_DEFS id to
-  // resume at (always 10) once the ad-lib pages are done; kept separate from `config`
-  // so nothing is written/autosaved until the real wizard's own onComplete actually
-  // fires (that wizard's own handleComplete() owns the eventual save for this path).
-  const [adlibHandoff, setAdlibHandoff] = useState(null);
-  // Set only when Back is hit on the real wizard's first handed-off step (jobless
-  // mini-flow only) — reopens SetupWizardAdlib pre-filled with the in-progress answers
-  // instead of blank, so the user lands back on the ad-lib page they left, not the
-  // real wizard's stacked-field view of the same steps.
-  const [adlibResumeData, setAdlibResumeData] = useState(null);
+  // SetupWizardAdlib is now the real production wizard for every path — first-run
+  // (employed and jobless) and every life-event re-entry (see its own header comment +
+  // CLAUDE.md's SetupWizardAdlib.jsx section) — mounted below whenever `wizardEntry`
+  // is `false` or a life-event string. The former jobless-mini-flow hand-off into the
+  // real SetupWizard (`adlibHandoff`/`adlibResumeData` state, `onHandoff`/
+  // `onBackBeforeStart` props) was removed once the jobless mini-flow was ported to
+  // three native ad-lib pages (drift-app-warden §7 F141) — SetupWizardAdlib now owns
+  // that path start to finish, so nothing hands off to a second component anymore.
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -1798,14 +1789,16 @@ export default function App() {
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SetupWizard exit animation — triggers fold-lift exit, waits 180ms, then unmounts
+  // Closes whichever wizard mount is open. Historically this staged a 180ms
+  // fold-lift exit (`wizardExiting`) before unmounting, matching real
+  // SetupWizard.jsx's own `isExiting`-driven exit animation — but SetupWizard.jsx
+  // is no longer mounted anywhere (F141: the jobless mini-flow it was kept
+  // around for went native), and SetupWizardAdlib has no exit-animation prop of
+  // its own to stage, so the delay had nothing left to wait for. Removed along
+  // with the now-fully-dead `wizardExiting`/`setWizardExiting` state.
   // ─────────────────────────────────────────────────────────────────────────────
   function closeWizardWithAnimation() {
-    setWizardExiting(true);
-    setTimeout(() => {
-      setWizardEntry(null);
-      setWizardExiting(false);
-    }, 180);
+    setWizardEntry(null);
   }
 
   // Ask Coach exit animation — same fold-lift-out timing/pattern as the
@@ -2133,6 +2126,13 @@ export default function App() {
       )}
     </>
   );
+
+  // Every wizardEntry value routes to SetupWizardAdlib now (docs/drift-app-warden.md §7.3's
+  // gate matrix) — see the single SetupWizardAdlib mount further down. "structure_change" is
+  // the only life-event string ever set here directly (LifeEventMenu's "Pay Structure
+  // Changed" tile); SetupWizardAdlib's own internal life-event pivot picker (IntakePage's
+  // LifeEventPivot) is what makes "lost_job"/"changed_jobs"/"commission_job" reachable in
+  // practice — a user pivots away from "structure_change" from inside the same mount.
 
   // Post-login fade animation: render both LoginScreen (fading out) and App shell
   // (fading in) during the 340ms transition. After fade completes, render only shell.
@@ -3937,71 +3937,46 @@ export default function App() {
           savePersistedStateNow({ config: nextConfig });
         }}
       />
-      {/* ── Setup wizard — re-entry (life event string), OR first-run's jobless mini-flow
-           continuation once SetupWizardAdlib has handed off into it (adlibHandoff set).
-           SetupWizard.jsx owns every life-event re-entry unchanged; for first-run
-           (wizardEntry===false) it only ever mounts here for the jobless continuation —
-           see the SetupWizardAdlib mount just below for the real first-run entry point. */}
-      {(wizardEntry !== null && wizardEntry !== false || (wizardEntry === false && adlibHandoff) || wizardExiting) && (
-        <SetupWizard
-          config={adlibHandoff?.config ?? config}
-          initialStepId={adlibHandoff?.initialStepId ?? null}
-          onBackBeforeStart={
-            adlibHandoff
-              ? (inProgressFormData) => {
-                  setAdlibHandoff(null);
-                  setAdlibResumeData(inProgressFormData);
-                  closeWizardWithAnimation();
-                }
-              : undefined
-          }
-          onComplete={(mergedConfig) => {
-            setAdlibHandoff(null);
-            handleWizardComplete(mergedConfig);
-          }}
+      {/* ── Setup wizard — SetupWizard.jsx is no longer mounted anywhere in the app. The one
+           remaining user-facing path that used to mount it (the jobless mini-flow's
+           initialStepId: 10 hand-off continuation) was ported to three native SetupWizardAdlib
+           pages (drift-app-warden §7 F141), so every wizardEntry value — first-run (false) and
+           every life-event string (structure_change, lost_job, commission_job, changed_jobs) —
+           now routes to SetupWizardAdlib below, start to finish, with nothing handing off to a
+           second component. SetupWizard.jsx itself is retained unchanged as the source
+           components (StepJoblessBenefits/StepJoblessDetails/StepJoblessWrapUp, STEP_DEFS ids
+           10-12) those native pages were ported from, and as LIFE_EVENTS/DIFF_FIELDS/
+           StructureChangeDiff's shared export home — see CLAUDE.md's SetupWizardAdlib.jsx
+           section. */}
+      {/* ── SetupWizardAdlib — the REAL production wizard for first-run onboarding (employed
+           and jobless, wizardEntry===false) AND every life-event re-entry (wizardEntry is a
+           life-event string: structure_change — the real, only entry point, LifeEventMenu's
+           "Pay Structure Changed" tile — plus lost_job/commission_job/changed_jobs, all three
+           reachable only via SetupWizardAdlib's own internal LifeEventPivot picker). See its
+           own header comment for the save path (finalizeWizardConfig → onComplete →
+           handleWizardComplete). handleWizardComplete already reads wizardEntry itself for its
+           `life_event:${wizardEntry}` configHistory source and its structure_change-only
+           branches — no change needed there for any of these values, including once
+           SetupWizardAdlib's own internal life-event pivot (LifeEventPivot, F140) changes
+           curLifeEvent away from wizardEntry: real SetupWizard.jsx's own Step0 pivot never
+           notified App.jsx of its internal lifeEvent change either, so handleWizardComplete's
+           tagging staying keyed to the original wizardEntry value (not the pivoted one) matches
+           existing, intentional behavior rather than diverging from it. */}
+      {wizardEntry !== null && (
+        <SetupWizardAdlib
+          config={config}
+          lifeEvent={wizardEntry === false ? null : wizardEntry}
+          isInvestor={config.isInvestor}
           onCancel={
             wizardEntry !== false
               ? () => closeWizardWithAnimation()
               : config.isInvestor
                 ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
-                // Jobless mini-flow continuation (adlibHandoff set, non-investor) and
-                // regular first-run must both stay uncancelable — undefined here (not a
-                // no-op function) is what makes SetupWizard omit the Cancel button
-                // entirely. Backing out of the jobless continuation instead uses
-                // onBackBeforeStart above, which returns the user to SetupWizardAdlib.
+                // Regular first-run (non-investor) stays uncancelable — no escape hatch,
+                // matching SetupWizard's own uncancelable-first-run rule.
                 : undefined
           }
-          lifeEvent={wizardEntry === false ? null : wizardEntry}
-          isInvestor={config.isInvestor}
-          isExiting={wizardExiting}
-        />
-      )}
-      {/* ── SetupWizardAdlib — the REAL production first-run onboarding wizard for an
-           employed (or investor) signup, mounted whenever wizardEntry===false and there's
-           no in-progress jobless hand-off. See its own header comment for the save path
-           (finalizeWizardConfig → onComplete → handleWizardComplete). The jobless mini-flow
-           still hands off into the real SetupWizard above (id 10) via onHandoff; a Back at
-           that step reopens this component pre-filled via adlibResumeData/onBackBeforeStart. */}
-      {wizardEntry === false && !adlibHandoff && (
-        <SetupWizardAdlib
-          config={config}
-          isInvestor={config.isInvestor}
-          resumeFormData={adlibResumeData}
-          onCancel={
-            config.isInvestor
-              ? () => { setAdlibResumeData(null); closeWizardWithAnimation(); setActiveInvestorAccount(1); }
-              // Regular first-run (non-investor) stays uncancelable — no escape hatch,
-              // matching SetupWizard's own uncancelable-first-run rule.
-              : undefined
-          }
-          onHandoff={(mergedFormData, initialStepId) => {
-            setAdlibResumeData(null);
-            setAdlibHandoff({ config: mergedFormData, initialStepId });
-          }}
-          onComplete={(finalConfig) => {
-            setAdlibResumeData(null);
-            handleWizardComplete(finalConfig);
-          }}
+          onComplete={(finalConfig) => handleWizardComplete(finalConfig)}
         />
       )}
     </div>

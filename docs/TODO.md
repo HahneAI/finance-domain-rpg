@@ -4342,15 +4342,16 @@ equivalent already.*
       prop with equivalent handling, or explicitly keep investor first-run on the real
       `SetupWizard` (documented exception) — either is fine, but it must be a decision, not an
       oversight.
-- [ ] **Life-event re-entry** (`structure_change`, `lost_job`, `changed_jobs`, `commission_job`)
-      — `SetupWizardAdlib` has no `lifeEvent` concept whatsoever: no pre-fill from
-      `originalConfig`, no `StructureChangeDiff` "What's Changing" summary, no Commission Income
-      field (`lifeEvent === "commission_job"` only, `SetupWizard.jsx:782–809`), no employer-preset
-      switch callout. **Recommended scope for this promotion:** ad-lib replaces `SetupWizard` only
-      for first-run (`wizardEntry === false`, non-investor or investor-per-decision-above);
-      `SetupWizard.jsx` stays mounted, unchanged, for every life-event string and the jobless
-      mini-flow continuation. State this decision explicitly in the PR/commit — don't let it be
-      implied.
+- [x] **Life-event re-entry** (`structure_change`, `lost_job`, `changed_jobs`, `commission_job`)
+      — **originally scoped out** ("ad-lib replaces `SetupWizard` only for first-run" — see the
+      struck-through recommendation this bullet used to carry) **but now explicitly requested and
+      underway, path by path — see §19.2 below.** 2026-08-11 round: `lost_job` and
+      `commission_job` are done (`SetupWizardAdlib` gained a `lifeEvent` prop — pre-fill from the
+      real config instead of blanking, skip the employment-status question, drop Wrap Up, add the
+      Commission Income field for `commission_job`). `structure_change` (pre-fill + frozen
+      `originalConfigRef` baseline + `StructureChangeDiff` "What's Changing" summary +
+      jobless-Back-to-Work interaction) and `changed_jobs` (full re-run against existing account
+      data) are still real-`SetupWizard`-only — tracked in §19.2.
 - [ ] **Jobless mini-flow** (STEP_DEFS ids 10/11/12: Unemployment Benefits, Job Loss Details,
       Jobless Wrap Up) — confirm the hand-off (`initialStepId: 10`) stays the intended permanent
       shape, not a temporary stopgap. If it's permanent, no further work; if it's meant to be
@@ -4540,3 +4541,46 @@ false checklist per CLAUDE.md's own drift-warden philosophy)*
       §9, pointing to CLAUDE.md/drift-app-warden for full detail rather than duplicating it.
 - [x] `docs/past-TODO-tasks.md` — closed out with a new "§19.1 — Ad-Lib Wizard field-parity
       rounds 3-4 + housekeeping + accessibility (2026-08-10)" entry, one-liner per F131–F137.
+
+### 19.2 Life-Event Re-Entry Expansion — Path By Path
+
+*Opened 2026-08-11. §19.1.B originally scoped life-event re-entry out ("ad-lib replaces
+SetupWizard only for first-run... SetupWizard.jsx stays mounted, unchanged, for every life-event
+string"). Anthony has now explicitly requested the opposite — every life-event path converted to
+the ad-lib mad-libs style, same as first-run. This is being done in rounds, one or two paths at a
+time (drift-app-warden §7.3's gate matrix is the authoritative per-path reference — read it before
+touching any of this). Progress:*
+
+- [x] **`lost_job`** (2026-08-11) — `SetupWizardAdlib` gained a `lifeEvent` prop; formData
+      pre-fills from the real config instead of blanking (`BLANK_PAY_FIELDS` is first-run only
+      now); the employment-status question is skipped entirely (`isIntakeValid`/`IntakePage` both
+      gate that check on `lifeEvent === null`); Wrap Up is excluded from `activePages` (commits
+      through `finalizeWizardConfig()` at the end of Tax Rates instead, matching real `STEP_DEFS`
+      id 7's `showIf`). New re-entry intro copy ("Let's rebuild your pay for the new job.") — see
+      the judgment-call note in the commit/session report; there's no real Step0 branch specific
+      to `lost_job` to port verbatim, only `structure_change` gets its own Step0 copy on the real
+      wizard. `App.jsx`'s `wizardEntry === "lost_job"` now mounts `SetupWizardAdlib` instead of
+      `SetupWizard.jsx`; cancelable (unlike first-run).
+- [x] **`commission_job`** (2026-08-11) — same shared plumbing as `lost_job`, plus the Commission
+      Income field ported into `IntakePage` (mirrors real Step1's field exactly — Pill-equivalent
+      toggle + Monthly Average, gated on `payStructureComplete`, applies to both DHL and base
+      users). Re-entry intro copy: "Let's add your commission job to your pay structure." (same
+      judgment-call caveat as `lost_job`'s copy). No new stored field — `commissionMonthly` already
+      existed in `DEFAULT_CONFIG`/`HISTORY_SENSITIVE_FIELDS`/`finance.js`'s income math.
+- [ ] **`structure_change`** — not started. Needs: pre-fill (shared with the above two, already
+      built) + a frozen `originalConfigRef` baseline (real wizard uses `useMemo(() => config, [])`
+      at wizard-open time) + the `StructureChangeDiff` "What's Changing" summary rendered inside
+      Wrap Up (structure_change is the one re-entry path that DOES show Wrap Up — real `STEP_DEFS`
+      id 7's `showIf` includes it) + clearing `startedUnemployed` on completion when the account
+      was jobless-started (real `handleWizardComplete`'s own special case, `App.jsx` — verify this
+      still fires correctly for an ad-lib-driven completion) + Food-expense restoration for the
+      same case. Real Step0 has bespoke copy for this path specifically
+      (`SetupWizard.jsx:109–136`) — port it verbatim this time, unlike the new copy written for
+      `lost_job`/`commission_job` above.
+- [ ] **`changed_jobs`** — not started. Full re-run against existing account data, same page set
+      as first-run employed (0→1→2→3→4→7, Wrap Up included). Lowest-risk of the two remaining
+      paths structurally (no diff table, no jobless-interaction edge case) — likely the better
+      candidate to pick up next.
+- [ ] Once all four life-event strings are covered, revisit whether `SetupWizard.jsx` can be
+      retired entirely (still needed for the jobless mini-flow hand-off — `initialStepId: 10` —
+      regardless of how the other four paths end up).

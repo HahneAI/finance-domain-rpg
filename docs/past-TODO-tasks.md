@@ -5,6 +5,39 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 1: `lost_job` + `commission_job` (2026-08-11)
+
+- [x] **`SetupWizardAdlib.jsx` gains a `lifeEvent` prop** — mirrors `SetupWizard.jsx`'s own
+  contract (`null | "structure_change" | "lost_job" | "changed_jobs" | "commission_job"`); default
+  `null` preserves every existing first-run behavior unchanged
+- [x] **Shared re-entry plumbing** — `formData` pre-fills from the real config instead of
+  `BLANK_PAY_FIELDS` when `lifeEvent !== null`; employment-status question skipped entirely
+  (`isIntakeValid`/`IntakePage` gate on `lifeEvent === null`, `isEmployed` forced `true`); new
+  `computeActivePages()` helper drops Wrap Up from the page set for `lost_job`/`commission_job`
+  specifically (both commit through `finalizeWizardConfig()` at the end of Tax Rates instead);
+  jobless single-page shortcut and hand-off both explicitly re-gated on `lifeEvent === null`
+- [x] **`commission_job` Commission Income field** — ported from real Step1
+  (`SetupWizard.jsx:782–809`) into `IntakePage`, gated on `payStructureComplete`; writes the
+  pre-existing `commissionMonthly` field (already fully covered in `DEFAULT_CONFIG`/
+  `HISTORY_SENSITIVE_FIELDS`/`finance.js` — no housekeeping gap)
+- [x] **`lost_job`** verified to need no fields beyond the shared plumbing — legacy wizard route,
+  primary entry is now `NewJobSeasonEntry`
+- [x] **`App.jsx` routing** — `wizardEntry === "lost_job" | "commission_job"` now mounts
+  `SetupWizardAdlib` (cancelable, unlike first-run) instead of `SetupWizard.jsx`; `SetupWizard.jsx`'s
+  own mount condition excludes both values, including from its `wizardExiting` close-animation
+  fallback, to prevent a transient double-mount
+- [x] Tests: 4 new cases in `SetupWizardAdlib.test.jsx` (`lost_job` completion — 4 pages, no Wrap
+  Up, cancelable; `commission_job` completion incl. `commissionMonthly`; Commission Income clause
+  absent on `lost_job`; first-run behavior unchanged)
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F139 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.1.B/§19.2
+- [ ] **Not done this round** — `structure_change` (needs frozen `originalConfigRef` baseline +
+  `StructureChangeDiff` summary + jobless-Back-to-Work special case + real Step0 copy ported
+  verbatim) and `changed_jobs` (full re-run, same page set as first-run) both still route to
+  `SetupWizard.jsx` — tracked in `docs/TODO.md` §19.2
+
+---
+
 ## DHL Warehouse Site (2026-08-09)
 
 - [x] **`dhlSite` field ("WAREHOUSE" | "PLANT" | null)** — Plant is the fallback for anything but

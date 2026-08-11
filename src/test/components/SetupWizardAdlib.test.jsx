@@ -896,3 +896,95 @@ describe('SetupWizardAdlib — resumeFormData', () => {
     expect(primaryBtn()).toHaveTextContent(/continue setup/i)
   })
 })
+
+// ── lifeEvent re-entry (drift-app-warden §7 F139) — lost_job and commission_job both skip
+// the employment-status question and Wrap Up entirely, and pre-fill formData from the real
+// account config instead of blanking it (BLANK_PAY_FIELDS is first-run only).
+describe('SetupWizardAdlib — lifeEvent re-entry plumbing (lost_job / commission_job)', () => {
+  // A config close to DEFAULT_CONFIG but with the Schedule/Deductions fields an already-set-up
+  // account would actually have answered — DEFAULT_CONFIG alone leaves startDate/
+  // maxWeeklyHours/hoursUnderstood/attendanceBucketEnabled null, which isIntakeValid doesn't
+  // require (base-user rate/shift fields are DEFAULT_CONFIG's own non-null defaults) but
+  // isScheduleValid/isDeductionsValid do.
+  const reEntryConfig = {
+    ...DEFAULT_CONFIG,
+    startedUnemployed: false,
+    startDate: '2026-01-01',
+    firstActiveIdx: 0,
+    maxWeeklyHours: 40,
+    hoursUnderstood: true,
+    attendanceBucketEnabled: true,
+  }
+
+  it('lost_job: skips the employment-status clause, shows re-entry intro copy, is cancelable, and ends after Tax Rates (4 pages, no Wrap Up)', () => {
+    const onComplete = vi.fn()
+    const onHandoff = vi.fn()
+    const onCancel = vi.fn()
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="lost_job" onHandoff={onHandoff} onComplete={onComplete} onCancel={onCancel} />)
+
+    expect(screen.queryByText(byText(/right now, i am/i))).toBeNull()
+    expect(screen.getByText(byText(/rebuild your pay for the new job/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Life Event · 1 of 4/i))).toBeTruthy()
+    expect(screen.getByText(byText(/I work for/i))).toBeTruthy() // pay-structure clauses render immediately — isEmployed forced true
+    expect(primaryBtn()).not.toBeDisabled() // reEntryConfig's pay fields already satisfy isIntakeValid
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    expect(screen.getByText(byText(/Life Event · 2 of 4/i))).toBeTruthy()
+    fireEvent.click(primaryBtn()) // -> Deductions
+    expect(screen.getByText(byText(/Life Event · 3 of 4/i))).toBeTruthy()
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    expect(screen.getByText(byText(/Life Event · 4 of 4/i))).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/finish setup/i) // last page — Tax Rates, not Wrap Up
+    expect(screen.queryByText(byText(/here's my estimated/i))).toBeNull() // Wrap Up never renders
+
+    fireEvent.click(primaryBtn())
+    expect(onHandoff).not.toHaveBeenCalled()
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    const finalConfig = onComplete.mock.calls[0][0]
+    // Wrap-Up-only fields still default correctly even with no Wrap Up page (finalizeWizardConfig
+    // is unconditional — drift-app-warden §7 F5/F13).
+    expect(finalConfig.setupComplete).toBe(true)
+    expect(finalConfig.accountCreatedIdx).not.toBeNull()
+    expect(Array.isArray(finalConfig.taxedWeeks)).toBe(true)
+    expect(finalConfig.freedomAllowanceEnabled).not.toBe(false)
+    expect(finalConfig.freedomAllowance).toBe(reEntryConfig.freedomAllowance ?? 50)
+  })
+
+  it('commission_job: shows re-entry intro copy and the Commission Income clause, ends after Tax Rates, and persists commissionMonthly', () => {
+    const onComplete = vi.fn()
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="commission_job" onHandoff={vi.fn()} onComplete={onComplete} onCancel={vi.fn()} />)
+
+    expect(screen.getByText(byText(/add your commission job to your pay structure/i))).toBeTruthy()
+    expect(screen.getByText(byText(/my pay also/i))).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Commission income'), { target: { value: 'yes' } })
+    fireEvent.change(screen.getByLabelText('Commission monthly average, dollars'), { target: { value: '900' } })
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    fireEvent.click(primaryBtn()) // -> Deductions
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    expect(screen.getByText(byText(/Life Event · 4 of 4/i))).toBeTruthy()
+    fireEvent.click(primaryBtn())
+
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    const finalConfig = onComplete.mock.calls[0][0]
+    expect(finalConfig.commissionMonthly).toBe(900)
+    expect(finalConfig.setupComplete).toBe(true)
+    expect(Array.isArray(finalConfig.taxedWeeks)).toBe(true)
+  })
+
+  it("doesn't reveal the Commission Income clause on the lost_job path", () => {
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="lost_job" onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} />)
+    expect(screen.queryByText(byText(/my pay also/i))).toBeNull()
+  })
+
+  it('first-run (lifeEvent omitted/null) behavior is unchanged — still blanks formData and asks employment status first', () => {
+    renderAdlib(DEFAULT_CONFIG)
+    expect(screen.getByText(byText(/Setup · 1 of 5/i))).toBeTruthy()
+    expect(screen.getByText(byText(/right now, i am/i))).toBeTruthy()
+    expect(primaryBtn()).toBeDisabled()
+  })
+})

@@ -3113,7 +3113,8 @@ export default function App() {
             <Pressable
               onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               className="text-xs" style={{
-                display: "block", width: "100%", textAlign: "left",
+                display: "flex", alignItems: "center", gap: "10px",
+                width: "100%", textAlign: "left",
                 padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
                 color: "var(--color-text-primary)",
@@ -3121,6 +3122,15 @@ export default function App() {
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
+              {/* Gavel — signals a deliberate, consequential change (job loss,
+                  new job, pay-structure change), distinct from routine nav icons. */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+                <path d="m16 16 6-6" />
+                <path d="m8 8 6-6" />
+                <path d="m9 7 8 8" />
+                <path d="m21 11-8-8" />
+              </svg>
               Life Events
             </Pressable>
             {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
@@ -3443,9 +3453,28 @@ export default function App() {
           </div>
         )}
 
-        {/* Active section indicator at bottom */}
-        <div className="text-xs" style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+        {/* Drawer footer — week/pay-period counter (moved here from the mobile
+            header/nav bar), then the active-section indicator below it. */}
+        <div style={{ borderTop: "1px solid #1e1e1e" }}>
+          {currentWeekNumber && (
+            <div style={{ padding: "14px 20px 0" }}>
+              <div className="text-2xs" style={{
+                display: "inline-block",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                padding: "3px 10px",
+                background: "rgba(0,200,150,0.14)",
+                color: "var(--color-green)",
+                border: "1px solid rgba(0,200,150,0.32)",
+                borderRadius: "10px",
+              }}>
+                {currentWeekLabel}
+              </div>
+            </div>
+          )}
+          <div className="text-xs" style={{ padding: "16px 20px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
+            Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+          </div>
         </div>
       </div>
 
@@ -3454,9 +3483,6 @@ export default function App() {
         className="mobile-bottom-nav"
         style={{
           display: "none",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "8px",
           position: "fixed",
           bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
           left: "16px",
@@ -3467,22 +3493,6 @@ export default function App() {
           transition: "opacity 0.25s ease",
         }}
       >
-        {/* Week / pay-period counter — moved down here from the mobile header
-            so the header stays to nav + brand + bell, per docs/TODO.md's
-            header cleanup. */}
-        {currentWeekNumber && (
-          <div className="text-2xs" style={{
-            letterSpacing: "1px",
-            textTransform: "uppercase",
-            padding: "3px 10px",
-            background: "rgba(0,200,150,0.14)",
-            color: "var(--color-green)",
-            border: "1px solid rgba(0,200,150,0.32)",
-            borderRadius: "10px",
-          }}>
-            {currentWeekLabel}
-          </div>
-        )}
         <LiquidGlass
           purpose="nav"
           tone="teal"

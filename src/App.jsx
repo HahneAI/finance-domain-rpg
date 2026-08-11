@@ -140,6 +140,11 @@ const BOTTOM_NAV = [
   },
 ];
 
+// key -> icon lookup, shared so the hamburger drawer's nav items can reuse
+// the exact same icons as BOTTOM_NAV instead of a second icon set drifting
+// out of sync with it.
+const NAV_ICONS = Object.fromEntries(BOTTOM_NAV.map(i => [i.key, i.icon]));
+
 // §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
@@ -164,21 +169,29 @@ function SidebarNavItem({ item, active, onClick }) {
     <Pressable
       onClick={onClick}
       className="text-xs" style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
         width: "100%",
         textAlign: "left",
-        padding: "14px 20px",
+        padding: "13px 20px 13px 17px",
+        margin: "2px 8px 2px 0",
         letterSpacing: "2px",
         textTransform: "uppercase",
-       
-        background: active ? "var(--color-bg-surface)" : "transparent",
+        background: active ? "rgba(0,200,150,0.12)" : "transparent",
         color: active ? "var(--color-teal)" : "var(--color-text-primary)",
-        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
+        borderLeft: active ? "3px solid var(--color-accent-primary)" : "3px solid transparent",
+        borderRadius: active ? "0 12px 12px 0" : "0 12px 12px 0",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.15s",
+        transition: "background 0.15s, color 0.15s",
       }}
     >
+      {item.icon && (
+        <span style={{ display: "flex", flexShrink: 0, color: active ? "var(--color-teal)" : "var(--color-text-secondary)", transition: "color 0.15s" }}>
+          {item.icon}
+        </span>
+      )}
       {item.label}
     </Pressable>
   );
@@ -2276,7 +2289,9 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div>
-                <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {config.employerPreset === "DHL" && (
+                  <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+                )}
                 <div className="text-base" style={{ fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
@@ -2633,8 +2648,11 @@ export default function App() {
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
-            <div className="text-md" style={{ fontWeight: "bold", flexShrink: 0 }}>A:Fin</div>
-            {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
+            {/* Brand title — deliberately bigger/heavier than the .text-* body scale
+                (which tops out at 14px via .text-md) to read as an app title, not
+                a label. Same weight/letter-spacing tier as the display-font headings
+                (see index.css's font-weight:900 heading tier). */}
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "19px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1, flexShrink: 0 }}>A:Fin</div>
             {isAdmin && tempLockDate && (
               <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -3029,7 +3047,11 @@ export default function App() {
         }}
       />
 
-      {/* ── Mobile drawer (slide-in sidebar) ── */}
+      {/* ── Mobile drawer (slide-in sidebar) ──
+          Revamp (subtle): gradient background + soft outward shadow instead of a
+          flat surface color + hardcoded #2a2a2a border, so the drawer reads as a
+          raised panel like the rest of the Flow shell (LiquidGlass bottom nav,
+          modals) instead of the oldest untouched surface in the app. */}
       <div
         className={`mobile-drawer-overlay drawer-slide${drawerOpen ? " open" : ""}`}
         style={{
@@ -3038,8 +3060,9 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid #2a2a2a",
+          background: "var(--color-bg-gradient)",
+          borderRight: "1px solid var(--color-border-accent)",
+          boxShadow: "8px 0 32px rgba(0, 0, 0, 0.5)",
           zIndex: 50,
           display: "flex",
           flexDirection: "column",
@@ -3048,7 +3071,12 @@ export default function App() {
         {/* Drawer header */}
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            {/* Tagline only exists for an employer-preset account (today, only
+                DHL) — a base user has no employer badge to show at all, so no
+                "Finance" placeholder fallback. */}
+            {config.employerPreset === "DHL" && (
+              <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+            )}
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -3073,11 +3101,12 @@ export default function App() {
           </div>
         </div>
 
-        {/* Drawer nav items */}
+        {/* Drawer nav items — icons mirror BOTTOM_NAV via NAV_ICONS so the
+            hamburger menu and the floating bottom nav never drift apart. */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
-          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
+          <SidebarNavItem item={{ key: "home", label: "Home", icon: NAV_ICONS.home }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {effectiveNavItems.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
+            <SidebarNavItem key={item.key} item={{ ...item, icon: NAV_ICONS[item.key] }} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
@@ -3425,6 +3454,9 @@ export default function App() {
         className="mobile-bottom-nav"
         style={{
           display: "none",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "8px",
           position: "fixed",
           bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
           left: "16px",
@@ -3435,6 +3467,22 @@ export default function App() {
           transition: "opacity 0.25s ease",
         }}
       >
+        {/* Week / pay-period counter — moved down here from the mobile header
+            so the header stays to nav + brand + bell, per docs/TODO.md's
+            header cleanup. */}
+        {currentWeekNumber && (
+          <div className="text-2xs" style={{
+            letterSpacing: "1px",
+            textTransform: "uppercase",
+            padding: "3px 10px",
+            background: "rgba(0,200,150,0.14)",
+            color: "var(--color-green)",
+            border: "1px solid rgba(0,200,150,0.32)",
+            borderRadius: "10px",
+          }}>
+            {currentWeekLabel}
+          </div>
+        )}
         <LiquidGlass
           purpose="nav"
           tone="teal"

@@ -417,7 +417,7 @@ export default function App() {
       fetchMyChecklistCompletions(),
       fetchBetaSuggestions(),
       fetchMyBetaScore(),
-      fetchPublishedChangelogEntries(5),
+      fetchPublishedChangelogEntries(6), // newest + second-newest shown inline, up to 4 more in "View More"
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
@@ -471,7 +471,7 @@ export default function App() {
       fetchBaseChecklistItems(),
       fetchMyBaseChecklistCompletions(),
       fetchBaseSuggestions(),
-      fetchPublishedChangelogEntries(5),
+      fetchPublishedChangelogEntries(6), // newest + second-newest shown inline, up to 4 more in "View More"
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;

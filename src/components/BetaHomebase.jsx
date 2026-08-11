@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { PanelHero, SH } from "./ui.jsx";
-import { ChangelogBody } from "./ChangelogModal.jsx";
+import { PanelHero, SH, Pressable } from "./ui.jsx";
+import { ChangelogBody, ChangelogHistoryModal } from "./ChangelogModal.jsx";
 import { toggleBetaChecklistItem } from "../lib/db.js";
 
 // Beta Tester Homebase (docs/TODO.md §12, database/migrations/037) — one
@@ -138,26 +138,94 @@ export function SuggestionsSection({ items, title = "Suggestions From The Team" 
   );
 }
 
+// Every markdown header line (#/##/### etc.) in an entry's body, in order —
+// used for the second-newest entry's collapsed-card preview below: just the
+// section headers, no paragraph text, rendered through the SAME
+// ChangelogBody/MARKDOWN_COMPONENTS path as everything else so the sizing
+// is identical to the fully-expanded view, not a smaller ad-hoc summary.
+function extractHeaderLines(markdown) {
+  if (!markdown) return [];
+  return markdown.split("\n").filter(line => /^#{1,6}\s+/.test(line.trim()));
+}
+
+function ChangelogEntryHeader({ entry }) {
+  const publishedLabel = entry.published_at
+    ? new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px" }}>
+      <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+      {publishedLabel && (
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{publishedLabel}</div>
+      )}
+    </div>
+  );
+}
+
+// Second-newest entry — a collapsible card. Collapsed shows the title plus
+// just its sub-header lines (a skimmable outline, not the full write-up);
+// tapping it folds out the complete body in place. Same card chrome/caret
+// pattern as SetupWizard.jsx's DetailsDisclosure, for consistency with the
+// rest of the app's own collapsible-card idiom.
+function SecondNewestCard({ entry }) {
+  const [expanded, setExpanded] = useState(false);
+  const headerLines = extractHeaderLines(entry.body);
+  return (
+    <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", overflow: "hidden" }}>
+      <Pressable
+        onClick={() => setExpanded(v => !v)}
+        style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+          <ChangelogEntryHeader entry={entry} />
+          <span className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0, marginLeft: "6px" }}>{expanded ? "▾" : "▸"}</span>
+        </div>
+        {!expanded && headerLines.length > 0 && (
+          <ChangelogBody markdown={headerLines.join("\n\n")} />
+        )}
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px" }}>
+          <ChangelogBody markdown={entry.body} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// entries[0] (newest) always shows in full. entries[1] (second-newest) is
+// the collapsible card above. entries[2:] never render inline — "View
+// More" opens ChangelogHistoryModal with the rest (near-full-screen, same
+// formatting throughout, no separate smaller treatment for older content).
 export function WhatsNewSection({ entries }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   if (entries.length === 0) return null;
+  const [newest, second, ...older] = entries;
+
   return (
     <div>
       <SH>What's New</SH>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {entries.map(entry => (
-          <div key={entry.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px", marginBottom: "6px" }}>
-              <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
-              {entry.published_at && (
-                <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>
-                  {new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </div>
-              )}
-            </div>
-            <ChangelogBody markdown={entry.body} />
+        <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
+          <div style={{ marginBottom: "6px" }}>
+            <ChangelogEntryHeader entry={newest} />
           </div>
-        ))}
+          <ChangelogBody markdown={newest.body} />
+        </div>
+
+        {second && <SecondNewestCard entry={second} />}
+
+        {older.length > 0 && (
+          <Pressable
+            onClick={() => setHistoryOpen(true)}
+            className="text-xs" style={{ alignSelf: "center", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "6px 14px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          >
+            View More
+          </Pressable>
+        )}
       </div>
+
+      <ChangelogHistoryModal open={historyOpen} entries={older} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 }

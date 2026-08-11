@@ -4567,20 +4567,24 @@ touching any of this). Progress:*
       users). Re-entry intro copy: "Let's add your commission job to your pay structure." (same
       judgment-call caveat as `lost_job`'s copy). No new stored field — `commissionMonthly` already
       existed in `DEFAULT_CONFIG`/`HISTORY_SENSITIVE_FIELDS`/`finance.js`'s income math.
-- [ ] **`structure_change`** — not started. Needs: pre-fill (shared with the above two, already
-      built) + a frozen `originalConfigRef` baseline (real wizard uses `useMemo(() => config, [])`
-      at wizard-open time) + the `StructureChangeDiff` "What's Changing" summary rendered inside
-      Wrap Up (structure_change is the one re-entry path that DOES show Wrap Up — real `STEP_DEFS`
-      id 7's `showIf` includes it) + clearing `startedUnemployed` on completion when the account
-      was jobless-started (real `handleWizardComplete`'s own special case, `App.jsx` — verify this
-      still fires correctly for an ad-lib-driven completion) + Food-expense restoration for the
-      same case. Real Step0 has bespoke copy for this path specifically
-      (`SetupWizard.jsx:109–136`) — port it verbatim this time, unlike the new copy written for
-      `lost_job`/`commission_job` above.
-- [ ] **`changed_jobs`** — not started. Full re-run against existing account data, same page set
-      as first-run employed (0→1→2→3→4→7, Wrap Up included). Lowest-risk of the two remaining
-      paths structurally (no diff table, no jobless-interaction edge case) — likely the better
-      candidate to pick up next.
-- [ ] Once all four life-event strings are covered, revisit whether `SetupWizard.jsx` can be
-      retired entirely (still needed for the jobless mini-flow hand-off — `initialStepId: 10` —
-      regardless of how the other four paths end up).
+- [x] **`structure_change`** (2026-08-11, drift-app-warden §7 F140) — `App.jsx`'s
+      `wizardEntry === "structure_change"` (the only real entry point — `LifeEventMenu`'s "Pay
+      Structure Changed" tile) now mounts `SetupWizardAdlib`. Real Step0's bespoke intro copy
+      ported verbatim into a new `LifeEventPivot` component (`IntakePage`), plus the "What
+      changed?" picker beneath it — `SetupWizardAdlib` gained its own internal `curLifeEvent`
+      pivot state (mirrors real `SetupWizard.jsx`'s local `lifeEvent` state) so a user can pivot
+      from `structure_change` to `lost_job`/`changed_jobs`/`commission_job` from inside the same
+      mount, which is also what makes those three reachable at all now (round 1's routing for
+      them was correct but unreachable — nothing ever set `wizardEntry` to those values directly).
+      Frozen `originalConfig` baseline captured at mount + `StructureChangeDiff`/`DIFF_FIELDS`
+      (now exported from `SetupWizard.jsx`, shared not duplicated) rendered in `WrapUpPage`,
+      gated on `curLifeEvent === "structure_change"`. `handleWizardComplete`'s existing
+      `startedUnemployed`-clearing/Food-restoration special case needed no changes — verified it
+      still fires correctly (keyed on `wizardEntry`, generic to either wizard).
+- [x] **`changed_jobs`** (2026-08-11) — verified, no changes needed beyond the shared pivot/
+      pre-fill plumbing. `computeActivePages`'s default branch already returns the full 5-page
+      set (0→1→2→3→4→7 equivalent, Wrap Up included, no diff); confirmed via `git grep
+      changed_jobs` that real `SetupWizard.jsx` has nothing else path-specific for it.
+- [x] All four life-event strings are now covered by `SetupWizardAdlib`. `SetupWizard.jsx` is
+      kept mounted only for the jobless mini-flow's `initialStepId: 10` hand-off continuation —
+      not retired.

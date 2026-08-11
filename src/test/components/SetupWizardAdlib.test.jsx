@@ -988,3 +988,113 @@ describe('SetupWizardAdlib — lifeEvent re-entry plumbing (lost_job / commissio
     expect(primaryBtn()).toBeDisabled()
   })
 })
+
+// ── Life-event pivot picker (drift-app-warden §7 F140) — structure_change is the only real
+// entry point (App.jsx item 5); SetupWizardAdlib's internal LifeEventPivot is what makes
+// lost_job/changed_jobs/commission_job reachable from it, mirroring real SetupWizard.jsx's own
+// (previously dead) Step0 picker mechanism.
+describe('SetupWizardAdlib — lifeEvent re-entry plumbing (structure_change + internal pivot)', () => {
+  const reEntryConfig = {
+    ...DEFAULT_CONFIG,
+    startedUnemployed: false,
+    startDate: '2026-01-01',
+    firstActiveIdx: 0,
+    maxWeeklyHours: 40,
+    hoursUnderstood: true,
+    attendanceBucketEnabled: true,
+  }
+
+  it('structure_change: shows the real Step0 intro copy, is a full 5-page flow (Wrap Up included), and offers the pivot picker below the intro', () => {
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="structure_change" onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} />)
+
+    expect(screen.getByText(byText(/update your pay structure/i))).toBeTruthy()
+    expect(screen.getByText(byText(/Life Event · 1 of 5/i))).toBeTruthy()
+    expect(screen.getByText(byText(/something else changed instead/i))).toBeTruthy()
+    expect(screen.getByText(byText(/lost my job/i))).toBeTruthy()
+    expect(screen.getByText(byText(/changed jobs/i))).toBeTruthy()
+    expect(screen.getByText(byText(/got a commission job/i))).toBeTruthy()
+    // Pay-structure clauses (isEmployed forced true, employment-status question skipped)
+    // still render alongside the pivot block, pre-filled from reEntryConfig.
+    expect(screen.getByText(byText(/I work for/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/right now, i am/i))).toBeNull()
+  })
+
+  it('pivots from structure_change to commission_job via the picker: page set shrinks to 4 (no Wrap Up) and the Commission field appears', () => {
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="structure_change" onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} />)
+
+    expect(screen.getByText(byText(/Life Event · 1 of 5/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/my pay also/i))).toBeNull()
+
+    fireEvent.click(screen.getByText(byText(/got a commission job/i)))
+
+    expect(screen.getByText(byText(/Life Event · 1 of 4/i))).toBeTruthy()
+    expect(screen.getByText(byText(/my pay also/i))).toBeTruthy()
+    // The structure_change-specific intro is gone post-pivot — only the generic picker remains.
+    expect(screen.queryByText(byText(/update your pay structure/i))).toBeNull()
+    expect(screen.getByText(byText(/what changed\? only the affected steps/i))).toBeTruthy()
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    fireEvent.click(primaryBtn()) // -> Deductions
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    expect(screen.getByText(byText(/Life Event · 4 of 4/i))).toBeTruthy()
+    expect(primaryBtn()).toHaveTextContent(/finish setup/i) // last page — no Wrap Up
+  })
+
+  it('pivots from structure_change to changed_jobs: stays a full 5-page flow (Wrap Up included) and shows no diff summary at Wrap Up', () => {
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="structure_change" onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} />)
+
+    fireEvent.click(screen.getByText(byText(/^changed jobs$/i)))
+    expect(screen.getByText(byText(/Life Event · 1 of 5/i))).toBeTruthy()
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    fireEvent.click(primaryBtn()) // -> Deductions
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    fireEvent.click(primaryBtn()) // -> Wrap Up
+    expect(screen.getByText(byText(/Life Event · 5 of 5/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/what's changing/i))).toBeNull()
+  })
+
+  it('structure_change completion renders the "What\'s Changing" diff at Wrap Up and calls onComplete', () => {
+    const onComplete = vi.fn()
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="structure_change" onHandoff={vi.fn()} onComplete={onComplete} onCancel={vi.fn()} />)
+
+    // Change the base rate on Intake so the frozen baseline (reEntryConfig) and the final
+    // formData diverge — the diff summary should surface exactly this change.
+    const rateInput = screen.getByLabelText('Hourly rate, dollars')
+    fireEvent.change(rateInput, { target: { value: '24' } })
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    fireEvent.click(primaryBtn()) // -> Deductions
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    fireEvent.click(primaryBtn()) // -> Wrap Up
+
+    expect(screen.getByText(byText(/what's changing/i))).toBeTruthy()
+    expect(screen.getByText(byText(/base rate/i))).toBeTruthy()
+
+    fireEvent.click(primaryBtn()) // Finish
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    const finalConfig = onComplete.mock.calls[0][0]
+    expect(finalConfig.baseRate).toBe(24)
+    expect(finalConfig.setupComplete).toBe(true)
+  })
+
+  it('changed_jobs (direct entry): full page set including Wrap Up, no diff summary, completes normally', () => {
+    const onComplete = vi.fn()
+    render(<SetupWizardAdlib config={reEntryConfig} lifeEvent="changed_jobs" onHandoff={vi.fn()} onComplete={onComplete} onCancel={vi.fn()} />)
+
+    expect(screen.getByText(byText(/Life Event · 1 of 5/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/right now, i am/i))).toBeNull()
+    expect(primaryBtn()).not.toBeDisabled()
+
+    fireEvent.click(primaryBtn()) // -> Schedule
+    fireEvent.click(primaryBtn()) // -> Deductions
+    fireEvent.click(primaryBtn()) // -> Tax Rates
+    fireEvent.click(primaryBtn()) // -> Wrap Up
+    expect(screen.getByText(byText(/Life Event · 5 of 5/i))).toBeTruthy()
+    expect(screen.queryByText(byText(/what's changing/i))).toBeNull()
+
+    fireEvent.click(primaryBtn())
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    expect(onComplete.mock.calls[0][0].setupComplete).toBe(true)
+  })
+})

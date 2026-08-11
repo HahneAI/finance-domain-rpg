@@ -5,6 +5,55 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 2: `structure_change` + `changed_jobs` (2026-08-11)
+
+- [x] **Reachability fix (the actual point of this round)** — round 1's `App.jsx` routing for
+  `wizardEntry === "lost_job" | "commission_job"` was real, correct plumbing for a state nothing
+  ever set: `LifeEventMenu.jsx` has no tile for either value, and the only real entry point,
+  `wizardEntry === "structure_change"` (the "Pay Structure Changed" tile), was still routed to
+  `SetupWizard.jsx`. Fixed by routing `wizardEntry === "structure_change"` to `SetupWizardAdlib`
+  too, and giving `SetupWizardAdlib` the internal life-event pivot picker
+  (`IntakePage`'s `LifeEventPivot`) real `SetupWizard.jsx`'s own `Step0` picker was always meant
+  to provide — `lost_job`/`changed_jobs`/`commission_job` are now reachable in practice, the same
+  way real `Step0`'s picker was designed to make them reachable
+- [x] **`LifeEventPivot`** — local `curLifeEvent` state (mirrors real `SetupWizard.jsx`'s own
+  local `lifeEvent` state, seeded from the `lifeEvent` prop); shows the real `structure_change`
+  Step0 intro copy ported verbatim (`"Update your pay structure."` + goals/expenses/logs-stay-put
+  explanation + start-date guidance) plus a "Something else changed instead?" picker beneath it —
+  the one deliberate deviation from a line-for-line Step0 port, since ad-lib has no separate first
+  "step" to show the intro on before a picker could appear; only rendered when the wizard's
+  original entry was `structure_change` (`onLifeEventChange` only threaded down in that case).
+  Every downstream page/gate (`computeActivePages`, `isXValid`, `WrapUpPage`'s diff gate, the
+  Commission Income clause) reacts to `curLifeEvent`, not the immutable `lifeEvent` prop
+- [x] **`StructureChangeDiff` + `DIFF_FIELDS` + `LIFE_EVENTS` now exported from `SetupWizard.jsx`**
+  and imported into `SetupWizardAdlib.jsx` — one source of truth on both wizards (drift-app-warden
+  §7 F7's "must never diverge" rule), not a second copy
+- [x] **`WrapUpPage` structure_change diff** — frozen `originalConfig` baseline captured once at
+  `SetupWizardAdlib` mount (`useState(() => config)`, mirrors real `useMemo(() => config, [])`),
+  threaded down and rendered via the shared `StructureChangeDiff` component, gated on
+  `curLifeEvent === "structure_change"` exactly like real `StepWrapUp`; the jobless-started
+  "no prior pay structure to diff" guard comes along for free since it's the same component
+- [x] **`changed_jobs` verified** — no changes needed beyond the shared pivot/pre-fill plumbing;
+  `computeActivePages` already returns the full 5-page set (default branch) for any lifeEvent
+  besides the jobless mini-flow/`lost_job`/`commission_job`; confirmed via `git grep changed_jobs`
+  across `SetupWizard.jsx` that nothing else is life-event-specific for this path
+- [x] **`App.jsx`** — `isAdlibLifeEvent` now also includes `"structure_change"`; `SetupWizard.jsx`
+  now only ever mounts for the jobless mini-flow's `initialStepId: 10` hand-off continuation.
+  `handleWizardComplete` needed no changes — confirmed it already reads `wizardEntry` (not a
+  pivot-aware param) for its `life_event:${wizardEntry}` tag, exactly matching real
+  `SetupWizard.jsx`'s own behavior (its internal `Step0` pivot never notified `App.jsx` either) —
+  see the session report's judgment-call note
+- [x] Tests: 5 new cases in `SetupWizardAdlib.test.jsx` — `structure_change` intro + picker
+  render, pivot to `commission_job` (page set shrinks, Commission field appears), pivot to
+  `changed_jobs` (stays 5 pages, no diff), `structure_change` completion with a real diff render,
+  `changed_jobs` direct-entry completion with no diff
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F140 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.2 (all four life-event paths now closed)
+- [x] Field housekeeping (F7) — `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS`; every key
+  already present, no new fields introduced by the diff mechanism itself, no gaps found
+
+---
+
 ## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 1: `lost_job` + `commission_job` (2026-08-11)
 
 - [x] **`SetupWizardAdlib.jsx` gains a `lifeEvent` prop** — mirrors `SetupWizard.jsx`'s own

@@ -830,6 +830,66 @@ existed at all).
 > at all), and its real Step0 has bespoke copy to port verbatim (unlike `lost_job`/
 > `commission_job`'s intro copy this round, which is new writing in a matching tone — see the
 > session report for that judgment call).
+>
+> **Done — see F140 below (2026-08-11).**
+
+**F140 · `structure_change`/`changed_jobs` ad-libbed — the real entry point (`wizardEntry ===
+"structure_change"`) now routes to `SetupWizardAdlib`, and an internal life-event pivot picker
+makes `lost_job`/`changed_jobs`/`commission_job` reachable from it** — `SetupWizardAdlib.jsx`,
+`SetupWizard.jsx`, `App.jsx` — **[G]** — *(added 2026-08-11, docs/TODO.md §19.2, closes it out)*
+F139's routing for `wizardEntry === "lost_job" | "commission_job"` was real, correct plumbing for
+a `wizardEntry` value **nothing ever set** — `LifeEventMenu.jsx` has exactly 3 tiles ("Pay
+Structure Changed" → `structure_change`, "Quit My Job" → the unrelated `NewJobSeasonEntry` modal,
+"Rate Update" → the unrelated `RateUpdateModal`), and the only way a real user ever reached
+`lost_job`/`changed_jobs`/`commission_job` was real `SetupWizard.jsx`'s own `Step0` internal
+picker — reachable only via `wizardEntry === "structure_change"`, which was still routed to
+`SetupWizard.jsx`, not `SetupWizardAdlib`. This round's actual fix, in order: (1) `App.jsx`'s
+`isAdlibLifeEvent` now includes `"structure_change"`, so `SetupWizardAdlib` mounts for the real
+entry point and `SetupWizard.jsx` mounts only for the jobless mini-flow's `initialStepId: 10`
+hand-off continuation; (2) `SetupWizardAdlib` gained its own internal `[curLifeEvent,
+setCurLifeEvent]` state (mirrors real `SetupWizard.jsx`'s local `[lifeEvent, setLifeEvent]`,
+seeded the same way from the immutable `lifeEvent` prop) plus a new `LifeEventPivot` component
+(`IntakePage`) — real Step0's `structure_change`-specific intro copy ported verbatim ("Update your
+pay structure." + the pre-filled/goals-stay-put explanation + start-date guidance), followed by
+the "What changed?" picker (`LIFE_EVENTS.filter(ev => ev.value !== "structure_change")`, exported
+from `SetupWizard.jsx` and imported rather than duplicated) — clicking a tile calls
+`onLifeEventChange`, which the top-level component only threads down at all when the original
+entry was `"structure_change"` (`onLifeEventChange={lifeEvent === "structure_change" ?
+setCurLifeEvent : null}`), so its mere presence is the render gate. **One deliberate deviation
+from a line-for-line Step0 port:** real Step0 returns early for `structure_change` with no picker
+at all (the picker only ever renders on its own separate "step" once `lifeEvent` has already
+changed away from `structure_change` by some other means — which nothing in the real wizard
+actually provides, making that branch dead code there too); ad-lib has no separate step to show
+the intro on first, so `LifeEventPivot` shows the intro **and** the picker together on
+`structure_change`, or that pivot has no reachable entry point at all. (3) Every downstream
+gate/page now reacts to `curLifeEvent`, not the immutable `lifeEvent` prop:
+`computeActivePages(formData, curLifeEvent)`, `current.isValid(formData, curLifeEvent)`, the
+`<current.Component lifeEvent={curLifeEvent} .../>` render prop, and the Commission Income clause
+gate inside `IntakePage`. `hasCommission`'s local `useState` lazy initializer only runs once at
+mount (when `curLifeEvent` was still `"structure_change"`) — a `useEffect` re-syncs it on every
+`curLifeEvent` change so pivoting into `commission_job` after mount still shows the field's
+correct initial state. (4) `WrapUpPage` gained `lifeEvent`/`originalConfig` props; a frozen
+baseline (`useState(() => config)` at `SetupWizardAdlib` mount, mirrors real `useMemo(() => config,
+[])`) is threaded down, and `StructureChangeDiff` (now exported from `SetupWizard.jsx` alongside
+`DIFF_FIELDS`, imported rather than duplicated — F7's "must never diverge" rule) renders inside
+Wrap Up gated on `curLifeEvent === "structure_change"` — the jobless-started "no prior pay
+structure to diff" guard comes along for free since it's the exact same component. `changed_jobs`
+needed **zero** code changes beyond the shared pivot/pre-fill plumbing above — `computeActivePages`'s
+default branch (anything besides the jobless mini-flow, `lost_job`, or `commission_job`) already
+returns the full 5-page set including Wrap Up but with no diff (correct — `changed_jobs` shows
+Wrap Up but not the diff, per the gate matrix); confirmed via `git grep changed_jobs` across
+`SetupWizard.jsx` that nothing else is life-event-specific for that path. `handleWizardComplete`
+(`App.jsx`) needed zero changes — verified it still reads `wizardEntry` itself (never a
+pivot-aware param) for its `life_event:${wizardEntry}` configHistory source and its
+`structure_change`-only `startedUnemployed`-clearing/Food-restoration special case, which
+generalizes to `SetupWizardAdlib`-driven completions automatically. This does mean a pivot away
+from `structure_change` (e.g., to `commission_job`) still tags the resulting configHistory row and
+runs the `structure_change`-only special-case checks as if the completion were `structure_change`
+— `wizardEntry` never learns about the internal pivot, same as real `SetupWizard.jsx`'s own Step0
+pivot never notifying `App.jsx` either. This is a deliberate parity choice (match the pre-existing,
+intentional real-wizard limitation), not an oversight — see the session report's judgment-call
+note. `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS` (F7): every key already present, no
+new fields introduced, no gaps found.
 
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -856,17 +916,19 @@ the one with no pay structure.
 |---|---|---|---|---|
 | First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` | `onCancel` undefined (non-investor) — no escape; Freedom Allowance + tax-exempt offered here only |
 | First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | `SetupWizardAdlib` → hands off to `SetupWizard` at id 10 | No pay structure at `buildYear` call; `newJobSeasonMode: true`; Food seed skipped (F8); lands in New Job Season panels |
-| `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | `SetupWizard` (not yet ad-libbed — §19.2) | Pre-filled; frozen `originalConfigRef` baseline; clears `startedUnemployed` on completion (F8); Food restored if jobless-started |
-| `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139, 2026-08-11) | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `NewJobSeasonEntry` modal (F12), not this |
-| `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizard` (not yet ad-libbed — §19.2) | Full re-run against existing account data |
-| `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139, 2026-08-11) | Commission field appears in Step 1 (ported into `IntakePage`); Wrap-Up-only fields must default in F5 |
+| `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — the real, only entry point (`LifeEventMenu`'s "Pay Structure Changed" tile) | Pre-filled; frozen `originalConfig` baseline; `StructureChangeDiff` at Wrap Up; clears `startedUnemployed` on completion (F8); Food restored if jobless-started; also the wizard's entry point for pivoting to any of the three rows below |
+| `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker (`LifeEventPivot`) today, since nothing sets `wizardEntry` to this value directly | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `NewJobSeasonEntry` modal (F12), not this |
+| `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — reachable only via `structure_change`'s internal pivot picker, same as `lost_job`/`commission_job` | Full re-run against existing account data; no diff summary (diff is `structure_change`-only) |
+| `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker today | Commission field appears in Step 1 (ported into `IntakePage`); Wrap-Up-only fields must default in F5 |
 
-**F139 note:** `lost_job`/`commission_job` moving to `SetupWizardAdlib` did not change this
-table's "Steps shown"/"Wrap Up?"/invariant columns at all — they still commit through the exact
-same `finalizeWizardConfig()` → `handleComplete`-equivalent path (F5), just from a second entry
-point (the same relationship F128 already established between `SetupWizardAdlib` and first-run).
-Only the "Which wizard?" column changed. `structure_change`/`changed_jobs` are unchanged this
-round — see docs/TODO.md §19.2 for the path-by-path expansion tracker.
+**F139/F140 note:** moving all four life-event strings to `SetupWizardAdlib` did not change this
+table's "Steps shown"/"Wrap Up?"/invariant columns at all — every path still commits through the
+exact same `finalizeWizardConfig()` → `handleComplete`-equivalent path (F5), just from a second
+entry point (the same relationship F128 already established between `SetupWizardAdlib` and
+first-run). Only the "Which wizard?" column changed. `SetupWizard.jsx` is still mounted, but only
+ever for the jobless mini-flow's `initialStepId: 10` hand-off continuation — every life-event
+string now routes to `SetupWizardAdlib` first. docs/TODO.md §19.2 (now fully closed) has the
+path-by-path history.
 
 Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
 hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**

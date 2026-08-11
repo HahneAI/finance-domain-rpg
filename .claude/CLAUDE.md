@@ -126,45 +126,101 @@ mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`TaxRatesPage`) co
 its own page; page 5 (`WrapUpPage`) covers Wrap Up as its own page — all in the same cascading
 style.
 
-**Scope: first-run, plus `lost_job`/`commission_job` life-event re-entry (2026-08-11,
-docs/TODO.md §19.2).** `App.jsx` mounts `SetupWizardAdlib` whenever `wizardEntry === false`
+**Scope: first-run, plus all four life-event re-entry strings (2026-08-11, docs/TODO.md §19.2,
+now fully closed).** `App.jsx` mounts `SetupWizardAdlib` whenever `wizardEntry === false`
 (first-run, `lifeEvent={null}`) and there is no in-progress jobless mini-flow hand-off
-(`adlibHandoff`), OR `wizardEntry === "lost_job" | "commission_job"` (`lifeEvent={wizardEntry}`).
-`SetupWizard.jsx` still owns `structure_change` and `changed_jobs` re-entry unchanged — those keep
-using the real stacked-form wizard for now (a later round will move them too; see the gate matrix
-in `docs/drift-app-warden.md` §7.3 for the definitive per-path map). The jobless mini-flow
-(unemployed at first-run — first-run only, never a life-event path) still hands off into the real
-`SetupWizard` at `STEP_DEFS` id 10 (`onHandoff(mergedFormData, 10)`, via `App.jsx`'s
-`adlibHandoff` state) for the Unemployment Benefits/Job Loss Details/Jobless Wrap Up steps — a
-real, click-through continuation, not a throwaway mockup. A Back at that first handed-off step
-returns the user to `SetupWizardAdlib`, pre-filled via `adlibResumeData`/`onBackBeforeStart`,
-resuming on the last page they were on.
+(`adlibHandoff`), OR `wizardEntry === "structure_change" | "lost_job" | "commission_job"`
+(`lifeEvent={wizardEntry}`). `wizardEntry === "structure_change"` is the **only real entry point**
+for any life-event re-entry — `LifeEventMenu.jsx`'s three tiles are "Pay Structure Changed" (→
+`structure_change`), "Quit My Job" (→ the unrelated `NewJobSeasonEntry` modal), and "Rate Update"
+(→ the unrelated `RateUpdateModal`); there is no menu tile for `lost_job`/`changed_jobs`/
+`commission_job` at all. Those three are reachable only through `SetupWizardAdlib`'s own internal
+life-event pivot (`IntakePage`'s `LifeEventPivot`, see below) once a `structure_change` wizard is
+already open — mirrors real `SetupWizard.jsx`'s own `Step0` picker, which was always meant to
+provide this pivot but, until this round, had nowhere reachable to pivot *to* (real Step0's
+`structure_change` branch returns early with no picker, and `wizardEntry` was never set to any of
+the other three values directly either). `SetupWizard.jsx` is still mounted, but now only ever for
+the jobless mini-flow's `initialStepId: 10` hand-off continuation — every life-event string routes
+to `SetupWizardAdlib` first (see the gate matrix in `docs/drift-app-warden.md` §7.3 for the
+definitive per-path map). The jobless mini-flow (unemployed at first-run — first-run only, never a
+life-event path) still hands off into the real `SetupWizard` at `STEP_DEFS` id 10
+(`onHandoff(mergedFormData, 10)`, via `App.jsx`'s `adlibHandoff` state) for the Unemployment
+Benefits/Job Loss Details/Jobless Wrap Up steps — a real, click-through continuation, not a
+throwaway mockup. A Back at that first handed-off step returns the user to `SetupWizardAdlib`,
+pre-filled via `adlibResumeData`/`onBackBeforeStart`, resuming on the last page they were on.
 
 **`lifeEvent` prop** (default `null`) mirrors `SetupWizard.jsx`'s own contract:
-`null` | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"` — only
-`null`/`"lost_job"`/`"commission_job"` are wired through `App.jsx` to this component today. A
-non-`null` value changes three things from first-run behavior: (1) `formData` initializes as
-`{ ...config }` — pre-filled from the real account config, matching real `SetupWizard.jsx`'s own
-re-entry init (including its `firstActiveIdx` recompute from `startDate` on open) — instead of
-`{ ...config, ...BLANK_PAY_FIELDS }`, which stays first-run-only; (2) the employment-status
-question (`IntakePage`'s opening clause, `isIntakeValid`'s first check) is skipped entirely —
-`isEmployed` is forced `true` so every pay-structure clause renders immediately, mirroring real
-`STEP_DEFS` id 0's own `ev !== null` unconditional-valid shape; a per-path intro clause
-(`"Let's rebuild your pay for the new job."` / `"Let's add your commission job to your pay
-structure."`) replaces the employment-status blank — new copy written to match
-`structure_change`'s own re-entry tone, since neither `lost_job` nor `commission_job` has bespoke
-Step0 copy on the real wizard to port verbatim; (3) `computeActivePages()` excludes Wrap Up for
-`lost_job`/`commission_job` specifically — both commit through `finalizeWizardConfig()` at the end
-of Tax Rates instead (real `STEP_DEFS` id 7's `showIf` excludes both paths too). The jobless
-single-page shortcut and hand-off (`onHandoff`) are both explicitly gated on `lifeEvent === null`
-— a life-event account can carry a stale `startedUnemployed: true` from a prior first-run jobless
-answer without that meaning anything on a `lost_job`/`commission_job` re-entry, since neither path
-asks or touches that field. `commission_job` additionally reveals a Commission Income clause in
-`IntakePage` (mirrors real Step1's field, `SetupWizard.jsx:782–809`, exactly — applies to both DHL
-and base users, gated on `payStructureComplete`; writes the pre-existing `commissionMonthly`
-field). Both re-entry paths are cancelable (`App.jsx` passes a real `onCancel`, unlike first-run's
-uncancelable `undefined`). See `docs/drift-app-warden.md` §7 F139 for the full implementation
+`null` | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"` — the prop
+itself never changes after mount; it's the wizard's original entry point, used only for
+`formData`'s pre-fill-vs-blank init and the jobless-mini-flow gates, both invariant across an
+internal pivot. A non-`null` value changes three things from first-run behavior: (1) `formData`
+initializes as `{ ...config }` — pre-filled from the real account config, matching real
+`SetupWizard.jsx`'s own re-entry init (including its `firstActiveIdx` recompute from `startDate`
+on open) — instead of `{ ...config, ...BLANK_PAY_FIELDS }`, which stays first-run-only; (2) the
+employment-status question (`IntakePage`'s opening clause, `isIntakeValid`'s first check) is
+skipped entirely — `isEmployed` is forced `true` so every pay-structure clause renders
+immediately, mirroring real `STEP_DEFS` id 0's own `ev !== null` unconditional-valid shape; a
+per-path intro clause replaces the employment-status blank (`"Let's rebuild your pay for the new
+job."` for `lost_job`, `"Let's add your commission job to your pay structure."` for
+`commission_job`, `"Let's set up your pay for the new job."` for `changed_jobs` — all three new
+copy in a matching tone, since none has bespoke Step0 copy on the real wizard to port verbatim;
+`structure_change` renders nothing here — its own bespoke intro copy is rendered separately by
+`LifeEventPivot`, below); (3) `computeActivePages()` excludes Wrap Up for `lost_job`/
+`commission_job` specifically — both commit through `finalizeWizardConfig()` at the end of Tax
+Rates instead (real `STEP_DEFS` id 7's `showIf` excludes both paths too); `structure_change`/
+`changed_jobs` both keep Wrap Up (computeActivePages' default branch). The jobless single-page
+shortcut and hand-off (`onHandoff`) are both explicitly gated on `lifeEvent === null` — a
+life-event account can carry a stale `startedUnemployed: true` from a prior first-run jobless
+answer without that meaning anything on any re-entry path, since none of the four ask or touch
+that field. `commission_job` additionally reveals a Commission Income clause in `IntakePage`
+(mirrors real Step1's field, `SetupWizard.jsx:782–809`, exactly — applies to both DHL and base
+users, gated on `payStructureComplete`; writes the pre-existing `commissionMonthly` field). All
+four re-entry paths are cancelable (`App.jsx` passes a real `onCancel`, unlike first-run's
+uncancelable `undefined`). See `docs/drift-app-warden.md` §7 F139/F140 for the full implementation
 writeup.
+
+**`LifeEventPivot` — the internal life-event pivot picker (2026-08-11, drift-app-warden §7
+F140).** `SetupWizardAdlib` holds its own local `[curLifeEvent, setCurLifeEvent]` state, seeded
+from the `lifeEvent` prop (mirrors real `SetupWizard.jsx`'s local `[lifeEvent, setLifeEvent]`
+state, seeded from its own `initialLifeEvent` prop). Every downstream gate/page reacts to
+`curLifeEvent`, not the immutable `lifeEvent` prop — `computeActivePages(formData,
+curLifeEvent)`, `current.isValid(formData, curLifeEvent)`, the `<current.Component
+lifeEvent={curLifeEvent} .../>` render prop, and `IntakePage`'s Commission Income gate all key off
+it. `LifeEventPivot` (rendered at the very top of `IntakePage`, before its cascading pay-structure
+sentence) is only shown when `onLifeEventChange` is passed down at all, which only happens when
+the *original* entry was `"structure_change"` (`onLifeEventChange={lifeEvent === "structure_change"
+? setCurLifeEvent : null}`) — direct entry as `lost_job`/`commission_job` (still supported,
+though nothing sets `wizardEntry` to those directly today) shows no pivot block, matching last
+round's behavior exactly. Two branches, both ported from real `SetupWizard.jsx`'s `Step0`
+(~line 40–178): while `curLifeEvent === "structure_change"` (not yet pivoted), it shows the real
+Step0 `structure_change` intro copy verbatim ("Update your pay structure." + the pre-filled/
+goals-stay-put explanation + start-date guidance) plus the "What changed?" picker beneath it
+(`LIFE_EVENTS.filter(ev => ev.value !== "structure_change")`, exported from `SetupWizard.jsx`
+alongside `DIFF_FIELDS` and `StructureChangeDiff` rather than duplicated — drift-app-warden §7
+F7's "must never diverge" rule); once pivoted, only the generic picker remains, with the active
+selection highlighted, same as real Step0's own "else" branch. **One deliberate deviation from a
+line-for-line Step0 port:** real Step0 returns early for `structure_change` with no picker
+rendered at all — the picker only exists on a separate "step" reached once `lifeEvent` has already
+changed away from `structure_change` by some other means, which the real wizard never actually
+provides (making that whole branch dead code there too). Ad-lib has no separate step to show the
+intro on first, so `LifeEventPivot` shows the intro **and** the picker together while still on
+`structure_change`, or the pivot would have no reachable entry point at all — see the session
+report's judgment-call note. `hasCommission`'s local `useState` lazy initializer only evaluates
+once at mount (when `curLifeEvent` was still `"structure_change"`); a `useEffect` re-syncs it on
+every `curLifeEvent` change so pivoting into `commission_job` after mount still shows the
+Commission field's correct initial toggle state.
+
+**`structure_change`'s Wrap Up diff — `StructureChangeDiff` (2026-08-11, F140).** `WrapUpPage`
+gained `lifeEvent`/`originalConfig` props. `SetupWizardAdlib` captures a frozen baseline
+(`useState(() => config)` at mount, mirrors real `SetupWizard.jsx`'s `useMemo(() => config, [])`)
+and threads it down; `WrapUpPage` renders the shared `StructureChangeDiff` component (imported
+from `SetupWizard.jsx`, not duplicated) gated on `curLifeEvent === "structure_change"` — the same
+gate real `StepWrapUp` uses. The jobless-started "no prior pay structure to diff" guard
+(`originalConfig?.startedUnemployed === true` → a dedicated first-time message instead of a
+misleading diff against `DEFAULT_CONFIG` placeholders) comes along for free since it's the exact
+same component. `changed_jobs` reaches Wrap Up too (full page set, same as first-run/
+`structure_change`) but never shows this diff — correct per the gate matrix, needed zero extra
+code since the render gate is already specific to `curLifeEvent === "structure_change"`.
 
 **Investor first-run** (`isInvestor` prop, threaded from `App.jsx` as `config.isInvestor`)
 mirrors `SetupWizard.jsx`'s investor handling field-for-field: `IntakePage`'s Welcome clause reads

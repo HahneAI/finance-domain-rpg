@@ -185,6 +185,32 @@ describe('loadUserData — config merge', () => {
     expect(result.config.jobLossPendingCheckDate).toBeUndefined()
   })
 
+  it('clears a stale jobHuntIncomeLog left over from a prior New Job Season occurrence', async () => {
+    const oldConfig = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      newJobSeasonMode: false,
+      jobHuntIncomeLog: [{ id: 'jhi_1', amount: 40, note: 'Mowed a lawn', loggedAt: '2026-05-01T00:00:00.000Z' }],
+    }
+    setupLoadMock(makeRow({ config: oldConfig }))
+
+    const result = await loadUserData()
+    expect(result.config.jobHuntIncomeLog).toEqual([])
+  })
+
+  it('leaves jobHuntIncomeLog alone while a New Job Season occurrence is still active', async () => {
+    const oldConfig = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      newJobSeasonMode: true,
+      jobHuntIncomeLog: [{ id: 'jhi_1', amount: 40, note: 'Mowed a lawn', loggedAt: '2026-05-01T00:00:00.000Z' }],
+    }
+    setupLoadMock(makeRow({ config: oldConfig }))
+
+    const result = await loadUserData()
+    expect(result.config.jobHuntIncomeLog).toHaveLength(1)
+  })
+
   it('migrates legacy per-expense jobLossStatus/trackDuringJobLoss keys to New Job Season names', async () => {
     const expense = {
       id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'paused',

@@ -446,13 +446,21 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
-**F11 · `handleBackToWork()`** — `App.jsx:1454–1478` — **[G]**
+**F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
-nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, routes into
-`structure_change`.
+nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets
+`jobHuntIncomeLog: []`, routes into `structure_change`. `jobApplications` is the one
+deliberate exception — kept as user history across occurrences, per its own inline
+comment — don't "fix" that by adding it here without a real product decision to reverse it.
 > **IF** a new `newJobSeason*` or unemployment-related config field is added anywhere, **THEN**
 > it must be reset here — or it leaks into the re-employed state and every consumer that
 > gates on it misfires. Check: grep new field name; confirm it appears in this reset patch.
+> **IF** a new field is scoped to *one job-loss occurrence* (like `jobHuntIncomeLog` — fixed
+> 2026-08, a user found a stale gig-income entry from a prior occurrence still counting
+> toward a later, unrelated runway, since the field isn't gated on `newJobSeasonMode` and
+> `NewJobSeasonEntry` never re-initializes it on a fresh activation either), **THEN** default
+> to resetting it here too — the burden of proof is on keeping data across occurrences
+> (`jobApplications`), not on clearing it.
 
 **F12 · `LifeEventMenu` routing + `NewJobSeasonEntry` activation** — `App.jsx:3526–3531` /
 `:3533–3548` — **[G]**

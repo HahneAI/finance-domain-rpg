@@ -348,6 +348,21 @@ export async function loadUserData() {
     delete mergedConfig.jobLossPendingCheckDate;
   }
 
+  // ── jobHuntIncomeLog invariant ────────────────────────────────────────────
+  // handleBackToWork() (App.jsx) resets this on exit as of 2026-08 — a user
+  // found a gig-income entry logged during one New Job Season occurrence
+  // still showing (and still counting toward the runway) during a *later,
+  // unrelated* occurrence, since the field isn't gated on newJobSeasonMode
+  // and nothing re-initializes it on a fresh NewJobSeasonEntry activation
+  // either. That fix only stops new staleness going forward; this closes the
+  // gap for accounts that already went Back to Work before it shipped —
+  // jobHuntIncomeLog having entries while newJobSeasonMode is false is never
+  // a valid state, so auto-heal it on load rather than requiring a one-off
+  // manual data fix per affected account.
+  if (!mergedConfig.newJobSeasonMode && mergedConfig.jobHuntIncomeLog?.length > 0) {
+    mergedConfig.jobHuntIncomeLog = [];
+  }
+
   // ── One-time rotation correction ─────────────────────────────────────────────
   // The initial migration set startingWeekIsLong: true. The intended follow-up
   // correction (checking dhlTeam === "B") never fired because dhlTeam was still

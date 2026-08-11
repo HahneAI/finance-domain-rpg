@@ -723,7 +723,7 @@ export async function loadResumeProfile() {
 
   const { data, error } = await supabase
     .from("resume_profile")
-    .select("resume_text, target_role, last_reviewed_at, created_at, updated_at")
+    .select("resume_text, target_role, last_reviewed_at, created_at, updated_at, storage_path, original_filename, mime_type, file_size_bytes")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -739,14 +739,37 @@ export async function loadResumeProfile() {
     lastReviewedAt: data.last_reviewed_at,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    storagePath: data.storage_path ?? null,
+    originalFilename: data.original_filename ?? null,
+    mimeType: data.mime_type ?? null,
+    fileSizeBytes: data.file_size_bytes ?? null,
   };
 }
+
+// Maps the resume_profile file-metadata columns to their camelCase profile
+// keys. Kept separate from the always-written base fields below so a plain
+// text/target-role edit (§2.E1 v1's call shape) never has to know these
+// columns exist.
+const RESUME_FILE_META_COLUMNS = [
+  ["storagePath", "storage_path"],
+  ["originalFilename", "original_filename"],
+  ["mimeType", "mime_type"],
+  ["fileSizeBytes", "file_size_bytes"],
+];
 
 /**
  * Upserts the signed-in user's resume_profile row by `user_id` (the table's
  * primary key), so this never creates a second row for the same account.
  * `user_id` always comes from the session, never the caller. Returns true on
  * success, false on failure or no session.
+ *
+ * File-metadata columns (storagePath/originalFilename/mimeType/fileSizeBytes,
+ * migration 041) are only included in the upsert when the caller explicitly
+ * passes that key — Postgres upsert only updates columns present in the
+ * payload, so a v1-shaped call with just {resumeText, targetRole} leaves a
+ * previously uploaded file's metadata untouched instead of nulling it out.
+ * Pass the key with an explicit `null` (e.g. `{ storagePath: null }`) to
+ * intentionally clear a file's metadata on removal.
  */
 export async function saveResumeProfile(profile) {
   const userId = await getCurrentUserId();
@@ -759,6 +782,9 @@ export async function saveResumeProfile(profile) {
     last_reviewed_at: profile.lastReviewedAt ?? null,
     updated_at: new Date().toISOString(),
   };
+  for (const [jsKey, column] of RESUME_FILE_META_COLUMNS) {
+    if (jsKey in profile) row[column] = profile[jsKey] ?? null;
+  }
 
   const { error } = await supabase
     .from("resume_profile")
@@ -766,6 +792,67 @@ export async function saveResumeProfile(profile) {
 
   if (error) {
     console.error("Failed to save resume profile:", error.message);
+    return false;
+  }
+  return true;
+}
+
+const RESUME_BUCKET = "resumes";
+
+/**
+ * Uploads a résumé file to the private 'resumes' Storage bucket (migration
+ * 041) at a fixed per-user path, overwriting any previously uploaded file for
+ * that account rather than versioning (§2.E1 v2 scoping). Does not touch
+ * resume_profile — callers save the returned storagePath (plus
+ * originalFilename/mimeType/fileSizeBytes) via saveResumeProfile themselves,
+ * same eager-save-after-computed-value pattern as every other Save action.
+ * Returns { storagePath, error } — storagePath is null on failure.
+ */
+export async function uploadResumeFile(file) {
+  const userId = await getCurrentUserId();
+  if (!userId) return { storagePath: null, error: "Not signed in." };
+
+  const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase() ?? "bin";
+  const storagePath = `${userId}/resume.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(RESUME_BUCKET)
+    .upload(storagePath, file, { upsert: true, contentType: file.type || undefined });
+
+  if (error) {
+    console.error("Failed to upload resume file:", error.message);
+    return { storagePath: null, error: error.message };
+  }
+  return { storagePath, error: null };
+}
+
+/**
+ * Short-lived signed URL for viewing/downloading the signed-in user's saved
+ * résumé file — the bucket is private, so there's no stable public URL to
+ * store or cache. Returns null if there's no file or the request fails.
+ */
+export async function getResumeFileUrl(storagePath) {
+  if (!storagePath) return null;
+  const { data, error } = await supabase.storage
+    .from(RESUME_BUCKET)
+    .createSignedUrl(storagePath, 3600);
+  if (error) {
+    console.warn("Failed to create resume file signed URL:", error.message);
+    return null;
+  }
+  return data?.signedUrl ?? null;
+}
+
+/**
+ * Deletes the signed-in user's saved résumé file from Storage. Callers are
+ * responsible for also clearing storage_path/originalFilename/mimeType/
+ * fileSizeBytes via saveResumeProfile — this only removes the Storage object.
+ */
+export async function deleteResumeFile(storagePath) {
+  if (!storagePath) return true;
+  const { error } = await supabase.storage.from(RESUME_BUCKET).remove([storagePath]);
+  if (error) {
+    console.error("Failed to delete resume file:", error.message);
     return false;
   }
   return true;

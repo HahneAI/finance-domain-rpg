@@ -1,6 +1,7 @@
-// §18.E1 — Résumé Review v1 (paste-text, no upload). chatWithCoach and the
-// db.js persistence functions are mocked so these tests never touch the
-// network/DB — same isolation pattern used across this session's Coach tests.
+// §2.E1 — Résumé / Career Document Center. v1 was paste-text only; v2 adds
+// file upload. chatWithCoach, db.js persistence, and resumeFile.js extraction
+// are all mocked so these tests never touch the network/DB/real pdf/docx
+// parsing — same isolation pattern used across this session's Coach tests.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { ResumeReviewCard } from "../../components/ResumeReviewCard.jsx";
@@ -11,6 +12,11 @@ const { mocks } = vi.hoisted(() => ({
     loadResumeProfile: vi.fn(),
     saveResumeProfile: vi.fn(),
     saveCoachChat: vi.fn(),
+    uploadResumeFile: vi.fn(),
+    getResumeFileUrl: vi.fn(),
+    deleteResumeFile: vi.fn(),
+    validateResumeFile: vi.fn(),
+    extractResumeText: vi.fn(),
   },
 }));
 vi.mock("../../lib/claude.js", () => ({ chatWithCoach: mocks.chatWithCoach }));
@@ -18,6 +24,14 @@ vi.mock("../../lib/db.js", () => ({
   loadResumeProfile: mocks.loadResumeProfile,
   saveResumeProfile: mocks.saveResumeProfile,
   saveCoachChat: mocks.saveCoachChat,
+  uploadResumeFile: mocks.uploadResumeFile,
+  getResumeFileUrl: mocks.getResumeFileUrl,
+  deleteResumeFile: mocks.deleteResumeFile,
+}));
+vi.mock("../../lib/resumeFile.js", () => ({
+  validateResumeFile: mocks.validateResumeFile,
+  extractResumeText: mocks.extractResumeText,
+  formatFileSize: (bytes) => `${Math.round(bytes / 1024)} KB`,
 }));
 
 function chunkGenerator(chunks) {
@@ -31,6 +45,10 @@ beforeEach(() => {
   mocks.loadResumeProfile.mockResolvedValue(null);
   mocks.saveResumeProfile.mockResolvedValue(true);
   mocks.saveCoachChat.mockResolvedValue("chat-id");
+  mocks.validateResumeFile.mockReturnValue({ valid: true, error: null });
+  mocks.uploadResumeFile.mockResolvedValue({ storagePath: "test-user-id/resume.pdf", error: null });
+  mocks.getResumeFileUrl.mockResolvedValue("https://signed.example/resume.pdf");
+  mocks.deleteResumeFile.mockResolvedValue(true);
 });
 
 describe("ResumeReviewCard", () => {
@@ -102,5 +120,97 @@ describe("ResumeReviewCard", () => {
 
     await waitFor(() => expect(screen.getByText("Coach couldn't complete the review — try again.")).toBeTruthy());
     expect(mocks.saveCoachChat).not.toHaveBeenCalled();
+  });
+
+  describe("v2 — file upload", () => {
+    it("shows a pre-existing saved file from the loaded profile", async () => {
+      mocks.loadResumeProfile.mockResolvedValue({
+        resumeText: "Warehouse lead...", targetRole: "",
+        storagePath: "test-user-id/resume.pdf", originalFilename: "resume.pdf",
+        mimeType: "application/pdf", fileSizeBytes: 204800,
+      });
+      render(<ResumeReviewCard config={{}} />);
+      expect(await screen.findByText(/resume\.pdf/)).toBeTruthy();
+      expect(screen.getByText("View")).toBeTruthy();
+      expect(screen.getByText("Remove")).toBeTruthy();
+    });
+
+    it("uploads a file, pre-fills extracted text, and saves the file metadata", async () => {
+      mocks.extractResumeText.mockResolvedValue({ text: "Extracted résumé text.", extractable: true, error: null });
+      render(<ResumeReviewCard config={{}} />);
+
+      const fileInput = await screen.findByLabelText("Upload résumé file");
+      const file = new File(["dummy"], "resume.pdf", { type: "application/pdf" });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      await waitFor(() => expect(mocks.uploadResumeFile).toHaveBeenCalledWith(file));
+      await waitFor(() => expect(screen.getByDisplayValue("Extracted résumé text.")).toBeTruthy());
+      await waitFor(() => expect(mocks.saveResumeProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resumeText: "Extracted résumé text.",
+          storagePath: "test-user-id/resume.pdf",
+          originalFilename: "resume.pdf",
+          mimeType: "application/pdf",
+        })
+      ));
+      expect(await screen.findByText(/resume\.pdf/)).toBeTruthy();
+    });
+
+    it("saves the file but shows a notice when its text can't be extracted", async () => {
+      mocks.extractResumeText.mockResolvedValue({ text: "", extractable: false, error: null });
+      render(<ResumeReviewCard config={{}} />);
+
+      const fileInput = await screen.findByLabelText("Upload résumé file");
+      const file = new File(["dummy"], "photo.jpg", { type: "image/jpeg" });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      await waitFor(() => expect(mocks.uploadResumeFile).toHaveBeenCalled());
+      expect(await screen.findByText(/can't automatically read text from this file type/)).toBeTruthy();
+      expect(await screen.findByText(/photo\.jpg/)).toBeTruthy();
+    });
+
+    it("shows a validation error and never uploads when the file is rejected client-side", async () => {
+      mocks.validateResumeFile.mockReturnValue({ valid: false, error: "That file is too large — max 10MB." });
+      render(<ResumeReviewCard config={{}} />);
+
+      const fileInput = await screen.findByLabelText("Upload résumé file");
+      const file = new File(["dummy"], "huge.pdf", { type: "application/pdf" });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      expect(await screen.findByText("That file is too large — max 10MB.")).toBeTruthy();
+      expect(mocks.uploadResumeFile).not.toHaveBeenCalled();
+    });
+
+    it("opens a signed URL when View is clicked", async () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => {});
+      mocks.loadResumeProfile.mockResolvedValue({
+        resumeText: "", targetRole: "",
+        storagePath: "test-user-id/resume.pdf", originalFilename: "resume.pdf",
+        mimeType: "application/pdf", fileSizeBytes: 204800,
+      });
+      render(<ResumeReviewCard config={{}} />);
+
+      fireEvent.click(await screen.findByText("View"));
+      await waitFor(() => expect(mocks.getResumeFileUrl).toHaveBeenCalledWith("test-user-id/resume.pdf"));
+      await waitFor(() => expect(openSpy).toHaveBeenCalledWith("https://signed.example/resume.pdf", "_blank", "noopener,noreferrer"));
+      openSpy.mockRestore();
+    });
+
+    it("removes the saved file and clears its metadata when Remove is clicked", async () => {
+      mocks.loadResumeProfile.mockResolvedValue({
+        resumeText: "Warehouse lead...", targetRole: "",
+        storagePath: "test-user-id/resume.pdf", originalFilename: "resume.pdf",
+        mimeType: "application/pdf", fileSizeBytes: 204800,
+      });
+      render(<ResumeReviewCard config={{}} />);
+
+      fireEvent.click(await screen.findByText("Remove"));
+
+      await waitFor(() => expect(mocks.deleteResumeFile).toHaveBeenCalledWith("test-user-id/resume.pdf"));
+      await waitFor(() => expect(mocks.saveResumeProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ storagePath: null, originalFilename: null, mimeType: null, fileSizeBytes: null })
+      ));
+      await waitFor(() => expect(screen.queryByText(/resume\.pdf/)).toBeNull());
+    });
   });
 });

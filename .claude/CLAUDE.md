@@ -689,8 +689,11 @@ to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route vi
 `entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
 F125), 040 (`employer_preset` column on `beta_content_items`/`base_content_items` +
 `get_user_employer_preset(uid)` — lets admin-authored content target a single employer preset,
-e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`) exist —
-**the next real migration is 041.** Verify against the folder before numbering;
+e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`), 041
+(`resume_profile` storage columns — `storage_path`/`original_filename`/`mime_type`/
+`file_size_bytes` — plus the app's first Supabase Storage bucket, `resumes`, private with
+own-folder RLS; §2.E1 v2, drift-app-warden §21 F124) exist —
+**the next real migration is 042.** Verify against the folder before numbering;
 this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a

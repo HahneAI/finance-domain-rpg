@@ -4008,9 +4008,11 @@ scoping holds).
 > spares the active chat, resume-from-history, and delete.
 
 **F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
-(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `aiContext.js`
-(`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
-`RESUME_REVIEW_SYSTEM_PROMPT`), migration `032_add_resume_profile.sql` — **[L/G]**
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `lib/resumeFile.js` (v2),
+`aiContext.js` (`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
+`RESUME_REVIEW_SYSTEM_PROMPT`), migrations `036_add_resume_profile.sql` (this entry previously
+cited `032` — corrected 2026-08-11; `032` is `changelog_entries`, unrelated) and
+`041_add_resume_profile_storage.sql` (v2) — **[L/G]**
 Built 2026-07-25. First real occupants of the "sections 4+" admin/tester/investor-only tier the
 doc comments in `entitlements.js` have described since the Ask Coach/Net Worth gate split — both
 gate **client-side** on `canAccessAiFeatures({isAdmin, isTester, isInvestor})`, the narrow gate
@@ -4039,6 +4041,24 @@ that table's check constraint by the same migration) via the existing `saveCoach
 new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
 scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
 system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+
+**v2 update, 2026-08-11 (§2.E1 v2) — `resume_profile` now also holds file metadata, and a
+Storage bucket entered the picture.** Migration `041_add_resume_profile_storage.sql` added
+`storage_path`/`original_filename`/`mime_type`/`file_size_bytes` columns and the app's first-ever
+Supabase Storage bucket (`resumes`, private, own-folder RLS keyed on the path's `<user_id>/...`
+prefix — a genuinely new RLS mechanism, not the row-level `auth.uid() = user_id` pattern every
+other table here uses, since Storage policies can't reference `resume_profile` directly).
+`db.js` gained three Storage-facing functions — `uploadResumeFile`/`getResumeFileUrl`/
+`deleteResumeFile` — alongside `loadResumeProfile`/`saveResumeProfile`, both extended to
+read/write the new columns. `lib/resumeFile.js` (new file) does client-side size validation +
+best-effort text extraction (pdfjs-dist for PDF, mammoth for DOCX, plain read for `.txt`, both
+libraries dynamically imported so a paste-only user never loads either). **`saveResumeProfile`'s
+partial-upsert contract is the load-bearing detail here:** file-metadata columns are only written
+when the caller's payload object contains that key at all — a plain text/target-role edit (v1's
+existing call shape, still used verbatim by the paste textarea and target-role field) omits the
+keys entirely, so Postgres upsert leaves a previously uploaded file's metadata untouched instead
+of nulling it out on every keystroke-triggered save. Removing a file explicitly passes
+`{ storagePath: null, ... }` to distinguish "clear this" from "don't touch this."
 > **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
 > decision (`coach-entry-points.md`, 2026-07-25) is **paid-only for everyone else, not
 > trial-included** — a real post-card-charge subscription (`entitlement.state === "active"`) for
@@ -4057,7 +4077,19 @@ system yet, the same stage `AskCoachPanel` was in before F123 landed persistence
 > and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
 > this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
 > `ResumeReviewCard.test.jsx`, `newJobSeasonFlow.test.jsx`'s gate-verification block (confirms a real
-> trial entitlement, not just admin/tester, is correctly refused).
+> trial entitlement, not just admin/tester, is correctly refused). **IF** `saveResumeProfile`'s
+> row-building loop (the `RESUME_FILE_META_COLUMNS` list in `db.js`) is touched, **THEN** verify
+> the "key omitted vs. key explicitly null" distinction still holds — a regression here nulls out
+> every user's uploaded résumé file the next time they edit the target-role field, silently, with
+> no error. **IF** §2.E1 v3's structured-extraction pass lands (`resume_profile.structured_sections`
+> or similar), **THEN** it's a new column on the same row, following the same partial-upsert
+> contract — do not let it ride the always-written base-field block by mistake. **IF** a second
+> feature ever needs Storage (§2.G's forward note), **THEN** check whether the `resumes` bucket's
+> own-folder RLS shape (`(storage.foldername(name))[1] = auth.uid()::text`) can be reused before
+> standing up a second bucket/policy set from scratch — this is the first one in the app, so
+> there's no established alternative pattern to diverge from yet. Check:
+> `dbResumeProfile.test.js`'s partial-upsert block, `resumeFile.test.js`'s extraction-dispatch
+> cases, `ResumeReviewCard.test.jsx`'s v2 file-upload block.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

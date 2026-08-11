@@ -377,7 +377,7 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   blocks already get `cache_control: ephemeral`, multi-turn messages already cache the growing
   history) — no new work needed since this mode reuses that route rather than a new one.
 
-#### E1. Résumé / Career Document Center — v1 built 2026-07-25 (scoped 2026-07-22); v2+ scope expanded 2026-08-11
+#### E1. Résumé / Career Document Center — v1 built 2026-07-25 (scoped 2026-07-22); v2 built 2026-08-11 (scope expanded same day, v3+ still ahead)
 
 *Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §1.H14
 bullet 6 as "genuinely absent as an idea" — the only prior trace anywhere in this doc was that one
@@ -386,13 +386,14 @@ plain user-entered text for form auto-fill, not this. This pass answers §1.H14'
 questions (storage, parsing, standalone vs. tied to `ReemploymentTracker`) and proposes a phased
 scope.*
 
-*v1 below shipped 2026-07-25 exactly as scoped — paste-text review only. Everything from v2 on
-reflects a 2026-08-11 user directive that reframes the feature: résumé data should be a
-persistent, retrievable account asset the user uploads once (any file type, not just paste-text)
-and reuses — Coach breaking it into structured sections, those sections feeding Job Hunt
-Assistant's context, an AI-assisted rewrite mode, and Coach drafting a per-application cover
-letter from it — rather than a one-shot "paste it, get a review, done" tool. v2–v6 are
-documentation only as of this edit; nothing past v1 is implemented yet.*
+*v1 shipped 2026-07-25 exactly as scoped — paste-text review only. Everything from v2 on reflects
+a 2026-08-11 user directive that reframes the feature: résumé data should be a persistent,
+retrievable account asset the user uploads once (any file type, not just paste-text) and reuses —
+Coach breaking it into structured sections, those sections feeding Job Hunt Assistant's context,
+an AI-assisted rewrite mode, and Coach drafting a per-application cover letter from it — rather
+than a one-shot "paste it, get a review, done" tool. v2 shipped the same day (file upload +
+persistent storage + a real view/remove surface). v3–v6 (structured extraction, Job Hunt
+integration, rewrite mode, cover letters) are still documentation only as of this edit.*
 
 - **Storage — plain text, not a file upload, for v1.** Confirmed via grep: this codebase has zero
   existing Supabase Storage usage anywhere (`grep -rn "storage.from\|createSignedUrl"` across
@@ -462,33 +463,40 @@ documentation only as of this edit; nothing past v1 is implemented yet.*
     `coach_chats.chat_type`; the review saves there via the existing `api/coach.js`/`saveCoachChat`
     path, same as the spec intended — no `insights` JSONB populated yet (that's for structured
     extraction beyond a written review; not needed for v1's plain-text output).
-  - **v2 — scope expanded 2026-08-11 (user directive): résumé becomes a persistent, retrievable
-    account asset, not a one-time paste-and-review.** Supersedes the original "v2 = just file
-    upload, gated on v1 proving usage" framing that used to sit here — the ask now makes this the
+  - **v2 — built 2026-08-11 (user directive): résumé becomes a persistent, retrievable
+    account asset, not a one-time paste-and-review.** Superseded the original "v2 = just file
+    upload, gated on v1 proving usage" framing that used to sit here — the ask made this the
     real next target regardless of v1 usage numbers, since it's the foundation v3–v6 below all
     build on, not an optional enhancement.
-    - [ ] **Any-file-type upload, not just PDF/DOCX.** New Supabase Storage bucket — first Storage
-      usage anywhere in this codebase (`grep -rn "storage.from\|createSignedUrl"` still comes back
-      empty; no existing bucket/RLS/validator pattern to copy, build from scratch) — with its own
-      own-row Storage RLS policy. Note Storage RLS is a separate mechanism from the Postgres
-      row-level policy already on `resume_profile`; don't assume the table policy covers the
-      bucket, it doesn't. Client-side extraction for text-bearing formats (`pdf.js` for PDF,
-      `mammoth.js` for DOCX, plain read for `.txt`) feeds the same v1 text pipeline unchanged; the
-      extracted `resume_text` is stored **and** the original file is kept (path + original
-      filename + mime type + size) so the file itself stays retrievable/viewable later, not just
-      its extracted text. Image-only/scanned uploads fail extraction gracefully to "paste text
-      instead" rather than silently producing an empty analysis — no OCR in scope (see "not yet
-      scoped" below).
-    - [ ] **`resume_profile` schema growth** — add `storage_path`, `original_filename`,
-      `mime_type`, `file_size_bytes` (nullable — v1's paste-only rows have none of these) alongside
-      the existing `resume_text`/`target_role` columns. Still one row per user (same PK shape as
-      v1); uploading a new file overwrites the previous one rather than versioning, unless the
-      rewrite-mode work in v5 forces versioning first.
-    - [ ] **A real "retrievable and viewable" surface** — view/download affordance for the saved
-      résumé (extracted text, and the original file via a signed URL from the bucket when one was
-      uploaded), reachable from `ResumeReviewCard.jsx` and anywhere else the résumé becomes
-      relevant (Job Hunt Assistant in v4, the per-application cover letter flow in v6) — not
-      re-derivable only by re-opening the paste/upload flow from scratch.
+    - [x] **Any-file-type upload, not just PDF/DOCX.** New Supabase Storage bucket (`resumes`,
+      private) — first Storage usage anywhere in this codebase — with own-folder RLS policies on
+      `storage.objects` (`migration 041_add_resume_profile_storage.sql`; Storage RLS is a separate
+      mechanism from `resume_profile`'s own row-level Postgres policies, keyed on the upload
+      path's `<user_id>/...` prefix instead of a table column). Client-side extraction
+      (`lib/resumeFile.js`) for text-bearing formats — `pdfjs-dist` for PDF, `mammoth` for DOCX,
+      plain `file.text()` for `.txt` — both libraries dynamically imported so a paste-only user
+      never loads either (confirmed in the production build: `pdf`/`pdf.worker` land in their own
+      chunks, not the main bundle). The extracted text is stored **and** the original file is
+      kept (path + original filename + mime type + size) so the file itself stays
+      retrievable/viewable, not just its extracted text. An unrecognized file type still uploads
+      and saves — extraction just reports `extractable: false` and `ResumeReviewCard.jsx` shows a
+      "paste your résumé text instead" notice rather than silently producing an empty analysis;
+      same graceful path for a recognized format that fails to parse (corrupt/password-protected
+      PDF), except with the parser's own error message included. No OCR (see "not yet scoped").
+    - [x] **`resume_profile` schema growth** — `storage_path`/`original_filename`/`mime_type`/
+      `file_size_bytes` added (migration 041), nullable (v1-era paste-only rows have none of
+      these). Still one row per user; uploading a new file overwrites the previous one (fixed
+      per-user path, `upsert: true` on the Storage write) rather than versioning — deferred to v5
+      if the rewrite-mode work ends up needing it. `saveResumeProfile()` (`db.js`) only writes
+      these four columns when the caller's payload object contains the key at all, so a plain
+      text/target-role edit (v1's existing call shape) can't accidentally null out a previously
+      uploaded file's metadata — see the drift note added to drift-app-warden §21 F124.
+    - [x] **A real "retrievable and viewable" surface** — `ResumeReviewCard.jsx` shows the saved
+      file's name/size plus **View** (fetches a fresh short-lived signed URL via
+      `getResumeFileUrl()` and opens it — the bucket is private, so there's no stable URL to
+      cache) and **Remove** (`deleteResumeFile()` + clears the four metadata columns) actions.
+      Not yet wired into Job Hunt Assistant or a per-application cover letter flow — that's v4/v6
+      below, both still open.
   - **v3 — Coach "breaks it down": structured extraction, not just a written review.** A second AI
     pass (or the same call, restructured) turns `resume_text` into a structured shape — work
     experience entries (title, company, dates, bullet points), education, skills/certifications —
@@ -561,11 +569,12 @@ documentation only as of this edit; nothing past v1 is implemented yet.*
   fields future AI features will need (§2.D/E/J, §8.A/B/C, §8 F1–F3); extend `buildCoachContext`
   and that map together whenever one of those items gets scoped, so context-building stays
   centralized instead of growing a bespoke builder per feature
-- [ ] **Supabase Storage — not yet used anywhere in this codebase.** First real caller will be
-  résumé v2 (§2.E1) — a bucket + own-row Storage RLS policy + file-type/size validator for
+- [x] **Supabase Storage — first real usage, built 2026-08-11.** Résumé v2 (§2.E1) added the
+  `resumes` bucket (private) + own-folder Storage RLS policy (`migration
+  041_add_resume_profile_storage.sql`) + client-side size validation (`lib/resumeFile.js`) for
   any-file-type résumé upload. Noted here so the next feature that also wants file storage (e.g. a
-  future statement-upload flow for §2.D) checks whether résumé v2's bucket/policy shape can be
-  reused before standing up a second one from scratch.
+  future statement-upload flow for §2.D) checks whether this bucket/policy shape can be reused
+  before standing up a second one from scratch.
 - [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
   + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
   `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
@@ -1251,8 +1260,8 @@ the emotional and practical weight of what just happened.*
 ### E. Future — AI Job Hunt Assistant & Résumé / Career Document Center *(Phase 3)*
 
 *Consolidated into §2.E (Job Hunt Assistant) and §2.E1 (Résumé / Career Document Center — v1 built
-2026-07-25, v2+ scope expanded 2026-08-11 per user directive: persistent any-file-type résumé
-storage, Coach-driven structured breakdown, integration into Job Hunt Assistant's context, an
+2026-07-25, v2 (persistent any-file-type résumé storage) built 2026-08-11 per user directive; v3+
+still ahead — Coach-driven structured breakdown, integration into Job Hunt Assistant's context, an
 AI-assisted rewrite mode, and per-application cover letter generation). Requires New Job Season
 (§1.C) to be live first.*
 

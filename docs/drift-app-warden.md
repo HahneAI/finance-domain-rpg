@@ -3716,6 +3716,37 @@ read," they don't belong here) and still route+render exactly as before.
 > don't pass `embedded` at that call site. Check: no automated test covers this page's toggle
 > wiring or the embedded/non-embedded BackBar branch — visual-only, verify by hand per method.
 
+**F128 · Cross-posting between Beta and Money Moves — a one-time copy, never a sync** —
+`ProfilePanel.jsx` (`ContentAdminDetail`'s `crossPost` prop, `handleSave`'s cross-post branch,
+`handleBulkCopy`) — **[G] — a stale field list here means the copy silently drops data, not a
+crash**
+Added 2026-08-10. Two independent write paths, both going through the SAME paired
+`saveItem`/`crossPost.saveItem` functions `UserCommunicationAdminDetail` already wires per
+method (beta_checklist↔base_checklist via Money Moves Checklist, beta_suggestion↔base_suggestion
+via Money Moves Tips — checklist never crosses to suggestion, only same-`kind` pairs):
+- **Per-item "Also post to {label}" checkbox** — on save, if checked, fires a SECOND
+  `crossPost.saveItem({ id: null, ... })` after the primary save succeeds. Always creates a
+  new row on the other side; never looks up or updates a counterpart, because none is tracked.
+- **List-view "Copy All to {label}" bulk action** — same shape, looped over every currently
+  listed item, `id: null` for each so the other table gets a fresh row per item.
+Neither path is a sync: editing or deleting an item afterward never touches its cross-posted
+copy (if any), and there is NO column recording "this row came from a cross-post of row X" —
+clicking "Copy All" a second time duplicates everything from the first click. That's a
+deliberate simplicity trade-off documented at build time, not a bug to fix reactively.
+> **IF** a new field is added to `ContentAdminDetail`'s `draft` state (beyond
+> title/body/published/employerPreset), **THEN** add it to BOTH the primary `saveItem(...)`
+> call AND the cross-post `crossPost.saveItem(...)` call in `handleSave`, AND to
+> `handleBulkCopy`'s per-item payload — three call sites, easy to update one and miss the
+> other two, and the failure mode is silent (the cross-posted copy just lacks the field,
+> nothing errors). **IF** de-duplication or a real link between cross-posted rows is ever
+> wanted, **THEN** that needs a new column (e.g. `copied_from_id`) on both `beta_content_items`
+> and `base_content_items` — don't bolt on ad-hoc "skip if title matches" heuristics, title
+> collisions are legitimate (an admin might deliberately reuse a title). Check: no automated
+> test covers this — `adminBetaHub.test.js`/`dbBetaHomebase.test.js`/
+> `dbBaseProductivityHub.test.js` cover `saveBetaContentItem`/`saveBaseContentItem` individually,
+> but nothing exercises `ContentAdminDetail`'s orchestration of calling both; verify by hand
+> (check the box, confirm the item appears in both methods' lists).
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +

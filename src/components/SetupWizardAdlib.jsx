@@ -1633,18 +1633,32 @@ function TaxRatesPage({ formData, onChange, attempted = false }) {
               </div>
             )}
             {!showCalc ? (
-              <Pressable
-                onClick={() => setShowCalc(true)}
-                className="text-2xs"
-                style={{
-                  background: "transparent", color: "var(--color-text-primary)",
-                  border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
-                  padding: "7px 14px", letterSpacing: "1.5px",
-                  textTransform: "uppercase", cursor: "pointer",
-                }}
-              >
-                Recalculate Using Paystub
-              </Pressable>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <Pressable
+                  onClick={() => setShowCalc(true)}
+                  className="text-2xs"
+                  style={{
+                    background: "transparent", color: "var(--color-text-primary)",
+                    border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                    padding: "7px 14px", letterSpacing: "1.5px",
+                    textTransform: "uppercase", cursor: "pointer",
+                  }}
+                >
+                  Recalculate Using Paystub
+                </Pressable>
+                <Pressable
+                  onClick={handleEstimate}
+                  className="text-2xs"
+                  style={{
+                    background: "transparent", color: "var(--color-text-primary)",
+                    border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                    padding: "7px 14px", letterSpacing: "1.5px",
+                    textTransform: "uppercase", cursor: "pointer",
+                  }}
+                >
+                  Use Estimate for Now
+                </Pressable>
+              </div>
             ) : null}
             {!showCalc && attempted && !(formData.fedRateLow > 0) && (
               <div className="text-2xs" style={{ marginTop: "8px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--color-deduction)" }}>
@@ -1996,7 +2010,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
         </div>
       </div>
 
-      <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "28px max(16px, env(safe-area-inset-left)) 28px max(16px, env(safe-area-inset-right))" }}>
+      <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "28px max(16px, env(safe-area-inset-left)) 28px max(16px, env(safe-area-inset-right))" }}>
         <div style={{ width: "100%", maxWidth: "720px" }}>
           <StepSlide stepKey={pageIdx} direction={stepDir}>
             {current && <current.Component formData={formData} onChange={update} isInvestor={isInvestor} attempted={attempted} />}

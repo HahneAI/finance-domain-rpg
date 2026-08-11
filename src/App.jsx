@@ -2135,9 +2135,15 @@ export default function App() {
   );
 
   // wizardEntry values now routed to SetupWizardAdlib instead of SetupWizard.jsx — see
-  // docs/drift-app-warden.md §7.3's gate matrix for why only these two life events this
-  // round (structure_change/changed_jobs stay on SetupWizard.jsx until a later round).
-  const isAdlibLifeEvent = wizardEntry === "lost_job" || wizardEntry === "commission_job";
+  // docs/drift-app-warden.md §7.3's gate matrix. "structure_change" is the actual, only real
+  // entry point (LifeEventMenu's "Pay Structure Changed" tile) — added this round (drift-
+  // app-warden §7 F140) alongside the "lost_job"/"commission_job" values routed last round
+  // (still real, correct plumbing for a wizardEntry value nothing sets directly today, kept
+  // for forward-compatibility). SetupWizardAdlib's own internal life-event pivot picker
+  // (IntakePage's LifeEventPivot) is what makes "lost_job"/"changed_jobs"/"commission_job"
+  // reachable in practice now — a user pivots away from "structure_change" from inside the
+  // same mount, exactly how real SetupWizard.jsx's Step0 picker was always meant to work.
+  const isAdlibLifeEvent = wizardEntry === "lost_job" || wizardEntry === "commission_job" || wizardEntry === "structure_change";
 
   // Post-login fade animation: render both LoginScreen (fading out) and App shell
   // (fading in) during the 340ms transition. After fade completes, render only shell.
@@ -3942,16 +3948,17 @@ export default function App() {
           savePersistedStateNow({ config: nextConfig });
         }}
       />
-      {/* ── Setup wizard — re-entry (life event string), OR first-run's jobless mini-flow
-           continuation once SetupWizardAdlib has handed off into it (adlibHandoff set).
-           SetupWizard.jsx owns structure_change/changed_jobs re-entry unchanged (a later
-           round will move those too — drift-app-warden §7.3); lost_job/commission_job now
-           route to SetupWizardAdlib instead (isAdlibLifeEvent below) — see the
-           SetupWizardAdlib mount further down for both the first-run and life-event entry
-           points. isAdlibLifeEvent is also excluded from the `wizardExiting` fallback here:
-           wizardEntry itself doesn't change during closeWizardWithAnimation's 180ms delay,
-           so without this exclusion a lost_job/commission_job close would transiently
-           mount BOTH this component and SetupWizardAdlib at once. */}
+      {/* ── Setup wizard — this component now only ever mounts for the jobless mini-flow's
+           continuation once SetupWizardAdlib has handed off into it (adlibHandoff set,
+           initialStepId: 10) — every wizardEntry life-event string (structure_change,
+           lost_job, commission_job — and, reachable only via SetupWizardAdlib's own internal
+           pivot picker, changed_jobs) now routes to SetupWizardAdlib instead
+           (isAdlibLifeEvent below, drift-app-warden §7 F140). See the SetupWizardAdlib mount
+           further down for both the first-run and life-event entry points. isAdlibLifeEvent is
+           also excluded from the `wizardExiting` fallback here: wizardEntry itself doesn't
+           change during closeWizardWithAnimation's 180ms delay, so without this exclusion a
+           structure_change/lost_job/commission_job close would transiently mount BOTH this
+           component and SetupWizardAdlib at once. */}
       {((wizardEntry !== null && wizardEntry !== false && !isAdlibLifeEvent) || (wizardEntry === false && adlibHandoff) || (wizardExiting && !isAdlibLifeEvent)) && (
         <SetupWizard
           config={adlibHandoff?.config ?? config}
@@ -4014,14 +4021,21 @@ export default function App() {
           }}
         />
       )}
-      {/* ── SetupWizardAdlib — lost_job/commission_job life-event re-entry
-           (docs/drift-app-warden.md §7.3, §7 F139). Unlike first-run, both are cancelable —
-           onCancel is a real closing function, matching SetupWizard.jsx's own re-entry
-           onCancel — and there's no jobless mini-flow concept on either path, so onHandoff
-           is a stub that should never actually fire (lifeEvent !== null skips that branch
-           entirely inside SetupWizardAdlib). handleWizardComplete already reads wizardEntry
-           itself for its `life_event:${wizardEntry}` configHistory source and its
-           structure_change-only branches — no change needed there for these two values. */}
+      {/* ── SetupWizardAdlib — life-event re-entry: structure_change (the real, only entry
+           point — LifeEventMenu's "Pay Structure Changed" tile) plus lost_job/commission_job
+           (docs/drift-app-warden.md §7.3, §7 F139/F140). All three are cancelable — onCancel is
+           a real closing function, matching SetupWizard.jsx's own re-entry onCancel — and
+           there's no jobless mini-flow concept on any of them, so onHandoff is a stub that
+           should never actually fire (lifeEvent !== null skips that branch entirely inside
+           SetupWizardAdlib). handleWizardComplete already reads wizardEntry itself for its
+           `life_event:${wizardEntry}` configHistory source and its structure_change-only
+           branches — no change needed there for any of these values, including once
+           SetupWizardAdlib's own internal life-event pivot (LifeEventPivot, F140) changes
+           curLifeEvent away from wizardEntry: real SetupWizard.jsx's own Step0 pivot never
+           notified App.jsx of its internal lifeEvent change either, so handleWizardComplete's
+           tagging staying keyed to the original wizardEntry value (not the pivoted one) matches
+           existing, intentional behavior rather than diverging from it — see the session
+           report's judgment-call note. */}
       {isAdlibLifeEvent && (
         <SetupWizardAdlib
           config={config}

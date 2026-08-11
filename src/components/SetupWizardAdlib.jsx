@@ -578,6 +578,13 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
   const isEmployed = lifeEvent !== null ? true : formData.startedUnemployed === false;
   const investorFirstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
 
+  // Commission toggle (lifeEvent === "commission_job" only) — mirrors real Step1's
+  // hasCommission local state exactly (commissionMonthly is the only stored field; the
+  // on/off state itself is UI-local, same as real Step1's own useState).
+  const [hasCommission, setHasCommission] = useState(
+    lifeEvent === "commission_job" && (formData.commissionMonthly ?? 0) > 0
+  );
+
   // Overtime Threshold local UI choice — mirrors real Step1's otCustom flag, plus a
   // separate "have they answered at all" tracked as its own string state so a
   // resumed/blank `otThreshold === null` (which real Step1 also uses for "Exempt")
@@ -677,6 +684,11 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
   const tipsLeadText = "On top of that, I";
   const commissionOnlyLeadText = "This is";
   const commissionOnlyTailText = "commission-only position.";
+  // Commission Income (lifeEvent === "commission_job" only) — mirrors real Step1's
+  // Commission Income Field exactly (Pill toggle + Monthly Average, gated on gateTouched
+  // only, applies to both DHL and base users): src/components/SetupWizard.jsx ~782-808.
+  const commissionLeadText = "My pay also";
+  const commissionAmountText = "averaging $";
 
   return (
     <>
@@ -913,6 +925,44 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                 </>
               )}
               {otChoice !== "custom" && <TypedText text="." />}
+            </>
+          )}
+
+          {/* ── Commission Income (real Step1 ~782–809, lifeEvent === "commission_job" only)
+               — applies to both DHL and base users, gated only on payStructureComplete
+               (mirrors real Step1's gateTouched gate). ── */}
+          {lifeEvent === "commission_job" && payStructureComplete && (
+            <>
+              {" "}<TypedText text={commissionLeadText} />{" "}
+              <FadeIn delay={typeDuration(commissionLeadText)}>
+                <InlineSelect
+                  value={hasCommission ? "yes" : "no"}
+                  onChange={v => {
+                    const next = v === "yes";
+                    setHasCommission(next);
+                    if (!next) onChange({ commissionMonthly: 0 });
+                  }}
+                  options={[{ value: "yes", label: "includes commission" }, { value: "no", label: "doesn't include commission" }]}
+                  ariaLabel="Commission income"
+                />
+              </FadeIn>
+              {hasCommission ? (
+                <>
+                  , <TypedText text={commissionAmountText} />
+                  <FadeIn delay={typeDuration(commissionAmountText)}>
+                    <InlineNumber
+                      value={formData.commissionMonthly ?? ""}
+                      onChange={v => onChange({ commissionMonthly: v === "" ? null : parseFloat(v) })}
+                      placeholder="800"
+                      width="72px"
+                      ariaLabel="Commission monthly average, dollars"
+                    />
+                  </FadeIn>{" "}
+                  <TypedText text="a month." />
+                </>
+              ) : (
+                <TypedText text="." />
+              )}
             </>
           )}
 

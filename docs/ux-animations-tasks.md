@@ -551,15 +551,23 @@ per-component sizing. **Last updated:** 2026-08-10.
 
 ### The classes (`src/index.css`)
 
-| Class | Size | Was | Status |
+| Class | Size (2026-08-11) | History | Status |
 |---|---|---|---|
-| `.text-2xs` | 10px | 9px (bumped) | shipped, in use |
-| `.text-xs` | 11px | 10px *and* 11px (bumped — the two raw sizes collapsed into one class) | shipped, in use |
-| `.text-sm` | 12px | 12px (unchanged) | shipped, in use |
-| `.text-base` | 13px | 13px (unchanged) | shipped, defined, **not yet referenced anywhere** |
-| `.text-md` | 14px | 14px (unchanged) | shipped, defined, **not yet referenced anywhere** |
+| `.text-2xs` | 11px | 9px → 10px (2026-08-10) → 11px (2026-08-11) | shipped, in use app-wide |
+| `.text-xs` | 12px | 10px/11px merged → 11px (2026-08-10) → 12px (2026-08-11) | shipped, in use app-wide |
+| `.text-sm` | 13px | 12px → 13px (2026-08-11) | shipped, in use app-wide |
+| `.text-base` | 14px | 13px → 14px (2026-08-11) | shipped, in use app-wide |
+| `.text-md` | 15px | 14px → 15px (2026-08-11) | shipped, in use app-wide |
 | `.heading-xl` | 700 / 0.04em / 1.15 | — | shipped, parity class, **not yet referenced anywhere** |
 | `.heading-lg` | 800 / -0.02em / 1.25 | — | shipped, parity class, **not yet referenced anywhere** |
+
+**2026-08-11: whole scale bumped +1px again**, per direct request after the 2026-08-10 rollout —
+even the post-bump sizes still read slightly small in practice. All 8 shared JS style objects
+(`lS`, `labelStyle`×3, `linkStyle`×3/`linkBtnStyle`) were bumped the same +1px in the same pass
+to stay in sync with their documented class-equivalent tier (e.g. `lS` is "the `.text-xs`
+equivalent," so it moved 11px→12px alongside `.text-xs` itself). `ReemploymentTracker.jsx` /
+`ResumeReviewCard.jsx`'s `inputStyle` objects were deliberately left at 14px — they're form
+input sizing, a separate concern from this body-text scale, not something this bump touches.
 
 ### Where the classes are displayed today
 

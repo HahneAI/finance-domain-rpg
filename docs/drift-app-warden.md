@@ -3549,21 +3549,39 @@ is the drift this entry exists to prevent:
   policies/the trigger instead of inlining the same subquery repeatedly. Still "two languages,
   no shared source" at the JS/SQL boundary (F122's existing warning), but now consolidated to
   ONE place on the SQL side instead of growing a second/third inline copy.
-- **Header badge (`App.jsx`'s `loadBetaHomebaseBadge`, added 2026-08-08)** — a SECOND caller of
-  the same read-only tester-facing fetchers `BetaHomebase.jsx` itself uses
-  (`fetchBetaChecklistItems`/`fetchMyChecklistCompletions`/`fetchBetaSuggestions`/
-  `fetchMyBetaScore`/`fetchPublishedChangelogEntries`) — deliberately the SAME functions, not a
-  second query written against the same tables, so this stays "one authoritative read, called
-  twice" rather than a parallel approximation (the distinction `active-systems.md` §6 draws for
-  Coach context grounding applies here too). Unchecked-count math (`items` minus
-  `completedIds`) is done independently in both places since there's no shared component to put
-  it in, but both start from the identical fetched rows. "New since last opened" (changelog/
-  suggestion/score) has NO server-side read-marker — it's a device-local `localStorage` timestamp
-  (`betaHomebaseLastViewedAt:<user_id>`, stamped on open, same pattern as the sitewide changelog
-  bell's `lastSeenChangelogId`), so a tester who reads on one device still sees the badge on
-  another. That's an accepted gap, not an oversight — this app has no other read-receipt/
-  notification-state table, and the checklist half of the badge (the only part with real
-  per-tester DB state) isn't affected by it.
+- **Header badge (`App.jsx`'s `loadBetaHomebaseBadge`, added 2026-08-08; became the SOLE fetch
+  owner 2026-08-11 — see the preload bullet below).** Originally a second caller of the same
+  read-only tester-facing fetchers `BetaHomebase.jsx` itself used; since 2026-08-11 it's the
+  ONLY caller — `BetaHomebase.jsx`/`ProductivityHub.jsx` no longer fetch at all, they render
+  from what this effect already fetched. Unchecked-count math (`items` minus `completedIds`) is
+  still computed independently here (for the badge number) and inside each page (for the
+  checklist UI), but both read the identical cached rows now, not two separate fetches — an
+  even stronger version of "one authoritative read" than the original two-caller design (the
+  distinction `active-systems.md` §6 draws for Coach context grounding applies here too).
+  "New since last opened" (changelog/suggestion/score) has NO server-side read-marker — it's a
+  device-local `localStorage` timestamp (`betaHomebaseLastViewedAt:<user_id>`, stamped on
+  navigate, same pattern as the sitewide changelog bell's `lastSeenChangelogId`), so a tester
+  who reads on one device still sees the badge on another. That's an accepted gap, not an
+  oversight — this app has no other read-receipt/notification-state table, and the checklist
+  half of the badge (the only part with real per-tester DB state) isn't affected by it.
+- **Preload + single-fetch-owner (2026-08-11).** `betaHomebaseData`/`productivityHubData`
+  (`App.jsx`) cache the FULL fetch result (not just badge counts) from the exact same effect —
+  the one that already fires on mount (right after login, while `currentView` is still
+  `"home"`) and on every subsequent nav change. `BetaHomebase.jsx`/`ProductivityHub.jsx` were
+  rewritten to consume this via a `preloadedData` prop instead of fetching in their own mount
+  effect — by the time someone taps the icon, the data is typically already sitting in
+  `App.jsx` state, so the page renders immediately with no spinner. Freshness contract is
+  DELIBERATELY "refresh on return to the page" only — no polling, no Supabase Realtime
+  subscription (this app has neither anywhere, and the user explicitly chose this option over
+  both when asked) — so content published while a tester is already sitting on either page
+  won't appear until they navigate away and back (or their next nav-triggered refresh). Both
+  page components use React's "adjusting state during render" pattern (a guarded `setState`
+  call in the render body, gated on `preloadedData !== hydratedFrom`) to hydrate their one
+  piece of genuinely-local mutable state (`completedIds`, needed for the optimistic toggle) —
+  deliberately NOT a `useEffect`, to avoid adding a new instance of the `setState`-in-effect
+  shape this file's neighbors already needed `"use no memo"` for (the §12.4 case law). The other
+  four fields (`checklistItems`/`suggestions`/`score`/`changelogEntries`) are read-only display
+  data and are read straight from the prop — no local state for them at all.
 - **Modal → real nav-stack page (2026-08-09).** `BetaHomebase.jsx`/`ProductivityHub.jsx` were
   originally `position:fixed` portal modals (backdrop, fold-in/out, own ✕ close button);
   they're now plain pages rendered inside `App.jsx`'s `activePanel` when `currentView ===
@@ -3585,11 +3603,23 @@ is the drift this entry exists to prevent:
 > through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. **IF** the
 > header badge's "new" definition changes (a new content kind should count, or an existing one
 > shouldn't), **THEN** update `loadBetaHomebaseBadge` in `App.jsx` only — never add a second,
-> differently-shaped fetch for the same data just to feed the badge. Check:
-> `dbBetaHomebase.test.js` (client read/write shape + gating), `adminBetaHub.test.js` (server
-> auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
-> scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
-> no single automated test spans the JS+SQL boundary, same gap F122 already flags.
+> differently-shaped fetch for the same data just to feed the badge. **IF** a new field is ever
+> needed inside `BetaHomebase.jsx`/`ProductivityHub.jsx` that isn't already part of
+> `betaHomebaseData`/`productivityHubData`'s shape, **THEN** add it to the `Promise.all` +
+> `setBetaHomebaseData`/`setProductivityHubData` calls in `App.jsx` — do NOT add a fetch inside
+> either page component to fill the gap, that reintroduces the exact duplicate-fetch-on-every-
+> visit problem the 2026-08-11 preload change removed. **IF** the freshness contract ever needs
+> to change (e.g. someone wants live updates while the page stays open), **THEN** that's a real
+> architecture decision (polling vs. Supabase Realtime, both weighed and explicitly declined in
+> favor of refresh-on-navigation when this was built) — don't casually add a `setInterval` or a
+> realtime channel to one page component without deciding whether it belongs in `App.jsx`'s
+> single-fetch-owner effect instead. Check: `dbBetaHomebase.test.js` (client read/write shape +
+> gating), `adminBetaHub.test.js` (server auth + entity dispatch), `adminBetaReport.test.js`
+> (the score/checklist joins the admin scoresheet reads); migration 037's own verification block
+> covers the RLS/trigger boundary — no single automated test spans the JS+SQL boundary, same gap
+> F122 already flags, and no automated test covers the preload/hydration wiring itself (React
+> Compiler blind spot, same as the rest of this file's neighbors — verify with a real `vite
+> build` + browser render, not `npm run test:run` alone).
 
 **F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
 Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,

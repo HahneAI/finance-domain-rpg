@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
 import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 import { estimateWeeklyNet } from "../lib/finance.js";
 import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComplete.js";
+// LIFE_EVENTS/DIFF_FIELDS/StructureChangeDiff are shared with SetupWizard.jsx rather than
+// duplicated (drift-app-warden §7 F7's "these two lists must never diverge" note — DIFF_FIELDS
+// specifically) — see drift-app-warden §7 F140.
+import { LIFE_EVENTS, StructureChangeDiff } from "./SetupWizard.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SetupWizardAdlib.jsx — the REAL production wizard for first-run onboarding
@@ -558,7 +562,88 @@ function DhlRotationCard({ formData, onChange, attempted = false }) {
   );
 }
 
-function IntakePage({ formData, onChange, isInvestor = false, attempted = false, lifeEvent = null }) {
+// ── Life-event pivot picker (drift-app-warden §7 F140) — ported from real
+// SetupWizard.jsx's Step0 re-entry picker (~line 40-178). Only ever rendered when this
+// wizard's ORIGINAL entry point was "structure_change" (the only real entry point,
+// App.jsx item 5) — `onLifeEventChange` is only threaded down by the parent in that case,
+// so its mere presence is the render gate IntakePage checks. `curLifeEvent` is the
+// pivoted-or-not life event currently in effect; `onLifeEventChange` updates it.
+//
+// Two branches, mirroring real Step0 exactly for their respective states:
+//   - curLifeEvent === "structure_change" (not yet pivoted): the structure_change-specific
+//     intro copy (item 2, ported verbatim from SetupWizard.jsx:109-136), PLUS the picker
+//     below it — real Step0 returns early here with no picker at all, but since ad-lib has
+//     no separate "step" to advance into first, the picker has to live on this same screen
+//     or pivoting would be permanently unreachable. This is the one deliberate deviation
+//     from a line-for-line Step0 port — see the session report's judgment-call note.
+//   - curLifeEvent is one of the other three (already pivoted): the generic "What changed?"
+//     picker only, active option highlighted — a verbatim port of real Step0's else branch.
+// Matches real LIFE_EVENTS' own filter: the list never includes "structure_change" as a
+// selectable option (no way to pivot back once moved away, same as the real wizard).
+function LifeEventPivot({ curLifeEvent, onLifeEventChange }) {
+  const picker = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {LIFE_EVENTS.filter(ev => ev.value !== "structure_change").map(ev => {
+        const active = curLifeEvent === ev.value;
+        return (
+          <Pressable
+            key={ev.value}
+            onClick={() => onLifeEventChange(ev.value)}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start",
+              gap: "3px", textAlign: "left",
+              background: active ? "rgba(0,200,150,0.08)" : "var(--color-bg-raised)",
+              border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
+              borderRadius: "12px", padding: "12px 14px", cursor: "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            <span className="text-base" style={{ fontWeight: "600", color: active ? "var(--color-teal)" : "var(--color-text-primary)" }}>
+              {active && "✓ "}{ev.label}
+            </span>
+            <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{ev.sub}</span>
+          </Pressable>
+        );
+      })}
+    </div>
+  );
+
+  if (curLifeEvent === "structure_change") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
+        <p className="text-md" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0, fontWeight: 600 }}>
+          Update your pay structure.
+        </p>
+        <p className="text-base" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0 }}>
+          The next steps are pre-filled with your current settings — only edit what actually
+          changed (rate, schedule, employer, deductions, or tax setup). Goals, expenses, logs,
+          and historical week confirmations stay put.
+        </p>
+        <p className="text-sm" style={{ lineHeight: "1.6", color: "var(--color-text-primary)", margin: 0 }}>
+          On the Schedule step, set the start date to the day your new pay structure takes
+          effect. Forward-looking projections recalculate from that week onward.
+        </p>
+        <div>
+          <p className="text-xs" style={{ color: "var(--color-text-secondary)", margin: "4px 0 8px" }}>
+            Something else changed instead?
+          </p>
+          {picker}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <p className="text-base" style={{ color: "var(--color-text-primary)", margin: "0 0 12px" }}>
+        What changed? Only the affected steps will be updated — everything else stays as-is.
+      </p>
+      {picker}
+    </div>
+  );
+}
+
+function IntakePage({ formData, onChange, isInvestor = false, attempted = false, lifeEvent = null, onLifeEventChange = null }) {
   // employerPreset is only ever "DHL" | null in this app's real model — null alone
   // can't distinguish "hasn't answered yet" from "explicitly chose someone else",
   // so track which blank the user picked as local UI state (mirrors real Step1's
@@ -580,10 +665,17 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
 
   // Commission toggle (lifeEvent === "commission_job" only) — mirrors real Step1's
   // hasCommission local state exactly (commissionMonthly is the only stored field; the
-  // on/off state itself is UI-local, same as real Step1's own useState).
+  // on/off state itself is UI-local, same as real Step1's own useState). Also re-synced
+  // via useEffect (not just the lazy initializer) — a pivot from "structure_change" to
+  // "commission_job" (drift-app-warden §7 F140's pivot mechanism) changes `lifeEvent` well
+  // after mount, when the lazy initializer has already run and evaluated false.
   const [hasCommission, setHasCommission] = useState(
     lifeEvent === "commission_job" && (formData.commissionMonthly ?? 0) > 0
   );
+  useEffect(() => {
+    if (lifeEvent === "commission_job") setHasCommission((formData.commissionMonthly ?? 0) > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lifeEvent]);
 
   // Overtime Threshold local UI choice — mirrors real Step1's otCustom flag, plus a
   // separate "have they answered at all" tracked as its own string state so a
@@ -662,6 +754,9 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
   // copy written in the same tone as structure_change's own re-entry intro.
   const introTextLostJob = "Let's rebuild your pay for the new job.";
   const introTextCommission = "Let's add your commission job to your pay structure.";
+  // changed_jobs has no bespoke real-Step0 copy either (same as lost_job/commission_job) —
+  // new copy in the same tone, distinct wording so it doesn't read as a lost-job re-hire.
+  const introTextChangedJobs = "Let's set up your pay for the new job.";
   const workForText = "I work for";
   const siteText = "I work at the";
   const onTeamText = "I'm on Team";
@@ -692,6 +787,12 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
 
   return (
     <>
+    {/* Life-event pivot picker (drift-app-warden §7 F140) — only rendered when the
+        wizard's original entry point was "structure_change" (the sole real entry point,
+        App.jsx item 5); onLifeEventChange is only threaded down in that case. */}
+    {onLifeEventChange && (
+      <LifeEventPivot curLifeEvent={lifeEvent} onLifeEventChange={onLifeEventChange} />
+    )}
     <p style={BLANK_FONT}>
       {isInvestor && investorFirstName && (
         <>
@@ -712,9 +813,13 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
             />
           </FadeIn>.
         </>
-      ) : (
-        <TypedText text={lifeEvent === "lost_job" ? introTextLostJob : introTextCommission} />
-      )}
+      ) : lifeEvent === "lost_job" ? (
+        <TypedText text={introTextLostJob} />
+      ) : lifeEvent === "commission_job" ? (
+        <TypedText text={introTextCommission} />
+      ) : lifeEvent === "changed_jobs" ? (
+        <TypedText text={introTextChangedJobs} />
+      ) : null /* structure_change: intro already rendered above via LifeEventPivot */}
       {isEmployed && (
         <>
           {!isInvestor && (
@@ -1858,7 +1963,7 @@ function TaxExemptPreview() {
   );
 }
 
-function WrapUpPage({ formData, onChange }) {
+function WrapUpPage({ formData, onChange, lifeEvent = null, originalConfig = null }) {
   const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
@@ -1889,6 +1994,18 @@ function WrapUpPage({ formData, onChange }) {
 
   return (
     <>
+      {/* ── Structure-change diff (drift-app-warden §7 F140) — shown only on the
+           structure_change flow, ported from real SetupWizard.jsx's own StepWrapUp gate
+           (`lifeEvent === "structure_change"`). Never shows for changed_jobs, which reaches
+           Wrap Up too but has no diff summary per the gate matrix. Reuses the exact same
+           StructureChangeDiff component/DIFF_FIELDS list the real wizard renders — see this
+           file's top-of-module import comment. ── */}
+      {lifeEvent === "structure_change" && (
+        <div style={{ marginBottom: "22px" }}>
+          <StructureChangeDiff originalConfig={originalConfig} formData={formData} />
+        </div>
+      )}
+
       <p style={BLANK_FONT}>
         <TypedText text={introText} />{" "}
         <FadeIn delay={typeDuration(introText)}>
@@ -2048,6 +2165,19 @@ function computeActivePages(d, lifeEvent) {
 // must pass a real closing function, not undefined, for those. The Cancel button only renders
 // when onCancel is provided.
 export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resumeFormData = null, isInvestor = false, lifeEvent = null }) {
+  // Internal life-event pivot (drift-app-warden §7 F140) — mirrors real SetupWizard.jsx's own
+  // local `[lifeEvent, setLifeEvent]` state (there seeded from its own `initialLifeEvent` prop).
+  // `lifeEvent` (the prop above) never changes after mount — it's the wizard's original entry
+  // point, used only for formData init (pre-fill vs. blank) and the jobless-mini-flow gates
+  // below, both of which are invariant across a pivot. `curLifeEvent` is what every page/gate
+  // downstream actually reacts to once the wizard is open — it starts equal to `lifeEvent` and
+  // changes only via LifeEventPivot's picker (IntakePage, gated on `onLifeEventChange` being
+  // passed at all, which only happens when the original entry was "structure_change").
+  const [curLifeEvent, setCurLifeEvent] = useState(lifeEvent);
+  // Frozen baseline for the structure_change "What's Changing" diff (item 3) — captured once
+  // at mount, before any edits, exactly like real SetupWizard.jsx's `originalConfig` useMemo.
+  // Irrelevant (never read) for any other lifeEvent value.
+  const [originalConfig] = useState(() => config);
   const [formData, setFormData] = useState(() => {
     if (resumeFormData) return resumeFormData;
     if (lifeEvent !== null) {
@@ -2077,11 +2207,13 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
   // Skipping straight to a single-page flow once "unemployed" is chosen —
   // Schedule is irrelevant for the jobless mini-flow, same as the real
   // wizard's isFirstRunJobless gate skipping it entirely. lost_job/commission_job
-  // exclude Wrap Up instead — see computeActivePages.
-  const activePages = computeActivePages(formData, lifeEvent);
+  // exclude Wrap Up instead — see computeActivePages. Gated on curLifeEvent, not the
+  // original lifeEvent prop, so a structure_change → lost_job/commission_job pivot
+  // immediately reshapes the page set (drift-app-warden §7 F140).
+  const activePages = computeActivePages(formData, curLifeEvent);
   const current = activePages[pageIdx];
   const isLast = pageIdx === activePages.length - 1;
-  const canProceed = current?.isValid(formData, lifeEvent) ?? false;
+  const canProceed = current?.isValid(formData, curLifeEvent) ?? false;
   const progressPct = ((pageIdx + 1) / activePages.length) * 100;
 
   function update(patch) {
@@ -2130,7 +2262,7 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
       <div style={{ padding: "20px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right))", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: "720px", margin: "0 auto" }}>
           <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-teal)" }}>
-            {lifeEvent === null ? "Setup" : "Life Event"} · {pageIdx + 1} of {activePages.length}
+            {curLifeEvent === null ? "Setup" : "Life Event"} · {pageIdx + 1} of {activePages.length}
           </div>
         </div>
         <div style={{ marginTop: "10px", height: "3px", borderRadius: "2px", background: "var(--color-border-subtle)", maxWidth: "720px", margin: "10px auto 0" }}>
@@ -2141,7 +2273,17 @@ export function SetupWizardAdlib({ config, onHandoff, onComplete, onCancel, resu
       <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "28px max(16px, env(safe-area-inset-left)) 28px max(16px, env(safe-area-inset-right))" }}>
         <div style={{ width: "100%", maxWidth: "720px" }}>
           <StepSlide stepKey={pageIdx} direction={stepDir}>
-            {current && <current.Component formData={formData} onChange={update} isInvestor={isInvestor} attempted={attempted} lifeEvent={lifeEvent} />}
+            {current && (
+              <current.Component
+                formData={formData}
+                onChange={update}
+                isInvestor={isInvestor}
+                attempted={attempted}
+                lifeEvent={curLifeEvent}
+                onLifeEventChange={lifeEvent === "structure_change" ? setCurLifeEvent : null}
+                originalConfig={originalConfig}
+              />
+            )}
           </StepSlide>
         </div>
       </div>

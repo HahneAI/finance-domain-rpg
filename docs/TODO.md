@@ -4585,6 +4585,48 @@ touching any of this). Progress:*
       pre-fill plumbing. `computeActivePages`'s default branch already returns the full 5-page
       set (0→1→2→3→4→7 equivalent, Wrap Up included, no diff); confirmed via `git grep
       changed_jobs` that real `SetupWizard.jsx` has nothing else path-specific for it.
-- [x] All four life-event strings are now covered by `SetupWizardAdlib`. `SetupWizard.jsx` is
-      kept mounted only for the jobless mini-flow's `initialStepId: 10` hand-off continuation —
-      not retired.
+- [x] All four life-event strings are now covered by `SetupWizardAdlib`. `SetupWizard.jsx` was, at
+      that point, still kept mounted for the jobless mini-flow's `initialStepId: 10` hand-off
+      continuation — see §19.3 below for its removal.
+
+### 19.3 Jobless Mini-Flow Ad-Libbed — Last Hand-Off Removed — CLOSED
+
+*Opened and closed 2026-08-11, drift-app-warden §7 F141. The last remaining path that hopped to a
+second component — first-run jobless (`lifeEvent === null && startedUnemployed === true`), which
+handed off via `onHandoff(formData, 10)` into real `SetupWizard.jsx` mounted at `STEP_DEFS` id 10
+for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — is now three native
+`SetupWizardAdlib` pages.*
+
+- [x] **Three native pages** — `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`,
+      ported line-for-line from real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`
+      (`STEP_DEFS` ids 10/11/12), with `isJoblessBenefitsValid`/`isJoblessDetailsValid`/
+      `isJoblessWrapUpValid` mirroring those steps' `isValid` exactly. `computeActivePages` returns
+      `[PAGES[0], joblessBenefits, joblessDetails, joblessWrapUp]` for the jobless gate instead of
+      the old `[PAGES[0]]` + hand-off.
+- [x] **Hand-off mechanism removed** — `onHandoff` (the prop), `App.jsx`'s
+      `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/`setWizardExiting` (whose only
+      consumer was real `SetupWizard.jsx`'s `isExiting`-driven fade, now unreachable) are all
+      deleted. `closeWizardWithAnimation()` simplified to a synchronous `setWizardEntry(null)`.
+      `SetupWizard.jsx` is no longer mounted by `App.jsx` anywhere — confirmed via full-repo grep
+      before deleting that nothing else called `onHandoff` with a real `initialStepId`. Kept in
+      place as generically useful, not dead code: `SetupWizard.jsx` itself (source of the three
+      ported page components, plus `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared
+      export home), and `initialStepId`/`onBackBeforeStart`/`resumeFormData` (no current caller,
+      but generic wizard-navigation props, still exercised by `SetupWizardAdlib.test.jsx`'s
+      employed-resume case).
+- [x] **Real latent bug fixed along the way** — `IntakePage`'s employment-status select never set
+      `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` when "unemployed" was
+      chosen (only real `Step0`'s pill handler did, and the old hand-off jumped past `Step0`
+      entirely). Writing a native full-completion test caught it; fixed by porting `Step0`'s pill
+      handler verbatim into `IntakePage`.
+- [x] Test coverage — full jobless-first-run completion test (Intake → all three jobless pages →
+      Finish), asserting `newJobSeasonMode`/`setupComplete`/`startDate`/`firstActiveIdx` on the
+      final payload and that `finalizeWizardConfig()`'s `buildYear()` call tolerates the
+      no-pay-structure config shape without throwing. `HISTORY_SENSITIVE_FIELDS` already covered
+      all six jobless fields (verified, not re-added).
+- [x] `.claude/CLAUDE.md`'s `SetupWizardAdlib.jsx` section and `docs/drift-app-warden.md` §7 (new
+      F141 entry + §7.3 gate matrix) updated in the same round.
+- [x] **This closes the entire "wire ad-lib in as production" saga across all three rounds this
+      session** (§19.1 field parity → §19.2 life-event re-entry → §19.3 jobless hand-off removal).
+      `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
+      experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.

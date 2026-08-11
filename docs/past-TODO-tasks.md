@@ -5,6 +5,35 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.3 — Ad-Lib Wizard jobless mini-flow ad-libbed, last hand-off removed (2026-08-11)
+
+*Closes the entire "wire ad-lib in as production" saga: §19.1 (field parity) → §19.2 (life-event
+re-entry) → §19.3 (this). `SetupWizardAdlib.jsx` is now the whole first-run (employed and jobless)
+and life-event-re-entry onboarding experience; `SetupWizard.jsx` is retained only as unmounted
+source/shared-export material. Drift-app-warden §7 F141.*
+
+- [x] **Three native jobless pages** — `JoblessBenefitsPage`/`JoblessDetailsPage`/
+  `JoblessWrapUpPage`, ported line-for-line from real `StepJoblessBenefits`/`StepJoblessDetails`/
+  `StepJoblessWrapUp` (`STEP_DEFS` ids 10/11/12), with matching `isJoblessBenefitsValid`/
+  `isJoblessDetailsValid`/`isJoblessWrapUpValid` gates. `computeActivePages` returns Intake + the
+  three jobless pages for the jobless gate instead of Intake-only + a hand-off.
+- [x] **Hand-off mechanism fully removed** — `onHandoff` prop, `App.jsx`'s
+  `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/`setWizardExiting` (dead once
+  `SetupWizard.jsx` stopped being mounted) all deleted; `closeWizardWithAnimation()` simplified to
+  a synchronous `setWizardEntry(null)`. `SetupWizard.jsx` is no longer mounted anywhere in
+  `App.jsx`. `initialStepId`/`onBackBeforeStart`/`resumeFormData` kept as generic, still-tested
+  wizard-navigation props even with no current caller.
+- [x] **Real latent bug found and fixed** — `IntakePage`'s employment-status select never seeded
+  `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` (only real `Step0`'s handler
+  did, which the old hand-off skipped past); ported `Step0`'s pill handler verbatim into
+  `IntakePage` once a full native completion test surfaced the gap.
+- [x] Full jobless-first-run completion test added (`SetupWizardAdlib.test.jsx`); `npm run
+  test:run` (1599 tests) and `vite build --mode production` both pass.
+- [x] `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7/§7.3, `docs/TODO.md` updated in the same
+  round.
+
+---
+
 ## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 2: `structure_change` + `changed_jobs` (2026-08-11)
 
 - [x] **Reachability fix (the actual point of this round)** — round 1's `App.jsx` routing for

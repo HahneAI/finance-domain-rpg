@@ -891,6 +891,53 @@ intentional real-wizard limitation), not an oversight — see the session report
 note. `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS` (F7): every key already present, no
 new fields introduced, no gaps found.
 
+**F141 · Jobless mini-flow ad-libbed — the last hand-off path removed, `SetupWizard.jsx` no
+longer mounted anywhere** — `SetupWizardAdlib.jsx`, `App.jsx` — **[G→L]** — *(added 2026-08-11,
+docs/TODO.md §19.3, closes it out — completes the "ad-lib is the entire first-run onboarding
+experience" goal first opened for §19.1)* The one path still hopping to a second component —
+first-run jobless (`lifeEvent === null && startedUnemployed === true`), which handed off via
+`onHandoff(formData, 10)` into real `SetupWizard.jsx` mounted at `STEP_DEFS` id 10 for the
+Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps (ids 10/11/12) — is now three
+native `SetupWizardAdlib` pages: `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`,
+with `isJoblessBenefitsValid`/`isJoblessDetailsValid`/`isJoblessWrapUpValid` as line-for-line
+mirrors of real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`'s `isValid`
+(F3's routing table). `computeActivePages` now returns `[PAGES[0], ...jobless pages]` instead of
+`[PAGES[0]]` for the jobless gate, and `handleNext`/`handleSkip`'s last-page branch collapsed to a
+single shared `finish()` (`finalizeWizardConfig()` → `onComplete()`) for every path — no more
+`onHandoff(formData, 10)` branch at all. **Fixed a real, previously-latent gap surfaced by writing
+native completion test coverage for this round:** `IntakePage`'s employment-status `InlineSelect`
+never set `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` when "unemployed" was
+chosen — only real `Step0`'s own pill handler did that (F4), and the old hand-off jumped straight
+to `STEP_DEFS` id 10, skipping `Step0` (and its seed) entirely. This meant a first-run jobless
+completion via the hand-off path could reach `handleWizardComplete` with `newJobSeasonMode` still
+false — the bug never surfaced because no prior test asserted `newJobSeasonMode` on the completed
+payload. Fixed by porting `Step0`'s pill handler verbatim into `IntakePage`'s employment-status
+`onChange` (F4's own field set, now load-bearing in two places instead of one — `SetupWizard.jsx`'s
+`Step0` and `SetupWizardAdlib.jsx`'s `IntakePage` — kept manually in sync per this file's own
+"duplicated, not shared" convention for cross-file field mirrors already established throughout
+§7 F139/F140). `JoblessDetailsPage`'s job-loss-date blank therefore now starts pre-filled to today
+(same as real `Step0` always seeded it), not blank — required-field tests updated to clear-then-refill
+rather than assert an initially-disabled Next.
+> **IF** `STEP_DEFS` id 10/11/12 or `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`'s
+> field set changes on the real wizard, **THEN** the mirrored fields in `JoblessBenefitsPage`/
+> `JoblessDetailsPage`/`isJoblessBenefitsValid`/`isJoblessDetailsValid` must change too — these are
+> the only two consumers of that field set now that `SetupWizard.jsx` is never actually mounted.
+> **IF** `onHandoff`/`initialStepId`/`onBackBeforeStart`/`resumeFormData` machinery is ever revived
+> for a new purpose, **THEN** re-verify `App.jsx`'s `closeWizardWithAnimation()` — it was simplified
+> to a synchronous `setWizardEntry(null)` once `wizardExiting`'s only consumer (real `SetupWizard.jsx`'s
+> `isExiting` fade) stopped being mounted; reintroducing a component that needs a staged exit
+> animation means restoring the 180ms delay too, not just the hand-off state.
+
+`onHandoff` (the prop), `App.jsx`'s `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/
+`setWizardExiting` are all removed — confirmed via full-repo grep before deleting that nothing
+called `onHandoff` with a real `initialStepId` outside the one branch this F entry removed, and
+that nothing read `wizardExiting` outside the `SetupWizard.jsx` mount this F entry also removed.
+`SetupWizard.jsx` itself, `initialStepId`, and `onBackBeforeStart` are all kept — `SetupWizard.jsx`
+is the source the three new pages were ported from (plus `LIFE_EVENTS`/`DIFF_FIELDS`/
+`StructureChangeDiff`'s shared export home, F7/F140), and `initialStepId`/`onBackBeforeStart`/
+`resumeFormData` are generic, reusable wizard-navigation props with no current caller rather than
+provably-dead code — see the session report's judgment-call note for the full reasoning either way.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -915,20 +962,23 @@ the one with no pay structure.
 | Path (lifeEvent · seed) | Steps shown | Wrap Up? | Which wizard? | Path-specific invariants |
 |---|---|---|---|---|
 | First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` | `onCancel` undefined (non-investor) — no escape; Freedom Allowance + tax-exempt offered here only |
-| First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | `SetupWizardAdlib` → hands off to `SetupWizard` at id 10 | No pay structure at `buildYear` call; `newJobSeasonMode: true`; Food seed skipped (F8); lands in New Job Season panels |
+| First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | `SetupWizardAdlib` (F141, 2026-08-11) — native pages, no hand-off | No pay structure at `buildYear` call; `newJobSeasonMode: true`; Food seed skipped (F8); lands in New Job Season panels |
 | `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — the real, only entry point (`LifeEventMenu`'s "Pay Structure Changed" tile) | Pre-filled; frozen `originalConfig` baseline; `StructureChangeDiff` at Wrap Up; clears `startedUnemployed` on completion (F8); Food restored if jobless-started; also the wizard's entry point for pivoting to any of the three rows below |
 | `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker (`LifeEventPivot`) today, since nothing sets `wizardEntry` to this value directly | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `NewJobSeasonEntry` modal (F12), not this |
 | `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — reachable only via `structure_change`'s internal pivot picker, same as `lost_job`/`commission_job` | Full re-run against existing account data; no diff summary (diff is `structure_change`-only) |
 | `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker today | Commission field appears in Step 1 (ported into `IntakePage`); Wrap-Up-only fields must default in F5 |
 
-**F139/F140 note:** moving all four life-event strings to `SetupWizardAdlib` did not change this
-table's "Steps shown"/"Wrap Up?"/invariant columns at all — every path still commits through the
-exact same `finalizeWizardConfig()` → `handleComplete`-equivalent path (F5), just from a second
-entry point (the same relationship F128 already established between `SetupWizardAdlib` and
-first-run). Only the "Which wizard?" column changed. `SetupWizard.jsx` is still mounted, but only
-ever for the jobless mini-flow's `initialStepId: 10` hand-off continuation — every life-event
-string now routes to `SetupWizardAdlib` first. docs/TODO.md §19.2 (now fully closed) has the
-path-by-path history.
+**F139/F140/F141 note:** moving all four life-event strings, then the jobless mini-flow, to
+`SetupWizardAdlib` did not change this table's "Steps shown"/"Wrap Up?"/invariant columns at all —
+every path still commits through the exact same `finalizeWizardConfig()` → `handleComplete`-
+equivalent path (F5). Only the "Which wizard?" column changed, and as of F141 it reads the same
+for all six rows: `SetupWizardAdlib`, full stop. **`SetupWizard.jsx` is no longer mounted by
+`App.jsx` at all** — every path, including first-run jobless, now completes inside
+`SetupWizardAdlib` with no hand-off to a second component. `SetupWizard.jsx` is retained solely as
+the source of the three jobless page components (`StepJoblessBenefits`/`StepJoblessDetails`/
+`StepJoblessWrapUp`, F141) and as `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared export
+home (F7/F140) — never mounted, never rendered. docs/TODO.md §19.2/§19.3 (both now fully closed)
+have the path-by-path history.
 
 Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
 hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**

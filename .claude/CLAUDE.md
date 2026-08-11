@@ -112,9 +112,12 @@ T5 Employment card (DHL Team editor + Schedule Override, same field/second-edito
 touching any of this again.
 
 `initialStepId` (optional prop, default `null`) opens the wizard on a specific `STEP_DEFS` id
-instead of always step 0 — added solely so `SetupWizardAdlib.jsx` can hand off into the real
-wizard's jobless mini-flow (id 10) after its own pilot pages are answered. No effect on any
-existing call site that omits it.
+instead of always step 0. Originally added so `SetupWizardAdlib.jsx` could hand off into the real
+wizard's jobless mini-flow (id 10) after its own pilot pages were answered; that hand-off no
+longer exists (drift-app-warden §7 F141 — the jobless mini-flow is now three native
+`SetupWizardAdlib` pages, `SetupWizard.jsx` is no longer mounted anywhere), so nothing in the app
+passes a non-`null` value today. Left in place as generically useful, not removed — a prop with no
+current caller, not dead code that needs deleting.
 
 **`SetupWizardAdlib.jsx` — the REAL production first-run onboarding wizard.** A
 "fill-in-the-blank" reimagining of the entire first-run, employed-signup flow — all six real
@@ -126,28 +129,28 @@ mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`TaxRatesPage`) co
 its own page; page 5 (`WrapUpPage`) covers Wrap Up as its own page — all in the same cascading
 style.
 
-**Scope: first-run, plus all four life-event re-entry strings (2026-08-11, docs/TODO.md §19.2,
-now fully closed).** `App.jsx` mounts `SetupWizardAdlib` whenever `wizardEntry === false`
-(first-run, `lifeEvent={null}`) and there is no in-progress jobless mini-flow hand-off
-(`adlibHandoff`), OR `wizardEntry === "structure_change" | "lost_job" | "commission_job"`
-(`lifeEvent={wizardEntry}`). `wizardEntry === "structure_change"` is the **only real entry point**
-for any life-event re-entry — `LifeEventMenu.jsx`'s three tiles are "Pay Structure Changed" (→
-`structure_change`), "Quit My Job" (→ the unrelated `NewJobSeasonEntry` modal), and "Rate Update"
-(→ the unrelated `RateUpdateModal`); there is no menu tile for `lost_job`/`changed_jobs`/
-`commission_job` at all. Those three are reachable only through `SetupWizardAdlib`'s own internal
-life-event pivot (`IntakePage`'s `LifeEventPivot`, see below) once a `structure_change` wizard is
-already open — mirrors real `SetupWizard.jsx`'s own `Step0` picker, which was always meant to
-provide this pivot but, until this round, had nowhere reachable to pivot *to* (real Step0's
-`structure_change` branch returns early with no picker, and `wizardEntry` was never set to any of
-the other three values directly either). `SetupWizard.jsx` is still mounted, but now only ever for
-the jobless mini-flow's `initialStepId: 10` hand-off continuation — every life-event string routes
-to `SetupWizardAdlib` first (see the gate matrix in `docs/drift-app-warden.md` §7.3 for the
-definitive per-path map). The jobless mini-flow (unemployed at first-run — first-run only, never a
-life-event path) still hands off into the real `SetupWizard` at `STEP_DEFS` id 10
-(`onHandoff(mergedFormData, 10)`, via `App.jsx`'s `adlibHandoff` state) for the Unemployment
-Benefits/Job Loss Details/Jobless Wrap Up steps — a real, click-through continuation, not a
-throwaway mockup. A Back at that first handed-off step returns the user to `SetupWizardAdlib`,
-pre-filled via `adlibResumeData`/`onBackBeforeStart`, resuming on the last page they were on.
+**Scope: the ENTIRE first-run flow (employed and jobless) plus all four life-event re-entry
+strings (2026-08-11, docs/TODO.md §19.2/§19.3, now fully closed).** `App.jsx` mounts
+`SetupWizardAdlib` whenever `wizardEntry !== null` — `wizardEntry === false` (first-run,
+`lifeEvent={null}`, covering both the employed and jobless paths natively) or `wizardEntry` is a
+life-event string (`lifeEvent={wizardEntry}`). `wizardEntry === "structure_change"` is the **only
+real entry point** for any life-event re-entry — `LifeEventMenu.jsx`'s three tiles are "Pay
+Structure Changed" (→ `structure_change`), "Quit My Job" (→ the unrelated `NewJobSeasonEntry`
+modal), and "Rate Update" (→ the unrelated `RateUpdateModal`); there is no menu tile for
+`lost_job`/`changed_jobs`/`commission_job` at all. Those three are reachable only through
+`SetupWizardAdlib`'s own internal life-event pivot (`IntakePage`'s `LifeEventPivot`, see below)
+once a `structure_change` wizard is already open — mirrors real `SetupWizard.jsx`'s own `Step0`
+picker, which was always meant to provide this pivot but, until F140, had nowhere reachable to
+pivot *to*. **`SetupWizard.jsx` is no longer mounted anywhere in the app** (drift-app-warden §7
+F141) — the jobless mini-flow (unemployed at first-run — first-run only, never a life-event path)
+that used to hand off into it at `STEP_DEFS` id 10 is now three native `SetupWizardAdlib` pages
+(`JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`, ported line-for-line from real
+`StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`), so every path — first-run employed,
+first-run jobless, and all four life-event strings — now completes inside this one component with
+no hand-off to a second component on any path. `SetupWizard.jsx` itself is retained unchanged,
+purely as the source components those three pages were ported from and as `LIFE_EVENTS`/
+`DIFF_FIELDS`/`StructureChangeDiff`'s shared export home (see the gate matrix in
+`docs/drift-app-warden.md` §7.3 for the definitive per-path map).
 
 **`lifeEvent` prop** (default `null`) mirrors `SetupWizard.jsx`'s own contract:
 `null` | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"` — the prop
@@ -243,14 +246,20 @@ which `App.jsx` wires straight to `handleWizardComplete()`, the same function ev
 food-seed logic). Cancel (`onCancel`, only present for investor first-run) has zero save side
 effects, matching the real wizard's uncancelable-first-run rule for everyone else.
 
-- **Five real pages, each internally cascading.** `PAGES = [{Component: IntakePage}, {Component:
-  SchedulePage}, {Component: DeductionsPage}, {Component: TaxRatesPage}, {Component: WrapUpPage}]`,
-  navigated with a page-level Next/Back via `StepSlide` (same slide transition the real wizard
-  uses) — but *within* each page, clauses still cascade in as plain `formData`-gated conditionals
-  (`isEmployed && (…)`, `formData.startDate && (…)`, etc.) that mount the instant their
-  prerequisite answer is given, no click required. Jobless users skip pages 2–5 entirely
-  (`activePages = startedUnemployed === true ? [PAGES[0]] : PAGES`), same as the real wizard's
-  `isFirstRunJobless` gate skipping STEP_DEFS id 2/3/4/7 outright.
+- **Eight real pages total, each internally cascading — five employed + three native jobless.**
+  `PAGES = [{Component: IntakePage}, {Component: SchedulePage}, {Component: DeductionsPage},
+  {Component: TaxRatesPage}, {Component: WrapUpPage}, {Component: JoblessBenefitsPage},
+  {Component: JoblessDetailsPage}, {Component: JoblessWrapUpPage}]`, navigated with a page-level
+  Next/Back via `StepSlide` (same slide transition the real wizard uses) — but *within* each page,
+  clauses still cascade in as plain `formData`-gated conditionals (`isEmployed && (…)`,
+  `formData.startDate && (…)`, etc.) that mount the instant their prerequisite answer is given, no
+  click required. `computeActivePages(formData, lifeEvent)` picks which subset is active:
+  first-run jobless (`lifeEvent === null && startedUnemployed === true`) gets Intake plus the
+  three jobless pages only (`[PAGES[0], joblessBenefits, joblessDetails, joblessWrapUp]`), same as
+  the real wizard's `isFirstRunJobless` gate skipping STEP_DEFS id 2/3/4/7 in favor of id 10/11/12
+  — but natively now, not via a hand-off (F141). Everyone else gets the five employed pages, minus
+  Wrap Up for `lost_job`/`commission_job` (§19.2's gate matrix). `JOBLESS_PAGE_IDS` factors the
+  three jobless page ids out so `computeActivePages` never repeats the literal list.
   Back is hidden on page 1 (`pageIdx > 0`) and reappears on pages 2–5, returning to the prior page
   with its answers intact — this Back is a real page-level navigation, distinct from undoing an
   earlier answer within the current page (just re-picking that blank directly). The outer
@@ -417,19 +426,43 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   `isValid` either, on this page or the real one, so omitting it can't break required-field
   parity), as is the `structure_change`-only diff section (this component has no life-event re-entry
   concept at all — it's first-run only).
-- **This is now the entire first-run flow, so the hand-off boundary changes shape for an employed
-  user.** For the jobless mini-flow, Back at the real `SetupWizard`'s first handed-off step (id 10)
-  still returns to this component exactly as before. But an employed user's `onHandoff` now passes
-  `initialStepId: null` — Wrap Up was the real wizard's last step too, so there is no real step left
-  to hand off to at all, and `App.jsx`'s `onHandoff` callback returns immediately without ever
-  setting `adlibHandoff`/mounting `SetupWizard`, so `onBackBeforeStart`'s whole mechanism is now only
-  reachable via the jobless path. `App.jsx` wires the jobless case to reopen `SetupWizardAdlib` via
-  its `resumeFormData` prop, which skips `BLANK_PAY_FIELDS` and seeds `formData` directly from the
-  in-progress answers, resuming on the last page (Wrap Up for an employed resume, since resuming
-  always lands on `pages.length - 1` regardless of that page's own validity — Wrap Up has none to
-  satisfy anyway) — a real resume, not a restart. `adlibResumeData` (`App.jsx`) is cleared on both
-  Cancel and a fresh forward hand-off, so a deliberate new investor first-run always starts
-  blank again.
+- **Native jobless mini-flow — `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`
+  (2026-08-11, drift-app-warden §7 F141) — the last remaining hand-off path removed.** Line-for-line
+  ports of real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp` (`STEP_DEFS` ids
+  10/11/12) into this file's cascading mad-libs idiom, with `isJoblessBenefitsValid`/
+  `isJoblessDetailsValid`/`isJoblessWrapUpValid` as line-for-line mirrors of those steps'
+  `isValid`. `JoblessBenefitsPage`: "I `[am/am not]` getting unemployment benefits," then — if
+  "am" — "My weekly benefit is $`[amount]` for `[N]` weeks, `[with/without]` a waiting week"
+  (weekly/duration required once "am" is chosen, waiting-week optional, defaults to `true` same
+  as the real Pill). `JoblessDetailsPage`: a required "I lost my job on `[date]`" clause plus an
+  optional "My prior rate was $`[rate]` an hour" clause computing `targetIncomeAnnual = rate * 40 *
+  52` — draft-string input, commit-only-on-parse, same as the real page's own `priorRateDraft`
+  local state. `JoblessWrapUpPage`: a read-only recap card (job loss date, unemployment benefits,
+  target income goal if set — reuses `WrapUpPage`'s own `calcBoxStyle` treatment rather than new
+  CSS) plus closing copy referencing the shared Finish Setup button; `isJoblessWrapUpValid` is
+  trivially `() => true`, same as the real page's live-summary nature. The employment-status
+  `InlineSelect` on `IntakePage` (`"Are you currently unemployed?"`) now seeds
+  `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` the moment "unemployed" is
+  chosen — a line-for-line mirror of real `Step0`'s pill handler that this file's Intake page had
+  never actually needed until the jobless pages became reachable natively (previously these fields
+  were seeded by the real wizard's own `Step0`, which the old hand-off skipped past entirely by
+  jumping straight to id 10 — this was a latent, never-triggered gap in the ad-lib path, caught and
+  fixed while adding native completion test coverage for this round). Finish on `JoblessWrapUpPage`
+  runs through the exact same shared `finish()` → `finalizeWizardConfig()` → `onComplete()` path
+  every other last page in this file already uses — no jobless-specific branch needed, and
+  `finalizeWizardConfig()`'s `buildYear()` call already tolerates a config with no pay structure at
+  all (drift-app-warden §7 F5's standing invariant, reconfirmed here). **The `onHandoff`
+  prop/mechanism, `App.jsx`'s `adlibHandoff`/`adlibResumeData` state, and the `wizardExiting`
+  fold-lift-delay state it rode along with are all removed** — nothing calls `onHandoff` with a
+  real `initialStepId` anymore (confirmed via full-repo grep before deleting), so `SetupWizard.jsx`
+  is no longer mounted by `App.jsx` at all. `closeWizardWithAnimation()` now just calls
+  `setWizardEntry(null)` synchronously — the 180ms staged exit it used to run existed only to let
+  real `SetupWizard.jsx`'s `isExiting` prop fade the card out, and `SetupWizardAdlib` was never
+  wired to any exit-animation prop of its own, so the delay had nothing left to wait for.
+  `resumeFormData`/`onBackBeforeStart` stay as generic mid-wizard-resume machinery on both
+  components (still exercised by `SetupWizardAdlib.test.jsx`'s employed-resume case) even though no
+  current caller feeds them — a prop with no caller today, not dead code needing deletion, per the
+  same reasoning `initialStepId` gets above.
 
 ---
 

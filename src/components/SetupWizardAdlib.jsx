@@ -109,15 +109,15 @@ function TypedText({ text, delay = 0 }) {
   }, []);
   return (
     <span style={{ whiteSpace: "normal", overflowWrap: "break-word" }}>
-      {chunks.map(({ chunk, chunkDur, start }, i) => {
+      {chunks.map(({ chunk, start }, i) => {
         const wordDelay = delay + start;
         return (
           <span
             key={i}
             className="adlib-typed-word"
             style={{
-              display: "inline-block", whiteSpace: "pre", overflow: "hidden", maxWidth: "100%",
-              animation: `adlibType ${chunkDur}s steps(${Math.max(chunk.length, 1)}, end) ${wordDelay}s both, fadeSlideUp 0.3s ease-out ${wordDelay}s both`,
+              display: "inline-block", whiteSpace: "pre", maxWidth: "100%",
+              animation: `fadeSlideUp 0.3s ease-out ${wordDelay}s both`,
             }}
           >
             {chunk}
@@ -1113,8 +1113,10 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
   const paycheckText = "benefits or deductions taken from my paycheck.";
   const enrolledText = "I'm enrolled in:";
   const benefitsStartText = "Benefits start on";
-  const attendanceText = "Does my employer track attendance with a formal points or hours system?";
-  const ptoText = "Does my employer offer PTO?";
+  const attendanceLeadText = "My employer";
+  const attendanceTailText = "my attendance with a formal points or hours system.";
+  const ptoLeadText = "My employer";
+  const ptoTailText = "PTO.";
 
   return (
     <>
@@ -1196,25 +1198,27 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
       )}
       {isBaseUser && benefitsGate !== null && (
         <>
-          {" "}<TypedText text={attendanceText} />{" "}
-          <FadeIn delay={typeDuration(attendanceText)}>
+          {" "}<TypedText text={attendanceLeadText} />{" "}
+          <FadeIn delay={typeDuration(attendanceLeadText)}>
             <InlineSelect
               value={formData.attendanceBucketEnabled === true ? "yes" : formData.attendanceBucketEnabled === false ? "no" : ""}
               onChange={v => onChange({ attendanceBucketEnabled: v === "" ? null : v === "yes" })}
-              options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]}
+              options={[{ value: "yes", label: "tracks" }, { value: "no", label: "doesn't track" }]}
               ariaLabel="Attendance tracking policy"
               error={attempted && formData.attendanceBucketEnabled === null}
             />
           </FadeIn>{" "}
-          <TypedText text={ptoText} />{" "}
-          <FadeIn delay={typeDuration(ptoText)}>
+          <TypedText text={attendanceTailText} />{" "}
+          <TypedText text={ptoLeadText} />{" "}
+          <FadeIn delay={typeDuration(ptoLeadText)}>
             <InlineSelect
               value={formData.ptoEnabled === true ? "yes" : formData.ptoEnabled === false ? "no" : ""}
               onChange={v => onChange({ ptoEnabled: v === "" ? null : v === "yes" })}
-              options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]}
+              options={[{ value: "yes", label: "offers" }, { value: "no", label: "doesn't offer" }]}
               ariaLabel="PTO offered"
             />
-          </FadeIn>
+          </FadeIn>{" "}
+          <TypedText text={ptoTailText} />
         </>
       )}
     </p>

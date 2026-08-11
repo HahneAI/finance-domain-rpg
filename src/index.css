@@ -289,20 +289,23 @@ code {
   to   { opacity: 1; transform: translateY(0);   }
 }
 
-/* ── Ad-Lib Wizard: crisp stepped typewriter reveal (SetupWizardAdlib.jsx) —
-   clip-path steps() gives discrete character-ish jumps rather than a smooth wipe.
-   Applied per-word (.adlib-typed-word) rather than to a whole clause, so normal
-   inline word-wrapping still happens between words on narrow viewports — see
-   docs/TODO.md §19.1.F / drift-app-warden §7 F129. ── */
-@keyframes adlibType {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0 0 0);   }
-}
+/* ── Ad-Lib Wizard: per-word cascading reveal (SetupWizardAdlib.jsx) — each word
+   fades + lifts in via fadeSlideUp, staggered left-to-right so a clause appears
+   to "type" itself out word by word. Applied per-word (.adlib-typed-word) rather
+   than to a whole clause, so normal inline word-wrapping still happens between
+   words on narrow viewports — see docs/TODO.md §19.1.F / drift-app-warden §7
+   F129. Previously used a clip-path steps() character-stepped typewriter effect
+   (drift-app-warden §7 F129's original fix) — replaced 2026-08-11 after real iOS
+   Safari devices showed words getting stuck mid-reveal (clip-path animated with
+   a steps() timing function doesn't repaint reliably on WebKit for many
+   concurrently-animating layers), a live bug real users hit, not a hypothetical.
+   fadeSlideUp has no such risk — it's the same primitive every other entrance
+   animation in this app already relies on. See drift-app-warden §7 F138. ── */
 .adlib-typed-word, .adlib-fade-in {
   animation-fill-mode: both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .adlib-typed-word, .adlib-fade-in { animation: none !important; opacity: 1; clip-path: none; }
+  .adlib-typed-word, .adlib-fade-in { animation: none !important; opacity: 1; }
 }
 
 /* ── Goal celebration animations (BudgetPanel) ── */

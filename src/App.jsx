@@ -411,6 +411,16 @@ export default function App() {
   // — this app has neither anywhere else, so the badge is (re)computed on
   // login and whenever the panel opens/closes, not polled.
   const [betaHomebaseBadge, setBetaHomebaseBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+  // Preloaded page data (added 2026-08-11) — the SAME fetch this effect
+  // already ran for the badge now also caches the full result here, so
+  // BetaHomebase.jsx never has to fetch on its own mount: it just renders
+  // straight from this prop. null = not fetched yet (page falls back to its
+  // own "Loading…" state for the rare case someone taps the icon before
+  // this resolves). Freshness contract: "refresh on return to the page,"
+  // not live-while-open — this state only changes when the effect below
+  // re-fires, which only happens on a currentView change (see that effect's
+  // own comment), never on a timer/subscription while already mounted.
+  const [betaHomebaseData, setBetaHomebaseData] = useState(null);
   const isTrackedTester = isTrackedBetaTester({ isTester, betaCodeUsed });
 
   const loadBetaHomebaseBadge = useCallback(async () => {
@@ -424,6 +434,7 @@ export default function App() {
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+    setBetaHomebaseData({ checklistItems: items, completedIds, suggestions, score: myScore, changelogEntries: changelog });
 
     const lastViewedKey = `betaHomebaseLastViewedAt:${authedUser.id}`;
     let lastViewedAt = null;
@@ -464,6 +475,8 @@ export default function App() {
   // count-only vs. red/plus-new-updates badge logic, own localStorage key
   // namespace, no scoring signal to check (base users have none).
   const [productivityHubBadge, setProductivityHubBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+  // Preloaded page data — same contract as betaHomebaseData above.
+  const [productivityHubData, setProductivityHubData] = useState(null);
 
   const loadProductivityHubBadge = useCallback(async () => {
     if (isTrackedTester || !authedUser?.id) return;
@@ -475,6 +488,7 @@ export default function App() {
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+    setProductivityHubData({ checklistItems: items, completedIds, suggestions, changelogEntries: changelog });
 
     const lastViewedKey = `productivityHubLastViewedAt:${authedUser.id}`;
     let lastViewedAt = null;
@@ -559,14 +573,19 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
 
-  // Beta Homebase / Money Moves badges — (re)computed on every nav change,
-  // not just on login. Covers both directions: arriving (harmless refetch,
-  // goToBetaHomebase/goToProductivityHub already optimistically cleared
-  // newCount) and — the case that actually needs it — LEAVING, since a
-  // tester may have toggled checklist items while on the page and that
-  // state lives inside BetaHomebase.jsx/ProductivityHub.jsx, not here.
-  // Effects fire on mount regardless of deps, so this alone also covers the
-  // original login-time load — no separate mount-only effect needed.
+  // Beta Homebase / Money Moves badges AND page-data preload (2026-08-11) —
+  // (re)computed on every nav change, not just on login. Effects fire on
+  // mount regardless of deps, so the very first firing (currentView still
+  // "home" right after login) is what actually delivers the "preload
+  // starts as soon as the home screen mounts" behavior — by the time
+  // someone taps the icon, betaHomebaseData/productivityHubData are
+  // typically already populated and the page renders with no spinner.
+  // Every subsequent nav change re-fires too, which covers both directions:
+  // arriving (re-fetch is what makes "refresh on return to the page" true —
+  // this is the ONLY freshness mechanism, deliberately no polling/realtime
+  // while the page stays mounted, see betaHomebaseData's own comment) and
+  // leaving (a tester may have toggled checklist items while on the page,
+  // resyncing the badge's unchecked count and the cache in one pass).
   useEffect(() => {
     loadBetaHomebaseBadge();
     loadProductivityHubBadge();
@@ -2132,10 +2151,10 @@ export default function App() {
         subscription={subscription}
       />}
       {currentView === "betaHomebase" && isTrackedTester && (
-        <BetaHomebase isTester={isTester} betaCodeUsed={betaCodeUsed} />
+        <BetaHomebase isTester={isTester} betaCodeUsed={betaCodeUsed} preloadedData={betaHomebaseData} />
       )}
       {currentView === "moneyMoves" && !isTrackedTester && (
-        <ProductivityHub />
+        <ProductivityHub preloadedData={productivityHubData} />
       )}
     </>
   );

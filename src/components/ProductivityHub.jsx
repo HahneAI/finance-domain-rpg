@@ -1,14 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, PanelHero, SH } from "./ui.jsx";
 import { ChecklistSection, SuggestionsSection, WhatsNewSection } from "./BetaHomebase.jsx";
-import {
-  fetchBaseChecklistItems,
-  fetchMyBaseChecklistCompletions,
-  toggleBaseChecklistItem,
-  fetchBaseSuggestions,
-  fetchPublishedChangelogEntries,
-  logBaseFeedback,
-} from "../lib/db.js";
+import { toggleBaseChecklistItem, logBaseFeedback } from "../lib/db.js";
 
 // "Money Moves" — the base-user counterpart to the Beta Tester Homebase
 // (database/migrations/039_add_base_productivity_hub.sql). Same underlying
@@ -80,30 +73,28 @@ function FeedbackSection() {
   );
 }
 
-export function ProductivityHub() {
-  const [loading, setLoading] = useState(true);
-  const [checklistItems, setChecklistItems] = useState([]);
+// `preloadedData` (added 2026-08-11) — App.jsx is the single fetch owner
+// now, same as BetaHomebase.jsx: its badge-refresh effect (mount + every
+// nav change) already runs this exact query, so this component only
+// hydrates from the prop and never fetches on its own. See App.jsx's
+// productivityHubData comment for the freshness contract (refresh-on-
+// navigation only, no polling/realtime while already mounted).
+export function ProductivityHub({ preloadedData }) {
+  // Same "adjusting state during render" pattern as BetaHomebase.jsx —
+  // see its comment for why this is deliberately not a useEffect.
+  // checklistItems/suggestions/changelogEntries are read-only display data,
+  // read straight from the prop; completedIds is the one field the
+  // optimistic toggle below needs locally mutable.
+  const [hydratedFrom, setHydratedFrom] = useState(null);
   const [completedIds, setCompletedIds] = useState(new Set());
-  const [suggestions, setSuggestions] = useState([]);
-  const [changelogEntries, setChangelogEntries] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchBaseChecklistItems(),
-      fetchMyBaseChecklistCompletions(),
-      fetchBaseSuggestions(),
-      fetchPublishedChangelogEntries(5),
-    ]).then(([items, completions, suggestionItems, changelog]) => {
-      if (cancelled) return;
-      setChecklistItems(items);
-      setCompletedIds(new Set(completions));
-      setSuggestions(suggestionItems);
-      setChangelogEntries(changelog);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
+  if (preloadedData && preloadedData !== hydratedFrom) {
+    setHydratedFrom(preloadedData);
+    setCompletedIds(preloadedData.completedIds);
+  }
+  const loading = !preloadedData;
+  const checklistItems = preloadedData?.checklistItems ?? [];
+  const suggestions = preloadedData?.suggestions ?? [];
+  const changelogEntries = preloadedData?.changelogEntries ?? [];
 
   async function handleToggle(itemId, completed) {
     // Optimistic — flip local state immediately, roll back only if the write fails.

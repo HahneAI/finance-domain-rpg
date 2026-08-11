@@ -1,14 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PanelHero, SH } from "./ui.jsx";
 import { ChangelogBody } from "./ChangelogModal.jsx";
-import {
-  fetchBetaChecklistItems,
-  fetchMyChecklistCompletions,
-  toggleBetaChecklistItem,
-  fetchBetaSuggestions,
-  fetchMyBetaScore,
-  fetchPublishedChangelogEntries,
-} from "../lib/db.js";
+import { toggleBetaChecklistItem } from "../lib/db.js";
 
 // Beta Tester Homebase (docs/TODO.md §12, database/migrations/037) — one
 // destination weaving together the scoring rubric, a personal feature
@@ -169,33 +162,42 @@ export function WhatsNewSection({ entries }) {
   );
 }
 
-export function BetaHomebase({ isTester, betaCodeUsed }) {
-  const [loading, setLoading] = useState(true);
-  const [checklistItems, setChecklistItems] = useState([]);
+// `preloadedData` (added 2026-08-11) — App.jsx is the single fetch owner now:
+// its badge-refresh effect (fires on mount and on every nav change) already
+// runs this exact query, so this component no longer fetches on its own at
+// all. It just hydrates from the prop — { checklistItems, completedIds,
+// suggestions, score, changelogEntries } | null. null (the rare case of
+// tapping the icon before App.jsx's first fetch resolves) shows a brief
+// "Loading…" the same as before; the effect below picks up the data the
+// instant App.jsx's fetch does resolve, without this component ever issuing
+// a request of its own. See App.jsx's betaHomebaseData comment for the
+// freshness contract (refresh-on-navigation only, no polling/realtime).
+export function BetaHomebase({ isTester, betaCodeUsed, preloadedData }) {
+  // checklistItems/suggestions/score/changelogEntries are read-only display
+  // data — nothing in this component ever mutates them, so they're read
+  // straight from the prop, no local state/effect needed. completedIds is
+  // the one exception (the optimistic toggle below needs it locally
+  // mutable), hydrated from a fresh preloadedData via React's documented
+  // "adjusting state during render" pattern — a guarded setState call in
+  // the render body itself, not inside a useEffect. Deliberately NOT a
+  // useEffect: this codebase has a confirmed, production-only React
+  // Compiler miscompilation (drift-app-warden.md §12.4) triggered by
+  // setState-in-effect patterns in this exact file's neighborhood
+  // (ChangelogAdminDetail/ContentAdminDetail/BetaScoresAdminDetail all
+  // needed "use no memo" for the same class of bug) — safer not to add a
+  // new instance of the flagged shape when the render-time alternative
+  // works just as well and needs no directive at all.
+  const [hydratedFrom, setHydratedFrom] = useState(null);
   const [completedIds, setCompletedIds] = useState(new Set());
-  const [suggestions, setSuggestions] = useState([]);
-  const [score, setScore] = useState(null);
-  const [changelogEntries, setChangelogEntries] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchBetaChecklistItems(),
-      fetchMyChecklistCompletions(),
-      fetchBetaSuggestions(),
-      fetchMyBetaScore(),
-      fetchPublishedChangelogEntries(5),
-    ]).then(([items, completions, suggestionItems, myScore, changelog]) => {
-      if (cancelled) return;
-      setChecklistItems(items);
-      setCompletedIds(new Set(completions));
-      setSuggestions(suggestionItems);
-      setScore(myScore);
-      setChangelogEntries(changelog);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
+  if (preloadedData && preloadedData !== hydratedFrom) {
+    setHydratedFrom(preloadedData);
+    setCompletedIds(preloadedData.completedIds);
+  }
+  const loading = !preloadedData;
+  const checklistItems = preloadedData?.checklistItems ?? [];
+  const suggestions = preloadedData?.suggestions ?? [];
+  const score = preloadedData?.score ?? null;
+  const changelogEntries = preloadedData?.changelogEntries ?? [];
 
   async function handleToggle(itemId, completed) {
     // Optimistic — flip local state immediately, roll back only if the write fails.

@@ -261,7 +261,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   // behavior (pre-existing gap there, not introduced here — see §1.H15).
   const nextNativeDisabled = (step === 0 || step === 1) ? false : nextDisabled;
 
-  const labelStyle = { fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
+  const labelStyle = { fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
   const inputStyle = {
     width: "100%",
     background: "var(--color-bg-base)",

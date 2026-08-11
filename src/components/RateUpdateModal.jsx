@@ -44,7 +44,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
     onClose();
   };
 
-  const labelStyle = { fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
+  const labelStyle = { fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
   const inputStyle = {
     width: "100%",
     background: "var(--color-bg-base)",

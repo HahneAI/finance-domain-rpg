@@ -276,11 +276,13 @@ components, not a class system). Does **not** apply to numeric emphasis (MetricC
 dollar totals) — those are data display, not headline text, and kept their existing styling.
 See `docs/authority-design-system`'s Typography section for the full file list touched.
 
-**Body-text size scale (2026-08-10, fully rolled out).** Non-numeric text (labels, sublabels,
-descriptions, list summaries) MUST use one of `src/index.css`'s five `text-*` classes instead of
-a hardcoded inline `fontSize` — never write `style={{ fontSize: "11px", ... }}` for label/body
-copy again: `.text-2xs` 10px, `.text-xs` 11px, `.text-sm` 12px, `.text-base` 13px, `.text-md`
-14px. Numeric emphasis (MetricCard values, dollar totals, computed readouts) is out of scope and
+**Body-text size scale (2026-08-10, fully rolled out; bumped +1px again 2026-08-11).**
+Non-numeric text (labels, sublabels, descriptions, list summaries) MUST use one of
+`src/index.css`'s five `text-*` classes instead of a hardcoded inline `fontSize` — never write
+`style={{ fontSize: "12px", ... }}` for label/body copy again: `.text-2xs` 11px, `.text-xs` 12px,
+`.text-sm` 13px, `.text-base` 14px, `.text-md` 15px. The 8 shared JS style objects listed below
+were bumped the same +1px to stay in sync. Numeric emphasis (MetricCard values, dollar totals,
+computed readouts) is out of scope and
 keeps its own per-component sizing. Every file under `src/components/` + `App.jsx` is converted
 as of 2026-08-10 — the only raw literals left are `ui.jsx`'s `Card.size` (numeric, always
 exempt), 3 dynamically-scaled template-literal sizes, and 8 shared JS style objects

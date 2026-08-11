@@ -5,7 +5,7 @@ import { RESUME_REVIEW_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
 import { loadResumeProfile, saveResumeProfile, saveCoachChat } from "../lib/db.js";
 
 const labelStyle = {
-  fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+  fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
   color: "var(--color-text-secondary)", display: "block", marginBottom: "6px",
 };
 const inputStyle = {

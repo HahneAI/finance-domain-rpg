@@ -3601,6 +3601,22 @@ is the drift this entry exists to prevent:
   unconditional siblings of the main content area) IS the exit, matching every other real
   page in the app. The badge's "mark as seen" trigger moved from "modal opened" to "navigated
   to" (`goToBetaHomebase`/`goToProductivityHub` in `App.jsx`) — same semantics, different verb.
+- **Desktop sidebar parity (2026-08-12).** The icon buttons above were only ever wired into
+  `.mobile-header` (`display:none` above the 768px breakpoint) — the real desktop `.sidebar`
+  (`App.jsx`, the `<nav>` block with `SidebarNavItem`) never got a matching entry, so a desktop
+  user had no way to reach either page at all, a real functional gap not caught until reported
+  live. Fixed by adding a `SidebarNavItem` (now accepts optional `badge`/`badgeColor` props,
+  rendered as a small circular count to the right of the label) for `betaHomebase`/`moneyMoves`
+  right after the standard nav items, reusing the exact same `goToBetaHomebase`/
+  `goToProductivityHub` handlers and the same `betaHomebaseBadgeCount`/`productivityHubBadgeCount`
+  values (hoisted into shared `const`s above `activePanel` so the mobile header icons and the
+  sidebar nav item read one computation, not two). The sidebar's separate `unconfirmedCount > 0`-
+  gated weekly-confirm banner was also made unconditional (always renders, bell icon + "up to
+  date" when zero) for the same reason — it was the closest desktop equivalent to the mobile
+  header's always-visible notification bell, but only ever appeared when there was something to
+  confirm, so desktop had no bell affordance the rest of the time either. The mobile drawer
+  (`.mobile-drawer-overlay`, a separate duplicate `<nav>` for the hamburger menu) was deliberately
+  left untouched — it's mobile-only chrome, reachable only where the header icons already work.
 > **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
 > three postures above before writing a migration — do not default to "admin route" or
 > "direct client write" out of habit; the posture follows from *who legitimately produces the

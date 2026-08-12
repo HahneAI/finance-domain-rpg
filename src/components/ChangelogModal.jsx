@@ -15,9 +15,19 @@ const MARKDOWN_COMPONENTS = {
   ul: ({ children }) => <ul style={{ margin: "0 0 12px", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>{children}</ul>,
   ol: ({ children }) => <ol style={{ margin: "0 0 12px", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>{children}</ol>,
   li: ({ children }) => <li className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.6 }}>{children}</li>,
-  h1: ({ children }) => <div className="text-base" style={{ fontWeight: 700, color: "var(--color-text-primary)", marginTop: "16px", marginBottom: "8px" }}>{children}</div>,
-  h2: ({ children }) => <div className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-teal)", marginTop: "16px", marginBottom: "6px" }}>{children}</div>,
-  h3: ({ children }) => <div className="text-xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginTop: "14px", marginBottom: "6px" }}>{children}</div>,
+  // Headers (2026-08-11 rework) — previously h1/h2/h3 all rendered at
+  // text-base/text-xs (i.e. AT OR BELOW body-paragraph size), distinguished
+  // only by color/case, so nothing actually read as a header hierarchy.
+  // Body stays exactly where it was (text-base, 14px) — that's the
+  // deliberate baseline everything else is sized relative to. # and ##
+  // size UP from it; ### steps back down close to body size (still bold +
+  // display-font so it still reads as *a* header, just a minor one) rather
+  // than staying tiny. `heading-lg` (src/index.css) is the site's own
+  // headline utility class — first real usage of it outside PanelHero-style
+  // components.
+  h1: ({ children }) => <div className="heading-lg" style={{ fontSize: "20px", color: "var(--color-text-primary)", marginTop: "18px", marginBottom: "8px" }}>{children}</div>,
+  h2: ({ children }) => <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", lineHeight: 1.3, color: "var(--color-teal)", marginTop: "16px", marginBottom: "6px" }}>{children}</div>,
+  h3: ({ children }) => <div className="text-md" style={{ fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-secondary)", marginTop: "14px", marginBottom: "6px" }}>{children}</div>,
   a:  ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--color-teal)" }}>{children}</a>,
   code: ({ children }) => <code className="text-sm" style={{ fontFamily: "var(--font-mono)", background: "var(--color-bg-raised)", padding: "1px 5px", borderRadius: "4px", }}>{children}</code>,
   blockquote: ({ children }) => <blockquote style={{ margin: "0 0 12px", borderLeft: "2px solid var(--color-border-accent)", paddingLeft: "12px", color: "var(--color-text-secondary)", fontStyle: "italic" }}>{children}</blockquote>,
@@ -67,6 +77,51 @@ export function ChangelogModal({ open, entry, onClose }) {
         >
           Got it
         </Pressable>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// Older changelog entries — "View More" from WhatsNewSection's What's New
+// list (BetaHomebase.jsx/ProductivityHub.jsx), for entries beyond the two
+// already shown inline there (newest full, second-newest as a collapsible
+// card). Same portal + fold-motion shell as ChangelogModal above, just
+// near-full-screen (94vw/90vh, not a 460px card) and multi-entry, with the
+// exact same ChangelogBody/MARKDOWN_COMPONENTS formatting throughout — no
+// separate, smaller treatment for "older" content.
+export function ChangelogHistoryModal({ open, entries, onClose }) {
+  const fold = useFoldTransition(open, { ms: 340 });
+  if (!fold.mounted) return null;
+
+  return createPortal(
+    <div className="fold-backdrop" data-fold={fold.fold} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div className="fold-modal" data-fold={fold.fold} onClick={(e) => e.stopPropagation()} style={{ width: "94vw", maxWidth: "640px", height: "90vh", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexShrink: 0 }}>
+          <div className="heading-lg" style={{ fontSize: "20px", color: "var(--color-text-primary)" }}>Past Updates</div>
+          <Pressable onClick={onClose} aria-label="Close" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>✕</Pressable>
+        </div>
+
+        <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "18px" }}>
+          {(entries ?? []).length === 0 ? (
+            <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Nothing older to show.</div>
+          ) : entries.map(entry => {
+            const publishedLabel = entry.published_at
+              ? new Date(entry.published_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+              : null;
+            return (
+              <div key={entry.id} style={{ paddingBottom: "18px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div className="heading-lg" style={{ fontSize: "18px", color: "var(--color-text-primary)" }}>
+                  {entry.title}
+                </div>
+                {publishedLabel && (
+                  <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "4px", marginBottom: "8px" }}>{publishedLabel}</div>
+                )}
+                <ChangelogBody markdown={entry.body} />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>,
     document.body,

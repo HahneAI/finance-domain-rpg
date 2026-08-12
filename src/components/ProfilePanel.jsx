@@ -1,8 +1,9 @@
 import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem, loadResumeProfile } from "../lib/db.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
+import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
@@ -1564,6 +1565,33 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
     setEditingFreedomAllowance(false);
   };
 
+  // §2.E1 v2 — résumé upload/view for every employed user (not gated behind
+  // canAccessAiFeatures, since this is plain file storage, not the AI skill-gap
+  // review — that stays admin/tester/investor-only in New Job Season). resumeSummary
+  // starts null (not yet loaded); ResumeReviewCard's own onProfileChange keeps it in
+  // sync after an edit without this row re-fetching the profile itself.
+  const [editingResume, setEditingResume] = useState(false);
+  const [resumeSummary, setResumeSummary] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const profile = await loadResumeProfile();
+      if (cancelled) return;
+      setResumeSummary({
+        hasFile: !!profile?.storagePath,
+        filename: profile?.originalFilename ?? null,
+        hasText: !!profile?.resumeText?.trim(),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const resumeValueLabel = !resumeSummary ? "…"
+    : resumeSummary.hasFile ? `Saved — ${resumeSummary.filename}`
+    : resumeSummary.hasText ? "Saved — pasted text"
+    : "Not saved";
+
   return (
     <>
       <BackBar onBack={onBack} title="App Preferences" />
@@ -1601,6 +1629,35 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               <Pressable onClick={() => { setEditingFreedomAllowance(false); setFreedomAllowanceEnabled(config.freedomAllowanceEnabled ?? true); setFreedomAllowance(config.freedomAllowance ?? 50); }} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
               <Pressable onClick={handleSaveFreedomAllowance} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
+          </div>
+        )}
+        {!editingResume ? (
+          <Pressable
+            onClick={() => setEditingResume(true)}
+            style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
+          >
+            <DetailRow
+              label="Résumé"
+              value={resumeValueLabel}
+              valueColor={resumeSummary && !resumeSummary.hasFile && !resumeSummary.hasText ? "var(--color-text-disabled)" : undefined}
+            />
+          </Pressable>
+        ) : (
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
+            <div className="text-base" style={{ color: "var(--color-text-primary)", marginBottom: "10px" }}>Résumé</div>
+            <ResumeReviewCard
+              config={config}
+              showReview={false}
+              embedded
+              onProfileChange={setResumeSummary}
+            />
+            <Pressable
+              onClick={() => setEditingResume(false)}
+              className="text-xs"
+              style={{ width: "100%", marginTop: "12px", padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Done
+            </Pressable>
           </div>
         )}
         <DetailRow
@@ -2426,7 +2483,19 @@ const BASE_CONTENT_COPY = {
 // for base) passed in by each call site below. Writes always go through
 // api/admin-beta-hub.js's service-role client — never a direct client
 // write, per migration 037's/039's RLS posture.
-function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem, embedded = false }) {
+//
+// `crossPost` (optional: { label, saveItem }) — the paired audience's own
+// saveItem wrapper (e.g. Beta Checklist's crossPost.saveItem is
+// saveBaseContentItem, and vice versa). When present it powers two things:
+// a per-item "Also post to {label}" checkbox in the editor (creates an
+// independent SECOND row in the other table at save time — never links or
+// syncs the two rows afterward, so editing/deleting one never touches the
+// other), and a list-view "Copy All to {label}" bulk action for backfilling
+// content that predates this feature. Both are one-way, one-time copies —
+// there's no tracking column recording what's already been cross-posted, so
+// clicking "Copy All" twice creates duplicates; that's an accepted
+// simplicity trade-off (docs 2026-08-10), not an oversight.
+function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteItem, embedded = false, crossPost = null }) {
   // "use no memo" — same confirmed React Compiler miscompilation documented
   // in detail on ChangelogAdminDetail above (this component — formerly
   // BetaContentAdminDetail, generalized to also serve base_content_items —
@@ -2443,6 +2512,9 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
   const [saveError, setSaveError] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [crossPostNotice, setCrossPostNotice] = useState(null);
+  const [bulkCopyConfirming, setBulkCopyConfirming] = useState(false);
+  const [bulkCopyStatus, setBulkCopyStatus] = useState(null); // { loading, message, error }
 
   useEffect(() => {
     let cancelled = false;
@@ -2457,14 +2529,14 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
   }, [kind, fetchItems]);
 
   function startNew() {
-    setDraft({ id: null, title: "", body: "", published: false, employerPreset: null });
+    setDraft({ id: null, title: "", body: "", published: false, employerPreset: null, alsoCrossPost: false });
     setSaveError(null);
     setShowPreview(false);
     setEditingId("new");
   }
 
   function startEdit(item) {
-    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null, employerPreset: item.employer_preset ?? null });
+    setDraft({ id: item.id, title: item.title, body: item.body ?? "", published: item.published_at != null, employerPreset: item.employer_preset ?? null, alsoCrossPost: false });
     setSaveError(null);
     setShowPreview(false);
     setEditingId(item.id);
@@ -2487,6 +2559,20 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
         ? list.map(i => i.id === draft.id ? result.item : i)
         : [result.item, ...list];
     });
+
+    // Cross-post — always a NEW row on the other side, id: null regardless
+    // of whether we were editing an existing item here. Fire after the
+    // primary save succeeds; a cross-post failure doesn't roll back or
+    // block the primary save, just surfaces as a notice on the list view.
+    if (draft.alsoCrossPost && crossPost) {
+      const crossResult = await crossPost.saveItem({ id: null, kind, title: draft.title, body: draft.body, published: draft.published, employerPreset: draft.employerPreset });
+      setCrossPostNotice(crossResult.ok
+        ? { ok: true, message: `Also posted to ${crossPost.label}.` }
+        : { ok: false, message: `Saved here, but posting to ${crossPost.label} failed: ${crossResult.error}` });
+    } else {
+      setCrossPostNotice(null);
+    }
+
     setEditingId(null);
     setDraft(null);
   }
@@ -2495,6 +2581,26 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
     setConfirmDeleteId(null);
     const result = await deleteItem(id);
     if (result.ok) setItems(prev => (prev ?? []).filter(i => i.id !== id));
+  }
+
+  async function handleBulkCopy() {
+    setBulkCopyConfirming(false);
+    setBulkCopyStatus({ loading: true, message: null, error: null });
+    const results = await Promise.all((items ?? []).map(item => crossPost.saveItem({
+      id: null,
+      kind,
+      title: item.title,
+      body: item.body,
+      published: item.published_at != null,
+      employerPreset: item.employer_preset ?? null,
+    })));
+    const failCount = results.filter(r => !r.ok).length;
+    const okCount = results.length - failCount;
+    setBulkCopyStatus({
+      loading: false,
+      message: `Copied ${okCount} item${okCount === 1 ? "" : "s"} to ${crossPost.label}.`,
+      error: failCount > 0 ? `${failCount} item${failCount === 1 ? "" : "s"} failed to copy.` : null,
+    });
   }
 
   if (editingId !== null) {
@@ -2562,6 +2668,21 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
                 DHL Employees Only{draft.employerPreset !== "DHL" ? " (unchecked = every eligible user)" : ""}
               </span>
             </label>
+            {/* Cross-post (2026-08-10) — creates an independent SECOND row in
+                the paired audience's table at save time. Not a sync: editing
+                or deleting this item afterward never touches the copy. */}
+            {crossPost && (
+              <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                <input
+                  type="checkbox" checked={draft.alsoCrossPost}
+                  onChange={e => setDraft(d => ({ ...d, alsoCrossPost: e.target.checked }))}
+                  style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+                />
+                <span className="text-sm" style={{ color: "var(--color-text-primary)" }}>
+                  Also post to {crossPost.label}
+                </span>
+              </label>
+            )}
             {saveError && (
               <div className="text-xs" style={{ color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
             )}
@@ -2580,10 +2701,46 @@ function ContentAdminDetail({ kind, onBack, copy, fetchItems, saveItem, deleteIt
       </div>
       <Pressable
         onClick={startNew}
-        className="text-xs" style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+        className="text-xs" style={{ width: "100%", padding: "12px 0", marginBottom: crossPost ? "10px" : "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
       >
         + New Entry
       </Pressable>
+
+      {/* Bulk backfill (2026-08-10) — one-way, one-time copy of every item
+          currently listed here into the paired audience's table. No
+          dedup/link tracking, see the crossPost doc comment above. */}
+      {crossPost && items !== null && items.length > 0 && (
+        <div style={{ marginBottom: "16px" }}>
+          {bulkCopyConfirming ? (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>
+                Copy all {items.length} item{items.length === 1 ? "" : "s"} to {crossPost.label}?
+              </span>
+              <Pressable onClick={handleBulkCopy} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+              <Pressable onClick={() => setBulkCopyConfirming(false)} className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+            </div>
+          ) : (
+            <Pressable
+              onClick={() => { setBulkCopyConfirming(true); setBulkCopyStatus(null); }}
+              disabled={bulkCopyStatus?.loading}
+              className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "6px 12px", cursor: bulkCopyStatus?.loading ? "default" : "pointer" }}
+            >
+              {bulkCopyStatus?.loading ? "Copying…" : `Copy All to ${crossPost.label}`}
+            </Pressable>
+          )}
+          {bulkCopyStatus && !bulkCopyStatus.loading && (
+            <div className="text-xs" style={{ marginTop: "6px", color: bulkCopyStatus.error ? "var(--color-deduction)" : "var(--color-teal)" }}>
+              {bulkCopyStatus.message}{bulkCopyStatus.error ? ` ${bulkCopyStatus.error}` : ""}
+            </div>
+          )}
+        </div>
+      )}
+
+      {crossPostNotice && (
+        <div className="text-xs" style={{ marginBottom: "14px", color: crossPostNotice.ok ? "var(--color-teal)" : "var(--color-deduction)" }}>
+          {crossPostNotice.message}
+        </div>
+      )}
 
       {items === null && <div className="text-sm" style={{ color: "var(--color-text-primary)" }}>Loading…</div>}
       {loadError && <div className="text-sm" style={{ color: "var(--color-deduction)" }}>{loadError}</div>}
@@ -2664,16 +2821,20 @@ function UserCommunicationAdminDetail({ onBack }) {
       </div>
       {method === "changelog" && <ChangelogAdminDetail embedded />}
       {method === "beta_checklist" && (
-        <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+        <ContentAdminDetail kind="checklist" copy={BETA_CONTENT_COPY.checklist} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded
+          crossPost={{ label: "Money Moves Checklist", saveItem: saveBaseContentItem }} />
       )}
       {method === "beta_suggestion" && (
-        <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded />
+        <ContentAdminDetail kind="suggestion" copy={BETA_CONTENT_COPY.suggestion} fetchItems={fetchAllBetaContentItems} saveItem={saveBetaContentItem} deleteItem={deleteBetaContentItem} embedded
+          crossPost={{ label: "Money Moves Tips", saveItem: saveBaseContentItem }} />
       )}
       {method === "base_checklist" && (
-        <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+        <ContentAdminDetail kind="checklist" copy={BASE_CONTENT_COPY.checklist} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded
+          crossPost={{ label: "Beta Checklist", saveItem: saveBetaContentItem }} />
       )}
       {method === "base_suggestion" && (
-        <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded />
+        <ContentAdminDetail kind="suggestion" copy={BASE_CONTENT_COPY.suggestion} fetchItems={fetchAllBaseContentItems} saveItem={saveBaseContentItem} deleteItem={deleteBaseContentItem} embedded
+          crossPost={{ label: "Beta Tips", saveItem: saveBetaContentItem }} />
       )}
     </>
   );

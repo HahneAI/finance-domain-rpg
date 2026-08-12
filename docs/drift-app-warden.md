@@ -446,13 +446,21 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
-**F11 · `handleBackToWork()`** — `App.jsx:1454–1478` — **[G]**
+**F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
-nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, routes into
-`structure_change`.
+nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets
+`jobHuntIncomeLog: []`, routes into `structure_change`. `jobApplications` is the one
+deliberate exception — kept as user history across occurrences, per its own inline
+comment — don't "fix" that by adding it here without a real product decision to reverse it.
 > **IF** a new `newJobSeason*` or unemployment-related config field is added anywhere, **THEN**
 > it must be reset here — or it leaks into the re-employed state and every consumer that
 > gates on it misfires. Check: grep new field name; confirm it appears in this reset patch.
+> **IF** a new field is scoped to *one job-loss occurrence* (like `jobHuntIncomeLog` — fixed
+> 2026-08, a user found a stale gig-income entry from a prior occurrence still counting
+> toward a later, unrelated runway, since the field isn't gated on `newJobSeasonMode` and
+> `NewJobSeasonEntry` never re-initializes it on a fresh activation either), **THEN** default
+> to resetting it here too — the burden of proof is on keeping data across occurrences
+> (`jobApplications`), not on clearing it.
 
 **F12 · `LifeEventMenu` routing + `NewJobSeasonEntry` activation** — `App.jsx:3526–3531` /
 `:3533–3548` — **[G]**
@@ -480,6 +488,464 @@ model D3-safe activation.
 > tracked loan at $0 (`weeklyAmountForBurn`, §8/§10) — the UI/opt-out path was never
 > broken, only the dollar amount feeding the Runway headline once a loan was kept.
 
+**F128 · `SetupWizardAdlib.jsx` — second real surface writing F5's fields, via the same
+helper** — `SetupWizardAdlib.jsx`, `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+Ad-Lib Wizard production promotion, docs/TODO.md §19)*
+F5's normalization logic (DHL overrides, Freedom Allowance normalize, `taxedWeeks`
+derivation, `accountCreatedIdx` stamp, `setupComplete: true`) was extracted into
+`finalizeWizardConfig()` (`src/lib/wizardComplete.js`) so both `SetupWizard.jsx`'s
+`handleComplete()` and `SetupWizardAdlib.jsx`'s employed-finish path (`finishEmployed()`)
+call the *same* function instead of two hand-transcribed copies. `SetupWizardAdlib.jsx` is
+now the real production first-run wizard for an employed (or investor) signup —
+`App.jsx` mounts it whenever `wizardEntry === false` and there is no in-progress jobless
+hand-off (`adlibHandoff`); `SetupWizard.jsx` still owns every life-event re-entry
+(`structure_change`/`lost_job`/`changed_jobs`/`commission_job`) and the jobless mini-flow
+continuation (`initialStepId: 10`) unchanged.
+> **IF** `finalizeWizardConfig()`'s ordered effects change, **THEN** re-check both
+> callers — a change tuned against only one caller's field set (e.g. assuming `config` is
+> always present) silently breaks the other. `SetupWizardAdlib.jsx` passes `config` as
+> `priorConfig` for the `tipsOrCommissionEnabledAt` transition check — for a real
+> first-run account this is the pre-wizard `DEFAULT_CONFIG`-shaped config, which is
+> correct (tips were never on).
+> **IF** a field is added to `SetupWizardAdlib.jsx`'s pages, **THEN** it must also be
+> added to `DIFF_FIELDS` (F7) and `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`) —
+> same three-way rule F7's drift-trigger-map row already states, now with two real
+> writers instead of one. `BLANK_PAY_FIELDS` (`SetupWizardAdlib.jsx`) must also gain the
+> new field, or a resumed/investor account would show it pre-filled instead of blank.
+> **IF** `SetupWizardAdlib.jsx`'s `onComplete`/`onHandoff` contract changes, **THEN**
+> check `App.jsx`'s wizard mount block (the `wizardEntry === false && !adlibHandoff`
+> condition and its sibling `SetupWizard` mount for the jobless continuation) — the two
+> mounts are a matched pair; changing one prop shape without the other silently breaks
+> the hand-off. Check: `SetupWizardAdlib.test.jsx`'s completion tests assert against
+> `onComplete`, not the old mock `onHandoff` contract.
+
+**F129 · `TypedText` word-chunked reveal — the fix for the horizontal-overflow bug** —
+`SetupWizardAdlib.jsx:63–95`, `index.css` (`adlibType`, `.adlib-typed-word`/`.adlib-fade-in`)
+— **[G]** — *(added 2026-08-10, ad-lib field-parity/responsive round, docs/TODO.md §19.1.F)*
+`TypedText` used to render an entire clause as one `display:inline-block; white-space:pre`
+span — an atomic box that cannot wrap internally, so a long single-sentence clause (e.g.
+Deductions' attendance-tracking question) overflowed horizontally on narrow viewports.
+Fixed by chunking each clause into per-word spans (still `inline-block`/`white-space:pre`
+individually, so a single word is never long enough to need wrapping) joined by ordinary
+breakable spaces in a normal-flow wrapper — the browser now wraps between words exactly
+like plain text, while each word still steps in via the same `adlibType` clip-path
+keyframe, staggered so words appear to type left-to-right in order. `typeDuration(text)`
+still describes the *total* duration across all of a clause's words, so external delay math
+(a following `FadeIn`'s `delay={typeDuration(clauseText)}`) is unaffected — the chunking is
+internal to `TypedText`.
+> **IF** `TypedText`'s per-word rendering changes again (e.g. back to one span, or a
+> different chunking granularity), **THEN** re-verify no clause overflows at 375px width
+> (iPhone SE class) — there is no automated viewport-width test for this, only manual/visual
+> verification, so a regression here won't fail CI.
+> **IF** you add a new `TypedText` call with a long clause, **THEN** no extra care is
+> needed — the word-chunking is automatic for any string, not something each call site has
+> to opt into.
+> **IF** you change how `SetupWizardAdlib.test.jsx` queries clause text, **THEN** use the
+> file's `byText()` helper (matches full recursive `textContent`, not RTL's default
+> direct-text-node-only match) — the word-chunked spans mean a plain
+> `screen.getByText(/multi word clause/i)` no longer matches, since the clause is no longer
+> one continuous text node.
+> Reduced motion: `.adlib-typed-word`/`.adlib-fade-in` are disabled to an instant, fully
+> visible state under `prefers-reduced-motion: reduce` (`index.css`) — the stepped reveal
+> and fade/lift both skip, text just appears.
+
+**F130 · `IntakePage` field-parity round 1 — Tips/Commission, base-user OT Threshold, DHL
+Weekend Differential** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round, docs/TODO.md §19.1.A)*
+Three real Step1 fields ported into `IntakePage`'s trailing clauses, all gated on a new
+`payStructureComplete` boolean (mirrors the point in real Step1 where the core rate/hours
+questions are answered and Advanced Pay Rules/OT Threshold/tips opt-in become relevant):
+Tips/Commission opt-in (`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+`tipsCommissionOnlyPosition`, any employer), base-user Overtime Threshold
+(`otThreshold`, 40/48/custom/exempt — DHL always uses its fixed 40h/1.5× override from
+`setEmployer`, so this only renders for base users), and an editable DHL Weekend Differential
+(`diffRate`, was previously hardcoded to the `DHL_PRESET` default with no way to change it).
+None of the three gate `isIntakeValid` on either wizard.
+> **IF** `payStructureComplete`'s definition changes, **THEN** all three trailing clauses move
+> together — they share one gate, not three independent ones. Check both the DHL branch
+> (`dhlTeamReady && !!formData.userPaySchedule`) and the base/investor branch (rate or salary
+> filled) still match what real Step1 considers "core pay structure answered."
+> **IF** you touch the DHL Weekend Differential clause, **THEN** note it's nested *inside*
+> `{dhlTeamReady && (...)}` but additionally gated on `formData.userPaySchedule` — the DHL
+> pay-schedule question (weekly/every-two-weeks) must be answered first, or the differential
+> blank renders before the sentence has even reached that clause. A regression here (differential
+> appearing before pay-schedule is answered) was caught by this round's own test — see
+> `SetupWizardAdlib.test.jsx`'s "DHL reveals an editable Weekend Differential…" test.
+> **IF** the Overtime Threshold's `otChoice` local state and `formData.otThreshold` diverge
+> (e.g. a resumed formData with `otThreshold === null` meaning "Exempt" on the real wizard),
+> **THEN** know this is a known, accepted ambiguity — `otChoice` only distinguishes
+> unanswered-vs-40-vs-48-vs-custom on *initial mount*, not on every render, and null is treated
+> as "unanswered" on resume rather than "Exempt." Harmless because `otThreshold` never gates
+> `isIntakeValid` on either wizard — purely a cosmetic scope note, not a data-correctness bug.
+> **IF** a field is added to any of these three clauses, **THEN** it must also be added to
+> `BLANK_PAY_FIELDS` (done for the tips/commission trio this round) — `diffRate`/`otThreshold`
+> were already present since the schedule/DHL-pick paths wrote them before this round.
+> `DIFF_FIELDS`/`HISTORY_SENSITIVE_FIELDS` (F7) already track `diffRate`/`otThreshold` (real
+> Step1 already wrote them); `tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/
+> `tipsCommissionOnlyPosition` are **not** in either list today — a pre-existing gap shared by
+> *both* wizards (real Step1 has written these fields since before this round without being
+> tracked), not something this round introduced or fixed. Flagged for §19.1.H's housekeeping
+> pass, not resolved here.
+
+**F131 · F130's tips/commission tracking gap — resolved** — `src/lib/configHistory.js`
+(`HISTORY_SENSITIVE_FIELDS`), `SetupWizard.jsx` (`DIFF_FIELDS`) — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 3, docs/TODO.md §19.1.H)*
+`tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` were writable by
+both wizards (real Step1 since before F130, `SetupWizardAdlib.jsx`'s `IntakePage` since F130)
+without being tracked by either the account-history diff whitelist or the structure-change diff
+table — flagged but deliberately left unresolved by F130 pending this round. Both lists now carry
+all three fields. A full sweep of every field `SetupWizardAdlib.jsx` currently writes (`onChange`
+call sites plus `pickTeamPatch`/`pickWarehouseTeamPatch`/`setEmployer`/`pickSite`'s returned
+patches) against `HISTORY_SENSITIVE_FIELDS` found no other gaps — everything else the ad-lib
+wizard writes was already tracked.
+> **IF** a new field is added to either wizard's pages, **THEN** it must land in
+> `HISTORY_SENSITIVE_FIELDS` in the same commit — this is the second time a field went live on
+> both wizards without history tracking; make it a checklist item, not a follow-up.
+> **IF** `SetupWizardAdlib.jsx` gains the remaining round-4 ported fields (Advanced Pay Rules,
+> DHL custom rotation, Deductions' Benefits Start Date/Other Deductions/Attendance
+> details/PTO, Tax Rates' estimate/DHL-preset fallbacks, Wrap Up's Tax-Exempt opt-in — see
+> docs/TODO.md §19.1), **THEN** re-run this same sweep — `HISTORY_SENSITIVE_FIELDS` already
+> carries `dhlCustomSchedule`/`taxExemptOptIn`/`otherDeductions`/`benefitsStartDate`/
+> `attendanceWarnThreshold`/`attendanceTerminateThreshold`/`attendanceIncrement`/`ptoEnabled`/
+> `ptoAccrualMethod`/`ptoAccrualRate`/`ptoCap` from real Step1/Step2/Step3's own writes, so no
+> new list entries are expected there, but confirm rather than assume.
+
+**F132 · `SetupWizardAdlib.jsx` — `attempted`/required-field feedback + accessible names** —
+`SetupWizardAdlib.jsx` (`InlineSelect`/`InlineNumber`/`InlineDate`/`InlineChip`, `RequiredNote`,
+`IntakePage`/`SchedulePage`/`DeductionsPage`/`TaxRatesPage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 3, docs/TODO.md §19.1.G)*
+`attempted` was threaded to every page component since the save-wiring round but never consumed —
+inert scaffolding. Now: `InlineSelect`/`InlineNumber`/`InlineDate` take an `error` boolean that
+swaps their dashed/teal border for a solid `--color-deduction` one, sets `aria-invalid`, and
+renders a small red `RequiredNote` ("↑ Required") — the same visual/semantic signal real
+`errBorder()`/`Field` give in `SetupWizard.jsx`, just adapted to an inline mad-libs blank instead
+of a labeled block-level form field (no separate `<label>` to redden, so the note sits right next
+to the blank instead). Each page wires `error={attempted && <missing-condition>}` on every control
+its own `isXValid` (F-mirrors of real `STEP_DEFS`) requires — line-for-line copies of the
+condition already inside that page's `isXValid` function, not independently re-derived. All four
+`Inline*` controls also gained/kept contextual accessible names (`InlineSelect`/`InlineNumber`
+via a new `ariaLabel` prop threaded per call site; `InlineDate` already had `label`; `InlineChip`
+gained `aria-pressed` + `aria-label`).
+> **IF** a required field's error condition is added or changed on the real wizard's matching
+> `STEP_DEFS` step, **THEN** update the mirrored `isXValid` here (already required by F7's
+> line-for-line-mirror convention) AND the matching `error={attempted && ...}` prop on this page —
+> three places in sync now (real `isValid`, ad-lib `isXValid`, ad-lib `error` prop), not two.
+> **IF** you add a new required field to any page, **THEN** its control needs `error={attempted &&
+> <the same condition isXValid checks for that field>}` plus an `ariaLabel` — omitting either is a
+> silent accessibility/UX regression that no test currently catches (no automated a11y assertions
+> exist for this file; `SetupWizardAdlib.test.jsx` doesn't query `aria-invalid` or `aria-label`
+> today).
+> **Known, accepted, NOT fixed by this round:** the Next/Finish `Pressable` stays
+> `disabled={!canProceed}` (unchanged), meaning `handleNext`'s `setAttempted(true)` branch mirrors
+> real `SetupWizard.jsx`'s own `handleNext` exactly — including that same function's own
+> reachability quirk (a native `<button disabled>` blocks click dispatch, so the branch cannot
+> fire from a literal click on a disabled button in either wizard). This round's brief was to
+> mirror the real wizard's pattern, not redesign it; an always-enabled Next button would itself be
+> a real behavioral divergence from `SetupWizard.jsx`, not a parity fix.
+
+**F133 · Advanced Pay Rules + DHL custom rotation ported into `IntakePage`, plus two
+pre-existing `isIntakeValid` gaps closed** — `SetupWizardAdlib.jsx` (`AdvancedPayRulesCard`,
+`DhlRotationCard`, `isIntakeValid`), `src/lib/wizardComplete.js` — **[L]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Two real Step1 blocks ported as collapsible cards below the sentence (not forced into inline
+mad-libs prose, matching how they already read as `Field`/Pill form blocks in the real wizard,
+not prose): `AdvancedPayRulesCard` (base users, OT multiplier/night diff/weekend diff — same
+three fields/defaults as real `AdvancedPayRules`) and `DhlRotationCard` (DHL Plant only, Standard
+vs. Custom weekly-hours override). While adding `DhlRotationCard`'s required-field checks to
+`isIntakeValid`, found real STEP_DEFS id 1 also gates on `customWeeklyHours`/
+`customWeeklyHoursLong`/`customWeeklyHoursShort` AND on a base-user's custom OT threshold being
+positive once entered — **neither check existed in `isIntakeValid` before this round**, a
+pre-existing F7 mirror gap (the fields simply weren't reachable in `IntakePage` before, so the
+gap was latent). Both added, now a true line-for-line mirror of real STEP_DEFS id 1's `isValid`.
+`finalizeWizardConfig()` also gained an `otMultiplier` default (`?? 1.5`, `DEFAULT_CONFIG`'s own
+value) — `SetupWizardAdlib.jsx`'s `BLANK_PAY_FIELDS` nulls it for base users until
+`AdvancedPayRulesCard` is opened, whereas real `SetupWizard.jsx` never blanks it (its `formData`
+always starts from the account's existing config); without the default, a base user who never
+opens the card would finish with `otMultiplier: null`, which several direct (non-`|| 1.5`)
+multiplications in `finance.js` would turn into `NaN`. No-op for the real wizard (already never
+null there).
+> **IF** `AdvancedPayRulesCard`/`DhlRotationCard`'s fields change on the real
+> `AdvancedPayRules`/Step1 rotation block, **THEN** update both the card here and
+> `isIntakeValid`'s mirrored checks together — three places now (real component, ad-lib card,
+> ad-lib `isIntakeValid`).
+> **IF** another field gets a `?? <DEFAULT_CONFIG value>` fallback added to
+> `finalizeWizardConfig()` for the same "blanked in Adlib, never blanked in real" reason,
+> **THEN** grep `BLANK_PAY_FIELDS` for other numeric/enum fields the real wizard's `Field`
+> components don't gate as required but that a raw calculation downstream assumes non-null —
+> `otMultiplier` was found this round by inspecting `finance.js`'s direct (unguarded)
+> `cfg.otMultiplier` multiplications; not an exhaustive audit of every such field.
+
+**F134 · `TaxRatesPage` fallback paths — "Use Estimate for Now" + DHL MO preset** —
+`SetupWizardAdlib.jsx` (`TaxRatesPage`) — **[L]** — *(added 2026-08-10, ad-lib field-parity
+round 4, docs/TODO.md §19.1.A)*
+Ported real Step4's two non-paystub paths to a valid tax rate, both straight function copies
+(`handleEstimate()`/`loadDHLPreset()`), previously scoped out by explicit instruction when this
+page was built ("just the paystub path") — now closed since a real user without a paystub handy
+was otherwise stuck unable to finish onboarding. `handleEstimate()` writes the same 10%/12% federal
+flat-rate estimate + state flat/midpoint/0 lookup (`STATE_TAX_TABLE`) as real Step4, flagged
+`taxRatesEstimated: true`; its button sits next to "Apply These Rates" inside the paystub reveal.
+`loadDHLPreset()` writes `DHL_PRESET.defaults`' MO reference rates, same gate as real Step4
+(`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`).
+> **IF** `STATE_TAX_TABLE`'s flat/midpoint rate shape changes, **THEN** both `handleEstimate()`
+> copies (real Step4 and this one) need the same update — same "SQL twin, one language each" risk
+> class other F-entries in this doc flag for duplicated logic, just JS-JS here instead of JS-SQL.
+> **IF** `DHL_PRESET.defaults`' rate fields change, **THEN** both `loadDHLPreset()` copies need
+> the same update.
+
+**F135 · `WrapUpPage` Tax-Exempt Week Projections opt-in** — `SetupWizardAdlib.jsx`
+(`WrapUpPage`, `TAX_EXEMPT_DISCLAIMER`, `TaxExemptPreview`) — **[G]** — *(added 2026-08-10,
+ad-lib field-parity round 4, docs/TODO.md §19.1.A)*
+Real Wrap Up's optional, non-blocking Tax-Exempt Week Projections opt-in ported: static
+disclosure copy (`TAX_EXEMPT_DISCLAIMER`) plus a "coming soon" placeholder
+(`TaxExemptPreview`) shown once `formData.taxExemptOptIn === true`. Both are exact copies of
+the real components — nothing to ground against live data here (unlike every other Wrap Up
+figure on this page, which reads `estimateWeeklyNet()`), since the feature itself isn't live
+yet on either wizard. Doesn't gate `isWrapUpValid`.
+> **IF** the Tax-Exempt Week Projections feature actually ships (currently a placeholder on
+> both wizards), **THEN** `TaxExemptPreview` needs real content on both `SetupWizard.jsx` and
+> here — check both, not just the one you're working in.
+> **IF** `TAX_EXEMPT_DISCLAIMER`'s copy changes, **THEN** update both copies (real Step7 and
+> this one) together — same duplicated-copy risk F134 already flags for its two fallback
+> functions.
+
+**F136 · `DeductionsPage` — Benefits Start Date, Other Recurring Deductions, Attendance Policy
+Details, PTO — plus two pre-existing `HISTORY_SENSITIVE_FIELDS` gaps closed** —
+`SetupWizardAdlib.jsx` (`OtherDeductionsList`, `AttendanceDetailsCard`, `PtoDetailsCard`),
+`src/lib/configHistory.js` — **[L]** — *(added 2026-08-10, ad-lib field-parity round 4,
+docs/TODO.md §19.1.A)*
+Closes out the last of §19.1.A's Deductions gaps, previously flagged "v1 scope" when this page
+was first built. Benefits Start Date is a single inline `InlineDate` clause (fits the sentence);
+the other three don't fit "one blank" mad-libs prose, so they're block-level cards below the
+sentence, same precedent as the Tax Rates page's paystub calculator: `OtherDeductionsList` (plain
+add/edit/remove row list, same shape as real Step3's), `AttendanceDetailsCard` and
+`PtoDetailsCard` (collapsible, default-expanded-if-already-answered — mirrors real
+`DetailsDisclosure`'s own `defaultExpanded` logic). None of these four gate `isDeductionsValid`
+on either wizard (matches real STEP_DEFS id 3). While wiring these into `HISTORY_SENSITIVE_FIELDS`
+(F7's three-way rule), found **`attendanceUnit`/`attendanceCurrentBalance`/`ptoCurrentBalance`
+were missing even on the real wizard** — a pre-existing gap this round found and fixed, not
+something introduced by adding these fields to Adlib. All three now present.
+> **IF** `DeductionsPage`'s fields change again, **THEN** re-run the full `HISTORY_SENSITIVE_FIELDS`
+> sweep this round already did once (F131) — this round found a *second* round of gaps on the
+> *real* wizard's side, which F131's original sweep (scoped to what Adlib itself writes) couldn't
+> have caught, since Adlib didn't write these fields yet at that point.
+> **Known, deliberately NOT done this round:** `DIFF_FIELDS` (F7) was **not** extended with
+> `benefitsStartDate`/attendance/PTO fields — `DIFF_FIELDS` has always been a curated subset of
+> `HISTORY_SENSITIVE_FIELDS` (many pre-existing fields, e.g. `customWeeklyHours`, benefit weekly
+> amounts, were never in `DIFF_FIELDS` even before this round), and F7's "must never diverge" rule
+> has pre-existing debt across the whole list that predates both wizards' current state — F130's
+> tips fix (F131) was the one explicitly-requested exception. Widening `DIFF_FIELDS` toward true
+> parity with `HISTORY_SENSITIVE_FIELDS` is a real, separate follow-up, not attempted here.
+
+**F137 · Bug found + fixed: `DhlRotationCard`/`AdvancedPayRulesCard` were nested inside `<p>`,
+invalid HTML** — `SetupWizardAdlib.jsx` (`IntakePage`) — **[G]** — *(added 2026-08-10, ad-lib
+field-parity round 4 test-coverage pass, docs/TODO.md §19.1.H)*
+F133 (Advanced Pay Rules + DHL rotation) rendered both new cards — `<div>`-based components —
+*inside* `IntakePage`'s sentence `<p>`, since the `<p>...</p>` was the entire function's return
+value at the time and the cards were added as trailing children of conditional blocks already
+inside it. `<div>` cannot be a descendant of `<p>` per the HTML spec; React/testing-library
+surfaced this as a console warning ("In HTML, `<div>` cannot be a descendant of `<p>`... This
+will cause a hydration error") the moment a test exercised the DHL-Plant-custom-rotation or
+Advanced-Pay-Rules render path — caught while writing this round's full-completion test, not by
+any test written *for* F133 itself (none of F133's own assertions rendered far enough into the
+DOM to trigger it). Real-browser impact: a browser auto-closes the `<p>` early when it encounters
+the nested `<div>`, silently splitting one paragraph into two and potentially breaking the
+`BLANK_FONT` styling inheritance for everything after the split. Fixed by closing `</p>` before
+either card and rendering both as siblings after it (`IntakePage`'s return is now a Fragment,
+same pattern `DeductionsPage` already uses for its own block-level cards) — same gate conditions,
+now written explicitly at the top level (`isEmployed && isEmployerDHL && isEmployerPlant &&
+dhlTeamReady` / `isEmployed && isBaseUser && payStructureComplete`) instead of inherited by
+nesting position.
+> **IF** a future card/block-level (`<div>`-rendering) component is added inside `IntakePage`
+> (or any other page here whose top-level element is a `<p>`), **THEN** it must be a sibling
+> *after* that `<p>` closes, never nested inside it — re-derive the gate condition explicitly at
+> the top level rather than relying on the surrounding conditional's nesting position to carry it
+> for free. Check: render the new component in a test and watch for this exact console warning —
+> `npm run test:run` does not fail the suite on it (it's a `console.error`, not a thrown error),
+> so a passing suite is not proof this class of bug is absent, same caveat React Compiler
+> miscompilation (§12.4) already carries for a different reason.
+
+**F138 · Bug found + fixed: `TypedText`'s clip-path `steps()` reveal got stuck mid-word on real
+iOS Safari** — `SetupWizardAdlib.jsx` (`TypedText`), `index.css` (`.adlib-typed-word`) — **[G]** —
+*(added 2026-08-11, live device report)*
+F129's fix for the horizontal-overflow bug (word-chunked `TypedText`, still `clip-path: inset()`
+animated via `steps()` per word) shipped clean through Vitest + a production build, but a real
+user on a real iPhone (Safari) hit words getting visually stuck mid-reveal — several characters
+into a word, permanently, not just mid-animation-frame — confirmed via screenshots on two separate
+pages of the wizard. `clip-path` animated with a `steps()` timing function across many
+concurrently-animating per-word layers is an unusual combination that WebKit does not repaint
+reliably; no sandbox in this repo has a real browser, so this class of bug is invisible to every
+automated gate here (Vitest, ESLint, `vite build`) — same blind-spot shape as F137's `<p>`-nesting
+warning and the React-Compiler miscompilation (§12.4), a third distinct category of "passes every
+check, breaks on a real device." Fixed by dropping the clip-path/`steps()` character-stepping
+entirely and using the same `fadeSlideUp` opacity+transform stagger every other entrance animation
+in this app already relies on, applied per word for the same left-to-right cascading feel (loses
+the literal character-by-character "typing" look, keeps the word-by-word reveal). `@keyframes
+adlibType` removed from `index.css` as dead code.
+> **IF** a future animation in this app needs to animate `clip-path` (or any other property poorly
+> supported for animation on WebKit) with a `steps()` timing function, especially across many
+> simultaneously-animating elements, **THEN** treat it as unverified until checked on a real iOS
+> Safari device — this sandbox has no browser, and Vitest/`vite build` both passed cleanly on the
+> broken version. Prefer `opacity`/`transform` (the two properties every browser reliably
+> compositor-animates) over `clip-path` for any new per-element reveal animation, unless a real
+> device check confirms otherwise.
+
+**F139 · `SetupWizardAdlib.jsx` gains a `lifeEvent` prop — `lost_job`/`commission_job` life-event
+re-entry now ad-libbed** — `SetupWizardAdlib.jsx`, `App.jsx` — **[G]** — *(added 2026-08-11,
+docs/TODO.md §19.2)*
+Until this round `SetupWizardAdlib.jsx` handled first-run only (`lifeEvent` was implicitly always
+`null`); every life-event re-entry stayed on `SetupWizard.jsx`. §19.1.B's original audit
+explicitly scoped this out ("ad-lib replaces `SetupWizard` only for first-run... `SetupWizard.jsx`
+stays mounted, unchanged, for every life-event string") — that decision is now reversed by
+explicit request, rolled out path by path. This round: `lost_job` and `commission_job`, the two
+paths that skip Wrap Up entirely (§7.3's gate matrix). Shared plumbing added: (1) `formData` init
+branches on `lifeEvent !== null` — pre-filled from the real account config (`{ ...config }`,
+matching real `SetupWizard.jsx`'s own re-entry init, including its `firstActiveIdx` recompute from
+`startDate` on open) instead of `BLANK_PAY_FIELDS`, which is now first-run-only; (2) the
+employment-status question (`IntakePage`'s first clause, `isIntakeValid`'s first check) is skipped
+entirely for `lifeEvent !== null` — mirrors real `STEP_DEFS` id 0's own `isValid: (d, ev) => ev
+!== null || ...` unconditional-true-on-re-entry shape — `isEmployed` is forced `true` instead so
+every pay-structure clause renders immediately; (3) a new `computeActivePages(formData,
+lifeEvent)` helper replaces the old inline `startedUnemployed === true ? [PAGES[0]] : PAGES`
+ternary — the jobless-mini-flow single-page shortcut is now explicitly gated on `lifeEvent ===
+null` too (a `lost_job`/`commission_job` account can carry a stale `startedUnemployed: true` left
+over from a prior first-run jobless answer without that meaning anything on *this* re-entry, since
+neither path asks or touches that field), and `lost_job`/`commission_job` specifically get `PAGES`
+minus Wrap Up; (4) `handleNext`'s jobless hand-off branch (`onHandoff(formData, 10)`) is likewise
+gated on `lifeEvent === null` — it must never fire on a life-event path since neither has a jobless
+mini-flow concept at all. `commission_job` additionally ports real Step1's Commission Income field
+(`SetupWizard.jsx:782–809`) into `IntakePage`, gated on `lifeEvent === "commission_job" &&
+payStructureComplete` (same gateTouched-level gate as the real field, not base-user-only) — writes
+the pre-existing `commissionMonthly` field (already in `DEFAULT_CONFIG`/
+`HISTORY_SENSITIVE_FIELDS`/`finance.js`'s income math; no housekeeping gap found). `App.jsx`:
+`wizardEntry === "lost_job" | "commission_job"` now mounts `SetupWizardAdlib` with
+`lifeEvent={wizardEntry}` instead of `SetupWizard.jsx` — both paths are cancelable (`onCancel` is a
+real closing function, matching `SetupWizard.jsx`'s own re-entry `onCancel`, unlike first-run's
+uncancelable `undefined`). `SetupWizard.jsx`'s own mount condition excludes both values, including
+from its `wizardExiting` fallback — `wizardEntry` itself doesn't change during
+`closeWizardWithAnimation`'s 180ms delay, so without that exclusion closing a `lost_job`/
+`commission_job` wizard would transiently mount *both* components at once. `handleWizardComplete`
+needed no changes — it already reads `wizardEntry` itself (not a param) for its
+`life_event:${wizardEntry}` configHistory source and its `structure_change`-only branches, so it
+generalizes to the new entry point automatically. `finalizeWizardConfig()` (`wizardComplete.js`)
+was verified, not changed — its Freedom Allowance/`taxedWeeks`/`accountCreatedIdx`/
+`setupComplete` normalization was already unconditional (extracted from real
+`handleComplete()`, which already had to handle these two no-Wrap-Up paths before `SetupWizardAdlib`
+existed at all).
+> **IF** `structure_change` or `changed_jobs` get ad-libbed next (docs/TODO.md §19.2), **THEN**
+> re-read this entry first — `structure_change` needs the frozen `originalConfigRef` baseline +
+> `StructureChangeDiff` summary + the jobless-Back-to-Work `startedUnemployed`-clearing special
+> case (none of which this round built, since neither `lost_job` nor `commission_job` show Wrap Up
+> at all), and its real Step0 has bespoke copy to port verbatim (unlike `lost_job`/
+> `commission_job`'s intro copy this round, which is new writing in a matching tone — see the
+> session report for that judgment call).
+>
+> **Done — see F140 below (2026-08-11).**
+
+**F140 · `structure_change`/`changed_jobs` ad-libbed — the real entry point (`wizardEntry ===
+"structure_change"`) now routes to `SetupWizardAdlib`, and an internal life-event pivot picker
+makes `lost_job`/`changed_jobs`/`commission_job` reachable from it** — `SetupWizardAdlib.jsx`,
+`SetupWizard.jsx`, `App.jsx` — **[G]** — *(added 2026-08-11, docs/TODO.md §19.2, closes it out)*
+F139's routing for `wizardEntry === "lost_job" | "commission_job"` was real, correct plumbing for
+a `wizardEntry` value **nothing ever set** — `LifeEventMenu.jsx` has exactly 3 tiles ("Pay
+Structure Changed" → `structure_change`, "Quit My Job" → the unrelated `NewJobSeasonEntry` modal,
+"Rate Update" → the unrelated `RateUpdateModal`), and the only way a real user ever reached
+`lost_job`/`changed_jobs`/`commission_job` was real `SetupWizard.jsx`'s own `Step0` internal
+picker — reachable only via `wizardEntry === "structure_change"`, which was still routed to
+`SetupWizard.jsx`, not `SetupWizardAdlib`. This round's actual fix, in order: (1) `App.jsx`'s
+`isAdlibLifeEvent` now includes `"structure_change"`, so `SetupWizardAdlib` mounts for the real
+entry point and `SetupWizard.jsx` mounts only for the jobless mini-flow's `initialStepId: 10`
+hand-off continuation; (2) `SetupWizardAdlib` gained its own internal `[curLifeEvent,
+setCurLifeEvent]` state (mirrors real `SetupWizard.jsx`'s local `[lifeEvent, setLifeEvent]`,
+seeded the same way from the immutable `lifeEvent` prop) plus a new `LifeEventPivot` component
+(`IntakePage`) — real Step0's `structure_change`-specific intro copy ported verbatim ("Update your
+pay structure." + the pre-filled/goals-stay-put explanation + start-date guidance), followed by
+the "What changed?" picker (`LIFE_EVENTS.filter(ev => ev.value !== "structure_change")`, exported
+from `SetupWizard.jsx` and imported rather than duplicated) — clicking a tile calls
+`onLifeEventChange`, which the top-level component only threads down at all when the original
+entry was `"structure_change"` (`onLifeEventChange={lifeEvent === "structure_change" ?
+setCurLifeEvent : null}`), so its mere presence is the render gate. **One deliberate deviation
+from a line-for-line Step0 port:** real Step0 returns early for `structure_change` with no picker
+at all (the picker only ever renders on its own separate "step" once `lifeEvent` has already
+changed away from `structure_change` by some other means — which nothing in the real wizard
+actually provides, making that branch dead code there too); ad-lib has no separate step to show
+the intro on first, so `LifeEventPivot` shows the intro **and** the picker together on
+`structure_change`, or that pivot has no reachable entry point at all. (3) Every downstream
+gate/page now reacts to `curLifeEvent`, not the immutable `lifeEvent` prop:
+`computeActivePages(formData, curLifeEvent)`, `current.isValid(formData, curLifeEvent)`, the
+`<current.Component lifeEvent={curLifeEvent} .../>` render prop, and the Commission Income clause
+gate inside `IntakePage`. `hasCommission`'s local `useState` lazy initializer only runs once at
+mount (when `curLifeEvent` was still `"structure_change"`) — a `useEffect` re-syncs it on every
+`curLifeEvent` change so pivoting into `commission_job` after mount still shows the field's
+correct initial state. (4) `WrapUpPage` gained `lifeEvent`/`originalConfig` props; a frozen
+baseline (`useState(() => config)` at `SetupWizardAdlib` mount, mirrors real `useMemo(() => config,
+[])`) is threaded down, and `StructureChangeDiff` (now exported from `SetupWizard.jsx` alongside
+`DIFF_FIELDS`, imported rather than duplicated — F7's "must never diverge" rule) renders inside
+Wrap Up gated on `curLifeEvent === "structure_change"` — the jobless-started "no prior pay
+structure to diff" guard comes along for free since it's the exact same component. `changed_jobs`
+needed **zero** code changes beyond the shared pivot/pre-fill plumbing above — `computeActivePages`'s
+default branch (anything besides the jobless mini-flow, `lost_job`, or `commission_job`) already
+returns the full 5-page set including Wrap Up but with no diff (correct — `changed_jobs` shows
+Wrap Up but not the diff, per the gate matrix); confirmed via `git grep changed_jobs` across
+`SetupWizard.jsx` that nothing else is life-event-specific for that path. `handleWizardComplete`
+(`App.jsx`) needed zero changes — verified it still reads `wizardEntry` itself (never a
+pivot-aware param) for its `life_event:${wizardEntry}` configHistory source and its
+`structure_change`-only `startedUnemployed`-clearing/Food-restoration special case, which
+generalizes to `SetupWizardAdlib`-driven completions automatically. This does mean a pivot away
+from `structure_change` (e.g., to `commission_job`) still tags the resulting configHistory row and
+runs the `structure_change`-only special-case checks as if the completion were `structure_change`
+— `wizardEntry` never learns about the internal pivot, same as real `SetupWizard.jsx`'s own Step0
+pivot never notifying `App.jsx` either. This is a deliberate parity choice (match the pre-existing,
+intentional real-wizard limitation), not an oversight — see the session report's judgment-call
+note. `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS` (F7): every key already present, no
+new fields introduced, no gaps found.
+
+**F141 · Jobless mini-flow ad-libbed — the last hand-off path removed, `SetupWizard.jsx` no
+longer mounted anywhere** — `SetupWizardAdlib.jsx`, `App.jsx` — **[G→L]** — *(added 2026-08-11,
+docs/TODO.md §19.3, closes it out — completes the "ad-lib is the entire first-run onboarding
+experience" goal first opened for §19.1)* The one path still hopping to a second component —
+first-run jobless (`lifeEvent === null && startedUnemployed === true`), which handed off via
+`onHandoff(formData, 10)` into real `SetupWizard.jsx` mounted at `STEP_DEFS` id 10 for the
+Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps (ids 10/11/12) — is now three
+native `SetupWizardAdlib` pages: `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`,
+with `isJoblessBenefitsValid`/`isJoblessDetailsValid`/`isJoblessWrapUpValid` as line-for-line
+mirrors of real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`'s `isValid`
+(F3's routing table). `computeActivePages` now returns `[PAGES[0], ...jobless pages]` instead of
+`[PAGES[0]]` for the jobless gate, and `handleNext`/`handleSkip`'s last-page branch collapsed to a
+single shared `finish()` (`finalizeWizardConfig()` → `onComplete()`) for every path — no more
+`onHandoff(formData, 10)` branch at all. **Fixed a real, previously-latent gap surfaced by writing
+native completion test coverage for this round:** `IntakePage`'s employment-status `InlineSelect`
+never set `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` when "unemployed" was
+chosen — only real `Step0`'s own pill handler did that (F4), and the old hand-off jumped straight
+to `STEP_DEFS` id 10, skipping `Step0` (and its seed) entirely. This meant a first-run jobless
+completion via the hand-off path could reach `handleWizardComplete` with `newJobSeasonMode` still
+false — the bug never surfaced because no prior test asserted `newJobSeasonMode` on the completed
+payload. Fixed by porting `Step0`'s pill handler verbatim into `IntakePage`'s employment-status
+`onChange` (F4's own field set, now load-bearing in two places instead of one — `SetupWizard.jsx`'s
+`Step0` and `SetupWizardAdlib.jsx`'s `IntakePage` — kept manually in sync per this file's own
+"duplicated, not shared" convention for cross-file field mirrors already established throughout
+§7 F139/F140). `JoblessDetailsPage`'s job-loss-date blank therefore now starts pre-filled to today
+(same as real `Step0` always seeded it), not blank — required-field tests updated to clear-then-refill
+rather than assert an initially-disabled Next.
+> **IF** `STEP_DEFS` id 10/11/12 or `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`'s
+> field set changes on the real wizard, **THEN** the mirrored fields in `JoblessBenefitsPage`/
+> `JoblessDetailsPage`/`isJoblessBenefitsValid`/`isJoblessDetailsValid` must change too — these are
+> the only two consumers of that field set now that `SetupWizard.jsx` is never actually mounted.
+> **IF** `onHandoff`/`initialStepId`/`onBackBeforeStart`/`resumeFormData` machinery is ever revived
+> for a new purpose, **THEN** re-verify `App.jsx`'s `closeWizardWithAnimation()` — it was simplified
+> to a synchronous `setWizardEntry(null)` once `wizardExiting`'s only consumer (real `SetupWizard.jsx`'s
+> `isExiting` fade) stopped being mounted; reintroducing a component that needs a staged exit
+> animation means restoring the 180ms delay too, not just the hand-off state.
+
+`onHandoff` (the prop), `App.jsx`'s `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/
+`setWizardExiting` are all removed — confirmed via full-repo grep before deleting that nothing
+called `onHandoff` with a real `initialStepId` outside the one branch this F entry removed, and
+that nothing read `wizardExiting` outside the `SetupWizard.jsx` mount this F entry also removed.
+`SetupWizard.jsx` itself, `initialStepId`, and `onBackBeforeStart` are all kept — `SetupWizard.jsx`
+is the source the three new pages were ported from (plus `LIFE_EVENTS`/`DIFF_FIELDS`/
+`StructureChangeDiff`'s shared export home, F7/F140), and `initialStepId`/`onBackBeforeStart`/
+`resumeFormData` are generic, reusable wizard-navigation props with no current caller rather than
+provably-dead code — see the session report's judgment-call note for the full reasoning either way.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -501,14 +967,26 @@ model D3-safe activation.
 All paths commit through `handleComplete` (F5) — including the two that skip Wrap Up and
 the one with no pay structure.
 
-| Path (lifeEvent · seed) | Steps shown | Wrap Up? | Path-specific invariants |
-|---|---|---|---|
-| First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `onCancel` undefined (non-investor) — no escape; Freedom Allowance + tax-exempt offered here only |
-| First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | No pay structure at `buildYear` call; `newJobSeasonMode: true`; Food seed skipped (F8); lands in New Job Season panels |
-| `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | Pre-filled; frozen `originalConfigRef` baseline; clears `startedUnemployed` on completion (F8); Food restored if jobless-started |
-| `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `NewJobSeasonEntry` modal (F12), not this |
-| `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | Full re-run against existing account data |
-| `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | Commission field appears in Step 1; Wrap-Up-only fields must default in F5 |
+| Path (lifeEvent · seed) | Steps shown | Wrap Up? | Which wizard? | Path-specific invariants |
+|---|---|---|---|---|
+| First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` | `onCancel` undefined (non-investor) — no escape; Freedom Allowance + tax-exempt offered here only |
+| First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | `SetupWizardAdlib` (F141, 2026-08-11) — native pages, no hand-off | No pay structure at `buildYear` call; `newJobSeasonMode: true`; Food seed skipped (F8); lands in New Job Season panels |
+| `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — the real, only entry point (`LifeEventMenu`'s "Pay Structure Changed" tile) | Pre-filled; frozen `originalConfig` baseline; `StructureChangeDiff` at Wrap Up; clears `startedUnemployed` on completion (F8); Food restored if jobless-started; also the wizard's entry point for pivoting to any of the three rows below |
+| `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker (`LifeEventPivot`) today, since nothing sets `wizardEntry` to this value directly | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `NewJobSeasonEntry` modal (F12), not this |
+| `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `SetupWizardAdlib` (F140, 2026-08-11) — reachable only via `structure_change`'s internal pivot picker, same as `lost_job`/`commission_job` | Full re-run against existing account data; no diff summary (diff is `structure_change`-only) |
+| `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | `SetupWizardAdlib` (F139/F140) — reachable only via `structure_change`'s internal pivot picker today | Commission field appears in Step 1 (ported into `IntakePage`); Wrap-Up-only fields must default in F5 |
+
+**F139/F140/F141 note:** moving all four life-event strings, then the jobless mini-flow, to
+`SetupWizardAdlib` did not change this table's "Steps shown"/"Wrap Up?"/invariant columns at all —
+every path still commits through the exact same `finalizeWizardConfig()` → `handleComplete`-
+equivalent path (F5). Only the "Which wizard?" column changed, and as of F141 it reads the same
+for all six rows: `SetupWizardAdlib`, full stop. **`SetupWizard.jsx` is no longer mounted by
+`App.jsx` at all** — every path, including first-run jobless, now completes inside
+`SetupWizardAdlib` with no hand-off to a second component. `SetupWizard.jsx` is retained solely as
+the source of the three jobless page components (`StepJoblessBenefits`/`StepJoblessDetails`/
+`StepJoblessWrapUp`, F141) and as `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared export
+home (F7/F140) — never mounted, never rendered. docs/TODO.md §19.2/§19.3 (both now fully closed)
+have the path-by-path history.
 
 Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
 hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**
@@ -3079,21 +3557,39 @@ is the drift this entry exists to prevent:
   policies/the trigger instead of inlining the same subquery repeatedly. Still "two languages,
   no shared source" at the JS/SQL boundary (F122's existing warning), but now consolidated to
   ONE place on the SQL side instead of growing a second/third inline copy.
-- **Header badge (`App.jsx`'s `loadBetaHomebaseBadge`, added 2026-08-08)** — a SECOND caller of
-  the same read-only tester-facing fetchers `BetaHomebase.jsx` itself uses
-  (`fetchBetaChecklistItems`/`fetchMyChecklistCompletions`/`fetchBetaSuggestions`/
-  `fetchMyBetaScore`/`fetchPublishedChangelogEntries`) — deliberately the SAME functions, not a
-  second query written against the same tables, so this stays "one authoritative read, called
-  twice" rather than a parallel approximation (the distinction `active-systems.md` §6 draws for
-  Coach context grounding applies here too). Unchecked-count math (`items` minus
-  `completedIds`) is done independently in both places since there's no shared component to put
-  it in, but both start from the identical fetched rows. "New since last opened" (changelog/
-  suggestion/score) has NO server-side read-marker — it's a device-local `localStorage` timestamp
-  (`betaHomebaseLastViewedAt:<user_id>`, stamped on open, same pattern as the sitewide changelog
-  bell's `lastSeenChangelogId`), so a tester who reads on one device still sees the badge on
-  another. That's an accepted gap, not an oversight — this app has no other read-receipt/
-  notification-state table, and the checklist half of the badge (the only part with real
-  per-tester DB state) isn't affected by it.
+- **Header badge (`App.jsx`'s `loadBetaHomebaseBadge`, added 2026-08-08; became the SOLE fetch
+  owner 2026-08-11 — see the preload bullet below).** Originally a second caller of the same
+  read-only tester-facing fetchers `BetaHomebase.jsx` itself used; since 2026-08-11 it's the
+  ONLY caller — `BetaHomebase.jsx`/`ProductivityHub.jsx` no longer fetch at all, they render
+  from what this effect already fetched. Unchecked-count math (`items` minus `completedIds`) is
+  still computed independently here (for the badge number) and inside each page (for the
+  checklist UI), but both read the identical cached rows now, not two separate fetches — an
+  even stronger version of "one authoritative read" than the original two-caller design (the
+  distinction `active-systems.md` §6 draws for Coach context grounding applies here too).
+  "New since last opened" (changelog/suggestion/score) has NO server-side read-marker — it's a
+  device-local `localStorage` timestamp (`betaHomebaseLastViewedAt:<user_id>`, stamped on
+  navigate, same pattern as the sitewide changelog bell's `lastSeenChangelogId`), so a tester
+  who reads on one device still sees the badge on another. That's an accepted gap, not an
+  oversight — this app has no other read-receipt/notification-state table, and the checklist
+  half of the badge (the only part with real per-tester DB state) isn't affected by it.
+- **Preload + single-fetch-owner (2026-08-11).** `betaHomebaseData`/`productivityHubData`
+  (`App.jsx`) cache the FULL fetch result (not just badge counts) from the exact same effect —
+  the one that already fires on mount (right after login, while `currentView` is still
+  `"home"`) and on every subsequent nav change. `BetaHomebase.jsx`/`ProductivityHub.jsx` were
+  rewritten to consume this via a `preloadedData` prop instead of fetching in their own mount
+  effect — by the time someone taps the icon, the data is typically already sitting in
+  `App.jsx` state, so the page renders immediately with no spinner. Freshness contract is
+  DELIBERATELY "refresh on return to the page" only — no polling, no Supabase Realtime
+  subscription (this app has neither anywhere, and the user explicitly chose this option over
+  both when asked) — so content published while a tester is already sitting on either page
+  won't appear until they navigate away and back (or their next nav-triggered refresh). Both
+  page components use React's "adjusting state during render" pattern (a guarded `setState`
+  call in the render body, gated on `preloadedData !== hydratedFrom`) to hydrate their one
+  piece of genuinely-local mutable state (`completedIds`, needed for the optimistic toggle) —
+  deliberately NOT a `useEffect`, to avoid adding a new instance of the `setState`-in-effect
+  shape this file's neighbors already needed `"use no memo"` for (the §12.4 case law). The other
+  four fields (`checklistItems`/`suggestions`/`score`/`changelogEntries`) are read-only display
+  data and are read straight from the prop — no local state for them at all.
 - **Modal → real nav-stack page (2026-08-09).** `BetaHomebase.jsx`/`ProductivityHub.jsx` were
   originally `position:fixed` portal modals (backdrop, fold-in/out, own ✕ close button);
   they're now plain pages rendered inside `App.jsx`'s `activePanel` when `currentView ===
@@ -3105,6 +3601,22 @@ is the drift this entry exists to prevent:
   unconditional siblings of the main content area) IS the exit, matching every other real
   page in the app. The badge's "mark as seen" trigger moved from "modal opened" to "navigated
   to" (`goToBetaHomebase`/`goToProductivityHub` in `App.jsx`) — same semantics, different verb.
+- **Desktop sidebar parity (2026-08-12).** The icon buttons above were only ever wired into
+  `.mobile-header` (`display:none` above the 768px breakpoint) — the real desktop `.sidebar`
+  (`App.jsx`, the `<nav>` block with `SidebarNavItem`) never got a matching entry, so a desktop
+  user had no way to reach either page at all, a real functional gap not caught until reported
+  live. Fixed by adding a `SidebarNavItem` (now accepts optional `badge`/`badgeColor` props,
+  rendered as a small circular count to the right of the label) for `betaHomebase`/`moneyMoves`
+  right after the standard nav items, reusing the exact same `goToBetaHomebase`/
+  `goToProductivityHub` handlers and the same `betaHomebaseBadgeCount`/`productivityHubBadgeCount`
+  values (hoisted into shared `const`s above `activePanel` so the mobile header icons and the
+  sidebar nav item read one computation, not two). The sidebar's separate `unconfirmedCount > 0`-
+  gated weekly-confirm banner was also made unconditional (always renders, bell icon + "up to
+  date" when zero) for the same reason — it was the closest desktop equivalent to the mobile
+  header's always-visible notification bell, but only ever appeared when there was something to
+  confirm, so desktop had no bell affordance the rest of the time either. The mobile drawer
+  (`.mobile-drawer-overlay`, a separate duplicate `<nav>` for the hamburger menu) was deliberately
+  left untouched — it's mobile-only chrome, reachable only where the header icons already work.
 > **IF** a new Beta Homebase surface is added, **THEN** classify its write path against the
 > three postures above before writing a migration — do not default to "admin route" or
 > "direct client write" out of habit; the posture follows from *who legitimately produces the
@@ -3115,11 +3627,23 @@ is the drift this entry exists to prevent:
 > through `fetchMyBetaScore` — `admin_notes` is the existing admin-only precedent. **IF** the
 > header badge's "new" definition changes (a new content kind should count, or an existing one
 > shouldn't), **THEN** update `loadBetaHomebaseBadge` in `App.jsx` only — never add a second,
-> differently-shaped fetch for the same data just to feed the badge. Check:
-> `dbBetaHomebase.test.js` (client read/write shape + gating), `adminBetaHub.test.js` (server
-> auth + entity dispatch), `adminBetaReport.test.js` (the score/checklist joins the admin
-> scoresheet reads); migration 037's own verification block covers the RLS/trigger boundary —
-> no single automated test spans the JS+SQL boundary, same gap F122 already flags.
+> differently-shaped fetch for the same data just to feed the badge. **IF** a new field is ever
+> needed inside `BetaHomebase.jsx`/`ProductivityHub.jsx` that isn't already part of
+> `betaHomebaseData`/`productivityHubData`'s shape, **THEN** add it to the `Promise.all` +
+> `setBetaHomebaseData`/`setProductivityHubData` calls in `App.jsx` — do NOT add a fetch inside
+> either page component to fill the gap, that reintroduces the exact duplicate-fetch-on-every-
+> visit problem the 2026-08-11 preload change removed. **IF** the freshness contract ever needs
+> to change (e.g. someone wants live updates while the page stays open), **THEN** that's a real
+> architecture decision (polling vs. Supabase Realtime, both weighed and explicitly declined in
+> favor of refresh-on-navigation when this was built) — don't casually add a `setInterval` or a
+> realtime channel to one page component without deciding whether it belongs in `App.jsx`'s
+> single-fetch-owner effect instead. Check: `dbBetaHomebase.test.js` (client read/write shape +
+> gating), `adminBetaHub.test.js` (server auth + entity dispatch), `adminBetaReport.test.js`
+> (the score/checklist joins the admin scoresheet reads); migration 037's own verification block
+> covers the RLS/trigger boundary — no single automated test spans the JS+SQL boundary, same gap
+> F122 already flags, and no automated test covers the preload/hydration wiring itself (React
+> Compiler blind spot, same as the rest of this file's neighbors — verify with a real `vite
+> build` + browser render, not `npm run test:run` alone).
 
 **F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
 Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,
@@ -3245,6 +3769,37 @@ read," they don't belong here) and still route+render exactly as before.
 > site again, **THEN** `embedded` already defaults to `false` for that — no prop needed, just
 > don't pass `embedded` at that call site. Check: no automated test covers this page's toggle
 > wiring or the embedded/non-embedded BackBar branch — visual-only, verify by hand per method.
+
+**F128 · Cross-posting between Beta and Money Moves — a one-time copy, never a sync** —
+`ProfilePanel.jsx` (`ContentAdminDetail`'s `crossPost` prop, `handleSave`'s cross-post branch,
+`handleBulkCopy`) — **[G] — a stale field list here means the copy silently drops data, not a
+crash**
+Added 2026-08-10. Two independent write paths, both going through the SAME paired
+`saveItem`/`crossPost.saveItem` functions `UserCommunicationAdminDetail` already wires per
+method (beta_checklist↔base_checklist via Money Moves Checklist, beta_suggestion↔base_suggestion
+via Money Moves Tips — checklist never crosses to suggestion, only same-`kind` pairs):
+- **Per-item "Also post to {label}" checkbox** — on save, if checked, fires a SECOND
+  `crossPost.saveItem({ id: null, ... })` after the primary save succeeds. Always creates a
+  new row on the other side; never looks up or updates a counterpart, because none is tracked.
+- **List-view "Copy All to {label}" bulk action** — same shape, looped over every currently
+  listed item, `id: null` for each so the other table gets a fresh row per item.
+Neither path is a sync: editing or deleting an item afterward never touches its cross-posted
+copy (if any), and there is NO column recording "this row came from a cross-post of row X" —
+clicking "Copy All" a second time duplicates everything from the first click. That's a
+deliberate simplicity trade-off documented at build time, not a bug to fix reactively.
+> **IF** a new field is added to `ContentAdminDetail`'s `draft` state (beyond
+> title/body/published/employerPreset), **THEN** add it to BOTH the primary `saveItem(...)`
+> call AND the cross-post `crossPost.saveItem(...)` call in `handleSave`, AND to
+> `handleBulkCopy`'s per-item payload — three call sites, easy to update one and miss the
+> other two, and the failure mode is silent (the cross-posted copy just lacks the field,
+> nothing errors). **IF** de-duplication or a real link between cross-posted rows is ever
+> wanted, **THEN** that needs a new column (e.g. `copied_from_id`) on both `beta_content_items`
+> and `base_content_items` — don't bolt on ad-hoc "skip if title matches" heuristics, title
+> collisions are legitimate (an admin might deliberately reuse a title). Check: no automated
+> test covers this — `adminBetaHub.test.js`/`dbBetaHomebase.test.js`/
+> `dbBaseProductivityHub.test.js` cover `saveBetaContentItem`/`saveBaseContentItem` individually,
+> but nothing exercises `ContentAdminDetail`'s orchestration of calling both; verify by hand
+> (check the box, confirm the item appears in both methods' lists).
 
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
@@ -3469,9 +4024,13 @@ scoping holds).
 > spares the active chat, resume-from-history, and delete.
 
 **F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
-(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `aiContext.js`
-(`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
-`RESUME_REVIEW_SYSTEM_PROMPT`), migration `032_add_resume_profile.sql` — **[L/G]**
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx` (mounted in both
+`NewJobSeasonHomePanel.jsx`, gated, and `ProfilePanel.jsx`'s `PreferencesDetail`, ungated — see
+the "second mount site" note below), `lib/resumeFile.js` (v2),
+`aiContext.js` (`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
+`RESUME_REVIEW_SYSTEM_PROMPT`), migrations `036_add_resume_profile.sql` (this entry previously
+cited `032` — corrected 2026-08-11; `032` is `changelog_entries`, unrelated) and
+`041_add_resume_profile_storage.sql` (v2) — **[L/G]**
 Built 2026-07-25. First real occupants of the "sections 4+" admin/tester/investor-only tier the
 doc comments in `entitlements.js` have described since the Ask Coach/Net Worth gate split — both
 gate **client-side** on `canAccessAiFeatures({isAdmin, isTester, isInvestor})`, the narrow gate
@@ -3500,6 +4059,38 @@ that table's check constraint by the same migration) via the existing `saveCoach
 new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
 scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
 system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+
+**v2 update, 2026-08-11 (§2.E1 v2) — `resume_profile` now also holds file metadata, and a
+Storage bucket entered the picture.** Migration `041_add_resume_profile_storage.sql` added
+`storage_path`/`original_filename`/`mime_type`/`file_size_bytes` columns and the app's first-ever
+Supabase Storage bucket (`resumes`, private, own-folder RLS keyed on the path's `<user_id>/...`
+prefix — a genuinely new RLS mechanism, not the row-level `auth.uid() = user_id` pattern every
+other table here uses, since Storage policies can't reference `resume_profile` directly).
+`db.js` gained three Storage-facing functions — `uploadResumeFile`/`getResumeFileUrl`/
+`deleteResumeFile` — alongside `loadResumeProfile`/`saveResumeProfile`, both extended to
+read/write the new columns. `lib/resumeFile.js` (new file) does client-side size validation +
+best-effort text extraction (pdfjs-dist for PDF, mammoth for DOCX, plain read for `.txt`, both
+libraries dynamically imported so a paste-only user never loads either). **`saveResumeProfile`'s
+partial-upsert contract is the load-bearing detail here:** file-metadata columns are only written
+when the caller's payload object contains that key at all — a plain text/target-role edit (v1's
+existing call shape, still used verbatim by the paste textarea and target-role field) omits the
+keys entirely, so Postgres upsert leaves a previously uploaded file's metadata untouched instead
+of nulling it out on every keystroke-triggered save. Removing a file explicitly passes
+`{ storagePath: null, ... }` to distinguish "clear this" from "don't touch this."
+
+**Second mount site, 2026-08-11 — `ProfilePanel.jsx`'s `PreferencesDetail`, deliberately
+*outside* the `canAccessAiFeatures` gate.** Résumé storage (upload/paste/view/remove) is now also
+reachable from App Preferences → the Résumé row directly under Freedom Allowance, for *every*
+employed user — not just admin/tester/investor, and not gated on `newJobSeasonMode` either, since
+the whole point is letting a currently-employed user save a résumé without faking a job loss to
+reach `NewJobSeasonHomePanel`. This is intentionally **not** a second copy of F124's
+`canAccessAiFeatures` gate lifted onto a new surface — it's the same `ResumeReviewCard.jsx`
+component reused with two new props (`showReview={false}` hides the target-role field/Get
+Skill-Gap Review button/review output; `embedded={true}` drops the outer `<SH>` heading) so the
+AI-gated skill-gap review and the ungated file storage stay one component with one save path
+instead of forking into a duplicate. `onProfileChange` (new prop) reports `{ hasFile, filename,
+hasText }` back up after any save so `PreferencesDetail`'s own collapsed-row summary ("Saved —
+resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetching the profile.
 > **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
 > decision (`coach-entry-points.md`, 2026-07-25) is **paid-only for everyone else, not
 > trial-included** — a real post-card-charge subscription (`entitlement.state === "active"`) for
@@ -3518,7 +4109,26 @@ system yet, the same stage `AskCoachPanel` was in before F123 landed persistence
 > and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
 > this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
 > `ResumeReviewCard.test.jsx`, `newJobSeasonFlow.test.jsx`'s gate-verification block (confirms a real
-> trial entitlement, not just admin/tester, is correctly refused).
+> trial entitlement, not just admin/tester, is correctly refused). **IF** `ResumeReviewCard.jsx`
+> is edited, **THEN** it now has two mount sites with opposite gating — `NewJobSeasonHomePanel`
+> (behind `canAccessAiFeatures`, `showReview` defaults true) and `ProfilePanel`'s Preferences row
+> (ungated, `showReview={false}`) — verify a change doesn't leak the AI review UI into the ungated
+> site (e.g. `showReview`'s default silently flipping, or new review-only markup added outside the
+> `{showReview && (...)}` block) or hide storage-only functionality from the New Job Season site.
+> `ProfilePanel.test.jsx`'s Résumé-row block asserts "Target role"/"Get Skill-Gap Review" are
+> absent there specifically. **IF** `saveResumeProfile`'s
+> row-building loop (the `RESUME_FILE_META_COLUMNS` list in `db.js`) is touched, **THEN** verify
+> the "key omitted vs. key explicitly null" distinction still holds — a regression here nulls out
+> every user's uploaded résumé file the next time they edit the target-role field, silently, with
+> no error. **IF** §2.E1 v3's structured-extraction pass lands (`resume_profile.structured_sections`
+> or similar), **THEN** it's a new column on the same row, following the same partial-upsert
+> contract — do not let it ride the always-written base-field block by mistake. **IF** a second
+> feature ever needs Storage (§2.G's forward note), **THEN** check whether the `resumes` bucket's
+> own-folder RLS shape (`(storage.foldername(name))[1] = auth.uid()::text`) can be reused before
+> standing up a second bucket/policy set from scratch — this is the first one in the app, so
+> there's no established alternative pattern to diverge from yet. Check:
+> `dbResumeProfile.test.js`'s partial-upsert block, `resumeFile.test.js`'s extraction-dispatch
+> cases, `ResumeReviewCard.test.jsx`'s v2 file-upload block.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
@@ -3542,7 +4152,7 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 | `buildJobHuntContext`'s source functions (F124) — `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `NewJobSeasonHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
-| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral` | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either | D4 |
+| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` in `NewJobSeasonHomePanel` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral`; does **not** apply to `ResumeReviewCard`'s second mount site in `ProfilePanel`'s Preferences row, which is deliberately ungated storage-only (`showReview={false}`) | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either at the New Job Season site; `ProfilePanel.test.jsx`'s Résumé-row block confirms the Preferences site renders for any account, with no review UI | D4 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
 

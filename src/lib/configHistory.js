@@ -15,6 +15,7 @@ export const HISTORY_SENSITIVE_FIELDS = [
   // Pay structure
   "baseRate", "annualSalary", "shiftHours", "diffRate", "nightDiffRate",
   "nightDiffEnabled", "otThreshold", "otMultiplier", "commissionMonthly",
+  "tipsOrCommissionEnabled", "tipsOrCommissionLabel", "tipsCommissionOnlyPosition",
   // Schedule
   "maxWeeklyHours", "customWeeklyHours", "customWeeklyHoursLong",
   "customWeeklyHoursShort", "scheduleIsVariable", "userPaySchedule",
@@ -32,10 +33,10 @@ export const HISTORY_SENSITIVE_FIELDS = [
   "otherDeductions", "k401Rate", "k401MatchRate", "k401StartDate",
   "benefitsStartDate",
   // Attendance / PTO / bucket
-  "attendanceBucketEnabled", "attendanceWarnThreshold",
-  "attendanceTerminateThreshold", "attendanceIncrement", "ptoEnabled",
-  "ptoAccrualMethod", "ptoAccrualRate", "ptoCap", "bucketStartBalance",
-  "bucketCap", "bucketPayoutRate",
+  "attendanceBucketEnabled", "attendanceUnit", "attendanceWarnThreshold",
+  "attendanceTerminateThreshold", "attendanceCurrentBalance", "attendanceIncrement",
+  "ptoEnabled", "ptoAccrualMethod", "ptoAccrualRate", "ptoCurrentBalance", "ptoCap",
+  "bucketStartBalance", "bucketCap", "bucketPayoutRate",
   // Freedom Allowance / risk posture
   "freedomAllowanceEnabled", "freedomAllowance",
   // Job loss (jobApplications deliberately excluded — already its own log)

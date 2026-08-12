@@ -15,7 +15,6 @@ import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
-import { SetupWizard } from "./components/SetupWizard.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -140,6 +139,11 @@ const BOTTOM_NAV = [
   },
 ];
 
+// key -> icon lookup, shared so the hamburger drawer's nav items can reuse
+// the exact same icons as BOTTOM_NAV instead of a second icon set drifting
+// out of sync with it.
+const NAV_ICONS = Object.fromEntries(BOTTOM_NAV.map(i => [i.key, i.icon]));
+
 // §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
@@ -159,27 +163,64 @@ function deriveCoachChatsMeta(chats) {
   };
 }
 
-function SidebarNavItem({ item, active, onClick }) {
+// `badge`/`badgeColor` (added 2026-08-12) — desktop-sidebar counterpart to
+// the small colored count bubble the mobile header's icon buttons already
+// show (Beta Homebase/Money Moves). Renders as a flex row instead of the
+// old block-level label so the count can sit flush right without wrapping;
+// `minWidth: 0` + `textOverflow: ellipsis` on the label guards against the
+// 190px sidebar clipping a long label instead of silently overflowing it.
+function SidebarNavItem({ item, active, onClick, badge, badgeColor }) {
   return (
     <Pressable
       onClick={onClick}
       className="text-xs" style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
         width: "100%",
         textAlign: "left",
-        padding: "14px 20px",
+        padding: "13px 20px 13px 17px",
+        margin: "2px 8px 2px 0",
         letterSpacing: "2px",
         textTransform: "uppercase",
-       
-        background: active ? "var(--color-bg-surface)" : "transparent",
+        background: active ? "rgba(0,200,150,0.12)" : "transparent",
         color: active ? "var(--color-teal)" : "var(--color-text-primary)",
-        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
+        borderLeft: active ? "3px solid var(--color-accent-primary)" : "3px solid transparent",
+        borderRadius: active ? "0 12px 12px 0" : "0 12px 12px 0",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.15s",
+        transition: "background 0.15s, color 0.15s",
       }}
     >
-      {item.label}
+      <span style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+        {item.icon && (
+          <span style={{ display: "flex", flexShrink: 0, color: active ? "var(--color-teal)" : "var(--color-text-secondary)", transition: "color 0.15s" }}>
+            {item.icon}
+          </span>
+        )}
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+      </span>
+      {badge > 0 && (
+        <span className="text-2xs" style={{
+          flexShrink: 0,
+          background: badgeColor ?? "var(--color-green)",
+          color: "var(--color-bg-base)",
+          borderRadius: "50%",
+          minWidth: "16px",
+          height: "16px",
+          padding: "0 4px",
+          fontFamily: "var(--font-sans)",
+          fontWeight: "bold",
+          letterSpacing: "normal",
+          textTransform: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          {badge}
+        </span>
+      )}
     </Pressable>
   );
 }
@@ -362,20 +403,14 @@ export default function App() {
   const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
-  // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
-  // Allows the wizard to stay mounted during exit animation, then unmount after.
-  const [wizardExiting, setWizardExiting] = useState(false);
-  // Ad-Lib Wizard preview (admin-only, TODO: experimental split-test) — toggled
-  // from the Admin Tools panel, never reachable by a real user. adlibHandoff
-  // carries the pilot's collected answers + which real STEP_DEFS id to resume
-  // at once the ad-lib pages are done; kept separate from `config` so nothing
-  // is written/autosaved until the real wizard's own onComplete actually fires.
-  const [adlibPreviewOpen, setAdlibPreviewOpen] = useState(false);
-  const [adlibHandoff, setAdlibHandoff] = useState(null);
-  // Set only when Back is hit on the real wizard's first handed-off step — reopens
-  // SetupWizardAdlib pre-filled with the in-progress answers instead of blank, so the
-  // admin lands back on the ad-lib page they left, not this component's own view of it.
-  const [adlibResumeData, setAdlibResumeData] = useState(null);
+  // SetupWizardAdlib is now the real production wizard for every path — first-run
+  // (employed and jobless) and every life-event re-entry (see its own header comment +
+  // CLAUDE.md's SetupWizardAdlib.jsx section) — mounted below whenever `wizardEntry`
+  // is `false` or a life-event string. The former jobless-mini-flow hand-off into the
+  // real SetupWizard (`adlibHandoff`/`adlibResumeData` state, `onHandoff`/
+  // `onBackBeforeStart` props) was removed once the jobless mini-flow was ported to
+  // three native ad-lib pages (drift-app-warden §7 F141) — SetupWizardAdlib now owns
+  // that path start to finish, so nothing hands off to a second component anymore.
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -405,6 +440,16 @@ export default function App() {
   // — this app has neither anywhere else, so the badge is (re)computed on
   // login and whenever the panel opens/closes, not polled.
   const [betaHomebaseBadge, setBetaHomebaseBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+  // Preloaded page data (added 2026-08-11) — the SAME fetch this effect
+  // already ran for the badge now also caches the full result here, so
+  // BetaHomebase.jsx never has to fetch on its own mount: it just renders
+  // straight from this prop. null = not fetched yet (page falls back to its
+  // own "Loading…" state for the rare case someone taps the icon before
+  // this resolves). Freshness contract: "refresh on return to the page,"
+  // not live-while-open — this state only changes when the effect below
+  // re-fires, which only happens on a currentView change (see that effect's
+  // own comment), never on a timer/subscription while already mounted.
+  const [betaHomebaseData, setBetaHomebaseData] = useState(null);
   const isTrackedTester = isTrackedBetaTester({ isTester, betaCodeUsed });
 
   const loadBetaHomebaseBadge = useCallback(async () => {
@@ -414,10 +459,11 @@ export default function App() {
       fetchMyChecklistCompletions(),
       fetchBetaSuggestions(),
       fetchMyBetaScore(),
-      fetchPublishedChangelogEntries(5),
+      fetchPublishedChangelogEntries(6), // newest + second-newest shown inline, up to 4 more in "View More"
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+    setBetaHomebaseData({ checklistItems: items, completedIds, suggestions, score: myScore, changelogEntries: changelog });
 
     const lastViewedKey = `betaHomebaseLastViewedAt:${authedUser.id}`;
     let lastViewedAt = null;
@@ -458,6 +504,8 @@ export default function App() {
   // count-only vs. red/plus-new-updates badge logic, own localStorage key
   // namespace, no scoring signal to check (base users have none).
   const [productivityHubBadge, setProductivityHubBadge] = useState({ uncheckedCount: 0, newCount: 0 });
+  // Preloaded page data — same contract as betaHomebaseData above.
+  const [productivityHubData, setProductivityHubData] = useState(null);
 
   const loadProductivityHubBadge = useCallback(async () => {
     if (isTrackedTester || !authedUser?.id) return;
@@ -465,10 +513,11 @@ export default function App() {
       fetchBaseChecklistItems(),
       fetchMyBaseChecklistCompletions(),
       fetchBaseSuggestions(),
-      fetchPublishedChangelogEntries(5),
+      fetchPublishedChangelogEntries(6), // newest + second-newest shown inline, up to 4 more in "View More"
     ]);
     const completedIds = new Set(completions);
     const uncheckedCount = items.filter(i => !completedIds.has(i.id)).length;
+    setProductivityHubData({ checklistItems: items, completedIds, suggestions, changelogEntries: changelog });
 
     const lastViewedKey = `productivityHubLastViewedAt:${authedUser.id}`;
     let lastViewedAt = null;
@@ -553,14 +602,19 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
 
-  // Beta Homebase / Money Moves badges — (re)computed on every nav change,
-  // not just on login. Covers both directions: arriving (harmless refetch,
-  // goToBetaHomebase/goToProductivityHub already optimistically cleared
-  // newCount) and — the case that actually needs it — LEAVING, since a
-  // tester may have toggled checklist items while on the page and that
-  // state lives inside BetaHomebase.jsx/ProductivityHub.jsx, not here.
-  // Effects fire on mount regardless of deps, so this alone also covers the
-  // original login-time load — no separate mount-only effect needed.
+  // Beta Homebase / Money Moves badges AND page-data preload (2026-08-11) —
+  // (re)computed on every nav change, not just on login. Effects fire on
+  // mount regardless of deps, so the very first firing (currentView still
+  // "home" right after login) is what actually delivers the "preload
+  // starts as soon as the home screen mounts" behavior — by the time
+  // someone taps the icon, betaHomebaseData/productivityHubData are
+  // typically already populated and the page renders with no spinner.
+  // Every subsequent nav change re-fires too, which covers both directions:
+  // arriving (re-fetch is what makes "refresh on return to the page" true —
+  // this is the ONLY freshness mechanism, deliberately no polling/realtime
+  // while the page stays mounted, see betaHomebaseData's own comment) and
+  // leaving (a tester may have toggled checklist items while on the page,
+  // resyncing the badge's unchecked count and the cache in one pass).
   useEffect(() => {
     loadBetaHomebaseBadge();
     loadProductivityHubBadge();
@@ -1796,14 +1850,16 @@ export default function App() {
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SetupWizard exit animation — triggers fold-lift exit, waits 180ms, then unmounts
+  // Closes whichever wizard mount is open. Historically this staged a 180ms
+  // fold-lift exit (`wizardExiting`) before unmounting, matching real
+  // SetupWizard.jsx's own `isExiting`-driven exit animation — but SetupWizard.jsx
+  // is no longer mounted anywhere (F141: the jobless mini-flow it was kept
+  // around for went native), and SetupWizardAdlib has no exit-animation prop of
+  // its own to stage, so the delay had nothing left to wait for. Removed along
+  // with the now-fully-dead `wizardExiting`/`setWizardExiting` state.
   // ─────────────────────────────────────────────────────────────────────────────
   function closeWizardWithAnimation() {
-    setWizardExiting(true);
-    setTimeout(() => {
-      setWizardEntry(null);
-      setWizardExiting(false);
-    }, 180);
+    setWizardEntry(null);
   }
 
   // Ask Coach exit animation — same fold-lift-out timing/pattern as the
@@ -1886,6 +1942,14 @@ export default function App() {
       // re-employed via the wizard. Job application log stays as
       // user history.
       returnToWorkDate: null,
+      // Gig/odd-job income logged for *this* job-loss episode's runway
+      // (sumJobHuntIncome, jobLossRunway.js) has no meaning once it's over —
+      // unlike jobApplications, this isn't a record worth keeping across a
+      // later, separate occurrence of New Job Season. Without this reset it
+      // sat invisible (NewJobSeasonHomePanel only mounts while
+      // newJobSeasonMode is true) until the *next* job loss, then reappeared
+      // and got summed into a runway it has nothing to do with.
+      jobHuntIncomeLog: [],
     }));
     setWizardEntry("structure_change");
   }
@@ -1965,6 +2029,21 @@ export default function App() {
   // here, not an unconditional bypass; that asymmetry is now closed.
   const paywallBypassed = isAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
+
+  // Beta Homebase / Money Moves badge count+color — single source shared by
+  // the mobile header's icon buttons AND the desktop sidebar's nav item
+  // (added 2026-08-12; the desktop sidebar previously had no entry point to
+  // either page at all — see SidebarNavItem usage below). Same red/green
+  // convention both places: red once anything "new" (changelog/suggestion/
+  // score) has landed since last opened, green for a plain unchecked count.
+  const betaHomebaseBadgeCount = betaHomebaseBadge.newCount > 0
+    ? betaHomebaseBadge.newCount + betaHomebaseBadge.uncheckedCount
+    : betaHomebaseBadge.uncheckedCount;
+  const betaHomebaseBadgeColor = betaHomebaseBadge.newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+  const productivityHubBadgeCount = productivityHubBadge.newCount > 0
+    ? productivityHubBadge.newCount + productivityHubBadge.uncheckedCount
+    : productivityHubBadge.uncheckedCount;
+  const productivityHubBadgeColor = productivityHubBadge.newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
 
   // Free trial breakdown — shown once ahead of first-run SetupWizard entry,
   // only for a fresh signup (wizardEntry===false, never a life-event
@@ -2124,13 +2203,20 @@ export default function App() {
         subscription={subscription}
       />}
       {currentView === "betaHomebase" && isTrackedTester && (
-        <BetaHomebase isTester={isTester} betaCodeUsed={betaCodeUsed} />
+        <BetaHomebase isTester={isTester} betaCodeUsed={betaCodeUsed} preloadedData={betaHomebaseData} />
       )}
       {currentView === "moneyMoves" && !isTrackedTester && (
-        <ProductivityHub />
+        <ProductivityHub preloadedData={productivityHubData} />
       )}
     </>
   );
+
+  // Every wizardEntry value routes to SetupWizardAdlib now (docs/drift-app-warden.md §7.3's
+  // gate matrix) — see the single SetupWizardAdlib mount further down. "structure_change" is
+  // the only life-event string ever set here directly (LifeEventMenu's "Pay Structure
+  // Changed" tile); SetupWizardAdlib's own internal life-event pivot picker (IntakePage's
+  // LifeEventPivot) is what makes "lost_job"/"changed_jobs"/"commission_job" reachable in
+  // practice — a user pivots away from "structure_change" from inside the same mount.
 
   // Post-login fade animation: render both LoginScreen (fading out) and App shell
   // (fading in) during the 340ms transition. After fade completes, render only shell.
@@ -2276,7 +2362,9 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div>
-                <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {config.employerPreset === "DHL" && (
+                  <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+                )}
                 <div className="text-base" style={{ fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
@@ -2292,14 +2380,34 @@ export default function App() {
               </svg>
             </Pressable>
           </div>
-          {currentWeekNumber && <div className="text-2xs" style={{ display: "inline-block", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
-          {/* Persistent unconfirmed-weeks badge — always visible when any past week
-              lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
-          {unconfirmedCount > 0 && (
-            <Pressable onClick={() => setConfirmDismissed(false)} className="text-2xs" style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
-              ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
-            </Pressable>
-          )}
+          {currentWeekNumber && <div className="text-2xs" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
+          {/* Notifications row — desktop counterpart to the mobile header's
+              always-visible bell icon (added 2026-08-12; previously this only
+              rendered at all once unconfirmedCount > 0, so desktop had no bell
+              affordance whatsoever the rest of the time). Same bell glyph as
+              the mobile header, same onClick (clears confirmDismissed so the
+              week-confirm modal re-opens). */}
+          <Pressable
+            onClick={() => setConfirmDismissed(false)}
+            className="text-2xs" style={{
+              marginTop: "8px", display: "flex", alignItems: "center", gap: "6px", width: "100%",
+              background: "transparent",
+              border: unconfirmedCount > 0 ? "1px solid #e8856a55" : "1px solid var(--color-border-subtle)",
+              borderRadius: "3px",
+              color: unconfirmedCount > 0 ? "var(--color-deduction)" : "var(--color-text-secondary)",
+              padding: "5px 8px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left",
+            }}
+            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? "weeks" : "pay periods"} to confirm` : "Notifications"}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {unconfirmedCount > 0
+                ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm`
+                : "Notifications — up to date"}
+            </span>
+          </Pressable>
           {isAdmin && tempLockDate && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -2321,6 +2429,30 @@ export default function App() {
           {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Beta Tester Homebase / Money Moves — desktop sidebar entry
+              point (added 2026-08-12). Both pages already existed and were
+              reachable via the mobile header's icon buttons, but the desktop
+              sidebar never got a matching nav item, so desktop users had no
+              way to reach either page at all. Same mutual-exclusivity and
+              badge convention as the mobile header icons (shared
+              betaHomebaseBadgeCount/productivityHubBadgeCount above). ── */}
+          {isTrackedTester ? (
+            <SidebarNavItem
+              item={{ key: "betaHomebase", label: "Beta Homebase" }}
+              active={currentView === "betaHomebase"}
+              onClick={goToBetaHomebase}
+              badge={betaHomebaseBadgeCount}
+              badgeColor={betaHomebaseBadgeColor}
+            />
+          ) : (
+            <SidebarNavItem
+              item={{ key: "moneyMoves", label: "Money Moves" }}
+              active={currentView === "moneyMoves"}
+              onClick={goToProductivityHub}
+              badge={productivityHubBadgeCount}
+              badgeColor={productivityHubBadgeColor}
+            />
+          )}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
@@ -2405,15 +2537,6 @@ export default function App() {
                   disabled={reopenableWeekIdx == null}
                   className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
                 >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
-              </div>
-
-              {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
-              <div style={{ padding: "0 20px 10px" }}>
-                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
-                <button
-                  onClick={() => setAdlibPreviewOpen(true)}
-                  className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
-                >Preview Fill-In-The-Blank Pilot</button>
               </div>
 
               {/* Config Raw View */}
@@ -2632,27 +2755,25 @@ export default function App() {
           </Pressable>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-                <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
-                {isAdmin && tempLockDate && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
-                      {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
-                      aria-label="Clear lock date"
-                    >×</Pressable>
-                  </div>
-                )}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Brand title — deliberately bigger/heavier than the .text-* body scale
+                (which tops out at 14px via .text-md) to read as an app title, not
+                a label. Same weight/letter-spacing tier as the display-font headings
+                (see index.css's font-weight:900 heading tier). */}
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "19px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1, flexShrink: 0 }}>A:Fin</div>
+            {isAdmin && tempLockDate && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                  {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <Pressable
+                  onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                  className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
+                  aria-label="Clear lock date"
+                >×</Pressable>
               </div>
-              <div className="text-md" style={{ fontWeight: "bold" }}>Authority Finance</div>
-            </div>
+            )}
           </div>
 
           {/* ── Beta Tester Homebase — tracked beta testers only, sits directly
@@ -2663,53 +2784,48 @@ export default function App() {
               unchecked checklist items + new changelog/suggestion/score
               updates since last opened — same red badge style as the
               check-in bell just to its right. ── */}
-          {isTrackedTester && (() => {
-            const { uncheckedCount, newCount } = betaHomebaseBadge;
-            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
-            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
-            return (
-              <Pressable
-                onClick={goToBetaHomebase}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "betaHomebase" ? "var(--color-teal)" : "var(--color-text-primary)"),
-                  cursor: "pointer",
-                  width: "44px",
-                  height: "44px",
+          {isTrackedTester && (
+            <Pressable
+              onClick={goToBetaHomebase}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: betaHomebaseBadge.newCount > 0 ? "var(--color-deduction)" : (currentView === "betaHomebase" ? "var(--color-teal)" : "var(--color-text-primary)"),
+                cursor: "pointer",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                position: "relative",
+              }}
+              aria-label={betaHomebaseBadgeCount > 0 ? `Beta Tester Homebase — ${betaHomebaseBadgeCount} ${betaHomebaseBadge.newCount > 0 ? "new" : "to do"}` : "Beta Tester Homebase"}
+            >
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {betaHomebaseBadgeCount > 0 && (
+                <span className="text-2xs" style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  background: betaHomebaseBadgeColor,
+                  color: "var(--color-bg-base)",
+                  borderRadius: "50%",
+                  width: "16px",
+                  height: "16px",
+                  fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  position: "relative",
-                }}
-                aria-label={badgeCount > 0 ? `Beta Tester Homebase — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Beta Tester Homebase"}
-              >
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 11l3 3L22 4" />
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-                {badgeCount > 0 && (
-                  <span className="text-2xs" style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    background: badgeColor,
-                    color: "var(--color-bg-base)",
-                    borderRadius: "50%",
-                    width: "16px",
-                    height: "16px",
-                    fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {badgeCount}
-                  </span>
-                )}
-              </Pressable>
-            );
-          })()}
+                }}>
+                  {betaHomebaseBadgeCount}
+                </span>
+              )}
+            </Pressable>
+          )}
 
           {/* ── Money Moves (Productivity Hub) — every signed-in user who ISN'T
               a tracked beta tester (docs: 039_add_base_productivity_hub.sql).
@@ -2718,52 +2834,47 @@ export default function App() {
               them. Same green/red badge convention, distinct icon (lightning
               bolt, not the beta checkmark) so the two are never mistaken for
               each other at a glance. ── */}
-          {!isTrackedTester && (() => {
-            const { uncheckedCount, newCount } = productivityHubBadge;
-            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
-            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
-            return (
-              <Pressable
-                onClick={goToProductivityHub}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "moneyMoves" ? "var(--color-teal)" : "var(--color-text-primary)"),
-                  cursor: "pointer",
-                  width: "44px",
-                  height: "44px",
+          {!isTrackedTester && (
+            <Pressable
+              onClick={goToProductivityHub}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: productivityHubBadge.newCount > 0 ? "var(--color-deduction)" : (currentView === "moneyMoves" ? "var(--color-teal)" : "var(--color-text-primary)"),
+                cursor: "pointer",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                position: "relative",
+              }}
+              aria-label={productivityHubBadgeCount > 0 ? `Money Moves — ${productivityHubBadgeCount} ${productivityHubBadge.newCount > 0 ? "new" : "to do"}` : "Money Moves"}
+            >
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              {productivityHubBadgeCount > 0 && (
+                <span className="text-2xs" style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  background: productivityHubBadgeColor,
+                  color: "var(--color-bg-base)",
+                  borderRadius: "50%",
+                  width: "16px",
+                  height: "16px",
+                  fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  position: "relative",
-                }}
-                aria-label={badgeCount > 0 ? `Money Moves — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Money Moves"}
-              >
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-                {badgeCount > 0 && (
-                  <span className="text-2xs" style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    background: badgeColor,
-                    color: "var(--color-bg-base)",
-                    borderRadius: "50%",
-                    width: "16px",
-                    height: "16px",
-                    fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {badgeCount}
-                  </span>
-                )}
-              </Pressable>
-            );
-          })()}
+                }}>
+                  {productivityHubBadgeCount}
+                </span>
+              )}
+            </Pressable>
+          )}
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
           <Pressable
@@ -3034,7 +3145,11 @@ export default function App() {
         }}
       />
 
-      {/* ── Mobile drawer (slide-in sidebar) ── */}
+      {/* ── Mobile drawer (slide-in sidebar) ──
+          Revamp (subtle): gradient background + soft outward shadow instead of a
+          flat surface color + hardcoded #2a2a2a border, so the drawer reads as a
+          raised panel like the rest of the Flow shell (LiquidGlass bottom nav,
+          modals) instead of the oldest untouched surface in the app. */}
       <div
         className={`mobile-drawer-overlay drawer-slide${drawerOpen ? " open" : ""}`}
         style={{
@@ -3043,8 +3158,9 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid #2a2a2a",
+          background: "var(--color-bg-gradient)",
+          borderRight: "1px solid var(--color-border-accent)",
+          boxShadow: "8px 0 32px rgba(0, 0, 0, 0.5)",
           zIndex: 50,
           display: "flex",
           flexDirection: "column",
@@ -3053,7 +3169,12 @@ export default function App() {
         {/* Drawer header */}
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            {/* Tagline only exists for an employer-preset account (today, only
+                DHL) — a base user has no employer badge to show at all, so no
+                "Finance" placeholder fallback. */}
+            {config.employerPreset === "DHL" && (
+              <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+            )}
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -3078,18 +3199,20 @@ export default function App() {
           </div>
         </div>
 
-        {/* Drawer nav items */}
+        {/* Drawer nav items — icons mirror BOTTOM_NAV via NAV_ICONS so the
+            hamburger menu and the floating bottom nav never drift apart. */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
-          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
+          <SidebarNavItem item={{ key: "home", label: "Home", icon: NAV_ICONS.home }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {effectiveNavItems.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
+            <SidebarNavItem key={item.key} item={{ ...item, icon: NAV_ICONS[item.key] }} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
               onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               className="text-xs" style={{
-                display: "block", width: "100%", textAlign: "left",
+                display: "flex", alignItems: "center", gap: "10px",
+                width: "100%", textAlign: "left",
                 padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
                 color: "var(--color-text-primary)",
@@ -3097,6 +3220,15 @@ export default function App() {
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
+              {/* Gavel — signals a deliberate, consequential change (job loss,
+                  new job, pay-structure change), distinct from routine nav icons. */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+                <path d="m16 16 6-6" />
+                <path d="m8 8 6-6" />
+                <path d="m9 7 8 8" />
+                <path d="m21 11-8-8" />
+              </svg>
               Life Events
             </Pressable>
             {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
@@ -3249,15 +3381,6 @@ export default function App() {
                 disabled={reopenableWeekIdx == null}
                 className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
               >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
-            </div>
-
-            {/* Ad-Lib Wizard preview (experimental split-test, admin-only) */}
-            <div style={{ marginTop: "12px" }}>
-              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Ad-Lib Wizard</div>
-              <button
-                onClick={() => setAdlibPreviewOpen(true)}
-                className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: "pointer" }}
-              >Preview Fill-In-The-Blank Pilot</button>
             </div>
 
             {/* Config Raw View */}
@@ -3419,9 +3542,28 @@ export default function App() {
           </div>
         )}
 
-        {/* Active section indicator at bottom */}
-        <div className="text-xs" style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+        {/* Drawer footer — week/pay-period counter (moved here from the mobile
+            header/nav bar), then the active-section indicator below it. */}
+        <div style={{ borderTop: "1px solid #1e1e1e" }}>
+          {currentWeekNumber && (
+            <div style={{ padding: "14px 20px 0" }}>
+              <div className="text-2xs" style={{
+                display: "inline-block",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                padding: "3px 10px",
+                background: "rgba(0,200,150,0.14)",
+                color: "var(--color-green)",
+                border: "1px solid rgba(0,200,150,0.32)",
+                borderRadius: "10px",
+              }}>
+                {currentWeekLabel}
+              </div>
+            </div>
+          )}
+          <div className="text-xs" style={{ padding: "16px 20px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
+            Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+          </div>
         </div>
       </div>
 
@@ -3953,73 +4095,46 @@ export default function App() {
           savePersistedStateNow({ config: nextConfig });
         }}
       />
-      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ──
-           config/initialStepId fall back to adlibHandoff when the Ad-Lib Wizard preview
-           (admin-only) handed off into this same mount — see adlibHandoff's own comment.
-           adlibHandoff being set also means this run is MOCK ONLY: onComplete below skips
-           handleWizardComplete entirely (no setConfig, no savePersistedStateNow) so admins
-           can click all the way through to tune the feel with zero risk to real account
-           data, and onCancel stays available the whole way through instead of the normal
-           first-run "no cancel button" rule. */}
-      {(wizardEntry !== null || wizardExiting) && (
-        <SetupWizard
-          config={adlibHandoff?.config ?? config}
-          initialStepId={adlibHandoff?.initialStepId ?? null}
-          onBackBeforeStart={
-            adlibHandoff
-              ? (inProgressFormData) => {
-                  setAdlibHandoff(null);
-                  setAdlibResumeData(inProgressFormData);
-                  setAdlibPreviewOpen(true);
-                  closeWizardWithAnimation();
-                }
-              : undefined
-          }
-          onComplete={(mergedConfig) => {
-            if (adlibHandoff) { setAdlibHandoff(null); closeWizardWithAnimation(); return; }
-            handleWizardComplete(mergedConfig);
-          }}
-          onCancel={
-            adlibHandoff
-              ? () => { setAdlibHandoff(null); closeWizardWithAnimation(); }
-              : wizardEntry !== false
-                ? () => closeWizardWithAnimation()
-                : config.isInvestor
-                  ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
-                  // Regular first-run (non-investor, no ad-lib handoff) must stay
-                  // uncancelable — undefined here (not a no-op function) is what
-                  // makes SetupWizard omit the Cancel button entirely.
-                  : undefined
-          }
-          lifeEvent={wizardEntry === false ? null : wizardEntry}
-          isInvestor={config.isInvestor}
-          isExiting={wizardExiting}
-        />
-      )}
-      {/* ── Ad-Lib Wizard preview (admin-only experiment) — fill-in-the-blank pilot
-           covering the whole first-run flow now (Welcome through Wrap Up for an employed
-           signup); still hands off into the real wizard above for the jobless mini-flow
-           (id 10), since that's the only real-wizard territory left. A null initialStepId
-           means Wrap Up was the last ad-lib page too — nothing left to hand off to, so this
-           just closes out MOCK ONLY (no setConfig/savePersistedStateNow) without ever
-           mounting the real SetupWizard, same as a real Finish click would but without the
-           real component in between. adlibResumeData reopens this pre-filled at the
-           last-answered page when the admin hit Back on the real wizard's first handed-off
-           step (see onBackBeforeStart above, jobless-flow only now) — cleared on both Exit
-           Preview and a fresh forward hand-off so the next deliberate "Preview" click always
-           starts blank again. ── */}
-      {isAdmin && adlibPreviewOpen && (
+      {/* ── Setup wizard — SetupWizard.jsx is no longer mounted anywhere in the app. The one
+           remaining user-facing path that used to mount it (the jobless mini-flow's
+           initialStepId: 10 hand-off continuation) was ported to three native SetupWizardAdlib
+           pages (drift-app-warden §7 F141), so every wizardEntry value — first-run (false) and
+           every life-event string (structure_change, lost_job, commission_job, changed_jobs) —
+           now routes to SetupWizardAdlib below, start to finish, with nothing handing off to a
+           second component. SetupWizard.jsx itself is retained unchanged as the source
+           components (StepJoblessBenefits/StepJoblessDetails/StepJoblessWrapUp, STEP_DEFS ids
+           10-12) those native pages were ported from, and as LIFE_EVENTS/DIFF_FIELDS/
+           StructureChangeDiff's shared export home — see CLAUDE.md's SetupWizardAdlib.jsx
+           section. */}
+      {/* ── SetupWizardAdlib — the REAL production wizard for first-run onboarding (employed
+           and jobless, wizardEntry===false) AND every life-event re-entry (wizardEntry is a
+           life-event string: structure_change — the real, only entry point, LifeEventMenu's
+           "Pay Structure Changed" tile — plus lost_job/commission_job/changed_jobs, all three
+           reachable only via SetupWizardAdlib's own internal LifeEventPivot picker). See its
+           own header comment for the save path (finalizeWizardConfig → onComplete →
+           handleWizardComplete). handleWizardComplete already reads wizardEntry itself for its
+           `life_event:${wizardEntry}` configHistory source and its structure_change-only
+           branches — no change needed there for any of these values, including once
+           SetupWizardAdlib's own internal life-event pivot (LifeEventPivot, F140) changes
+           curLifeEvent away from wizardEntry: real SetupWizard.jsx's own Step0 pivot never
+           notified App.jsx of its internal lifeEvent change either, so handleWizardComplete's
+           tagging staying keyed to the original wizardEntry value (not the pivoted one) matches
+           existing, intentional behavior rather than diverging from it. */}
+      {wizardEntry !== null && (
         <SetupWizardAdlib
           config={config}
-          resumeFormData={adlibResumeData}
-          onCancel={() => { setAdlibPreviewOpen(false); setAdlibResumeData(null); }}
-          onHandoff={(mergedFormData, initialStepId) => {
-            setAdlibPreviewOpen(false);
-            setAdlibResumeData(null);
-            if (initialStepId == null) return;
-            setAdlibHandoff({ config: mergedFormData, initialStepId });
-            setWizardEntry(false);
-          }}
+          lifeEvent={wizardEntry === false ? null : wizardEntry}
+          isInvestor={config.isInvestor}
+          onCancel={
+            wizardEntry !== false
+              ? () => closeWizardWithAnimation()
+              : config.isInvestor
+                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
+                // Regular first-run (non-investor) stays uncancelable — no escape hatch,
+                // matching SetupWizard's own uncancelable-first-run rule.
+                : undefined
+          }
+          onComplete={(finalConfig) => handleWizardComplete(finalConfig)}
         />
       )}
     </div>

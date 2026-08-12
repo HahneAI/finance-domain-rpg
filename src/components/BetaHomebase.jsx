@@ -1,14 +1,7 @@
-import { useEffect, useState } from "react";
-import { PanelHero, SH } from "./ui.jsx";
-import { ChangelogBody } from "./ChangelogModal.jsx";
-import {
-  fetchBetaChecklistItems,
-  fetchMyChecklistCompletions,
-  toggleBetaChecklistItem,
-  fetchBetaSuggestions,
-  fetchMyBetaScore,
-  fetchPublishedChangelogEntries,
-} from "../lib/db.js";
+import { useState } from "react";
+import { PanelHero, SH, Pressable } from "./ui.jsx";
+import { ChangelogBody, ChangelogHistoryModal } from "./ChangelogModal.jsx";
+import { toggleBetaChecklistItem, logBetaFeedback } from "../lib/db.js";
 
 // Beta Tester Homebase (docs/TODO.md §12, database/migrations/037) — one
 // destination weaving together the scoring rubric, a personal feature
@@ -27,12 +20,13 @@ import {
 // this page. (Was a fixed-position portal modal before 2026-08-09 — no
 // longer needed once this became a real navigable view.)
 //
-// ChecklistSection/SuggestionsSection/WhatsNewSection are exported for
-// ProductivityHub.jsx (the base-user "Money Moves" panel,
+// ChecklistSection/SuggestionsSection/WhatsNewSection/FeedbackSection are
+// exported for ProductivityHub.jsx (the base-user "Money Moves" panel,
 // 039_add_base_productivity_hub.sql) to reuse directly — same presentation,
 // different data source, no duplicated JSX. ScoreSection is NOT reused —
 // scoring is deliberately beta-program-specific and has no base-user
-// equivalent.
+// equivalent, which is why it's the one section pinned above this shared
+// order rather than participating in it.
 
 const RUBRIC_CATEGORIES = [
   { key: "usage_score", label: "App Usage", max: 50 },
@@ -145,57 +139,187 @@ export function SuggestionsSection({ items, title = "Suggestions From The Team" 
   );
 }
 
-export function WhatsNewSection({ entries }) {
-  if (entries.length === 0) return null;
+// Every markdown header line (#/##/### etc.) in an entry's body, in order —
+// used for the second-newest entry's collapsed-card preview below: just the
+// section headers, no paragraph text, rendered through the SAME
+// ChangelogBody/MARKDOWN_COMPONENTS path as everything else so the sizing
+// is identical to the fully-expanded view, not a smaller ad-hoc summary.
+function extractHeaderLines(markdown) {
+  if (!markdown) return [];
+  return markdown.split("\n").filter(line => /^#{1,6}\s+/.test(line.trim()));
+}
+
+function ChangelogEntryHeader({ entry }) {
+  const publishedLabel = entry.published_at
+    ? new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   return (
-    <div>
-      <SH>What's New</SH>
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {entries.map(entry => (
-          <div key={entry.id} style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px", marginBottom: "6px" }}>
-              <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
-              {entry.published_at && (
-                <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>
-                  {new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </div>
-              )}
-            </div>
-            <ChangelogBody markdown={entry.body} />
-          </div>
-        ))}
-      </div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px" }}>
+      <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+      {publishedLabel && (
+        <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{publishedLabel}</div>
+      )}
     </div>
   );
 }
 
-export function BetaHomebase({ isTester, betaCodeUsed }) {
-  const [loading, setLoading] = useState(true);
-  const [checklistItems, setChecklistItems] = useState([]);
-  const [completedIds, setCompletedIds] = useState(new Set());
-  const [suggestions, setSuggestions] = useState([]);
-  const [score, setScore] = useState(null);
-  const [changelogEntries, setChangelogEntries] = useState([]);
+// Second-newest entry — a collapsible card. Collapsed shows the title plus
+// just its sub-header lines (a skimmable outline, not the full write-up);
+// tapping it folds out the complete body in place. Same card chrome/caret
+// pattern as SetupWizard.jsx's DetailsDisclosure, for consistency with the
+// rest of the app's own collapsible-card idiom.
+function SecondNewestCard({ entry }) {
+  const [expanded, setExpanded] = useState(false);
+  const headerLines = extractHeaderLines(entry.body);
+  return (
+    <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", overflow: "hidden" }}>
+      <Pressable
+        onClick={() => setExpanded(v => !v)}
+        style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+          <ChangelogEntryHeader entry={entry} />
+          <span className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0, marginLeft: "6px" }}>{expanded ? "▾" : "▸"}</span>
+        </div>
+        {!expanded && headerLines.length > 0 && (
+          <ChangelogBody markdown={headerLines.join("\n\n")} />
+        )}
+      </Pressable>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px" }}>
+          <ChangelogBody markdown={entry.body} />
+        </div>
+      )}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchBetaChecklistItems(),
-      fetchMyChecklistCompletions(),
-      fetchBetaSuggestions(),
-      fetchMyBetaScore(),
-      fetchPublishedChangelogEntries(5),
-    ]).then(([items, completions, suggestionItems, myScore, changelog]) => {
-      if (cancelled) return;
-      setChecklistItems(items);
-      setCompletedIds(new Set(completions));
-      setSuggestions(suggestionItems);
-      setScore(myScore);
-      setChangelogEntries(changelog);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
+// entries[0] (newest) always shows in full. entries[1] (second-newest) is
+// the collapsible card above. entries[2:] never render inline — "View
+// More" opens ChangelogHistoryModal with the rest (near-full-screen, same
+// formatting throughout, no separate smaller treatment for older content).
+export function WhatsNewSection({ entries }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  if (entries.length === 0) return null;
+  const [newest, second, ...older] = entries;
+
+  return (
+    <div>
+      <SH>What's New</SH>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
+          <div style={{ marginBottom: "6px" }}>
+            <ChangelogEntryHeader entry={newest} />
+          </div>
+          <ChangelogBody markdown={newest.body} />
+        </div>
+
+        {second && <SecondNewestCard entry={second} />}
+
+        {older.length > 0 && (
+          <Pressable
+            onClick={() => setHistoryOpen(true)}
+            className="text-xs" style={{ alignSelf: "center", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "6px 14px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          >
+            View More
+          </Pressable>
+        )}
+      </div>
+
+      <ChangelogHistoryModal open={historyOpen} entries={older} onClose={() => setHistoryOpen(false)} />
+    </div>
+  );
+}
+
+// Exported so ProductivityHub.jsx can reuse it directly (added 2026-08-12,
+// moved from ProductivityHub.jsx where it originated — same "shared
+// presentation, audience-specific write function passed in" pattern as
+// ChecklistSection's onToggle). `onSubmit(note)` is the only audience-
+// specific piece: BetaHomebase passes `note => logBetaFeedback({ isTester,
+// betaCodeUsed, note })`, ProductivityHub passes `note => logBaseFeedback({ note })`.
+export function FeedbackSection({ onSubmit }) {
+  const [note, setNote] = useState("");
+  const [status, setStatus] = useState({ loading: false, error: null, success: false });
+
+  async function handleSubmit() {
+    if (!note.trim() || status.loading) return;
+    setStatus({ loading: true, error: null, success: false });
+    const result = await onSubmit(note);
+    if (result.ok) {
+      setStatus({ loading: false, error: null, success: true });
+      setNote("");
+    } else {
+      setStatus({ loading: false, error: result.error || "Couldn't submit feedback", success: false });
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: "24px" }}>
+      <SH>Send Feedback</SH>
+      {status.success ? (
+        <div className="text-base" style={{ color: "var(--color-teal)" }}>Thanks — got it.</div>
+      ) : (
+        <>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="What's working, what's not, what would help..."
+            maxLength={4000}
+            rows={3}
+            className="text-base" style={{ width: "100%", boxSizing: "border-box", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "10px 12px", color: "var(--color-text-primary)", fontFamily: "inherit", resize: "vertical", marginBottom: "10px" }}
+          />
+          {status.error && (
+            <div className="text-xs" style={{ color: "var(--color-deduction)", marginBottom: "10px" }}>{status.error}</div>
+          )}
+          <Pressable
+            onClick={handleSubmit}
+            disabled={status.loading || !note.trim()}
+            className="text-xs" style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
+          >
+            {status.loading ? "Sending…" : "Submit"}
+          </Pressable>
+        </>
+      )}
+    </div>
+  );
+}
+
+// `preloadedData` (added 2026-08-11) — App.jsx is the single fetch owner now:
+// its badge-refresh effect (fires on mount and on every nav change) already
+// runs this exact query, so this component no longer fetches on its own at
+// all. It just hydrates from the prop — { checklistItems, completedIds,
+// suggestions, score, changelogEntries } | null. null (the rare case of
+// tapping the icon before App.jsx's first fetch resolves) shows a brief
+// "Loading…" the same as before; the effect below picks up the data the
+// instant App.jsx's fetch does resolve, without this component ever issuing
+// a request of its own. See App.jsx's betaHomebaseData comment for the
+// freshness contract (refresh-on-navigation only, no polling/realtime).
+export function BetaHomebase({ isTester, betaCodeUsed, preloadedData }) {
+  // checklistItems/suggestions/score/changelogEntries are read-only display
+  // data — nothing in this component ever mutates them, so they're read
+  // straight from the prop, no local state/effect needed. completedIds is
+  // the one exception (the optimistic toggle below needs it locally
+  // mutable), hydrated from a fresh preloadedData via React's documented
+  // "adjusting state during render" pattern — a guarded setState call in
+  // the render body itself, not inside a useEffect. Deliberately NOT a
+  // useEffect: this codebase has a confirmed, production-only React
+  // Compiler miscompilation (drift-app-warden.md §12.4) triggered by
+  // setState-in-effect patterns in this exact file's neighborhood
+  // (ChangelogAdminDetail/ContentAdminDetail/BetaScoresAdminDetail all
+  // needed "use no memo" for the same class of bug) — safer not to add a
+  // new instance of the flagged shape when the render-time alternative
+  // works just as well and needs no directive at all.
+  const [hydratedFrom, setHydratedFrom] = useState(null);
+  const [completedIds, setCompletedIds] = useState(new Set());
+  if (preloadedData && preloadedData !== hydratedFrom) {
+    setHydratedFrom(preloadedData);
+    setCompletedIds(preloadedData.completedIds);
+  }
+  const loading = !preloadedData;
+  const checklistItems = preloadedData?.checklistItems ?? [];
+  const suggestions = preloadedData?.suggestions ?? [];
+  const score = preloadedData?.score ?? null;
+  const changelogEntries = preloadedData?.changelogEntries ?? [];
 
   async function handleToggle(itemId, completed) {
     // Optimistic — flip local state immediately, roll back only if the write fails.
@@ -221,7 +345,12 @@ export function BetaHomebase({ isTester, betaCodeUsed }) {
         <div className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Loading…</div>
       ) : (
         <>
+          {/* Order (2026-08-12): Score stays pinned at top — it's the one
+              beta-only section, the reason this program exists — then
+              Feedback, Checklist, Suggestions, What's New, matching
+              ProductivityHub.jsx's order below Score. */}
           <ScoreSection score={score} />
+          <FeedbackSection onSubmit={(note) => logBetaFeedback({ isTester, betaCodeUsed, note })} />
           <ChecklistSection items={checklistItems} completedIds={completedIds} onToggle={handleToggle} />
           <SuggestionsSection items={suggestions} />
           <WhatsNewSection entries={changelogEntries} />

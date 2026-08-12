@@ -208,6 +208,6 @@ export function InvestorRegister({ onRegister, onBack }) {
 
 const linkStyle = {
   background: "transparent", border: "none",
-  color: "var(--color-teal)", fontSize: "11px",
+  color: "var(--color-teal)", fontSize: "12px",
   cursor: "pointer", padding: 0, textDecoration: "underline",
 };

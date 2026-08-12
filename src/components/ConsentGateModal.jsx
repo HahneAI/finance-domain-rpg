@@ -80,6 +80,6 @@ export function ConsentGateModal({ open, onAgree, onSignOut, agreeLoading = fals
 
 const linkStyle = {
   background: "transparent", border: "none",
-  color: "var(--color-teal)", fontSize: "12px",
+  color: "var(--color-teal)", fontSize: "13px",
   cursor: "pointer", padding: 0, textDecoration: "underline",
 };

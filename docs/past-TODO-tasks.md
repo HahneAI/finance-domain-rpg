@@ -5,6 +5,117 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.3 — Ad-Lib Wizard jobless mini-flow ad-libbed, last hand-off removed (2026-08-11)
+
+*Closes the entire "wire ad-lib in as production" saga: §19.1 (field parity) → §19.2 (life-event
+re-entry) → §19.3 (this). `SetupWizardAdlib.jsx` is now the whole first-run (employed and jobless)
+and life-event-re-entry onboarding experience; `SetupWizard.jsx` is retained only as unmounted
+source/shared-export material. Drift-app-warden §7 F141.*
+
+- [x] **Three native jobless pages** — `JoblessBenefitsPage`/`JoblessDetailsPage`/
+  `JoblessWrapUpPage`, ported line-for-line from real `StepJoblessBenefits`/`StepJoblessDetails`/
+  `StepJoblessWrapUp` (`STEP_DEFS` ids 10/11/12), with matching `isJoblessBenefitsValid`/
+  `isJoblessDetailsValid`/`isJoblessWrapUpValid` gates. `computeActivePages` returns Intake + the
+  three jobless pages for the jobless gate instead of Intake-only + a hand-off.
+- [x] **Hand-off mechanism fully removed** — `onHandoff` prop, `App.jsx`'s
+  `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/`setWizardExiting` (dead once
+  `SetupWizard.jsx` stopped being mounted) all deleted; `closeWizardWithAnimation()` simplified to
+  a synchronous `setWizardEntry(null)`. `SetupWizard.jsx` is no longer mounted anywhere in
+  `App.jsx`. `initialStepId`/`onBackBeforeStart`/`resumeFormData` kept as generic, still-tested
+  wizard-navigation props even with no current caller.
+- [x] **Real latent bug found and fixed** — `IntakePage`'s employment-status select never seeded
+  `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` (only real `Step0`'s handler
+  did, which the old hand-off skipped past); ported `Step0`'s pill handler verbatim into
+  `IntakePage` once a full native completion test surfaced the gap.
+- [x] Full jobless-first-run completion test added (`SetupWizardAdlib.test.jsx`); `npm run
+  test:run` (1599 tests) and `vite build --mode production` both pass.
+- [x] `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7/§7.3, `docs/TODO.md` updated in the same
+  round.
+
+---
+
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 2: `structure_change` + `changed_jobs` (2026-08-11)
+
+- [x] **Reachability fix (the actual point of this round)** — round 1's `App.jsx` routing for
+  `wizardEntry === "lost_job" | "commission_job"` was real, correct plumbing for a state nothing
+  ever set: `LifeEventMenu.jsx` has no tile for either value, and the only real entry point,
+  `wizardEntry === "structure_change"` (the "Pay Structure Changed" tile), was still routed to
+  `SetupWizard.jsx`. Fixed by routing `wizardEntry === "structure_change"` to `SetupWizardAdlib`
+  too, and giving `SetupWizardAdlib` the internal life-event pivot picker
+  (`IntakePage`'s `LifeEventPivot`) real `SetupWizard.jsx`'s own `Step0` picker was always meant
+  to provide — `lost_job`/`changed_jobs`/`commission_job` are now reachable in practice, the same
+  way real `Step0`'s picker was designed to make them reachable
+- [x] **`LifeEventPivot`** — local `curLifeEvent` state (mirrors real `SetupWizard.jsx`'s own
+  local `lifeEvent` state, seeded from the `lifeEvent` prop); shows the real `structure_change`
+  Step0 intro copy ported verbatim (`"Update your pay structure."` + goals/expenses/logs-stay-put
+  explanation + start-date guidance) plus a "Something else changed instead?" picker beneath it —
+  the one deliberate deviation from a line-for-line Step0 port, since ad-lib has no separate first
+  "step" to show the intro on before a picker could appear; only rendered when the wizard's
+  original entry was `structure_change` (`onLifeEventChange` only threaded down in that case).
+  Every downstream page/gate (`computeActivePages`, `isXValid`, `WrapUpPage`'s diff gate, the
+  Commission Income clause) reacts to `curLifeEvent`, not the immutable `lifeEvent` prop
+- [x] **`StructureChangeDiff` + `DIFF_FIELDS` + `LIFE_EVENTS` now exported from `SetupWizard.jsx`**
+  and imported into `SetupWizardAdlib.jsx` — one source of truth on both wizards (drift-app-warden
+  §7 F7's "must never diverge" rule), not a second copy
+- [x] **`WrapUpPage` structure_change diff** — frozen `originalConfig` baseline captured once at
+  `SetupWizardAdlib` mount (`useState(() => config)`, mirrors real `useMemo(() => config, [])`),
+  threaded down and rendered via the shared `StructureChangeDiff` component, gated on
+  `curLifeEvent === "structure_change"` exactly like real `StepWrapUp`; the jobless-started
+  "no prior pay structure to diff" guard comes along for free since it's the same component
+- [x] **`changed_jobs` verified** — no changes needed beyond the shared pivot/pre-fill plumbing;
+  `computeActivePages` already returns the full 5-page set (default branch) for any lifeEvent
+  besides the jobless mini-flow/`lost_job`/`commission_job`; confirmed via `git grep changed_jobs`
+  across `SetupWizard.jsx` that nothing else is life-event-specific for this path
+- [x] **`App.jsx`** — `isAdlibLifeEvent` now also includes `"structure_change"`; `SetupWizard.jsx`
+  now only ever mounts for the jobless mini-flow's `initialStepId: 10` hand-off continuation.
+  `handleWizardComplete` needed no changes — confirmed it already reads `wizardEntry` (not a
+  pivot-aware param) for its `life_event:${wizardEntry}` tag, exactly matching real
+  `SetupWizard.jsx`'s own behavior (its internal `Step0` pivot never notified `App.jsx` either) —
+  see the session report's judgment-call note
+- [x] Tests: 5 new cases in `SetupWizardAdlib.test.jsx` — `structure_change` intro + picker
+  render, pivot to `commission_job` (page set shrinks, Commission field appears), pivot to
+  `changed_jobs` (stays 5 pages, no diff), `structure_change` completion with a real diff render,
+  `changed_jobs` direct-entry completion with no diff
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F140 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.2 (all four life-event paths now closed)
+- [x] Field housekeeping (F7) — `DIFF_FIELDS` diffed against `HISTORY_SENSITIVE_FIELDS`; every key
+  already present, no new fields introduced by the diff mechanism itself, no gaps found
+
+---
+
+## §19.2 — Ad-Lib Wizard life-event re-entry expansion, round 1: `lost_job` + `commission_job` (2026-08-11)
+
+- [x] **`SetupWizardAdlib.jsx` gains a `lifeEvent` prop** — mirrors `SetupWizard.jsx`'s own
+  contract (`null | "structure_change" | "lost_job" | "changed_jobs" | "commission_job"`); default
+  `null` preserves every existing first-run behavior unchanged
+- [x] **Shared re-entry plumbing** — `formData` pre-fills from the real config instead of
+  `BLANK_PAY_FIELDS` when `lifeEvent !== null`; employment-status question skipped entirely
+  (`isIntakeValid`/`IntakePage` gate on `lifeEvent === null`, `isEmployed` forced `true`); new
+  `computeActivePages()` helper drops Wrap Up from the page set for `lost_job`/`commission_job`
+  specifically (both commit through `finalizeWizardConfig()` at the end of Tax Rates instead);
+  jobless single-page shortcut and hand-off both explicitly re-gated on `lifeEvent === null`
+- [x] **`commission_job` Commission Income field** — ported from real Step1
+  (`SetupWizard.jsx:782–809`) into `IntakePage`, gated on `payStructureComplete`; writes the
+  pre-existing `commissionMonthly` field (already fully covered in `DEFAULT_CONFIG`/
+  `HISTORY_SENSITIVE_FIELDS`/`finance.js` — no housekeeping gap)
+- [x] **`lost_job`** verified to need no fields beyond the shared plumbing — legacy wizard route,
+  primary entry is now `NewJobSeasonEntry`
+- [x] **`App.jsx` routing** — `wizardEntry === "lost_job" | "commission_job"` now mounts
+  `SetupWizardAdlib` (cancelable, unlike first-run) instead of `SetupWizard.jsx`; `SetupWizard.jsx`'s
+  own mount condition excludes both values, including from its `wizardExiting` close-animation
+  fallback, to prevent a transient double-mount
+- [x] Tests: 4 new cases in `SetupWizardAdlib.test.jsx` (`lost_job` completion — 4 pages, no Wrap
+  Up, cancelable; `commission_job` completion incl. `commissionMonthly`; Commission Income clause
+  absent on `lost_job`; first-run behavior unchanged)
+- [x] Docs: `.claude/CLAUDE.md`, `docs/drift-app-warden.md` §7 F139 + §7.3 gate matrix "Which
+  wizard?" column, `docs/TODO.md` §19.1.B/§19.2
+- [ ] **Not done this round** — `structure_change` (needs frozen `originalConfigRef` baseline +
+  `StructureChangeDiff` summary + jobless-Back-to-Work special case + real Step0 copy ported
+  verbatim) and `changed_jobs` (full re-run, same page set as first-run) both still route to
+  `SetupWizard.jsx` — tracked in `docs/TODO.md` §19.2
+
+---
+
 ## DHL Warehouse Site (2026-08-09)
 
 - [x] **`dhlSite` field ("WAREHOUSE" | "PLANT" | null)** — Plant is the fallback for anything but
@@ -97,6 +208,151 @@ One-liner per item — see git history for full implementation detail.*
   The jobless mini-flow (Unemployment Benefits, Job Loss Details, Jobless Wrap Up) and any
   re-entry life events (changed jobs, lost job, structure change, commission job) remain
   real-wizard-only — out of scope unless requested.
+
+---
+
+## §19 — Ad-Lib Wizard production promotion (2026-08-10, partial — see docs/TODO.md §19.1)
+
+`SetupWizardAdlib.jsx` promoted from admin-only mock preview to the real production first-run
+onboarding wizard, per the §19.1 pre-production audit. Delivered this round:
+
+- [x] **Save/completion wiring (§19.1.C)** — `SetupWizard.jsx`'s `handleComplete()` normalization
+  extracted into a shared `finalizeWizardConfig()` helper (`src/lib/wizardComplete.js`); both
+  `SetupWizard.jsx` and `SetupWizardAdlib.jsx` now call it. `SetupWizardAdlib`'s employed-finish
+  path calls a new `onComplete(finalConfig)` prop, which `App.jsx` wires directly to
+  `handleWizardComplete()` — no reimplementation. Jobless mini-flow hand-off (`onHandoff`)
+  unchanged. Cancel has zero save side effects.
+- [x] **Real-wizard field rename fix** — ad-lib's Wrap Up buffer fields renamed
+  `bufferEnabled`/`paycheckBuffer` → `freedomAllowanceEnabled`/`freedomAllowance` to match the real
+  wizard's post-rebrand field names (were previously silently dropped by the real save path).
+- [x] **Entry-point & gating wiring (§19.1.D)** — `isAdmin`/`adlibPreviewOpen` gate removed;
+  `App.jsx` now mounts `SetupWizardAdlib` whenever `wizardEntry === false` and no jobless hand-off
+  is in progress; `SetupWizard.jsx` keeps every life-event re-entry and the jobless continuation.
+  `onCancel` is `undefined` for a real first-run, non-investor signup (no escape hatch); Admin
+  Tools "Ad-Lib Wizard" → Preview button removed (both copies). "Ad-Lib Preview · N of M"/"Exit
+  Preview" copy renamed to "Setup · N of M"/"Cancel".
+- [x] **`isInvestor` prop (decision 2)** — mirrors `SetupWizard.jsx` field-for-field: Welcome
+  greeting, DHL question hidden, `formData` init override; wired from `App.jsx`.
+- [x] **Deductions page Skip button** — added (`PAGES` entry `skippable: true`), fixing the
+  functional regression flagged in §19.1.A vs. real `STEP_DEFS id 3`'s `skippable: true`.
+- [x] **Full-page conversion, partial (§19.1.E)** — dropped the bounded centered-card modal
+  styling; content now fills the viewport with a ~720px max-width text/content column, keeping the
+  `fold-lift`/`data-fold`/safe-area-inset takeover mechanics.
+- [x] **Drift ledger** — `docs/drift-app-warden.md` §7 F128 added, documenting the shared helper
+  and `SetupWizardAdlib.jsx` as a second real surface.
+- [ ] **Not done this round** (see `docs/TODO.md` §19.1 for the remaining checklist): most of
+  §19.1.A's field/UI parity gaps (tips/commission opt-in, base-user OT threshold, Advanced Pay
+  Rules, DHL weekend differential edit, DHL custom-rotation question, Benefits Start Date, Other
+  Recurring Deductions, Attendance Policy Details, PTO section, Tax Rates "Use Estimate for Now" +
+  DHL Missouri preset, Wrap Up's Tax-Exempt Week Projections opt-in); the rest of §19.1.E/F
+  (TypedText `white-space:pre` wrap fix, `Inline*` max-width audit, `BLANK_FONT` `clamp()`,
+  `StepSlide`/mobile-picker re-tuning, `prefers-reduced-motion`); §19.1.G (attempted-gated
+  required-field feedback, screen-reader pass); §19.1.H's `DIFF_FIELDS`/`HISTORY_SENSITIVE_FIELDS`
+  three-way audit and `docs/account-reference.json` spot-check.
+
+---
+
+## §19.1.E/F — Ad-Lib Wizard responsive polish (2026-08-10)
+
+Follow-on to §19 above, closing out most of the remaining `docs/TODO.md` §19.1.E/F responsive
+checklist:
+
+- [x] **`TypedText` horizontal-overflow bug fixed** — the single most important item in this
+  batch per the audit. Was one `display:inline-block; white-space:pre` span per clause, which
+  cannot wrap internally; a long real clause (e.g. Deductions' attendance-tracking question)
+  overflowed at narrow widths. Now chunks each clause into per-word spans joined by ordinary
+  breakable spaces, so the browser wraps between words normally while each word still steps in
+  via the same `adlibType` keyframe. See `docs/drift-app-warden.md` §7 F129.
+- [x] `Inline*` controls (`InlineDate`/`InlineNumber`/`InlineSelect`) gained `max-width: 100%` +
+  `box-sizing: border-box` so a fixed nominal width can still shrink on narrow screens.
+- [x] `BLANK_FONT` moved from a fixed `26px` to `clamp(18px, 4.2vw, 26px)`.
+- [x] `prefers-reduced-motion` handling added for the stepped-reveal/fade-in classes
+  (`.adlib-typed-word`/`.adlib-fade-in`, `index.css`), matching the app's existing
+  class-based reduced-motion override pattern.
+- [x] `StepSlide` reviewed — no change needed (fixed-px transform distance, already shared with
+  the real wizard at full width).
+- [ ] Benefit-chip row / 50-option state select mobile usability, and native date/select picker
+  clipping — reasoned through, not empirically verified (no browser in this sandbox).
+- **Not done this round:** §19.1.A's field/UI parity gaps (unchanged from the §19 list above);
+  §19.1.G (attempted-gated required-field feedback, screen-reader pass); §19.1.H's field-set
+  housekeeping and account-reference spot-check; §19.1.I's remaining doc updates for those items.
+
+---
+
+## §19.1.A — Ad-Lib Wizard field-parity round 1 (2026-08-10)
+
+Three of §19.1.A's `IntakePage` gaps closed, all gated behind a new `payStructureComplete`
+boolean (fires once the core rate/hours questions are answered, matching where real Step1
+reveals the same fields):
+
+- [x] **Tips/Commission daily check-in opt-in** — "On top of that, I [don't earn tips or
+  commission / earn tips / earn commission]," with the commission-only-position follow-up blank.
+  Any employer, DHL or base. `tipsOrCommissionEnabledAt` stamping already handled by the shared
+  `finalizeWizardConfig()` (F128) — no additional completion-time wiring needed.
+- [x] **Base-user Overtime Threshold** — 40h/48h/Custom/Exempt picker, base users only (DHL
+  keeps its fixed 40h/1.5× override).
+- [x] **DHL Weekend Differential** — now an editable `$/hr` `InlineNumber`, pre-filled with the
+  `DHL_PRESET` default (was previously hardcoded with no way to change it).
+
+New tests: 4 tests covering all three additions (gating order, Custom OT numeric blank, DHL
+differential pre-fill + edit, commission-only follow-up reveal). Full suite: 1538 passed
+(up from 1534). See `docs/drift-app-warden.md` §7 F130.
+
+**Not done this round:** the rest of §19.1.A (Advanced Pay Rules' OT multiplier + night
+differential rate editing, DHL custom-rotation question, Benefits Start Date, Other Recurring
+Deductions, Attendance Policy Details, PTO section, Tax Rates "Use Estimate for Now" + DHL
+Missouri preset, Wrap Up's Tax-Exempt Week Projections opt-in); §19.1.G; §19.1.H.
+
+---
+
+## §19.1 — Ad-Lib Wizard field-parity rounds 3-4 + housekeeping + accessibility (2026-08-10)
+
+Closes out **all** of §19.1.A (field/UI parity), all of §19.1.G (accessibility/validation
+feedback), and the first two boxes of §19.1.H (field-set housekeeping). Six commits:
+
+- [x] **F131 — resolved F130's tips/commission history gap.** `tipsOrCommissionEnabled`/
+  `tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` added to both `HISTORY_SENSITIVE_FIELDS`
+  and `DIFF_FIELDS` (F7's three-way rule). Full sweep of every field `SetupWizardAdlib.jsx` wrote
+  at that point found no other gaps.
+- [x] **F132 — `attempted`-driven required-field feedback + accessible names.**
+  `InlineSelect`/`InlineNumber`/`InlineDate` gained an `error` prop (red border + `aria-invalid` +
+  a new `RequiredNote` "↑ Required" tail, mirroring real `errBorder()`/`Field`); every page wires
+  `error={attempted && <the same condition that page's own isXValid checks>}` on every required
+  control. `ariaLabel` added to every `InlineSelect`/`InlineNumber` call site; `InlineChip` gained
+  `aria-pressed`/`aria-label`.
+- [x] **F133 — Advanced Pay Rules + DHL custom rotation.** `AdvancedPayRulesCard` (base users, OT
+  multiplier/night diff/weekend diff) and `DhlRotationCard` (DHL Plant, Standard-vs-Custom
+  weekly-hours override) added as collapsible cards. Closed two pre-existing `isIntakeValid` gaps
+  found in the process (`customWeeklyHours` checks, base-user custom-OT-threshold-positive
+  check — both present in real STEP_DEFS id 1 but missing from `isIntakeValid` since before this
+  round). `finalizeWizardConfig()` gained an `otMultiplier ?? 1.5` default.
+- [x] **F134 — Tax Rates fallback paths.** "Use Estimate for Now" (`handleEstimate()`) and the
+  DHL Missouri preset button (`loadDHLPreset()`), both straight copies of real Step4's functions.
+- [x] **F135 — Wrap Up Tax-Exempt Week Projections opt-in.** Static disclosure copy +
+  "coming soon" placeholder, straight copies of real `StepWrapUp`'s components.
+- [x] **F136 — Deductions: Benefits Start Date, Other Recurring Deductions, Attendance Policy
+  Details, PTO.** `OtherDeductionsList`/`AttendanceDetailsCard`/`PtoDetailsCard` added. Found and
+  fixed two more pre-existing `HISTORY_SENSITIVE_FIELDS` gaps (`attendanceUnit`/
+  `attendanceCurrentBalance`/`ptoCurrentBalance` — missing even on the real wizard).
+- [x] **F137 — bug found + fixed: invalid `<div>`-in-`<p>` nesting.** F133's two cards were
+  rendered inside `IntakePage`'s sentence `<p>` — invalid HTML, caught by a console warning while
+  writing this round's full-completion test (no assertion failure; `npm run test:run` doesn't
+  fail on console warnings). Fixed by making `IntakePage`'s return a Fragment with both cards as
+  siblings after `</p>` closes.
+- [x] New "full ad-lib-to-production completion" test in `SetupWizardAdlib.test.jsx` — builds a
+  base-user run through every page, touching every field added across rounds 2–4, asserts against
+  the real `onComplete(finalConfig)` payload (not the old mock `onHandoff` contract).
+- [x] `docs/account-reference.json` spot-checked — its `computed_expectations` tier is entirely
+  `null` placeholders already (pre-existing, unrelated to this round); no `finance.js` computation
+  logic changed, so no update was needed.
+
+**Not done this round:** the rest of §19.1.E/F's responsive polish (mobile-width verification —
+needs a real browser, none available in this sandbox); §19.1.B's flow-coverage decisions
+(life-event/jobless-mini-flow ad-libbing scope); widening `DIFF_FIELDS` toward full parity with
+`HISTORY_SENSITIVE_FIELDS` (pre-existing gap predating this round, documented but not attempted —
+see drift-app-warden §7 F136's own note).
+
+Full suite: 1539 passed (up from 1538). See `docs/drift-app-warden.md` §7 F131–F137.
 
 ---
 

@@ -184,6 +184,18 @@ deletion tracked in CLAUDE.md Known Cleanup. Corrected 2026-07-19 (Drift Warden 
 
 ## 9. Setup Wizard
 
+**Two components now share this system, split by entry path (2026-08-10, ad-lib wizard
+production promotion — full detail: CLAUDE.md's `SetupWizardAdlib.jsx` section,
+drift-app-warden §7 F128–F137).** `SetupWizardAdlib.jsx` — a five-page "fill-in-the-blank"
+mad-libs UI — is the real first-run wizard for an employed (or investor) signup, mounted by
+`App.jsx` whenever `wizardEntry === false` and there's no in-progress jobless hand-off. It reuses
+the exact same config fields/DHL-preset defaults as `SetupWizard.jsx`'s own steps and both funnel
+through the same `finalizeWizardConfig()` normalizer (`src/lib/wizardComplete.js`) before
+`App.jsx`'s `handleWizardComplete()`. `SetupWizard.jsx` (the stacked-step form below) stays
+mounted, completely unchanged, for every life-event re-entry and for the jobless mini-flow
+continuation (`initialStepId: 10`) — the table below still describes its full step inventory,
+which both wizards' Pay Structure/Schedule/Deductions/Tax Rates pages mirror field-for-field.
+
 **File:** `SetupWizard.jsx`. Steps (`STEP_DEFS`, ids not sequential — 7 is reserved for
 Wrap Up):
 

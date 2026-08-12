@@ -75,29 +75,35 @@ cramped. Fix: move to positive tracking + slightly looser line-height, at two ti
   component here (A:Fin builds headers as inline styles / the `PanelHero`/`SectionHeader`
   components, not via a class system).
 
-**Body-text size scale (adopted 2026-08-10).** Non-numeric text — labels, sublabels,
-descriptions, list summaries — should use one of five `text-*` utility classes in
-`src/index.css` instead of a hardcoded inline `fontSize`, so the smallest tiers have one place
-to tune instead of hundreds of scattered px literals:
-- `.text-2xs` → 10px (was 9px — bumped, read too small)
-- `.text-xs` → 11px (was 10px *and* 11px — the two raw sizes collapsed into one class once both
-  got bumped a step)
-- `.text-sm` → 12px
-- `.text-base` → 13px
-- `.text-md` → 14px
+**Body-text size scale (adopted 2026-08-10, bumped +1px again 2026-08-11).** Non-numeric text —
+labels, sublabels, descriptions, list summaries — MUST use one of five `text-*` utility classes
+in `src/index.css` instead of a hardcoded inline `fontSize`, so the whole scale has one place to
+tune instead of hundreds of scattered px literals:
+- `.text-2xs` → 11px
+- `.text-xs` → 12px
+- `.text-sm` → 13px
+- `.text-base` → 14px
+- `.text-md` → 15px
 
 Large numeric emphasis (MetricCard values, dollar totals, computed readouts) is explicitly out
 of scope — it keeps whatever per-component sizing it already had.
 
-**Migration status:** all of `ui.jsx`'s shared primitives (`Card`/`MetricCard`, `SH`,
-`PanelHero`, `SectionHeader`, `NT`, `VT`, `SmBtn`, `lS`, `InsightRow`) — the components reused
-across every panel — are converted. Most individual panels (`HomePanel`, `IncomePanel`,
-`BudgetPanel`, `LogPanel`, `ProfilePanel`, `SetupWizard`, `App.jsx`'s admin views) still have
-their own one-off inline `fontSize` declarations not yet migrated to these classes — that's a
-larger follow-up pass, panel by panel, rather than a blind repo-wide sweep.
-- Scoped to actual header/title text only — large *numeric* emphasis (MetricCard values, dollar
-  totals, computed readouts) intentionally keeps its existing weight/tracking; that's data
-  display, not headline text, and wasn't part of this fix.
+**Migration status: complete (2026-08-10), enforced going forward.** Every component under
+`src/components/` + `App.jsx` — all of `ui.jsx`'s shared primitives plus every panel, modal, and
+lower-traffic surface — is converted; nothing left with a hardcoded inline `fontSize` in this
+range except `Card`'s dynamic `size` prop (numeric, always exempt), a few dynamically-scaled
+template-literal sizes, and 8 shared JS style objects (same DRY treatment as `ui.jsx`'s `lS` —
+the object is the single source of truth for every render site that uses it). A static-analysis
+test, `src/test/lib/textUtilityClassAudit.test.js`, greps every component file for raw
+`fontSize: "Npx"` literals and fails `npm run test:run` the moment new code reintroduces one
+outside that documented allowlist — see `docs/ux-animations-tasks.md`'s Typography section for
+the full rollout history, the Tailwind name-collision gotcha (`.text-xs`/`.text-sm`/`.text-base`
+share names with Tailwind's own defaults — never wrap the `.text-*` block in `@layer`), and the
+exact allowlist.
+- Header weight/tracking fix (§ above) is scoped to actual header/title text only — large
+  *numeric* emphasis (MetricCard values, dollar totals, computed readouts) intentionally keeps
+  its existing weight/tracking; that's data display, not headline text, and isn't part of
+  either the header fix or the body-text scale.
 
 ### Component Style
 - Cards: floating, rounded (12–16px), soft shadows, minimal borders

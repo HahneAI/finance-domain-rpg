@@ -304,14 +304,22 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires New Job Season (§1.C) to be live first.*
 
-**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
-session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
-gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
-feature is finished, mirroring the precedent Coach's own gate-flip already set
-(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
-entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
-Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
-is happening in another session, so don't duplicate work here without checking in first.
+**AI-gating decision resolved, 2026-07-25 (user directive).** Ships behind the same narrow
+`canAccessAiFeatures` gate every other AI surface uses today — **note this gate itself widened
+2026-07-25 to admin/tester/investor** (`hasPrivilegedAccess`, `entitlements.js`; the original
+"isAdmin/isTester" phrasing here predates that widening and was stale until this correction).
+Locked plan is to move it to a paid-tier gate once the feature leaves that privileged-only
+surface — see the locked decision in §2.E1 below (paid-only, not trial-included, mirrors this
+feature exactly), which supersedes the vaguer "mirroring Coach's gate-flip" framing this
+paragraph originally had.
+
+**Correction, 2026-08-11: the checklist below is not informational — it shipped in this
+repository.** `JobHuntChatPanel.jsx` was built 2026-07-25 (same session/repo as this doc, not a
+separate one) and every checklist item below is marked `[x]` as a result. The original text this
+paragraph replaced said "the actual build is happening in another session, so don't duplicate
+work here without checking in first" — accurate for a narrow window before that build landed, but
+stale by the time the `[x]` items below were checked off. Do not treat that sentence as current
+guidance if it resurfaces in an older diff or branch.
 
 *New Job Season's §1.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
@@ -369,14 +377,23 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   blocks already get `cache_control: ephemeral`, multi-turn messages already cache the growing
   history) — no new work needed since this mode reuses that route rather than a new one.
 
-#### E1. Résumé upload / skill-gap analysis — v1 built 2026-07-25 (scoped 2026-07-22)
+#### E1. Résumé / Career Document Center — v1 built 2026-07-25 (scoped 2026-07-22); v2 built 2026-08-11 (scope expanded same day, v3+ still ahead)
 
 *Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §1.H14
 bullet 6 as "genuinely absent as an idea" — the only prior trace anywhere in this doc was that one
 unbuilt chat-prompt bullet and §1.F's "Profile store for auto-fill," which is explicitly scoped as
 plain user-entered text for form auto-fill, not this. This pass answers §1.H14's three open
 questions (storage, parsing, standalone vs. tied to `ReemploymentTracker`) and proposes a phased
-scope — documentation only, nothing below is implemented.*
+scope.*
+
+*v1 shipped 2026-07-25 exactly as scoped — paste-text review only. Everything from v2 on reflects
+a 2026-08-11 user directive that reframes the feature: résumé data should be a persistent,
+retrievable account asset the user uploads once (any file type, not just paste-text) and reuses —
+Coach breaking it into structured sections, those sections feeding Job Hunt Assistant's context,
+an AI-assisted rewrite mode, and Coach drafting a per-application cover letter from it — rather
+than a one-shot "paste it, get a review, done" tool. v2 shipped the same day (file upload +
+persistent storage + a real view/remove surface). v3–v6 (structured extraction, Job Hunt
+integration, rewrite mode, cover letters) are still documentation only as of this edit.*
 
 - **Storage — plain text, not a file upload, for v1.** Confirmed via grep: this codebase has zero
   existing Supabase Storage usage anywhere (`grep -rn "storage.from\|createSignedUrl"` across
@@ -446,11 +463,88 @@ scope — documentation only, nothing below is implemented.*
     `coach_chats.chat_type`; the review saves there via the existing `api/coach.js`/`saveCoachChat`
     path, same as the spec intended — no `insights` JSONB populated yet (that's for structured
     extraction beyond a written review; not needed for v1's plain-text output).
-  - **v2 (only if v1 shows real usage)** — file upload (PDF/DOCX) via a new Supabase Storage
-    bucket + client-side text extraction feeding the same v1 analysis pipeline unchanged.
-  - **Not scoped even for v2:** any auto-apply / auto-tailor-resume-per-listing feature — that's a
-    materially different (and higher-liability) feature than "review my resume against a role,"
-    and depends on §1.F's job-board integrations existing first regardless.
+  - **v2 — built 2026-08-11 (user directive): résumé becomes a persistent, retrievable
+    account asset, not a one-time paste-and-review.** Superseded the original "v2 = just file
+    upload, gated on v1 proving usage" framing that used to sit here — the ask made this the
+    real next target regardless of v1 usage numbers, since it's the foundation v3–v6 below all
+    build on, not an optional enhancement.
+    - [x] **Any-file-type upload, not just PDF/DOCX.** New Supabase Storage bucket (`resumes`,
+      private) — first Storage usage anywhere in this codebase — with own-folder RLS policies on
+      `storage.objects` (`migration 041_add_resume_profile_storage.sql`; Storage RLS is a separate
+      mechanism from `resume_profile`'s own row-level Postgres policies, keyed on the upload
+      path's `<user_id>/...` prefix instead of a table column). Client-side extraction
+      (`lib/resumeFile.js`) for text-bearing formats — `pdfjs-dist` for PDF, `mammoth` for DOCX,
+      plain `file.text()` for `.txt` — both libraries dynamically imported so a paste-only user
+      never loads either (confirmed in the production build: `pdf`/`pdf.worker` land in their own
+      chunks, not the main bundle). The extracted text is stored **and** the original file is
+      kept (path + original filename + mime type + size) so the file itself stays
+      retrievable/viewable, not just its extracted text. An unrecognized file type still uploads
+      and saves — extraction just reports `extractable: false` and `ResumeReviewCard.jsx` shows a
+      "paste your résumé text instead" notice rather than silently producing an empty analysis;
+      same graceful path for a recognized format that fails to parse (corrupt/password-protected
+      PDF), except with the parser's own error message included. No OCR (see "not yet scoped").
+    - [x] **`resume_profile` schema growth** — `storage_path`/`original_filename`/`mime_type`/
+      `file_size_bytes` added (migration 041), nullable (v1-era paste-only rows have none of
+      these). Still one row per user; uploading a new file overwrites the previous one (fixed
+      per-user path, `upsert: true` on the Storage write) rather than versioning — deferred to v5
+      if the rewrite-mode work ends up needing it. `saveResumeProfile()` (`db.js`) only writes
+      these four columns when the caller's payload object contains the key at all, so a plain
+      text/target-role edit (v1's existing call shape) can't accidentally null out a previously
+      uploaded file's metadata — see the drift note added to drift-app-warden §21 F124.
+    - [x] **A real "retrievable and viewable" surface** — `ResumeReviewCard.jsx` shows the saved
+      file's name/size plus **View** (fetches a fresh short-lived signed URL via
+      `getResumeFileUrl()` and opens it — the bucket is private, so there's no stable URL to
+      cache) and **Remove** (`deleteResumeFile()` + clears the four metadata columns) actions.
+      Not yet wired into Job Hunt Assistant or a per-application cover letter flow — that's v4/v6
+      below, both still open.
+    - [x] **Reachable outside New Job Season entirely — built 2026-08-11 (user directive,
+      same-day follow-up).** `ProfilePanel.jsx`'s App Preferences → Résumé row (directly under
+      Freedom Allowance) mounts the same `ResumeReviewCard.jsx` with `showReview={false}` (hides
+      target role + Get Skill-Gap Review + review output — the AI review stays admin/tester/
+      investor-gated in New Job Season) and `embedded` (drops the outer section heading). Any
+      employed user can now upload/paste/view/remove a résumé without faking a job loss to reach
+      `NewJobSeasonHomePanel`. `onProfileChange` keeps the collapsed row's summary ("Saved —
+      resume.pdf" / "Saved — pasted text" / "Not saved") live after an edit. See drift-app-warden
+      §21 F124's "second mount site" note for the gating split this creates.
+  - **v3 — Coach "breaks it down": structured extraction, not just a written review.** A second AI
+    pass (or the same call, restructured) turns `resume_text` into a structured shape — work
+    experience entries (title, company, dates, bullet points), education, skills/certifications —
+    stored in `resume_profile.structured_sections` (new jsonb column; recommended over reusing
+    `coach_chats.insights` because the breakdown is a property of the résumé itself, not of one
+    review conversation, and needs to exist even if that chat row was never loaded back). This
+    structured shape is the hard dependency both v4 and v5/v6 need — plain prose review text isn't
+    machine-usable for "plug in experience sections" or a targeted rewrite.
+  - **v4 — plug résumé experience into Job Hunt Assistant's context.** `buildJobHuntContext()`
+    (`aiContext.js`) gains the structured résumé sections (once v3 exists) alongside its existing
+    runway/burn/application-log grounding, so Coach can reference specific past roles/bullets when
+    coaching a specific application. **This reverses §2.E's current "Help me with my resume"
+    redirect-away design** — `JOB_HUNT_SYSTEM_PROMPT`'s addendum currently tells Coach it's "not a
+    resume-writing service... redirect to what you can help with here"; that instruction has to be
+    rewritten, not left in place alongside the new capability, or Coach will contradict its own
+    system prompt on every résumé-adjacent question. Also updates v1's "own section, no change to
+    `ReemploymentTracker.jsx`" placement note above — `ResumeReviewCard.jsx` stays its own section,
+    but is no longer an information island the Job Hunt chat can't see into.
+  - **v5 — Coach-assisted rewrite mode, distinct from "review."** Review (v1) critiques the résumé
+    as-is; rewrite takes the structured breakdown (v3) plus a target role and produces new résumé
+    text the user can accept/edit/save back. Needs a second `coach_chats.chat_type` value
+    (`resume_rewrite`, alongside `resume_review`) and a decision on whether a rewrite overwrites
+    `resume_profile.resume_text` in place or is kept as a separate draft the user explicitly
+    promotes — recommend the latter (silently overwriting a user's own uploaded document on an AI
+    pass is a bad default), which forces the versioning question v2's schema note deferred.
+  - **v6 — per-application cover letter generation.** For a specific `jobApplications` entry
+    (company/role already logged via `ReemploymentTracker`), Coach drafts a cover letter grounded
+    in the structured résumé (v3) plus that entry's company/role — not a generic template. Storage
+    is an open question: a new `coverLetter` field per `jobApplications` array entry (simplest —
+    cover letters are already scoped 1:1 with an application, matching that entry's own lifecycle)
+    vs. a standalone table (only worth it if cover letters need independent version history the way
+    résumés do). Recommend the array-field approach unless a real need for per-application history
+    surfaces — consistent with why `resume_profile` went the other way and became its own table:
+    résumé text is large and shared across every application, a cover letter isn't.
+  - **Not yet scoped:** OCR for scanned/image-only résumés; multi-résumé support (one per target
+    role, vs. today's implicit one-per-account model that v1–v6 all assume); auto-apply /
+    auto-tailor-resume-per-listing — carried over unchanged from the original phasing note this
+    section replaces: still out of scope, and still depends on §1.F's job-board integrations
+    existing first regardless.
 
 ---
 
@@ -484,6 +578,12 @@ scope — documentation only, nothing below is implemented.*
   fields future AI features will need (§2.D/E/J, §8.A/B/C, §8 F1–F3); extend `buildCoachContext`
   and that map together whenever one of those items gets scoped, so context-building stays
   centralized instead of growing a bespoke builder per feature
+- [x] **Supabase Storage — first real usage, built 2026-08-11.** Résumé v2 (§2.E1) added the
+  `resumes` bucket (private) + own-folder Storage RLS policy (`migration
+  041_add_resume_profile_storage.sql`) + client-side size validation (`lib/resumeFile.js`) for
+  any-file-type résumé upload. Noted here so the next feature that also wants file storage (e.g. a
+  future statement-upload flow for §2.D) checks whether this bucket/policy shape can be reused
+  before standing up a second one from scratch.
 - [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
   + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
   `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
@@ -730,6 +830,60 @@ generic form to ask the right follow-up questions on its own.*
 - [ ] **Same accountant gate as §4.D** — this entire flow is downstream of the split-tracking
   schema and the disclosure boundary; it cannot ship ahead of either, and the guided interview's
   question set/copy needs the same professional review before it goes live.
+
+---
+
+### K. Hub-Aware Context — Beta Homebase / Money Moves (Productivity Hub) *(new — scoped 2026-08-11, not yet built)*
+
+*Scoping only — nothing below is implemented. Origin: user request to give Coach "full circle
+insights" — able to reference the same changelog, personal checklist, and team-authored tips a
+person already sees on their own hub page (Beta Tester Homebase for tracked beta testers,
+`ProductivityHub.jsx`/"Money Moves" for everyone else — `BetaHomebase.jsx`'s header comment),
+so a conversation with Coach doesn't feel disconnected from what that person is already looking
+at elsewhere in the app.*
+
+- [ ] **Data sources already exist — this is a context-injection task, not a new feature build.**
+  Both hub surfaces already read three admin-authored/systemic content types via `db.js`:
+  changelog entries (`fetchPublishedChangelogEntries` — `changelog_entries` table, migration 032,
+  shared by both audiences), a personal feature checklist (`fetchBetaChecklistItems`/
+  `fetchBaseChecklistItems` + the caller's own completions via `fetchMyChecklistCompletions`/
+  `fetchMyBaseChecklistCompletions` — `beta_content_items`/`base_content_items` where
+  `kind = 'checklist'`, migrations 037/039), and team-authored tips (`fetchBetaSuggestions`/
+  `fetchBaseSuggestions` — same tables, `kind = 'suggestion'`, the "Suggestions From The Team"
+  section rendered by `SuggestionsSection` in `BetaHomebase.jsx`). Coach's job here is to read
+  the same fetchers the hub itself already calls, never a parallel query — same D1 grounding
+  rule as everything else in this section (§2's cardinal rule; drift-app-warden.md Spine D).
+- [ ] **Audience split must be respected in the context builder, not flattened.** A tracked beta
+  tester (`isTrackedBetaTester`) sees Beta Homebase content; everyone else sees Money Moves
+  content — these are different rows from different tables (`beta_content_items` vs.
+  `base_content_items`), not a formatting difference. The context builder needs the same branch
+  `App.jsx`'s nav already uses to pick between the two hub pages, so Coach never references a
+  checklist item or tip the person can't actually see on their own hub page.
+- [ ] **Scope as `buildCoachContext` additions, not a new context builder.** Unlike Job Hunt
+  Assistant's `buildJobHuntContext()` (a separate function for a separate mode), this context
+  belongs in the *general* Ask Coach chat (§2.B) — every user already reaches that surface, hub
+  content isn't gated behind anything extra beyond the ordinary Coach gate. Add a compact
+  serialized block: which checklist items are still open (title only, not full `body` — keep the
+  context block small, same compression discipline as the rest of `aiContext.js`), the caller's
+  own completion count, the most recent 1–2 published changelog entries, and the most recent 1–2
+  team suggestions.
+- [ ] **What "full circle insights" means in practice — proactive reference, not a new command
+  set.** No new UI, no new Coach mode — this is purely grounding so that, inside an ordinary Ask
+  Coach conversation, Coach can naturally say things like "looks like you haven't tried
+  [checklist item] yet" or "did you catch the [changelog entry] update?" when it's relevant to
+  what the user is asking — the same way Coach already references real runway/goal/savings
+  numbers instead of speaking in generalities.
+- [ ] **Open question — read-only grounding vs. write-back.** Simplest v1: Coach can *reference*
+  hub content but never mutate it (no "mark that off for me" via chat) — matches every other
+  context field in `aiContext.js` today, which are all read-only snapshots. A write-back path
+  (Coach checking off a completed item on the user's behalf, calling `toggleBetaChecklistItem`/
+  `toggleBaseChecklistItem`) is a real v2 idea but needs its own confirm-before-write design, same
+  trust boundary §2.J's paystub-extraction flow already established (extracted/inferred data
+  pre-fills, never auto-applies) — don't build silent writes into Coach's first pass at this.
+- [ ] **Not yet scoped:** `ScoreSection` content (`BetaHomebase.jsx`) — deliberately excluded,
+  since beta scoring is between the tester and the team, not something Coach should be
+  volunteering opinions on; feedback-box submissions (`logBetaFeedback`/`logBaseFeedback`) are
+  one-way (user → team) and have no read path back into Coach context either.
 
 ---
 
@@ -1166,9 +1320,13 @@ the emotional and practical weight of what just happened.*
 
 ---
 
-### E. Future — AI Job Hunt Assistant *(Phase 3)*
+### E. Future — AI Job Hunt Assistant & Résumé / Career Document Center *(Phase 3)*
 
-*Consolidated into §2.E. Requires New Job Season (§1.C) to be live first.*
+*Consolidated into §2.E (Job Hunt Assistant) and §2.E1 (Résumé / Career Document Center — v1 built
+2026-07-25, v2 (persistent any-file-type résumé storage) built 2026-08-11 per user directive; v3+
+still ahead — Coach-driven structured breakdown, integration into Job Hunt Assistant's context, an
+AI-assisted rewrite mode, and per-application cover letter generation). Requires New Job Season
+(§1.C) to be live first.*
 
 ---
 
@@ -4197,10 +4355,15 @@ shipping or merging.
 
 ## 19. Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment
 
-*Status: all five real first-run steps are now ad-libbed (Welcome+Pay Structure, Schedule,
-Deductions, Tax Rates, Wrap Up) — still admin-only, still MOCK ONLY. §19.1 below is the audit
-gating the next decision: wire this in as the real production wizard. Not user-facing yet — see
-`.claude/CLAUDE.md`'s SetupWizard section and `SetupWizardAdlib.jsx`.*
+*Status: SetupWizardAdlib.jsx is now the REAL production first-run wizard (save/completion
+wiring, entry-point/gating wiring, isInvestor support, Deductions Skip button, and a partial
+full-page conversion shipped 2026-08-10 — see docs/past-TODO-tasks.md §19). §19.1 below is kept
+as the tracking checklist for the remaining items. As of 2026-08-10's field-parity round 3+4:
+**§19.1.A is now fully closed** (all field/UI parity gaps ported); §19.1.G accessibility and the
+first two boxes of §19.1.H housekeeping are also closed. Still open: the rest of §19.1.E/F's
+responsive polish (mobile-width verification, needs a real browser — none available in this
+sandbox), §19.1.B's flow-coverage decisions, and §19.1.H's test-coverage/account-reference boxes.
+See `.claude/CLAUDE.md`'s SetupWizardAdlib.jsx section for current architecture.*
 
 **What shipped:** the entire first-run, employed-signup SetupWizard flow (Welcome through Wrap
 Up — six real steps) reimagined as five cascading mad-libs pages with inline blanks, instead of
@@ -4239,35 +4402,61 @@ concrete, code-grounded finding, not a guess.*
 **A. Field/UI parity gaps — real fields the ad-lib pages don't ask at all, yet**
 
 *Pay Structure (real Step1, `SetupWizard.jsx:339`) vs. `IntakePage`:*
-- [ ] **Tips/Commission daily check-in opt-in** (`SetupWizard.jsx:811–844`) — entirely missing
-      from `IntakePage`. Real production feature (tips/commission check-in card, `LogPanel`
-      section, `calcEventImpact` branch already built this session) has no way to be turned on
-      from the ad-lib flow at all. Also feeds `tipsOrCommissionEnabledAt` stamping in
-      `handleComplete` (`SetupWizard.jsx:2578–2587`) — a real gap, not cosmetic.
-- [ ] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
-      — missing entirely; base users can never set a non-40h OT threshold or go OT-exempt via ad-lib.
-- [ ] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — OT multiplier
-      (1.5×/2×), night differential enable+rate, weekend differential for base users — the whole
-      collapsible group is missing. None of it gates `isValid`, but production users need a way to
-      set it.
-- [ ] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — ad-lib
-      only ever uses the DHL_PRESET default (`diffRate ?? 1.75`); DHL users can't edit it.
-- [ ] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
-      (`SetupWizard.jsx:560–639`, Plant-only) — entirely missing from `IntakePage`. A DHL Plant
-      user working a non-standard schedule (pickup shifts, extended hours) has no way to say so.
+- [x] **Tips/Commission daily check-in opt-in** (`SetupWizard.jsx:811–844`) — added 2026-08-10.
+      `IntakePage` now asks "On top of that, I [don't earn tips or commission / earn tips / earn
+      commission]" once pay structure is fully answered (any employer, DHL or base), with the
+      commission-only-position follow-up blank. `tipsOrCommissionEnabledAt` stamping is unchanged
+      — already handled by `finalizeWizardConfig()` (F128), which both wizards share, so no
+      further wiring was needed there.
+- [x] **Base-user Overtime Threshold** (40h/48h/Custom/Exempt picker, `SetupWizard.jsx:741–776`)
+      — added 2026-08-10, base users only (DHL always uses the fixed 40h/1.5× override applied at
+      employer-pick time, same as the real wizard). Doesn't gate `isIntakeValid` on either wizard.
+- [x] **Advanced Pay Rules** (`AdvancedPayRules`, `SetupWizard.jsx:243`) — added 2026-08-10 as a
+      new `AdvancedPayRulesCard` collapsible (base users only, rendered after the OT Threshold
+      clause once `payStructureComplete`): OT multiplier (1.5×/2× via `InlineChip`), night
+      differential enable+rate, and weekend differential — same three fields/defaults as real
+      `AdvancedPayRules`, reshaped from labeled Field/Pill controls into this file's card+chip
+      idiom. `finalizeWizardConfig()` now also defaults `otMultiplier` to `1.5` when left `null`
+      (a base user who never opens the card) — see `wizardComplete.js`.
+- [x] **DHL Weekend Differential** (`SetupWizard.jsx:727–736`, editable `$/hr` input) — added
+      2026-08-10. `IntakePage` now shows an editable `InlineNumber` pre-filled with the
+      `DHL_PRESET` default (1.75), once the DHL pay-schedule clause is answered.
+- [x] **"Do you follow the standard DHL rotation?"** custom weekly-hours override
+      (`SetupWizard.jsx:560–639`, Plant-only) — added 2026-08-10 as a new `DhlRotationCard`
+      collapsible (Plant only, rendered after the weekend-differential clause once
+      `dhlTeamReady`): Standard-vs-Custom `InlineChip` toggle, long/short-week hour blanks with
+      draft-string state (mirrors real Step1's `longHoursDraft`/`shortHoursDraft`) once Custom is
+      picked. `isIntakeValid` gained the matching `customWeeklyHours`/`customWeeklyHoursLong`/
+      `customWeeklyHoursShort` checks (line-for-line mirror of real STEP_DEFS id 1) — a
+      pre-existing gap in `isIntakeValid` itself (it was missing this check even before today,
+      since the field was previously unreachable in `IntakePage`). Also added the matching
+      base-user "custom OT threshold must be positive once entered" check to `isIntakeValid`,
+      found while touching that function for the rotation checks — a second pre-existing gap,
+      unrelated to the rotation feature itself but caught in the same pass.
 
 *Deductions (real Step3, `SetupWizard.jsx:1204`) vs. `DeductionsPage` — most of these were
 already flagged "v1 scope" in the page's own code comment when built, on the reasoning that none
 of them gate `isValid`; that reasoning holds for an admin preview, not for a production wizard:*
-- [ ] **Benefits Start Date** (`SetupWizard.jsx:1283–1293`) — missing.
-- [ ] **Other Recurring Deductions** dynamic list (union dues, parking, etc.,
-      `SetupWizard.jsx:1296–1347`) — missing.
-- [ ] **Attendance Policy Details** sub-fields (unit, warn/terminate thresholds, current balance,
-      per-event increment — `SetupWizard.jsx:1372–1435`) — missing.
-- [ ] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
-      balance/cap, `SetupWizard.jsx:1438–1509`) — missing entirely. Not previously called out in
-      any doc as an intentional scope-out by name; a real gap.
-- [ ] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
+- [x] **Benefits Start Date** (`SetupWizard.jsx:1283–1293`) — added 2026-08-10, an inline
+      `InlineDate` clause right after the per-benefit blanks, once `benefitsGate === true`.
+- [x] **Other Recurring Deductions** dynamic list (union dues, parking, etc.,
+      `SetupWizard.jsx:1296–1347`) — added 2026-08-10 as `OtherDeductionsList`, a block-level
+      card below the sentence (doesn't fit the one-blank mad-libs shape), same
+      add/edit/remove-row logic as real Step3.
+- [x] **Attendance Policy Details** sub-fields (unit, warn/terminate thresholds, current balance,
+      per-event increment — `SetupWizard.jsx:1372–1435`) — added 2026-08-10 as
+      `AttendanceDetailsCard`, a collapsible card (defaults expanded if any sub-field already has
+      a value, mirrors real `DetailsDisclosure`'s own `defaultExpanded` logic). Found and fixed a
+      pre-existing gap while adding these: `attendanceUnit`/`attendanceCurrentBalance` were
+      missing from `HISTORY_SENSITIVE_FIELDS` even on the real wizard (not something this round
+      introduced) — added, see drift-app-warden §7 F136.
+- [x] **PTO policy — the entire section** (`ptoEnabled` gate + accrual method/rate/current
+      balance/cap, `SetupWizard.jsx:1438–1509`) — added 2026-08-10: the yes/no gate is an inline
+      clause (`ptoEnabled`) right after the attendance question; `PtoDetailsCard` (same
+      collapsible pattern) covers accrual method (`InlineChip` standing in for `Pill`)/rate/
+      current balance/cap once answered Yes. Found and fixed a second pre-existing gap:
+      `ptoCurrentBalance` was also missing from `HISTORY_SENSITIVE_FIELDS`.
+- [x] **Step 3 is `skippable: true`** in the real wizard (`STEP_DEFS id:3`, only step with a Skip
       button) — `DeductionsPage` has no Skip affordance at all, so a real user who wants to skip
       benefits/attendance entirely (allowed today) would be *blocked* by ad-lib's attendance gate
       for base users where the real wizard would let them through. This is a **functional
@@ -4275,15 +4464,24 @@ of them gate `isValid`; that reasoning holds for an admin preview, not for a pro
 
 *Tax Rates (real Step4, `SetupWizard.jsx:1646`) vs. `TaxRatesPage` — scoped out by explicit user
 instruction when built ("just the paystub path"), revisit now that this is going to production:*
-- [ ] **"Use Estimate for Now"** flat-rate fallback (`PaystubCalc`'s `onEstimate`,
-      `SetupWizard.jsx:1666–1676`) — no paystub-free path to a valid tax rate exists in ad-lib. A
-      real user without a paystub handy is currently stuck unable to finish onboarding.
-- [ ] **DHL Missouri preset button** (`loadDHLPreset`, `SetupWizard.jsx:1678–1689`) — missing.
+- [x] **"Use Estimate for Now"** flat-rate fallback (`PaystubCalc`'s `onEstimate`,
+      `SetupWizard.jsx:1666–1676`) — added 2026-08-10. `handleEstimate()` is a straight copy of
+      real Step4's function (10%/12% federal flat estimate, state flat/midpoint/0 by
+      `STATE_TAX_TABLE`, `taxRatesEstimated: true`) and its button now sits alongside "Apply
+      These Rates" inside the same paystub-calculator reveal, always available regardless of
+      whether gross/withheld have been entered — matching the real wizard exactly.
+- [x] **DHL Missouri preset button** (`loadDHLPreset`, `SetupWizard.jsx:1678–1689`) — added
+      2026-08-10. Same gate as real Step4 (`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates
+      && userState === "MO"`), rendered above the "Recalculate Using Paystub" button once
+      filing status + state are answered.
 
 *Wrap Up (real Step7, `SetupWizard.jsx:2040`) vs. `WrapUpPage` — scoped out as v1 when built:*
-- [ ] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,
-      `SetupWizard.jsx:2144–2170`) — missing. Doesn't gate `isValid`, but it's a real, user-facing
-      feature real Wrap Up offers today.
+- [x] **Tax-Exempt Week Projections opt-in** (`TAX_EXEMPT_DISCLAIMER` + `TaxExemptPreview`,
+      `SetupWizard.jsx:2144–2170`) — added 2026-08-10. Both are straight copies (static
+      disclosure copy + a "coming soon" placeholder, not data-grounded, so nothing to
+      re-derive — see `docs/active-systems.md` §6). Renders below the buffer sentence, gated on
+      `formData.taxExemptOptIn === true` exactly like real Wrap Up's own `accepted` flag. Doesn't
+      gate `isWrapUpValid` on either wizard.
 
 *Schedule (real Step2) vs. `SchedulePage` — audited, no gaps found. Every real Step2 field/branch
 (DHL rotation vs. base-user hours ceiling + pay-period day + biweekly parity) has an ad-lib
@@ -4291,7 +4489,7 @@ equivalent already.*
 
 **B. Flow-coverage gaps — entire paths the ad-lib pages never touch**
 
-- [ ] **Investor first-run entry** — `SetupWizard`'s `isInvestor` prop drives: Step0's "Welcome,
+- [x] **Investor first-run entry** — `SetupWizard`'s `isInvestor` prop drives: Step0's "Welcome,
       {firstName}." greeting reading `formData.investorName`; the "Do you work for DHL?" gate
       hidden entirely (investors are always base users); a special `formData` init override
       (`SetupWizard.jsx:2499–2501`: `employerPreset: null`, `otThreshold: config.otThreshold || 40`,
@@ -4302,15 +4500,16 @@ equivalent already.*
       prop with equivalent handling, or explicitly keep investor first-run on the real
       `SetupWizard` (documented exception) — either is fine, but it must be a decision, not an
       oversight.
-- [ ] **Life-event re-entry** (`structure_change`, `lost_job`, `changed_jobs`, `commission_job`)
-      — `SetupWizardAdlib` has no `lifeEvent` concept whatsoever: no pre-fill from
-      `originalConfig`, no `StructureChangeDiff` "What's Changing" summary, no Commission Income
-      field (`lifeEvent === "commission_job"` only, `SetupWizard.jsx:782–809`), no employer-preset
-      switch callout. **Recommended scope for this promotion:** ad-lib replaces `SetupWizard` only
-      for first-run (`wizardEntry === false`, non-investor or investor-per-decision-above);
-      `SetupWizard.jsx` stays mounted, unchanged, for every life-event string and the jobless
-      mini-flow continuation. State this decision explicitly in the PR/commit — don't let it be
-      implied.
+- [x] **Life-event re-entry** (`structure_change`, `lost_job`, `changed_jobs`, `commission_job`)
+      — **originally scoped out** ("ad-lib replaces `SetupWizard` only for first-run" — see the
+      struck-through recommendation this bullet used to carry) **but now explicitly requested and
+      underway, path by path — see §19.2 below.** 2026-08-11 round: `lost_job` and
+      `commission_job` are done (`SetupWizardAdlib` gained a `lifeEvent` prop — pre-fill from the
+      real config instead of blanking, skip the employment-status question, drop Wrap Up, add the
+      Commission Income field for `commission_job`). `structure_change` (pre-fill + frozen
+      `originalConfigRef` baseline + `StructureChangeDiff` "What's Changing" summary +
+      jobless-Back-to-Work interaction) and `changed_jobs` (full re-run against existing account
+      data) are still real-`SetupWizard`-only — tracked in §19.2.
 - [ ] **Jobless mini-flow** (STEP_DEFS ids 10/11/12: Unemployment Benefits, Job Loss Details,
       Jobless Wrap Up) — confirm the hand-off (`initialStepId: 10`) stays the intended permanent
       shape, not a temporary stopgap. If it's permanent, no further work; if it's meant to be
@@ -4319,10 +4518,10 @@ equivalent already.*
 
 **C. Save/completion wiring — ad-lib must actually save for production; it never has**
 
-- [ ] Today, an employed finish just closes the preview with **zero save** — that's correct for a
+- [x] Today, an employed finish just closes the preview with **zero save** — that's correct for a
       mock preview and **wrong** for production. The finished `formData` must reach the real save
       pipeline.
-- [ ] **Reuse `App.jsx`'s existing `handleWizardComplete(mergedConfig)` directly** rather than
+- [x] **Reuse `App.jsx`'s existing `handleWizardComplete(mergedConfig)` directly** rather than
       reimplementing its logic — that function already owns: `configHistoryMetaRef` tagging
       (`source: "setup_wizard"`, `effectiveFrom: startDate` — required by drift-app-warden §7 F9
       or the config-history snapshot loses its attribution); the `structure_change` +
@@ -4332,22 +4531,22 @@ equivalent already.*
       production data loss, per drift-app-warden's own case law). Routing ad-lib's finish through
       this one function, instead of writing a second copy, is what keeps this a single
       source-of-truth commit point instead of a new parallel-formula risk.
-- [ ] `handleComplete()`'s own normalization must still run before `handleWizardComplete` sees the
+- [x] `handleComplete()`'s own normalization must still run before `handleWizardComplete` sees the
       data — DHL overrides (`payPeriodEndDay: 0`, `otThreshold: 40`, `otMultiplier: 1.5`), buffer
       normalize (`paycheckBuffer ?? 50` whenever `bufferEnabled !== false`), `taxedWeeks`
       derivation via `buildYear`, `accountCreatedIdx` stamp, `setupComplete: true`
       (`SetupWizard.jsx:2566–2598`). Either call the same function ad-lib-side too, or extract it
       to a shared helper both `SetupWizard.jsx` and `SetupWizardAdlib.jsx` call — do **not**
       hand-transcribe this logic a second time.
-- [ ] Confirm the `onCancel`/Exit path for a real first-run ad-lib session has **no save side
+- [x] Confirm the `onCancel`/Exit path for a real first-run ad-lib session has **no save side
       effects** — abandoning setup must leave `config.setupComplete` untouched, same as the real
       wizard today.
 
 **D. Entry-point & gating wiring**
 
-- [ ] Remove the `isAdmin` gate — production ad-lib must be reachable by real signups, not just
+- [x] Remove the `isAdmin` gate — production ad-lib must be reachable by real signups, not just
       the Admin Tools panel.
-- [ ] Route ad-lib through the **same `wizardEntry` state** `SetupWizard` uses today (or an
+- [x] Route ad-lib through the **same `wizardEntry` state** `SetupWizard` uses today (or an
       equivalent single source of truth) — this is what already gates, for free, everything a
       first-run signup must still see: the `TrialExplainerScreen` interstitial
       (`App.jsx:1866–1874`, shown once ahead of first-run entry for a real trial signup — must
@@ -4355,20 +4554,20 @@ equivalent already.*
       (`paywallBypassed`/`isExpiredReadOnly`), and the `investorSession` race guard
       (`App.jsx:712–715`). A separate, parallel `adlibPreviewOpen` state (today's admin-preview
       model) would silently skip all of this if reused as-is for production.
-- [ ] For a real first-run, non-investor signup, `onCancel` must be **`undefined`** (no escape
+- [x] For a real first-run, non-investor signup, `onCancel` must be **`undefined`** (no escape
       hatch) — matching the real wizard's own uncancelable-first-run rule
       (drift-app-warden §7.3: "`onCancel` undefined (non-investor) — no escape"). Ad-lib's
       "Exit Preview" button must not survive into production for this path; it can stay for
       investor/re-entry flows if/when those are ever ad-libbed, same as the real wizard's own
       conditional Cancel.
-- [ ] Rename/remove "Ad-Lib Preview · N of M" and "Exit Preview" copy once this isn't a preview —
+- [x] Rename/remove "Ad-Lib Preview · N of M" and "Exit Preview" copy once this isn't a preview —
       it's the wizard.
-- [ ] Remove (or explicitly repurpose) the Admin Tools "Ad-Lib Wizard" → Preview toggle — it has
+- [x] Remove (or explicitly repurpose) the Admin Tools "Ad-Lib Wizard" → Preview toggle — it has
       no reason to exist once there's nothing left to preview against.
 
 **E. Full-page conversion** *(explicit ask: "a real full page instead of a popup modal")*
 
-- [ ] Every full-screen surface in this app today — including both `SetupWizard` and
+- [x] Every full-screen surface in this app today — including both `SetupWizard` and
       `SetupWizardAdlib` — uses the same pattern: a `position: fixed; inset: 0` viewport takeover
       with a **centered, bounded card** inside it (`maxWidth`/`maxHeight`, its own `background`/
       `border`/`border-radius`). That's a modal-on-a-backdrop, not a page. Drop the card
@@ -4388,69 +4587,204 @@ equivalent already.*
 **F. Screen-edge / responsive sentence handling** *(explicit ask: "clean ad lib sentence handling
 for screen edges")*
 
-- [ ] **`TypedText` uses `white-space: "pre"`** (`SetupWizardAdlib.jsx:49–61`), which blocks
-      wrapping *within* a single clause. Short clauses are fine, but several real clauses are one
-      long sentence rendered as a single `TypedText` span — e.g. Deductions' "Does my employer
-      track attendance with a formal points or hours system?" — and **will overflow horizontally**
-      on a narrow viewport instead of wrapping. Confirmed bug, not a hypothetical: reproduce at
-      375px width (iPhone SE class) on the Deductions page. Fix by breaking long clauses into
-      several shorter `TypedText` segments at natural phrase boundaries (each still typing in
-      sequence), or finding a stepped-clip-path approach compatible with `white-space: pre-wrap`.
-- [ ] Fixed pixel `width` values on `InlineDate` (168px/140px) and other `Inline*` controls don't
-      shrink on narrow screens — audit every `Inline*` usage for `max-width: 100%` / responsive
-      sizing so a control plus its surrounding text can't force horizontal overflow.
-- [ ] `BLANK_FONT`'s fixed `26px` font-size was tuned for the current ~560px-wide centered card —
-      once the card boundary is gone (§19.1.E), decide a responsive scale (e.g. `clamp()` by
-      viewport width) instead of one fixed size that may read oversized on mobile or undersized on
-      a wide desktop full-page layout.
-- [ ] A true full-page layout removes the ~560px width ceiling entirely — without a deliberate max
-      reading-width on the **text column** (e.g. ~640–720px, centered, independent of the
-      page's own full-bleed background), desktop viewers get uncomfortably long lines. Apply a
-      max-width to the sentence/text column, not to the page.
+- [x] **`TypedText` uses `white-space: "pre"`** — fixed 2026-08-10: `TypedText` now chunks each
+      clause into per-word `inline-block` spans (each still `white-space:pre`, but a single word
+      never needs to wrap internally) joined by ordinary breakable spaces in a normal-flow
+      wrapper, so the browser wraps between words exactly like plain text while each word still
+      steps in via the same `adlibType` keyframe, staggered left-to-right. See
+      drift-app-warden §7 F129. `SetupWizardAdlib.test.jsx` gained a `byText()` helper (matches
+      recursive `textContent`) since the old direct-text-node `getByText(/clause/i)` calls no
+      longer match a word-chunked clause.
+- [x] Fixed pixel `width` values on `InlineDate`/`InlineNumber`/`InlineSelect` now also carry
+      `max-width: 100%` (+ `box-sizing: border-box`, `InlineDate` also `min-width: 0`) so a
+      control can shrink below its nominal width instead of forcing horizontal overflow.
+- [x] `BLANK_FONT`'s fixed `26px` replaced with `clamp(18px, 4.2vw, 26px)` — scales down on
+      narrow viewports, caps at the original 26px on wide/desktop layouts.
+- [x] Text column already carries a `max-width: 720px` (shipped in the full-page-conversion
+      commit, `0a6026d`) — confirmed still in place, no change needed here.
 - [ ] Verify the benefit-chip row (`DeductionsPage`) and the 50-option state-name `<select>`
       (`TaxRatesPage`) render and remain usable on mobile widths — chip row wrapping, native
-      `<select>` dropdown behavior on iOS/Android.
+      `<select>` dropdown behavior on iOS/Android. Reasoned through (chip row's `FadeIn` wrapper
+      has no `white-space:pre`, so `InlineChip` buttons wrap normally inside it) but **not
+      empirically verified** — no browser available in this sandbox (`VITE_SUPABASE_URL` unset,
+      no in-browser testing possible).
 - [ ] Verify native date/select pickers (iOS/Android) don't clip against the new full-page scroll
-      container when they open.
-- [ ] Re-tune the `StepSlide` page-transition animation for full-page width/height — it was built
-      and tuned against a small centered card.
-- [ ] Add `prefers-reduced-motion` handling to `TypedText`'s stepped-reveal keyframe — every real
-      signup will see this animation on every page, unlike an admin doing a one-off preview click.
+      container when they open — same caveat, reasoned but not visually verified.
+- [x] `StepSlide` (`ui.jsx`) re-tuned: reviewed — its `translateX(90px)` push/pop distance is a
+      fixed pixel offset independent of container width (not proportional to the old card's
+      bounds), and it's a shared primitive also used by the real `SetupWizard.jsx`'s own step
+      transitions at full width already. No change needed; not a full-page-conversion regression.
+- [x] Added `prefers-reduced-motion` handling: `.adlib-typed-word`/`.adlib-fade-in` (`index.css`)
+      disable to an instant, fully-visible state under `prefers-reduced-motion: reduce`, same
+      class-based override pattern the rest of the app already uses (`.step-in-right` etc.).
 
 **G. Accessibility & validation-feedback parity**
 
-- [ ] The real wizard shows explicit red-label + red-border + "↑ Required" text once a field is
+- [x] The real wizard shows explicit red-label + red-border + "↑ Required" text once a field is
       `attempted` and still empty — concrete, in-page feedback for *why* the primary button is
-      disabled. Ad-lib pages only disable the button with no explanation. Real users (not admins
-      familiar with the fields) need equivalent required-field feedback before this ships.
-- [ ] Screen-reader pass on `InlineChip`/`InlineSelect`/`InlineNumber`/`InlineDate` accessible
-      names — these were built and tested for an admin-only tool; verify they hold up for a
-      real, broader signup audience.
+      disabled. **Done 2026-08-10:** `InlineSelect`/`InlineNumber`/`InlineDate` gained an `error`
+      prop that swaps the dashed border for a solid `--color-deduction` border, sets
+      `aria-invalid`, and renders a new `RequiredNote` ("↑ Required", mirrors real `Field`'s error
+      text) — the same signal real `errBorder()`/`Field` give, adapted to an inline blank instead
+      of a labeled form field. `IntakePage`/`SchedulePage`/`DeductionsPage`/`TaxRatesPage` gained
+      an `attempted` param (already threaded from the parent, previously unconsumed) and wire
+      `error={attempted && <same missing-condition isXValid checks>}` on every required control —
+      line-for-line mirrors of the real wizard's own `attempted && !foo` conditions. `WrapUpPage`
+      needs none (`isWrapUpValid` is always `true`). Known, accepted limitation carried over
+      unchanged from the real wizard: the Next/Finish button stays `disabled={!canProceed}`, so
+      the `setAttempted(true)` branch in `handleNext` is reachable only if `canProceed` somehow
+      passes render-to-click (native `<button disabled>` blocks click dispatch entirely) — this is
+      the *same* dead-branch shape `SetupWizard.jsx`'s own `handleNext` already has; not something
+      this round invented or was asked to redesign, and changing it (e.g. an always-enabled Next)
+      would itself be a real behavioral divergence from the wizard this component mirrors.
+- [x] Screen-reader pass on `InlineChip`/`InlineSelect`/`InlineNumber`/`InlineDate` accessible
+      names — **done 2026-08-10.** Every `InlineSelect`/`InlineNumber` call site across all five
+      pages now carries a contextual `ariaLabel` (e.g. "Employment status", "Hourly rate,
+      dollars"); `InlineDate` already had a `label` prop (unchanged). `InlineChip` gained
+      `aria-pressed`/`aria-label` (includes "(selected)" state) — it's a toggle button, not a
+      native checkbox, so `aria-pressed` is the correct role signal.
 
 **H. Field-set completeness housekeeping**
 
-- [ ] Every field the (now-production) ad-lib pages write must be present in **both**
+- [x] Every field the (now-production) ad-lib pages write must be present in **both**
       `configHistory.js`'s `HISTORY_SENSITIVE_FIELDS` and real Step1's `DIFF_FIELDS` — per
       drift-app-warden §7 F7, these two lists must never diverge, and this is the first time
       ad-lib's writes actually reach `account_history` (previously MOCK ONLY, so this path has
       never been exercised for real). Diff the two lists against each other and against every
-      field `SetupWizardAdlib.jsx` touches.
-- [ ] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
+      field `SetupWizardAdlib.jsx` touches. **Resolved 2026-08-10 (drift-app-warden §7 F131):**
+      `tipsOrCommissionEnabled`/`tipsOrCommissionLabel`/`tipsCommissionOnlyPosition` added to both
+      `HISTORY_SENSITIVE_FIELDS` and `DIFF_FIELDS`; a full sweep of every field currently written
+      by `SetupWizardAdlib.jsx` found no other gaps. **Re-check required** once §19.1.A's
+      remaining field-parity items (Advanced Pay Rules, DHL custom rotation, Deductions'
+      Benefits Start Date/Other Deductions/Attendance/PTO, Tax Rates fallbacks, Wrap Up
+      Tax-Exempt opt-in) are ported — `HISTORY_SENSITIVE_FIELDS` already carries their field
+      names from real Step1/2/3's own writes, so no new entries are expected, but this must be
+      confirmed, not assumed.
+- [x] Extend `SetupWizard.test.jsx`-equivalent coverage: a full ad-lib-to-production completion
       test asserting the final saved config has the correct `taxedWeeks`, `accountCreatedIdx`,
-      `setupComplete: true`, and DHL/buffer/tips-stamp normalization — today's 45 ad-lib tests all
-      assert against the *mock* `onHandoff` callback, not a real save.
-- [ ] `docs/account-reference.json` — spot-check that the reference account's
-      `computed_expectations` still line up once real signups can complete through this UI.
+      `setupComplete: true`, and DHL/buffer/tips-stamp normalization — **done 2026-08-10.** New
+      "full ad-lib-to-production completion" describe block in `SetupWizardAdlib.test.jsx` builds
+      a base-user run through every page, touching every field added across rounds 2–4 (Advanced
+      Pay Rules, tips, benefits + start date + other deductions + attendance + PTO, Tax Rates'
+      estimate fallback, Wrap Up's buffer + Tax-Exempt opt-in), asserts against the real
+      `onComplete(finalConfig)` payload — not the old mock `onHandoff` contract. Caught and fixed
+      a real bug in the process: `DhlRotationCard`/`AdvancedPayRulesCard` (F133) were nested
+      inside `IntakePage`'s `<p>`, invalid HTML — see drift-app-warden §7 F137.
+- [x] `docs/account-reference.json` — spot-checked 2026-08-10. Read the file: it's Anthony's
+      existing DHL account (`db_record`), not wizard output, and its `computed_expectations`
+      tier is entirely `null` placeholders already (never filled in, pre-existing). This round's
+      changes only touched `SetupWizardAdlib.jsx`'s wizard UI and `finalizeWizardConfig()`'s
+      normalization (plus the `otMultiplier ?? 1.5` default) — no change to `finance.js`'s
+      `buildYear`/`computeNet`/etc., which is what `computed_expectations` would derive from.
+      **The reference account's expected output shape is unaffected by this round; no change
+      made to the file.**
 
 **I. Docs to update once wired** *(do this in the same PR — a stale drift-map entry certifies a
 false checklist per CLAUDE.md's own drift-warden philosophy)*
 
-- [ ] `.claude/CLAUDE.md` — rewrite the `SetupWizardAdlib.jsx` section: drop "EXPERIMENTAL,
+- [x] `.claude/CLAUDE.md` — rewrite the `SetupWizardAdlib.jsx` section: drop "EXPERIMENTAL,
       admin-only, not for real users" and "MOCK ONLY", describe the real production entry point
-      and save path instead.
-- [ ] `docs/drift-app-warden.md` §7 — extend the F1–F12 critical inventory and the six-path gate
-      matrix to cover `SetupWizardAdlib.jsx` as a second real surface writing the same sensitive
-      fields; note the line-number drift already present in the current §7 text while in there.
-- [ ] `docs/active-systems.md` — update if it documents the wizard's live behavior.
-- [ ] `docs/past-TODO-tasks.md` — close out this entry once shipped, one-liner per the section's
-      own convention.
+      and save path instead. Done across all four rounds (0a6026d onward); verified 2026-08-10 —
+      no stale "MOCK ONLY"/"EXPERIMENTAL" wording remains anywhere in the file.
+- [x] `docs/drift-app-warden.md` §7 — extend the F1–F12 critical inventory (now F1–F137) to cover
+      `SetupWizardAdlib.jsx` as a second real surface writing the same sensitive fields — done
+      across F128–F137. The six-path gate matrix (§7.3) itself was **not** extended with a
+      seventh ad-lib-specific path — `SetupWizardAdlib.jsx` funnels through the exact same
+      `handleComplete`/`finalizeWizardConfig`/`handleWizardComplete` commit point every existing
+      path already uses (F128), so it's a new *entry point* onto an existing path, not a new
+      path; noted here explicitly rather than silently left alone.
+- [x] `docs/active-systems.md` — checked 2026-08-10; §9 (Setup Wizard) documented `SetupWizard.jsx`
+      only. Added a note explaining the two-component split (`SetupWizardAdlib.jsx` for first-run,
+      `SetupWizard.jsx` unchanged for life-event re-entry + jobless continuation) at the top of
+      §9, pointing to CLAUDE.md/drift-app-warden for full detail rather than duplicating it.
+- [x] `docs/past-TODO-tasks.md` — closed out with a new "§19.1 — Ad-Lib Wizard field-parity
+      rounds 3-4 + housekeeping + accessibility (2026-08-10)" entry, one-liner per F131–F137.
+
+### 19.2 Life-Event Re-Entry Expansion — Path By Path
+
+*Opened 2026-08-11. §19.1.B originally scoped life-event re-entry out ("ad-lib replaces
+SetupWizard only for first-run... SetupWizard.jsx stays mounted, unchanged, for every life-event
+string"). Anthony has now explicitly requested the opposite — every life-event path converted to
+the ad-lib mad-libs style, same as first-run. This is being done in rounds, one or two paths at a
+time (drift-app-warden §7.3's gate matrix is the authoritative per-path reference — read it before
+touching any of this). Progress:*
+
+- [x] **`lost_job`** (2026-08-11) — `SetupWizardAdlib` gained a `lifeEvent` prop; formData
+      pre-fills from the real config instead of blanking (`BLANK_PAY_FIELDS` is first-run only
+      now); the employment-status question is skipped entirely (`isIntakeValid`/`IntakePage` both
+      gate that check on `lifeEvent === null`); Wrap Up is excluded from `activePages` (commits
+      through `finalizeWizardConfig()` at the end of Tax Rates instead, matching real `STEP_DEFS`
+      id 7's `showIf`). New re-entry intro copy ("Let's rebuild your pay for the new job.") — see
+      the judgment-call note in the commit/session report; there's no real Step0 branch specific
+      to `lost_job` to port verbatim, only `structure_change` gets its own Step0 copy on the real
+      wizard. `App.jsx`'s `wizardEntry === "lost_job"` now mounts `SetupWizardAdlib` instead of
+      `SetupWizard.jsx`; cancelable (unlike first-run).
+- [x] **`commission_job`** (2026-08-11) — same shared plumbing as `lost_job`, plus the Commission
+      Income field ported into `IntakePage` (mirrors real Step1's field exactly — Pill-equivalent
+      toggle + Monthly Average, gated on `payStructureComplete`, applies to both DHL and base
+      users). Re-entry intro copy: "Let's add your commission job to your pay structure." (same
+      judgment-call caveat as `lost_job`'s copy). No new stored field — `commissionMonthly` already
+      existed in `DEFAULT_CONFIG`/`HISTORY_SENSITIVE_FIELDS`/`finance.js`'s income math.
+- [x] **`structure_change`** (2026-08-11, drift-app-warden §7 F140) — `App.jsx`'s
+      `wizardEntry === "structure_change"` (the only real entry point — `LifeEventMenu`'s "Pay
+      Structure Changed" tile) now mounts `SetupWizardAdlib`. Real Step0's bespoke intro copy
+      ported verbatim into a new `LifeEventPivot` component (`IntakePage`), plus the "What
+      changed?" picker beneath it — `SetupWizardAdlib` gained its own internal `curLifeEvent`
+      pivot state (mirrors real `SetupWizard.jsx`'s local `lifeEvent` state) so a user can pivot
+      from `structure_change` to `lost_job`/`changed_jobs`/`commission_job` from inside the same
+      mount, which is also what makes those three reachable at all now (round 1's routing for
+      them was correct but unreachable — nothing ever set `wizardEntry` to those values directly).
+      Frozen `originalConfig` baseline captured at mount + `StructureChangeDiff`/`DIFF_FIELDS`
+      (now exported from `SetupWizard.jsx`, shared not duplicated) rendered in `WrapUpPage`,
+      gated on `curLifeEvent === "structure_change"`. `handleWizardComplete`'s existing
+      `startedUnemployed`-clearing/Food-restoration special case needed no changes — verified it
+      still fires correctly (keyed on `wizardEntry`, generic to either wizard).
+- [x] **`changed_jobs`** (2026-08-11) — verified, no changes needed beyond the shared pivot/
+      pre-fill plumbing. `computeActivePages`'s default branch already returns the full 5-page
+      set (0→1→2→3→4→7 equivalent, Wrap Up included, no diff); confirmed via `git grep
+      changed_jobs` that real `SetupWizard.jsx` has nothing else path-specific for it.
+- [x] All four life-event strings are now covered by `SetupWizardAdlib`. `SetupWizard.jsx` was, at
+      that point, still kept mounted for the jobless mini-flow's `initialStepId: 10` hand-off
+      continuation — see §19.3 below for its removal.
+
+### 19.3 Jobless Mini-Flow Ad-Libbed — Last Hand-Off Removed — CLOSED
+
+*Opened and closed 2026-08-11, drift-app-warden §7 F141. The last remaining path that hopped to a
+second component — first-run jobless (`lifeEvent === null && startedUnemployed === true`), which
+handed off via `onHandoff(formData, 10)` into real `SetupWizard.jsx` mounted at `STEP_DEFS` id 10
+for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — is now three native
+`SetupWizardAdlib` pages.*
+
+- [x] **Three native pages** — `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`,
+      ported line-for-line from real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`
+      (`STEP_DEFS` ids 10/11/12), with `isJoblessBenefitsValid`/`isJoblessDetailsValid`/
+      `isJoblessWrapUpValid` mirroring those steps' `isValid` exactly. `computeActivePages` returns
+      `[PAGES[0], joblessBenefits, joblessDetails, joblessWrapUp]` for the jobless gate instead of
+      the old `[PAGES[0]]` + hand-off.
+- [x] **Hand-off mechanism removed** — `onHandoff` (the prop), `App.jsx`'s
+      `adlibHandoff`/`adlibResumeData` state, and `wizardExiting`/`setWizardExiting` (whose only
+      consumer was real `SetupWizard.jsx`'s `isExiting`-driven fade, now unreachable) are all
+      deleted. `closeWizardWithAnimation()` simplified to a synchronous `setWizardEntry(null)`.
+      `SetupWizard.jsx` is no longer mounted by `App.jsx` anywhere — confirmed via full-repo grep
+      before deleting that nothing else called `onHandoff` with a real `initialStepId`. Kept in
+      place as generically useful, not dead code: `SetupWizard.jsx` itself (source of the three
+      ported page components, plus `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared
+      export home), and `initialStepId`/`onBackBeforeStart`/`resumeFormData` (no current caller,
+      but generic wizard-navigation props, still exercised by `SetupWizardAdlib.test.jsx`'s
+      employed-resume case).
+- [x] **Real latent bug fixed along the way** — `IntakePage`'s employment-status select never set
+      `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` when "unemployed" was
+      chosen (only real `Step0`'s pill handler did, and the old hand-off jumped past `Step0`
+      entirely). Writing a native full-completion test caught it; fixed by porting `Step0`'s pill
+      handler verbatim into `IntakePage`.
+- [x] Test coverage — full jobless-first-run completion test (Intake → all three jobless pages →
+      Finish), asserting `newJobSeasonMode`/`setupComplete`/`startDate`/`firstActiveIdx` on the
+      final payload and that `finalizeWizardConfig()`'s `buildYear()` call tolerates the
+      no-pay-structure config shape without throwing. `HISTORY_SENSITIVE_FIELDS` already covered
+      all six jobless fields (verified, not re-added).
+- [x] `.claude/CLAUDE.md`'s `SetupWizardAdlib.jsx` section and `docs/drift-app-warden.md` §7 (new
+      F141 entry + §7.3 gate matrix) updated in the same round.
+- [x] **This closes the entire "wire ad-lib in as production" saga across all three rounds this
+      session** (§19.1 field parity → §19.2 life-event re-entry → §19.3 jobless hand-off removal).
+      `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
+      experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.

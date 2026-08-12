@@ -1,8 +1,9 @@
 import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem, loadResumeProfile } from "../lib/db.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
+import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
@@ -1564,6 +1565,33 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
     setEditingFreedomAllowance(false);
   };
 
+  // §2.E1 v2 — résumé upload/view for every employed user (not gated behind
+  // canAccessAiFeatures, since this is plain file storage, not the AI skill-gap
+  // review — that stays admin/tester/investor-only in New Job Season). resumeSummary
+  // starts null (not yet loaded); ResumeReviewCard's own onProfileChange keeps it in
+  // sync after an edit without this row re-fetching the profile itself.
+  const [editingResume, setEditingResume] = useState(false);
+  const [resumeSummary, setResumeSummary] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const profile = await loadResumeProfile();
+      if (cancelled) return;
+      setResumeSummary({
+        hasFile: !!profile?.storagePath,
+        filename: profile?.originalFilename ?? null,
+        hasText: !!profile?.resumeText?.trim(),
+      });
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const resumeValueLabel = !resumeSummary ? "…"
+    : resumeSummary.hasFile ? `Saved — ${resumeSummary.filename}`
+    : resumeSummary.hasText ? "Saved — pasted text"
+    : "Not saved";
+
   return (
     <>
       <BackBar onBack={onBack} title="App Preferences" />
@@ -1601,6 +1629,35 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               <Pressable onClick={() => { setEditingFreedomAllowance(false); setFreedomAllowanceEnabled(config.freedomAllowanceEnabled ?? true); setFreedomAllowance(config.freedomAllowance ?? 50); }} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
               <Pressable onClick={handleSaveFreedomAllowance} className="text-xs" style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
+          </div>
+        )}
+        {!editingResume ? (
+          <Pressable
+            onClick={() => setEditingResume(true)}
+            style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
+          >
+            <DetailRow
+              label="Résumé"
+              value={resumeValueLabel}
+              valueColor={resumeSummary && !resumeSummary.hasFile && !resumeSummary.hasText ? "var(--color-text-disabled)" : undefined}
+            />
+          </Pressable>
+        ) : (
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
+            <div className="text-base" style={{ color: "var(--color-text-primary)", marginBottom: "10px" }}>Résumé</div>
+            <ResumeReviewCard
+              config={config}
+              showReview={false}
+              embedded
+              onProfileChange={setResumeSummary}
+            />
+            <Pressable
+              onClick={() => setEditingResume(false)}
+              className="text-xs"
+              style={{ width: "100%", marginTop: "12px", padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Done
+            </Pressable>
           </div>
         )}
         <DetailRow

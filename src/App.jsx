@@ -139,6 +139,11 @@ const BOTTOM_NAV = [
   },
 ];
 
+// key -> icon lookup, shared so the hamburger drawer's nav items can reuse
+// the exact same icons as BOTTOM_NAV instead of a second icon set drifting
+// out of sync with it.
+const NAV_ICONS = Object.fromEntries(BOTTOM_NAV.map(i => [i.key, i.icon]));
+
 // §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
@@ -172,21 +177,30 @@ function SidebarNavItem({ item, active, onClick, badge, badgeColor }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: "8px",
+        gap: "12px",
         width: "100%",
         textAlign: "left",
-        padding: "14px 20px",
+        padding: "13px 20px 13px 17px",
+        margin: "2px 8px 2px 0",
         letterSpacing: "2px",
         textTransform: "uppercase",
-        background: active ? "var(--color-bg-surface)" : "transparent",
+        background: active ? "rgba(0,200,150,0.12)" : "transparent",
         color: active ? "var(--color-teal)" : "var(--color-text-primary)",
-        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
+        borderLeft: active ? "3px solid var(--color-accent-primary)" : "3px solid transparent",
+        borderRadius: active ? "0 12px 12px 0" : "0 12px 12px 0",
         border: "none",
         cursor: "pointer",
-        transition: "all 0.15s",
+        transition: "background 0.15s, color 0.15s",
       }}
     >
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+      <span style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+        {item.icon && (
+          <span style={{ display: "flex", flexShrink: 0, color: active ? "var(--color-teal)" : "var(--color-text-secondary)", transition: "color 0.15s" }}>
+            {item.icon}
+          </span>
+        )}
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+      </span>
       {badge > 0 && (
         <span className="text-2xs" style={{
           flexShrink: 0,
@@ -1928,6 +1942,14 @@ export default function App() {
       // re-employed via the wizard. Job application log stays as
       // user history.
       returnToWorkDate: null,
+      // Gig/odd-job income logged for *this* job-loss episode's runway
+      // (sumJobHuntIncome, jobLossRunway.js) has no meaning once it's over —
+      // unlike jobApplications, this isn't a record worth keeping across a
+      // later, separate occurrence of New Job Season. Without this reset it
+      // sat invisible (NewJobSeasonHomePanel only mounts while
+      // newJobSeasonMode is true) until the *next* job loss, then reappeared
+      // and got summed into a runway it has nothing to do with.
+      jobHuntIncomeLog: [],
     }));
     setWizardEntry("structure_change");
   }
@@ -2340,7 +2362,9 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div>
-                <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {config.employerPreset === "DHL" && (
+                  <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+                )}
                 <div className="text-base" style={{ fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
@@ -2731,27 +2755,25 @@ export default function App() {
           </Pressable>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-                <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
-                {isAdmin && tempLockDate && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
-                      {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
-                      aria-label="Clear lock date"
-                    >×</Pressable>
-                  </div>
-                )}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Brand title — deliberately bigger/heavier than the .text-* body scale
+                (which tops out at 14px via .text-md) to read as an app title, not
+                a label. Same weight/letter-spacing tier as the display-font headings
+                (see index.css's font-weight:900 heading tier). */}
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "19px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1, flexShrink: 0 }}>A:Fin</div>
+            {isAdmin && tempLockDate && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                  {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <Pressable
+                  onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                  className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, display: "flex", alignItems: "center" }}
+                  aria-label="Clear lock date"
+                >×</Pressable>
               </div>
-              <div className="text-md" style={{ fontWeight: "bold" }}>Authority Finance</div>
-            </div>
+            )}
           </div>
 
           {/* ── Beta Tester Homebase — tracked beta testers only, sits directly
@@ -3123,7 +3145,11 @@ export default function App() {
         }}
       />
 
-      {/* ── Mobile drawer (slide-in sidebar) ── */}
+      {/* ── Mobile drawer (slide-in sidebar) ──
+          Revamp (subtle): gradient background + soft outward shadow instead of a
+          flat surface color + hardcoded #2a2a2a border, so the drawer reads as a
+          raised panel like the rest of the Flow shell (LiquidGlass bottom nav,
+          modals) instead of the oldest untouched surface in the app. */}
       <div
         className={`mobile-drawer-overlay drawer-slide${drawerOpen ? " open" : ""}`}
         style={{
@@ -3132,8 +3158,9 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid #2a2a2a",
+          background: "var(--color-bg-gradient)",
+          borderRight: "1px solid var(--color-border-accent)",
+          boxShadow: "8px 0 32px rgba(0, 0, 0, 0.5)",
           zIndex: 50,
           display: "flex",
           flexDirection: "column",
@@ -3142,7 +3169,12 @@ export default function App() {
         {/* Drawer header */}
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            {/* Tagline only exists for an employer-preset account (today, only
+                DHL) — a base user has no employer badge to show at all, so no
+                "Finance" placeholder fallback. */}
+            {config.employerPreset === "DHL" && (
+              <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G</div>
+            )}
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -3167,18 +3199,20 @@ export default function App() {
           </div>
         </div>
 
-        {/* Drawer nav items */}
+        {/* Drawer nav items — icons mirror BOTTOM_NAV via NAV_ICONS so the
+            hamburger menu and the floating bottom nav never drift apart. */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
-          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
+          <SidebarNavItem item={{ key: "home", label: "Home", icon: NAV_ICONS.home }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {effectiveNavItems.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
+            <SidebarNavItem key={item.key} item={{ ...item, icon: NAV_ICONS[item.key] }} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
               onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               className="text-xs" style={{
-                display: "block", width: "100%", textAlign: "left",
+                display: "flex", alignItems: "center", gap: "10px",
+                width: "100%", textAlign: "left",
                 padding: "14px 20px", letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
                 color: "var(--color-text-primary)",
@@ -3186,6 +3220,15 @@ export default function App() {
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
+              {/* Gavel — signals a deliberate, consequential change (job loss,
+                  new job, pay-structure change), distinct from routine nav icons. */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+                <path d="m16 16 6-6" />
+                <path d="m8 8 6-6" />
+                <path d="m9 7 8 8" />
+                <path d="m21 11-8-8" />
+              </svg>
               Life Events
             </Pressable>
             {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
@@ -3499,9 +3542,28 @@ export default function App() {
           </div>
         )}
 
-        {/* Active section indicator at bottom */}
-        <div className="text-xs" style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+        {/* Drawer footer — week/pay-period counter (moved here from the mobile
+            header/nav bar), then the active-section indicator below it. */}
+        <div style={{ borderTop: "1px solid #1e1e1e" }}>
+          {currentWeekNumber && (
+            <div style={{ padding: "14px 20px 0" }}>
+              <div className="text-2xs" style={{
+                display: "inline-block",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                padding: "3px 10px",
+                background: "rgba(0,200,150,0.14)",
+                color: "var(--color-green)",
+                border: "1px solid rgba(0,200,150,0.32)",
+                borderRadius: "10px",
+              }}>
+                {currentWeekLabel}
+              </div>
+            </div>
+          )}
+          <div className="text-xs" style={{ padding: "16px 20px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
+            Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+          </div>
         </div>
       </div>
 

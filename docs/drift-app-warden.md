@@ -446,13 +446,21 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
-**F11 · `handleBackToWork()`** — `App.jsx:1454–1478` — **[G]**
+**F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
-nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, routes into
-`structure_change`.
+nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets
+`jobHuntIncomeLog: []`, routes into `structure_change`. `jobApplications` is the one
+deliberate exception — kept as user history across occurrences, per its own inline
+comment — don't "fix" that by adding it here without a real product decision to reverse it.
 > **IF** a new `newJobSeason*` or unemployment-related config field is added anywhere, **THEN**
 > it must be reset here — or it leaks into the re-employed state and every consumer that
 > gates on it misfires. Check: grep new field name; confirm it appears in this reset patch.
+> **IF** a new field is scoped to *one job-loss occurrence* (like `jobHuntIncomeLog` — fixed
+> 2026-08, a user found a stale gig-income entry from a prior occurrence still counting
+> toward a later, unrelated runway, since the field isn't gated on `newJobSeasonMode` and
+> `NewJobSeasonEntry` never re-initializes it on a fresh activation either), **THEN** default
+> to resetting it here too — the burden of proof is on keeping data across occurrences
+> (`jobApplications`), not on clearing it.
 
 **F12 · `LifeEventMenu` routing + `NewJobSeasonEntry` activation** — `App.jsx:3526–3531` /
 `:3533–3548` — **[G]**
@@ -4016,9 +4024,13 @@ scoping holds).
 > spares the active chat, resume-from-history, and delete.
 
 **F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
-(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `aiContext.js`
-(`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
-`RESUME_REVIEW_SYSTEM_PROMPT`), migration `032_add_resume_profile.sql` — **[L/G]**
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx` (mounted in both
+`NewJobSeasonHomePanel.jsx`, gated, and `ProfilePanel.jsx`'s `PreferencesDetail`, ungated — see
+the "second mount site" note below), `lib/resumeFile.js` (v2),
+`aiContext.js` (`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
+`RESUME_REVIEW_SYSTEM_PROMPT`), migrations `036_add_resume_profile.sql` (this entry previously
+cited `032` — corrected 2026-08-11; `032` is `changelog_entries`, unrelated) and
+`041_add_resume_profile_storage.sql` (v2) — **[L/G]**
 Built 2026-07-25. First real occupants of the "sections 4+" admin/tester/investor-only tier the
 doc comments in `entitlements.js` have described since the Ask Coach/Net Worth gate split — both
 gate **client-side** on `canAccessAiFeatures({isAdmin, isTester, isInvestor})`, the narrow gate
@@ -4047,6 +4059,38 @@ that table's check constraint by the same migration) via the existing `saveCoach
 new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
 scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
 system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+
+**v2 update, 2026-08-11 (§2.E1 v2) — `resume_profile` now also holds file metadata, and a
+Storage bucket entered the picture.** Migration `041_add_resume_profile_storage.sql` added
+`storage_path`/`original_filename`/`mime_type`/`file_size_bytes` columns and the app's first-ever
+Supabase Storage bucket (`resumes`, private, own-folder RLS keyed on the path's `<user_id>/...`
+prefix — a genuinely new RLS mechanism, not the row-level `auth.uid() = user_id` pattern every
+other table here uses, since Storage policies can't reference `resume_profile` directly).
+`db.js` gained three Storage-facing functions — `uploadResumeFile`/`getResumeFileUrl`/
+`deleteResumeFile` — alongside `loadResumeProfile`/`saveResumeProfile`, both extended to
+read/write the new columns. `lib/resumeFile.js` (new file) does client-side size validation +
+best-effort text extraction (pdfjs-dist for PDF, mammoth for DOCX, plain read for `.txt`, both
+libraries dynamically imported so a paste-only user never loads either). **`saveResumeProfile`'s
+partial-upsert contract is the load-bearing detail here:** file-metadata columns are only written
+when the caller's payload object contains that key at all — a plain text/target-role edit (v1's
+existing call shape, still used verbatim by the paste textarea and target-role field) omits the
+keys entirely, so Postgres upsert leaves a previously uploaded file's metadata untouched instead
+of nulling it out on every keystroke-triggered save. Removing a file explicitly passes
+`{ storagePath: null, ... }` to distinguish "clear this" from "don't touch this."
+
+**Second mount site, 2026-08-11 — `ProfilePanel.jsx`'s `PreferencesDetail`, deliberately
+*outside* the `canAccessAiFeatures` gate.** Résumé storage (upload/paste/view/remove) is now also
+reachable from App Preferences → the Résumé row directly under Freedom Allowance, for *every*
+employed user — not just admin/tester/investor, and not gated on `newJobSeasonMode` either, since
+the whole point is letting a currently-employed user save a résumé without faking a job loss to
+reach `NewJobSeasonHomePanel`. This is intentionally **not** a second copy of F124's
+`canAccessAiFeatures` gate lifted onto a new surface — it's the same `ResumeReviewCard.jsx`
+component reused with two new props (`showReview={false}` hides the target-role field/Get
+Skill-Gap Review button/review output; `embedded={true}` drops the outer `<SH>` heading) so the
+AI-gated skill-gap review and the ungated file storage stay one component with one save path
+instead of forking into a duplicate. `onProfileChange` (new prop) reports `{ hasFile, filename,
+hasText }` back up after any save so `PreferencesDetail`'s own collapsed-row summary ("Saved —
+resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetching the profile.
 > **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
 > decision (`coach-entry-points.md`, 2026-07-25) is **paid-only for everyone else, not
 > trial-included** — a real post-card-charge subscription (`entitlement.state === "active"`) for
@@ -4065,7 +4109,26 @@ system yet, the same stage `AskCoachPanel` was in before F123 landed persistence
 > and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
 > this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
 > `ResumeReviewCard.test.jsx`, `newJobSeasonFlow.test.jsx`'s gate-verification block (confirms a real
-> trial entitlement, not just admin/tester, is correctly refused).
+> trial entitlement, not just admin/tester, is correctly refused). **IF** `ResumeReviewCard.jsx`
+> is edited, **THEN** it now has two mount sites with opposite gating — `NewJobSeasonHomePanel`
+> (behind `canAccessAiFeatures`, `showReview` defaults true) and `ProfilePanel`'s Preferences row
+> (ungated, `showReview={false}`) — verify a change doesn't leak the AI review UI into the ungated
+> site (e.g. `showReview`'s default silently flipping, or new review-only markup added outside the
+> `{showReview && (...)}` block) or hide storage-only functionality from the New Job Season site.
+> `ProfilePanel.test.jsx`'s Résumé-row block asserts "Target role"/"Get Skill-Gap Review" are
+> absent there specifically. **IF** `saveResumeProfile`'s
+> row-building loop (the `RESUME_FILE_META_COLUMNS` list in `db.js`) is touched, **THEN** verify
+> the "key omitted vs. key explicitly null" distinction still holds — a regression here nulls out
+> every user's uploaded résumé file the next time they edit the target-role field, silently, with
+> no error. **IF** §2.E1 v3's structured-extraction pass lands (`resume_profile.structured_sections`
+> or similar), **THEN** it's a new column on the same row, following the same partial-upsert
+> contract — do not let it ride the always-written base-field block by mistake. **IF** a second
+> feature ever needs Storage (§2.G's forward note), **THEN** check whether the `resumes` bucket's
+> own-folder RLS shape (`(storage.foldername(name))[1] = auth.uid()::text`) can be reused before
+> standing up a second bucket/policy set from scratch — this is the first one in the app, so
+> there's no established alternative pattern to diverge from yet. Check:
+> `dbResumeProfile.test.js`'s partial-upsert block, `resumeFile.test.js`'s extraction-dispatch
+> cases, `ResumeReviewCard.test.jsx`'s v2 file-upload block.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
@@ -4089,7 +4152,7 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 | `buildJobHuntContext`'s source functions (F124) — `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `NewJobSeasonHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
-| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral` | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either | D4 |
+| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` in `NewJobSeasonHomePanel` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral`; does **not** apply to `ResumeReviewCard`'s second mount site in `ProfilePanel`'s Preferences row, which is deliberately ungated storage-only (`showReview={false}`) | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either at the New Job Season site; `ProfilePanel.test.jsx`'s Résumé-row block confirms the Preferences site renders for any account, with no review UI | D4 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
 

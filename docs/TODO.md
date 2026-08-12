@@ -833,6 +833,60 @@ generic form to ask the right follow-up questions on its own.*
 
 ---
 
+### K. Hub-Aware Context — Beta Homebase / Money Moves (Productivity Hub) *(new — scoped 2026-08-11, not yet built)*
+
+*Scoping only — nothing below is implemented. Origin: user request to give Coach "full circle
+insights" — able to reference the same changelog, personal checklist, and team-authored tips a
+person already sees on their own hub page (Beta Tester Homebase for tracked beta testers,
+`ProductivityHub.jsx`/"Money Moves" for everyone else — `BetaHomebase.jsx`'s header comment),
+so a conversation with Coach doesn't feel disconnected from what that person is already looking
+at elsewhere in the app.*
+
+- [ ] **Data sources already exist — this is a context-injection task, not a new feature build.**
+  Both hub surfaces already read three admin-authored/systemic content types via `db.js`:
+  changelog entries (`fetchPublishedChangelogEntries` — `changelog_entries` table, migration 032,
+  shared by both audiences), a personal feature checklist (`fetchBetaChecklistItems`/
+  `fetchBaseChecklistItems` + the caller's own completions via `fetchMyChecklistCompletions`/
+  `fetchMyBaseChecklistCompletions` — `beta_content_items`/`base_content_items` where
+  `kind = 'checklist'`, migrations 037/039), and team-authored tips (`fetchBetaSuggestions`/
+  `fetchBaseSuggestions` — same tables, `kind = 'suggestion'`, the "Suggestions From The Team"
+  section rendered by `SuggestionsSection` in `BetaHomebase.jsx`). Coach's job here is to read
+  the same fetchers the hub itself already calls, never a parallel query — same D1 grounding
+  rule as everything else in this section (§2's cardinal rule; drift-app-warden.md Spine D).
+- [ ] **Audience split must be respected in the context builder, not flattened.** A tracked beta
+  tester (`isTrackedBetaTester`) sees Beta Homebase content; everyone else sees Money Moves
+  content — these are different rows from different tables (`beta_content_items` vs.
+  `base_content_items`), not a formatting difference. The context builder needs the same branch
+  `App.jsx`'s nav already uses to pick between the two hub pages, so Coach never references a
+  checklist item or tip the person can't actually see on their own hub page.
+- [ ] **Scope as `buildCoachContext` additions, not a new context builder.** Unlike Job Hunt
+  Assistant's `buildJobHuntContext()` (a separate function for a separate mode), this context
+  belongs in the *general* Ask Coach chat (§2.B) — every user already reaches that surface, hub
+  content isn't gated behind anything extra beyond the ordinary Coach gate. Add a compact
+  serialized block: which checklist items are still open (title only, not full `body` — keep the
+  context block small, same compression discipline as the rest of `aiContext.js`), the caller's
+  own completion count, the most recent 1–2 published changelog entries, and the most recent 1–2
+  team suggestions.
+- [ ] **What "full circle insights" means in practice — proactive reference, not a new command
+  set.** No new UI, no new Coach mode — this is purely grounding so that, inside an ordinary Ask
+  Coach conversation, Coach can naturally say things like "looks like you haven't tried
+  [checklist item] yet" or "did you catch the [changelog entry] update?" when it's relevant to
+  what the user is asking — the same way Coach already references real runway/goal/savings
+  numbers instead of speaking in generalities.
+- [ ] **Open question — read-only grounding vs. write-back.** Simplest v1: Coach can *reference*
+  hub content but never mutate it (no "mark that off for me" via chat) — matches every other
+  context field in `aiContext.js` today, which are all read-only snapshots. A write-back path
+  (Coach checking off a completed item on the user's behalf, calling `toggleBetaChecklistItem`/
+  `toggleBaseChecklistItem`) is a real v2 idea but needs its own confirm-before-write design, same
+  trust boundary §2.J's paystub-extraction flow already established (extracted/inferred data
+  pre-fills, never auto-applies) — don't build silent writes into Coach's first pass at this.
+- [ ] **Not yet scoped:** `ScoreSection` content (`BetaHomebase.jsx`) — deliberately excluded,
+  since beta scoring is between the tester and the team, not something Coach should be
+  volunteering opinions on; feedback-box submissions (`logBetaFeedback`/`logBaseFeedback`) are
+  one-way (user → team) and have no read path back into Coach context either.
+
+---
+
 ## 3. Master Timeline — Config History & Point-in-Time Computation Integrity
 
 **STATUS: FOUNDATION COMPLETE · PROOF-OF-CONCEPT SHIPPED · 70 FIELDS REMAIN**

@@ -158,18 +158,26 @@ function deriveCoachChatsMeta(chats) {
   };
 }
 
-function SidebarNavItem({ item, active, onClick }) {
+// `badge`/`badgeColor` (added 2026-08-12) — desktop-sidebar counterpart to
+// the small colored count bubble the mobile header's icon buttons already
+// show (Beta Homebase/Money Moves). Renders as a flex row instead of the
+// old block-level label so the count can sit flush right without wrapping;
+// `minWidth: 0` + `textOverflow: ellipsis` on the label guards against the
+// 190px sidebar clipping a long label instead of silently overflowing it.
+function SidebarNavItem({ item, active, onClick, badge, badgeColor }) {
   return (
     <Pressable
       onClick={onClick}
       className="text-xs" style={{
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "8px",
         width: "100%",
         textAlign: "left",
         padding: "14px 20px",
         letterSpacing: "2px",
         textTransform: "uppercase",
-       
         background: active ? "var(--color-bg-surface)" : "transparent",
         color: active ? "var(--color-teal)" : "var(--color-text-primary)",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
@@ -178,7 +186,27 @@ function SidebarNavItem({ item, active, onClick }) {
         transition: "all 0.15s",
       }}
     >
-      {item.label}
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+      {badge > 0 && (
+        <span className="text-2xs" style={{
+          flexShrink: 0,
+          background: badgeColor ?? "var(--color-green)",
+          color: "var(--color-bg-base)",
+          borderRadius: "50%",
+          minWidth: "16px",
+          height: "16px",
+          padding: "0 4px",
+          fontFamily: "var(--font-sans)",
+          fontWeight: "bold",
+          letterSpacing: "normal",
+          textTransform: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          {badge}
+        </span>
+      )}
     </Pressable>
   );
 }
@@ -1980,6 +2008,21 @@ export default function App() {
   const paywallBypassed = isAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
 
+  // Beta Homebase / Money Moves badge count+color — single source shared by
+  // the mobile header's icon buttons AND the desktop sidebar's nav item
+  // (added 2026-08-12; the desktop sidebar previously had no entry point to
+  // either page at all — see SidebarNavItem usage below). Same red/green
+  // convention both places: red once anything "new" (changelog/suggestion/
+  // score) has landed since last opened, green for a plain unchecked count.
+  const betaHomebaseBadgeCount = betaHomebaseBadge.newCount > 0
+    ? betaHomebaseBadge.newCount + betaHomebaseBadge.uncheckedCount
+    : betaHomebaseBadge.uncheckedCount;
+  const betaHomebaseBadgeColor = betaHomebaseBadge.newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+  const productivityHubBadgeCount = productivityHubBadge.newCount > 0
+    ? productivityHubBadge.newCount + productivityHubBadge.uncheckedCount
+    : productivityHubBadge.uncheckedCount;
+  const productivityHubBadgeColor = productivityHubBadge.newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
+
   // Free trial breakdown — shown once ahead of first-run SetupWizard entry,
   // only for a fresh signup (wizardEntry===false, never a life-event
   // re-entry) with a real trial window seeded. Required "I understand"
@@ -2313,14 +2356,34 @@ export default function App() {
               </svg>
             </Pressable>
           </div>
-          {currentWeekNumber && <div className="text-2xs" style={{ display: "inline-block", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
-          {/* Persistent unconfirmed-weeks badge — always visible when any past week
-              lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
-          {unconfirmedCount > 0 && (
-            <Pressable onClick={() => setConfirmDismissed(false)} className="text-2xs" style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
-              ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
-            </Pressable>
-          )}
+          {currentWeekNumber && <div className="text-2xs" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
+          {/* Notifications row — desktop counterpart to the mobile header's
+              always-visible bell icon (added 2026-08-12; previously this only
+              rendered at all once unconfirmedCount > 0, so desktop had no bell
+              affordance whatsoever the rest of the time). Same bell glyph as
+              the mobile header, same onClick (clears confirmDismissed so the
+              week-confirm modal re-opens). */}
+          <Pressable
+            onClick={() => setConfirmDismissed(false)}
+            className="text-2xs" style={{
+              marginTop: "8px", display: "flex", alignItems: "center", gap: "6px", width: "100%",
+              background: "transparent",
+              border: unconfirmedCount > 0 ? "1px solid #e8856a55" : "1px solid var(--color-border-subtle)",
+              borderRadius: "3px",
+              color: unconfirmedCount > 0 ? "var(--color-deduction)" : "var(--color-text-secondary)",
+              padding: "5px 8px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left",
+            }}
+            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? "weeks" : "pay periods"} to confirm` : "Notifications"}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {unconfirmedCount > 0
+                ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm`
+                : "Notifications — up to date"}
+            </span>
+          </Pressable>
           {isAdmin && tempLockDate && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -2342,6 +2405,30 @@ export default function App() {
           {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Beta Tester Homebase / Money Moves — desktop sidebar entry
+              point (added 2026-08-12). Both pages already existed and were
+              reachable via the mobile header's icon buttons, but the desktop
+              sidebar never got a matching nav item, so desktop users had no
+              way to reach either page at all. Same mutual-exclusivity and
+              badge convention as the mobile header icons (shared
+              betaHomebaseBadgeCount/productivityHubBadgeCount above). ── */}
+          {isTrackedTester ? (
+            <SidebarNavItem
+              item={{ key: "betaHomebase", label: "Beta Homebase" }}
+              active={currentView === "betaHomebase"}
+              onClick={goToBetaHomebase}
+              badge={betaHomebaseBadgeCount}
+              badgeColor={betaHomebaseBadgeColor}
+            />
+          ) : (
+            <SidebarNavItem
+              item={{ key: "moneyMoves", label: "Money Moves" }}
+              active={currentView === "moneyMoves"}
+              onClick={goToProductivityHub}
+              badge={productivityHubBadgeCount}
+              badgeColor={productivityHubBadgeColor}
+            />
+          )}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <Pressable
@@ -2675,53 +2762,48 @@ export default function App() {
               unchecked checklist items + new changelog/suggestion/score
               updates since last opened — same red badge style as the
               check-in bell just to its right. ── */}
-          {isTrackedTester && (() => {
-            const { uncheckedCount, newCount } = betaHomebaseBadge;
-            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
-            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
-            return (
-              <Pressable
-                onClick={goToBetaHomebase}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "betaHomebase" ? "var(--color-teal)" : "var(--color-text-primary)"),
-                  cursor: "pointer",
-                  width: "44px",
-                  height: "44px",
+          {isTrackedTester && (
+            <Pressable
+              onClick={goToBetaHomebase}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: betaHomebaseBadge.newCount > 0 ? "var(--color-deduction)" : (currentView === "betaHomebase" ? "var(--color-teal)" : "var(--color-text-primary)"),
+                cursor: "pointer",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                position: "relative",
+              }}
+              aria-label={betaHomebaseBadgeCount > 0 ? `Beta Tester Homebase — ${betaHomebaseBadgeCount} ${betaHomebaseBadge.newCount > 0 ? "new" : "to do"}` : "Beta Tester Homebase"}
+            >
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+              {betaHomebaseBadgeCount > 0 && (
+                <span className="text-2xs" style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  background: betaHomebaseBadgeColor,
+                  color: "var(--color-bg-base)",
+                  borderRadius: "50%",
+                  width: "16px",
+                  height: "16px",
+                  fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  position: "relative",
-                }}
-                aria-label={badgeCount > 0 ? `Beta Tester Homebase — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Beta Tester Homebase"}
-              >
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 11l3 3L22 4" />
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-                {badgeCount > 0 && (
-                  <span className="text-2xs" style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    background: badgeColor,
-                    color: "var(--color-bg-base)",
-                    borderRadius: "50%",
-                    width: "16px",
-                    height: "16px",
-                    fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {badgeCount}
-                  </span>
-                )}
-              </Pressable>
-            );
-          })()}
+                }}>
+                  {betaHomebaseBadgeCount}
+                </span>
+              )}
+            </Pressable>
+          )}
 
           {/* ── Money Moves (Productivity Hub) — every signed-in user who ISN'T
               a tracked beta tester (docs: 039_add_base_productivity_hub.sql).
@@ -2730,52 +2812,47 @@ export default function App() {
               them. Same green/red badge convention, distinct icon (lightning
               bolt, not the beta checkmark) so the two are never mistaken for
               each other at a glance. ── */}
-          {!isTrackedTester && (() => {
-            const { uncheckedCount, newCount } = productivityHubBadge;
-            const badgeCount = newCount > 0 ? newCount + uncheckedCount : uncheckedCount;
-            const badgeColor = newCount > 0 ? "var(--color-deduction)" : "var(--color-green)";
-            return (
-              <Pressable
-                onClick={goToProductivityHub}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: newCount > 0 ? "var(--color-deduction)" : (currentView === "moneyMoves" ? "var(--color-teal)" : "var(--color-text-primary)"),
-                  cursor: "pointer",
-                  width: "44px",
-                  height: "44px",
+          {!isTrackedTester && (
+            <Pressable
+              onClick={goToProductivityHub}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: productivityHubBadge.newCount > 0 ? "var(--color-deduction)" : (currentView === "moneyMoves" ? "var(--color-teal)" : "var(--color-text-primary)"),
+                cursor: "pointer",
+                width: "44px",
+                height: "44px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                position: "relative",
+              }}
+              aria-label={productivityHubBadgeCount > 0 ? `Money Moves — ${productivityHubBadgeCount} ${productivityHubBadge.newCount > 0 ? "new" : "to do"}` : "Money Moves"}
+            >
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              {productivityHubBadgeCount > 0 && (
+                <span className="text-2xs" style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  background: productivityHubBadgeColor,
+                  color: "var(--color-bg-base)",
+                  borderRadius: "50%",
+                  width: "16px",
+                  height: "16px",
+                  fontWeight: "bold",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  position: "relative",
-                }}
-                aria-label={badgeCount > 0 ? `Money Moves — ${badgeCount} ${newCount > 0 ? "new" : "to do"}` : "Money Moves"}
-              >
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-                {badgeCount > 0 && (
-                  <span className="text-2xs" style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    background: badgeColor,
-                    color: "var(--color-bg-base)",
-                    borderRadius: "50%",
-                    width: "16px",
-                    height: "16px",
-                    fontWeight: "bold",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {badgeCount}
-                  </span>
-                )}
-              </Pressable>
-            );
-          })()}
+                }}>
+                  {productivityHubBadgeCount}
+                </span>
+              )}
+            </Pressable>
+          )}
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
           <Pressable

@@ -149,13 +149,19 @@ function extractHeaderLines(markdown) {
   return markdown.split("\n").filter(line => /^#{1,6}\s+/.test(line.trim()));
 }
 
+// Title size (2026-08-12) matches MARKDOWN_COMPONENTS' own h1 exactly
+// (ChangelogModal.jsx, 22px `heading-lg`) — this header sits just above the
+// entry's markdown body, so the card's own title and "the actual header in
+// the body" (a `# Heading` line inside that same markdown) read as one
+// continuous top-of-hierarchy tier, not two different sizes competing for
+// "biggest thing on the card."
 function ChangelogEntryHeader({ entry }) {
   const publishedLabel = entry.published_at
     ? new Date(entry.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : null;
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px" }}>
-      <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+      <div className="heading-lg" style={{ fontSize: "22px", color: "var(--color-text-primary)" }}>{entry.title}</div>
       {publishedLabel && (
         <div className="text-xs" style={{ color: "var(--color-text-secondary)", flexShrink: 0 }}>{publishedLabel}</div>
       )}

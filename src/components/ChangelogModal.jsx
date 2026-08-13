@@ -8,26 +8,24 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 // dropped-in web page. No rehype-raw plugin is used anywhere in this file, so
 // raw HTML in an entry's body is never rendered — admin-authored markdown is
 // still untrusted-enough content to keep that door shut.
+// Body/header ladder (2026-08-12 rework) — body content bumped text-base
+// (14px) → text-md (15px) so it reads clearly above SH's page-section-title
+// text (ui.jsx, also bumped to 14px this round) instead of tying with it.
+// That pushed h3 into a collision with the new 15px body (h3 used to be
+// text-md itself), so the whole header ladder shifted up a notch to keep
+// daylight between every tier: h3 16px, h2 18px, h1 22px — each still a
+// clear, deliberate step, not an arbitrary bump. `heading-lg` (src/index.css)
+// is the site's own headline utility class.
 const MARKDOWN_COMPONENTS = {
-  p:  ({ children }) => <p className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.7, margin: "0 0 12px" }}>{children}</p>,
+  p:  ({ children }) => <p className="text-md" style={{ color: "var(--color-text-primary)", lineHeight: 1.7, margin: "0 0 12px" }}>{children}</p>,
   strong: ({ children }) => <strong style={{ color: "var(--color-teal)", fontWeight: 700 }}>{children}</strong>,
   em: ({ children }) => <em style={{ color: "var(--color-text-primary)" }}>{children}</em>,
   ul: ({ children }) => <ul style={{ margin: "0 0 12px", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>{children}</ul>,
   ol: ({ children }) => <ol style={{ margin: "0 0 12px", paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "6px" }}>{children}</ol>,
-  li: ({ children }) => <li className="text-base" style={{ color: "var(--color-text-primary)", lineHeight: 1.6 }}>{children}</li>,
-  // Headers (2026-08-11 rework) — previously h1/h2/h3 all rendered at
-  // text-base/text-xs (i.e. AT OR BELOW body-paragraph size), distinguished
-  // only by color/case, so nothing actually read as a header hierarchy.
-  // Body stays exactly where it was (text-base, 14px) — that's the
-  // deliberate baseline everything else is sized relative to. # and ##
-  // size UP from it; ### steps back down close to body size (still bold +
-  // display-font so it still reads as *a* header, just a minor one) rather
-  // than staying tiny. `heading-lg` (src/index.css) is the site's own
-  // headline utility class — first real usage of it outside PanelHero-style
-  // components.
-  h1: ({ children }) => <div className="heading-lg" style={{ fontSize: "20px", color: "var(--color-text-primary)", marginTop: "18px", marginBottom: "8px" }}>{children}</div>,
-  h2: ({ children }) => <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", lineHeight: 1.3, color: "var(--color-teal)", marginTop: "16px", marginBottom: "6px" }}>{children}</div>,
-  h3: ({ children }) => <div className="text-md" style={{ fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-secondary)", marginTop: "14px", marginBottom: "6px" }}>{children}</div>,
+  li: ({ children }) => <li className="text-md" style={{ color: "var(--color-text-primary)", lineHeight: 1.6 }}>{children}</li>,
+  h1: ({ children }) => <div className="heading-lg" style={{ fontSize: "22px", color: "var(--color-text-primary)", marginTop: "18px", marginBottom: "8px" }}>{children}</div>,
+  h2: ({ children }) => <div style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-display)", lineHeight: 1.3, color: "var(--color-teal)", marginTop: "16px", marginBottom: "6px" }}>{children}</div>,
+  h3: ({ children }) => <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-secondary)", marginTop: "14px", marginBottom: "6px" }}>{children}</div>,
   a:  ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--color-teal)" }}>{children}</a>,
   code: ({ children }) => <code className="text-sm" style={{ fontFamily: "var(--font-mono)", background: "var(--color-bg-raised)", padding: "1px 5px", borderRadius: "4px", }}>{children}</code>,
   blockquote: ({ children }) => <blockquote style={{ margin: "0 0 12px", borderLeft: "2px solid var(--color-border-accent)", paddingLeft: "12px", color: "var(--color-text-secondary)", fontStyle: "italic" }}>{children}</blockquote>,
@@ -61,7 +59,7 @@ export function ChangelogModal({ open, entry, onClose }) {
           <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
             What's New{entry.version_label ? ` · ${entry.version_label}` : ""}
           </div>
-          <div style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>
+          <div style={{ fontSize: "22px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>
             {entry.title}
           </div>
           {publishedLabel && (
@@ -98,7 +96,7 @@ export function ChangelogHistoryModal({ open, entries, onClose }) {
     <div className="fold-backdrop" data-fold={fold.fold} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div className="fold-modal" data-fold={fold.fold} onClick={(e) => e.stopPropagation()} style={{ width: "94vw", maxWidth: "640px", height: "90vh", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", padding: "22px", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexShrink: 0 }}>
-          <div className="heading-lg" style={{ fontSize: "20px", color: "var(--color-text-primary)" }}>Past Updates</div>
+          <div className="heading-lg" style={{ fontSize: "22px", color: "var(--color-text-primary)" }}>Past Updates</div>
           <Pressable onClick={onClose} aria-label="Close" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>✕</Pressable>
         </div>
 
@@ -111,7 +109,7 @@ export function ChangelogHistoryModal({ open, entries, onClose }) {
               : null;
             return (
               <div key={entry.id} style={{ paddingBottom: "18px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div className="heading-lg" style={{ fontSize: "18px", color: "var(--color-text-primary)" }}>
+                <div className="heading-lg" style={{ fontSize: "22px", color: "var(--color-text-primary)" }}>
                   {entry.title}
                 </div>
                 {publishedLabel && (

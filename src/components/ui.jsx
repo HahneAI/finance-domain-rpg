@@ -626,7 +626,13 @@ export function FlowSparklineCard({
 }
 
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle, className = "text-xs" }) { return <Pressable onClick={onClick} className={className} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</Pressable>; }
-export function SH({ children, color, textColor, right }) { const c = color || "var(--color-teal)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div className="text-xs" style={{ letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div className="text-sm" style={{ color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
+// Section-title size (2026-08-12): bumped text-xs(12px) → text-base(14px) —
+// still the smallest tier in the hierarchy (uppercase + 3px letter-spacing +
+// bold already reads as a "label," not prose) but was too small to register
+// as a real section title next to 15px/16px+ content. `right` stays one
+// notch below it (text-sm, 13px) so the count/total on the right edge
+// doesn't compete with the title for attention.
+export function SH({ children, color, textColor, right }) { const c = color || "var(--color-teal)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div className="text-base" style={{ letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div className="text-sm" style={{ color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
 export function PanelHero({ eyebrow, children }) {
   return (

@@ -7,6 +7,7 @@ import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveA
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
+import { PENDING_BETA_CODE_STORAGE_KEY, MAX_PENDING_BETA_CODE_ATTEMPTS, parsePendingBetaCode } from "./lib/pendingBetaCode.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -71,17 +72,8 @@ import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome }
 // cap full) clears it immediately — retrying an invalid request changes
 // nothing. parsePendingBetaCode() also accepts the old plain-string format
 // for anyone with a pre-hardening value already sitting in localStorage.
-const PENDING_BETA_CODE_STORAGE_KEY = "pendingBetaCode";
-const MAX_PENDING_BETA_CODE_ATTEMPTS = 5;
-
-function parsePendingBetaCode(raw) {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.code === "string") return { code: parsed.code, attempts: parsed.attempts ?? 0 };
-  } catch { /* pre-hardening plain-string format */ }
-  return { code: raw, attempts: 0 };
-}
+// (Storage key/parser now live in lib/pendingBetaCode.js, shared with
+// LoginScreen.jsx's read-only beta-seat-scarcity display.)
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },

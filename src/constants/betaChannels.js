@@ -48,3 +48,16 @@ export const BETA_CHANNEL_SEED_SEATS = {
   [BETA_CHANNELS.WEBSITE]: 20,
   [BETA_CHANNELS.FLYER]: 20,
 };
+
+// Human-facing channel name, for LoginScreen's honest seat-scarcity line
+// (2026-08-21). Display only — never combine with BETA_CHANNEL_SEED_SEATS
+// above to show a user-facing "X of 20 left" figure; that 20 is a snapshot
+// of the LAST seed, not a live total, and the marketing site's own seat
+// counter (which does read live Supabase counts) is the appropriate place
+// for any founding-seed-stagger display trick. Inside the app, only
+// getBetaChannelSeatsRemaining()'s live count (src/lib/supabase.js) may be
+// shown to a real visitor.
+export const BETA_CHANNEL_LABEL = {
+  [BETA_CHANNELS.WEBSITE]: "Website",
+  [BETA_CHANNELS.FLYER]: "Flyer",
+};

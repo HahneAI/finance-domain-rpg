@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BETA_CHANNELS, BETA_CHANNEL_CODE_PREFIX, BETA_CHANNEL_SEED_SEATS } from "../../constants/betaChannels.js";
+import { BETA_CHANNELS, BETA_CHANNEL_CODE_PREFIX, BETA_CHANNEL_SEED_SEATS, BETA_CHANNEL_LABEL } from "../../constants/betaChannels.js";
 
 // Guards against silent drift between these documentation constants and the
 // actual channel/prefix values live in Supabase's beta_codes table — nothing
@@ -21,6 +21,13 @@ describe("betaChannels constants", () => {
     expect(BETA_CHANNEL_SEED_SEATS).toEqual({
       website: 20,
       flyer: 20,
+    });
+  });
+
+  it("maps each channel to a human-facing display label", () => {
+    expect(BETA_CHANNEL_LABEL).toEqual({
+      website: "Website",
+      flyer: "Flyer",
     });
   });
 });

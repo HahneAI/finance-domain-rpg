@@ -117,3 +117,24 @@ export async function validateInvestorCode(code) {
   if (error) return false;
   return data !== null;
 }
+
+/**
+ * Live remaining-seat count for one beta_codes channel ('website' | 'flyer'),
+ * for LoginScreen's honest seat-scarcity line — real Supabase data only,
+ * never a hardcoded/seeded number (the marketing site's own founding-seed
+ * stagger is a display-layer trick that stays on the public marketing pages;
+ * this app always shows the true count). Relies on migration 028's
+ * "anon can read active beta codes" RLS policy (is_active = true rows only),
+ * the same policy the marketing site's own seat counter reads through.
+ * Returns null on any query error so the caller can hide the line rather
+ * than risk showing a stale/wrong number.
+ */
+export async function getBetaChannelSeatsRemaining(channel) {
+  const { count, error } = await supabase
+    .from("beta_codes")
+    .select("id", { count: "exact", head: true })
+    .eq("channel", channel)
+    .eq("is_active", true);
+  if (error) return null;
+  return count ?? 0;
+}

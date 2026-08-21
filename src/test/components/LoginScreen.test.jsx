@@ -9,6 +9,7 @@ const resetPasswordForEmail = vi.fn(async () => ({ error: null }))
 const signInWithOAuth = vi.fn(async () => ({ error: null }))
 const updateUser = vi.fn(async () => ({ error: null }))
 const validateInvestorCode = vi.fn(async () => false)
+const getBetaChannelSeatsRemaining = vi.fn(async () => null)
 
 vi.mock('../../lib/supabase.js', () => ({
   supabase: {
@@ -22,9 +23,11 @@ vi.mock('../../lib/supabase.js', () => ({
     from: () => ({ insert: vi.fn(async () => ({ error: null })) }),
   },
   validateInvestorCode: (...a) => validateInvestorCode(...a),
+  getBetaChannelSeatsRemaining: (...a) => getBetaChannelSeatsRemaining(...a),
 }))
 
 const { LoginScreen } = await import('../../components/LoginScreen.jsx')
+const { PENDING_BETA_CODE_STORAGE_KEY } = await import('../../lib/pendingBetaCode.js')
 
 beforeEach(() => {
   signInWithPassword.mockClear()
@@ -33,6 +36,8 @@ beforeEach(() => {
   signInWithOAuth.mockClear()
   updateUser.mockClear()
   validateInvestorCode.mockClear()
+  getBetaChannelSeatsRemaining.mockClear()
+  window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY)
 })
 
 describe('LoginScreen — sign in', () => {
@@ -299,5 +304,44 @@ describe('LoginScreen — password recovery mode', () => {
     fillRecovery('secret99', 'secret99')
     await waitFor(() => expect(screen.getByText(/Token expired/)).toBeTruthy())
     expect(onRecoveryDone).not.toHaveBeenCalled()
+  })
+})
+
+// Marketing handoff (2026-08-21) — continuing the marketing site's honest
+// seat-scarcity story ("20 online / 20 flyer") onto the actual signup form,
+// using the real live beta_codes count rather than any hardcoded number.
+describe('LoginScreen — beta seat-scarcity banner', () => {
+  it('shows no banner and defaults to the sign-in tab when no beta link was followed', () => {
+    render(<LoginScreen />)
+    expect(screen.getAllByText('Sign in').length).toBeGreaterThanOrEqual(2)
+    expect(getBetaChannelSeatsRemaining).not.toHaveBeenCalled()
+    expect(screen.queryByText(/beta right now/)).toBeNull()
+  })
+
+  it('lands directly on Create Account and shows the real remaining count for a ?beta=website visitor', async () => {
+    window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, 'website')
+    getBetaChannelSeatsRemaining.mockResolvedValueOnce(7)
+    render(<LoginScreen />)
+    // Lazily defaulted straight to the Create Account tab, not Sign In.
+    expect(screen.getAllByText('Create account').length).toBeGreaterThanOrEqual(2)
+    expect(getBetaChannelSeatsRemaining).toHaveBeenCalledWith('website')
+    await waitFor(() => expect(screen.getByText(/7/)).toBeTruthy())
+    expect(screen.getByText(/seats left in the Website beta right now/)).toBeTruthy()
+  })
+
+  it('shows an honest "full" message instead of a 0-seat count', async () => {
+    window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, 'flyer')
+    getBetaChannelSeatsRemaining.mockResolvedValueOnce(0)
+    render(<LoginScreen />)
+    await waitFor(() => expect(screen.getByText(/Flyer beta batch is full for now/)).toBeTruthy())
+  })
+
+  it('never shows a banner for a one-off code that is not a known channel name', () => {
+    window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, 'some-vip-code')
+    render(<LoginScreen />)
+    // Not a recognized channel — no pool seat-count concept applies, and the
+    // signup-tab default only kicks in for a recognized channel link.
+    expect(screen.getAllByText('Sign in').length).toBeGreaterThanOrEqual(2)
+    expect(getBetaChannelSeatsRemaining).not.toHaveBeenCalled()
   })
 })

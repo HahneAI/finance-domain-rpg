@@ -10,6 +10,16 @@
  *
  * Copy only ever states the public trial length (trialDaysLeft, computed by
  * getEntitlement) — never the hidden grace window or access_ends_at cutoff.
+ *
+ * Also carries two small additions (2026-08-21) continuing the marketing
+ * site's story onto the one screen every fresh signup — beta and base user
+ * alike, since this gate is keyed on entitlement.state==="trial", not
+ * isTester — passes through before ever reaching SetupWizardAdlib:
+ *   (1) A one-line nod to the marketing site's "Sign Up → Set Your Numbers →
+ *       Set a Goal" 3-step promise, so it doesn't feel abandoned the moment
+ *       someone's actually in the product.
+ *   (2) The marketing site's micro-commitment question ("gone by Sunday?") —
+ *       no input, purely a "this company gets me" beat before the wizard.
  */
 import { useState } from "react";
 import { Shell } from "./LoginScreen.jsx";
@@ -50,6 +60,13 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
 
   return (
     <Shell title="Your free trial" subtitle={`${days} ${dayWord} of full access, on us.`}>
+      <div className="text-md" style={{
+        textAlign: "center", fontStyle: "italic", color: "var(--color-text-primary)",
+        lineHeight: 1.5, padding: "2px 4px 22px",
+      }}>
+        Does it ever feel like your paycheck is gone by Sunday?
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "22px" }}>
         {rows.map((row) => (
           <div key={row.label} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -61,6 +78,12 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="text-sm" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "18px" }}>
+        You've done step one — <span style={{ color: "var(--color-text-primary)" }}>Sign Up</span>. Next up, the
+        wizard walks you through <span style={{ color: "var(--color-text-primary)" }}>Set Your Numbers</span> and{" "}
+        <span style={{ color: "var(--color-text-primary)" }}>Set a Goal</span> — just a couple minutes.
       </div>
 
       <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", marginBottom: "18px" }}>

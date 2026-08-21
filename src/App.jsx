@@ -7,6 +7,7 @@ import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveA
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
+import { PENDING_BETA_CODE_STORAGE_KEY, MAX_PENDING_BETA_CODE_ATTEMPTS, parsePendingBetaCode } from "./lib/pendingBetaCode.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -33,6 +34,8 @@ import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { BetaSignupNoticeBanner } from "./components/BetaSignupNoticeBanner.jsx";
+import { BetaChannelFullModal } from "./components/BetaChannelFullModal.jsx";
+import { resolveBetaChannel } from "./constants/betaChannels.js";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { CoachMonocleIcon } from "./components/CoachMonocleIcon.jsx";
 import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
@@ -71,17 +74,8 @@ import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome }
 // cap full) clears it immediately — retrying an invalid request changes
 // nothing. parsePendingBetaCode() also accepts the old plain-string format
 // for anyone with a pre-hardening value already sitting in localStorage.
-const PENDING_BETA_CODE_STORAGE_KEY = "pendingBetaCode";
-const MAX_PENDING_BETA_CODE_ATTEMPTS = 5;
-
-function parsePendingBetaCode(raw) {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.code === "string") return { code: parsed.code, attempts: parsed.attempts ?? 0 };
-  } catch { /* pre-hardening plain-string format */ }
-  return { code: raw, attempts: 0 };
-}
+// (Storage key/parser now live in lib/pendingBetaCode.js, shared with
+// LoginScreen.jsx's read-only beta-seat-scarcity display.)
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -546,6 +540,14 @@ export default function App() {
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
   // instead of only a console warning on failure.
   const [betaSignupNotice, setBetaSignupNotice] = useState(null);
+  // Per-channel counterpart to the marketing site's own "beta is full"
+  // popup (2026-08-21/22) — see BetaChannelFullModal.jsx's header comment.
+  // Kept fully separate from betaSignupNotice/BetaSignupNoticeBanner above:
+  // a channel-name (website or flyer) redemption failure branches here
+  // instead of into the generic banner; a one-off VIP code failure is
+  // completely untouched, still using the generic banner. null when closed,
+  // otherwise the channel ('website' | 'flyer') whose pool is full.
+  const [betaChannelFullModal, setBetaChannelFullModal] = useState(null);
   const [newJobSeasonEntryOpen, setNewJobSeasonEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   // TODO §1 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
@@ -765,7 +767,17 @@ export default function App() {
               }
               window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
               console.warn("Beta signup-link code redemption failed:", result.error);
-              setBetaSignupNotice({ status: "error", message: result.error });
+              // A submitted value that's exactly a known channel name ("website"
+              // or "flyer") is the keyword a link/QR carries, not a typo-able
+              // code — any failure on it means that pool is exhausted, so route
+              // to the dedicated per-channel modal instead of the generic
+              // banner. A one-off VIP code failure is unaffected.
+              const failedChannel = resolveBetaChannel(pending.code);
+              if (failedChannel) {
+                setBetaChannelFullModal(failedChannel);
+              } else {
+                setBetaSignupNotice({ status: "error", message: result.error });
+              }
             });
           }
         } catch { /* private mode etc. */ }
@@ -2999,6 +3011,7 @@ export default function App() {
               onDismiss={() => setBetaSignupNotice(null)}
             />
           )}
+          <BetaChannelFullModal channel={betaChannelFullModal} open={!!betaChannelFullModal} onClose={() => setBetaChannelFullModal(null)} />
           {/* ── New Job Season banner (TODO §1.C1 + C2) ── */}
           {config.newJobSeasonMode && !newJobSeasonBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

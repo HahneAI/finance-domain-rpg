@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BETA_CHANNELS, BETA_CHANNEL_CODE_PREFIX, BETA_CHANNEL_SEED_SEATS, BETA_CHANNEL_LABEL, isBetaChannelValue } from "../../constants/betaChannels.js";
+import { BETA_CHANNELS, BETA_CHANNEL_CODE_PREFIX, BETA_CHANNEL_SEED_SEATS, BETA_CHANNEL_LABEL, resolveBetaChannel } from "../../constants/betaChannels.js";
 
 // Guards against silent drift between these documentation constants and the
 // actual channel/prefix values live in Supabase's beta_codes table — nothing
@@ -32,26 +32,27 @@ describe("betaChannels constants", () => {
   });
 });
 
-// Backs the flyer-pool-full detection App.jsx/ProfilePanel.jsx both use
-// (FlyerBetaFullModal.jsx, 2026-08-21) — a submitted value must match a
-// channel name exactly (trimmed/case-insensitively) to count as that
-// channel's own keyword, never a partial or unrelated match.
-describe("isBetaChannelValue", () => {
-  it("matches a channel name case-insensitively and trims whitespace", () => {
-    expect(isBetaChannelValue("flyer", BETA_CHANNELS.FLYER)).toBe(true);
-    expect(isBetaChannelValue("FLYER", BETA_CHANNELS.FLYER)).toBe(true);
-    expect(isBetaChannelValue("  Flyer  ", BETA_CHANNELS.FLYER)).toBe(true);
+// Backs the per-channel-pool-full detection App.jsx/ProfilePanel.jsx both
+// use (BetaChannelFullModal.jsx, 2026-08-21/22), and LoginScreen.jsx's
+// pre-signup seat-count banner — a submitted value must match a channel
+// name exactly (trimmed/case-insensitively) to resolve to that channel,
+// never a partial or unrelated match.
+describe("resolveBetaChannel", () => {
+  it("resolves a channel name case-insensitively and trims whitespace", () => {
+    expect(resolveBetaChannel("flyer")).toBe(BETA_CHANNELS.FLYER);
+    expect(resolveBetaChannel("WEBSITE")).toBe(BETA_CHANNELS.WEBSITE);
+    expect(resolveBetaChannel("  Flyer  ")).toBe(BETA_CHANNELS.FLYER);
   });
 
-  it("does not match the other channel or an unrelated/one-off code", () => {
-    expect(isBetaChannelValue("website", BETA_CHANNELS.FLYER)).toBe(false);
-    expect(isBetaChannelValue("clarity802", BETA_CHANNELS.FLYER)).toBe(false);
-    expect(isBetaChannelValue("some-vip-code", BETA_CHANNELS.FLYER)).toBe(false);
+  it("returns null for an unrelated/one-off code — no pool concept applies", () => {
+    expect(resolveBetaChannel("clarity802")).toBeNull();
+    expect(resolveBetaChannel("glass042")).toBeNull();
+    expect(resolveBetaChannel("some-vip-code")).toBeNull();
   });
 
   it("handles non-string/empty input safely", () => {
-    expect(isBetaChannelValue(null, BETA_CHANNELS.FLYER)).toBe(false);
-    expect(isBetaChannelValue(undefined, BETA_CHANNELS.FLYER)).toBe(false);
-    expect(isBetaChannelValue("", BETA_CHANNELS.FLYER)).toBe(false);
+    expect(resolveBetaChannel(null)).toBeNull();
+    expect(resolveBetaChannel(undefined)).toBeNull();
+    expect(resolveBetaChannel("")).toBeNull();
   });
 });

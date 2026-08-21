@@ -6,8 +6,8 @@ import { ChangelogBody } from "./ChangelogModal.jsx";
 import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { BETA_CHANNELS, isBetaChannelValue } from "../constants/betaChannels.js";
-import { FlyerBetaFullModal } from "./FlyerBetaFullModal.jsx";
+import { resolveBetaChannel } from "../constants/betaChannels.js";
+import { BetaChannelFullModal } from "./BetaChannelFullModal.jsx";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
@@ -2019,12 +2019,13 @@ function ListRow({ label, summary, onPress, last }) {
 function BetaRedeemDetail({ onBack }) {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
-  // Flyer-channel counterpart to the marketing site's own "beta is full"
-  // popup (2026-08-21) — see FlyerBetaFullModal.jsx. Someone manually typing
-  // exactly "flyer" here is submitting the channel name a QR link carries,
-  // not a typo-able code, so a failure on it means the pool is exhausted;
-  // every other code/error still uses the existing inline error text below.
-  const [flyerFullOpen, setFlyerFullOpen] = useState(false);
+  // Per-channel counterpart to the marketing site's own "beta is full"
+  // popup (2026-08-21/22) — see BetaChannelFullModal.jsx. Someone manually
+  // typing exactly "website" or "flyer" here is submitting the channel name
+  // a link/QR carries, not a typo-able code, so a failure on it means that
+  // pool is exhausted; every other code/error still uses the existing
+  // inline error text below.
+  const [channelFullModal, setChannelFullModal] = useState(null);
 
   const handleRedeem = async () => {
     const trimmed = code.trim();
@@ -2033,9 +2034,12 @@ function BetaRedeemDetail({ onBack }) {
     const result = await redeemBetaCode(trimmed);
     if (result.ok) {
       setStatus({ loading: false, error: null, success: true });
-    } else if (isBetaChannelValue(trimmed, BETA_CHANNELS.FLYER)) {
+      return;
+    }
+    const failedChannel = resolveBetaChannel(trimmed);
+    if (failedChannel) {
       setStatus({ loading: false, error: null, success: false });
-      setFlyerFullOpen(true);
+      setChannelFullModal(failedChannel);
     } else {
       setStatus({ loading: false, error: result.error || "Invalid or inactive beta code", success: false });
     }
@@ -2043,7 +2047,7 @@ function BetaRedeemDetail({ onBack }) {
 
   return (
     <>
-      <FlyerBetaFullModal open={flyerFullOpen} onClose={() => setFlyerFullOpen(false)} />
+      <BetaChannelFullModal channel={channelFullModal} open={!!channelFullModal} onClose={() => setChannelFullModal(null)} />
       <BackBar onBack={onBack} title="Redeem Beta Code" />
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>

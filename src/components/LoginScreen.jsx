@@ -30,7 +30,7 @@ import { supabase, validateInvestorCode, getBetaChannelSeatsRemaining } from "..
 import { recordConsent } from "../lib/db.js";
 import { CURRENT_LEGAL_VERSION, TERMS_OF_SERVICE_MARKDOWN, PRIVACY_POLICY_MARKDOWN } from "../constants/legalDocuments.js";
 import { PENDING_BETA_CODE_STORAGE_KEY, parsePendingBetaCode } from "../lib/pendingBetaCode.js";
-import { BETA_CHANNELS, BETA_CHANNEL_LABEL } from "../constants/betaChannels.js";
+import { BETA_CHANNEL_LABEL, resolveBetaChannel } from "../constants/betaChannels.js";
 import { iS, lS } from "./ui.jsx";
 import { LegalDocumentModal } from "./LegalDocumentModal.jsx";
 
@@ -44,9 +44,7 @@ import { LegalDocumentModal } from "./LegalDocumentModal.jsx";
 function resolvePendingBetaChannel() {
   try {
     const pending = parsePendingBetaCode(window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY));
-    if (!pending) return null;
-    const normalized = pending.code.trim().toLowerCase();
-    return Object.values(BETA_CHANNELS).includes(normalized) ? normalized : null;
+    return pending ? resolveBetaChannel(pending.code) : null;
   } catch {
     return null; // private mode etc.
   }

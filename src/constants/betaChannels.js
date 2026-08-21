@@ -62,12 +62,15 @@ export const BETA_CHANNEL_LABEL = {
   [BETA_CHANNELS.FLYER]: "Flyer",
 };
 
-// Shared match used by both of App.jsx's/ProfilePanel.jsx's flyer-pool-full
-// detection sites (2026-08-21, FlyerBetaFullModal.jsx) — a submitted value
-// of exactly a channel name (e.g. "flyer") is the keyword a QR link/manual
-// entry carries, not a typo-able individual code, so any redemption failure
-// on it means that channel's pool is exhausted, never a bad code. Single
-// source of truth so the two call sites can't drift on the comparison.
-export function isBetaChannelValue(value, channel) {
-  return typeof value === "string" && value.trim().toLowerCase() === channel;
+// Resolves an arbitrary submitted/pending ?beta=<value> down to a known
+// channel, or null if it's a one-off individually-distributed code (not a
+// channel name) — there's no pool seat-count/full concept for a single
+// code, so callers should fall through to the generic error path for that
+// case. Shared by LoginScreen.jsx's pre-signup seat-count display and
+// App.jsx's/ProfilePanel.jsx's post-signup "pool is full" detection
+// (BetaChannelFullModal.jsx) so all three agree on what counts as a channel.
+export function resolveBetaChannel(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return Object.values(BETA_CHANNELS).includes(normalized) ? normalized : null;
 }

@@ -34,6 +34,8 @@ import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { BetaSignupNoticeBanner } from "./components/BetaSignupNoticeBanner.jsx";
+import { FlyerBetaFullModal } from "./components/FlyerBetaFullModal.jsx";
+import { BETA_CHANNELS, isBetaChannelValue } from "./constants/betaChannels.js";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { CoachMonocleIcon } from "./components/CoachMonocleIcon.jsx";
 import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
@@ -538,6 +540,13 @@ export default function App() {
   // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
   // instead of only a console warning on failure.
   const [betaSignupNotice, setBetaSignupNotice] = useState(null);
+  // Flyer-channel counterpart to the marketing site's own "beta is full"
+  // popup (2026-08-21) — see FlyerBetaFullModal.jsx's header comment. Kept
+  // fully separate from betaSignupNotice/BetaSignupNoticeBanner above: a
+  // flyer-channel failure branches here instead of into the generic banner;
+  // every other beta failure path (website channel, a one-off VIP code,
+  // BetaRedeemDetail's own generic error) is completely untouched.
+  const [flyerBetaFullOpen, setFlyerBetaFullOpen] = useState(false);
   const [newJobSeasonEntryOpen, setNewJobSeasonEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   // TODO §1 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
@@ -757,7 +766,16 @@ export default function App() {
               }
               window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
               console.warn("Beta signup-link code redemption failed:", result.error);
-              setBetaSignupNotice({ status: "error", message: result.error });
+              // A submitted value of exactly "flyer" is the channel name a QR
+              // link carries, not a typo-able code — any failure on it means
+              // the pool is exhausted, so route to the dedicated modal instead
+              // of the generic banner. Website-channel and one-off-code
+              // failures are unaffected.
+              if (isBetaChannelValue(pending.code, BETA_CHANNELS.FLYER)) {
+                setFlyerBetaFullOpen(true);
+              } else {
+                setBetaSignupNotice({ status: "error", message: result.error });
+              }
             });
           }
         } catch { /* private mode etc. */ }
@@ -2991,6 +3009,7 @@ export default function App() {
               onDismiss={() => setBetaSignupNotice(null)}
             />
           )}
+          <FlyerBetaFullModal open={flyerBetaFullOpen} onClose={() => setFlyerBetaFullOpen(false)} />
           {/* ── New Job Season banner (TODO §1.C1 + C2) ── */}
           {config.newJobSeasonMode && !newJobSeasonBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

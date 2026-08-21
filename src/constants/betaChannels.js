@@ -61,3 +61,13 @@ export const BETA_CHANNEL_LABEL = {
   [BETA_CHANNELS.WEBSITE]: "Website",
   [BETA_CHANNELS.FLYER]: "Flyer",
 };
+
+// Shared match used by both of App.jsx's/ProfilePanel.jsx's flyer-pool-full
+// detection sites (2026-08-21, FlyerBetaFullModal.jsx) — a submitted value
+// of exactly a channel name (e.g. "flyer") is the keyword a QR link/manual
+// entry carries, not a typo-able individual code, so any redemption failure
+// on it means that channel's pool is exhausted, never a bad code. Single
+// source of truth so the two call sites can't drift on the comparison.
+export function isBetaChannelValue(value, channel) {
+  return typeof value === "string" && value.trim().toLowerCase() === channel;
+}

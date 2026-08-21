@@ -41,6 +41,24 @@ describe('TrialExplainerScreen — required acknowledgement gate', () => {
   })
 })
 
+// Marketing handoff (2026-08-21) — continues the marketing site's story
+// ("Sign Up → Set Your Numbers → Set a Goal", plus its micro-commitment
+// question) onto this shared pre-wizard screen, seen by beta AND base
+// signups alike.
+describe('TrialExplainerScreen — marketing continuity', () => {
+  it('asks the micro-commitment question before the wizard', () => {
+    render(<TrialExplainerScreen trialDaysLeft={14} trialEndsAt={null} onContinue={() => {}} />)
+    expect(screen.getByText(/paycheck is gone by Sunday/i)).toBeTruthy()
+  })
+
+  it('nods to the Set Your Numbers / Set a Goal steps without abandoning the 3-step promise', () => {
+    render(<TrialExplainerScreen trialDaysLeft={14} trialEndsAt={null} onContinue={() => {}} />)
+    expect(screen.getByText(/Sign Up/)).toBeTruthy()
+    expect(screen.getByText(/Set Your Numbers/)).toBeTruthy()
+    expect(screen.getByText(/Set a Goal/)).toBeTruthy()
+  })
+})
+
 describe('TrialExplainerScreen — disclosure guard', () => {
   it('never mentions the hidden grace window or 21-day access', () => {
     const { container } = render(<TrialExplainerScreen trialDaysLeft={14} trialEndsAt={null} onContinue={() => {}} />)

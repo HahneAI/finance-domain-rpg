@@ -26,11 +26,29 @@
  * Animation: mode crossfades (signin ↔ signup ↔ forgot ↔ revive, etc) via opacity fade.
  */
 import { useEffect, useState } from "react";
-import { supabase, validateInvestorCode } from "../lib/supabase.js";
+import { supabase, validateInvestorCode, getBetaChannelSeatsRemaining } from "../lib/supabase.js";
 import { recordConsent } from "../lib/db.js";
 import { CURRENT_LEGAL_VERSION, TERMS_OF_SERVICE_MARKDOWN, PRIVACY_POLICY_MARKDOWN } from "../constants/legalDocuments.js";
+import { PENDING_BETA_CODE_STORAGE_KEY, parsePendingBetaCode } from "../lib/pendingBetaCode.js";
+import { BETA_CHANNEL_LABEL, resolveBetaChannel } from "../constants/betaChannels.js";
 import { iS, lS } from "./ui.jsx";
 import { LegalDocumentModal } from "./LegalDocumentModal.jsx";
+
+// Resolves a pending ?beta=<value> capture (see lib/pendingBetaCode.js) down
+// to a known channel, if it is one — a marketing-site link is expected to
+// carry the channel name itself (`?beta=website` / `?beta=flyer`), not a
+// literal glass/clarity code. A one-off individually-distributed code (not a
+// channel name) intentionally resolves to null here — there's no pool
+// seat-count concept for a single code, so the scarcity banner just doesn't
+// show for that case.
+function resolvePendingBetaChannel() {
+  try {
+    const pending = parsePendingBetaCode(window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY));
+    return pending ? resolveBetaChannel(pending.code) : null;
+  } catch {
+    return null; // private mode etc.
+  }
+}
 
 // Key used to hand the "I agreed" intent across the OAuth redirect boundary —
 // clicking "Continue with Google" on the signup tab navigates the whole page
@@ -112,6 +130,41 @@ function Divider({ label }) {
   );
 }
 
+// ── Beta seat-scarcity banner (2026-08-21) ────────────────────────────────────
+// Honest continuation of the marketing site's "only 20 seats online, 20 on
+// flyers" story — shown only when the visitor actually arrived via a
+// ?beta=website/flyer link, using the real live count from beta_codes
+// (channel + is_active), never a fake/seeded number. Renders nothing while
+// the count is still loading (null) rather than flash a wrong figure.
+function BetaSeatBanner({ channel, seatsRemaining }) {
+  if (seatsRemaining === null) return null;
+  const label = BETA_CHANNEL_LABEL[channel] ?? channel;
+  const full = seatsRemaining <= 0;
+  return (
+    <div className="text-sm" style={{
+      display: "flex", alignItems: "center", gap: "10px",
+      padding: "10px 14px", marginBottom: "18px",
+      background: "var(--color-bg-base)",
+      border: `1px solid ${full ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
+      borderRadius: "10px",
+      color: full ? "var(--color-text-secondary)" : "var(--color-text-primary)",
+      lineHeight: 1.5,
+    }}>
+      <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: full ? "var(--color-text-disabled)" : "var(--color-teal)", flexShrink: 0 }} />
+      <div>
+        {full
+          ? `The ${label} beta batch is full for now — you can still start your free trial today.`
+          : (
+            <>
+              <span style={{ color: "var(--color-teal)", fontWeight: 700 }}>{seatsRemaining}</span>{" "}
+              {seatsRemaining === 1 ? "seat" : "seats"} left in the {label} beta right now.
+            </>
+          )}
+      </div>
+    </div>
+  );
+}
+
 // ── Shared wrapper (exported for investor auth screens) ───────────────────────
 
 export function Shell({ title, subtitle, children }) {
@@ -132,7 +185,12 @@ export function Shell({ title, subtitle, children }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVerified, oauthCallbackFailed = false, onOauthRetry }) {
-  const [mode, setMode]         = useState("signin"); // "signin" | "signup" | "forgot" | "revive"
+  // Lands directly on the Create Account tab when a beta signup link brought
+  // the visitor here (?beta=website/flyer, captured by App.jsx before this
+  // component ever mounts) — "Join the Beta" on the marketing site implies
+  // account creation, not a blank Sign In form. Lazy initializer so this only
+  // reads localStorage once, on first mount.
+  const [mode, setMode]         = useState(() => (resolvePendingBetaChannel() ? "signup" : "signin")); // "signin" | "signup" | "forgot" | "revive"
   const [reviveProvider, setReviveProvider] = useState(null); // oauth provider from revival-lookup, e.g. "google"
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -141,6 +199,21 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [info, setInfo]         = useState(null); // success / info messages
+
+  // ── Beta seat-scarcity line (2026-08-21) — real Supabase count only, never
+  // a fake/seeded number (that display trick is the marketing site's job,
+  // not this app's). null while unresolved/loading/failed — the banner
+  // simply doesn't render rather than risk showing a wrong number.
+  const [pendingBetaChannel] = useState(resolvePendingBetaChannel);
+  const [betaSeatsRemaining, setBetaSeatsRemaining] = useState(null);
+  useEffect(() => {
+    if (!pendingBetaChannel) return;
+    let cancelled = false;
+    getBetaChannelSeatsRemaining(pendingBetaChannel).then((count) => {
+      if (!cancelled) setBetaSeatsRemaining(count);
+    });
+    return () => { cancelled = true; };
+  }, [pendingBetaChannel]);
 
   // ── Terms of Service / Privacy Policy consent (signup only) ────────────────
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -450,6 +523,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
     screenTitle = isSignUp ? "Create account" : "Sign in";
     screenContent = (
       <>
+      {pendingBetaChannel && <BetaSeatBanner channel={pendingBetaChannel} seatsRemaining={betaSeatsRemaining} />}
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "4px" }}>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

@@ -119,21 +119,22 @@ export async function validateInvestorCode(code) {
 }
 
 /**
- * Validates a beta program access code against the beta_codes table
- * (docs/TODO.md §16, database/migrations/028_add_beta_codes.sql). Same shape
- * as validateInvestorCode — client-side check for instant UI feedback only;
- * api/seed.js (type: "beta") re-validates server-side before granting anything.
+ * Live remaining-seat count for one beta_codes channel ('website' | 'flyer'),
+ * for LoginScreen's honest seat-scarcity line — real Supabase data only,
+ * never a hardcoded/seeded number (the marketing site's own founding-seed
+ * stagger is a display-layer trick that stays on the public marketing pages;
+ * this app always shows the true count). Relies on migration 028's
+ * "anon can read active beta codes" RLS policy (is_active = true rows only),
+ * the same policy the marketing site's own seat counter reads through.
+ * Returns null on any query error so the caller can hide the line rather
+ * than risk showing a stale/wrong number.
  */
-export async function validateBetaCode(code) {
-  // ilike, not eq — beta_codes is dashboard-managed (migration 028), so a
-  // code typed in any case must still match; api/seed.js's real
-  // (server-side) check uses the same case-insensitive match.
-  const { data, error } = await supabase
+export async function getBetaChannelSeatsRemaining(channel) {
+  const { count, error } = await supabase
     .from("beta_codes")
-    .select("id")
-    .ilike("code", code.trim().toLowerCase())
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error) return false;
-  return data !== null;
+    .select("id", { count: "exact", head: true })
+    .eq("channel", channel)
+    .eq("is_active", true);
+  if (error) return null;
+  return count ?? 0;
 }

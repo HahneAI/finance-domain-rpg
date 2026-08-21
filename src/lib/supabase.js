@@ -117,23 +117,3 @@ export async function validateInvestorCode(code) {
   if (error) return false;
   return data !== null;
 }
-
-/**
- * Validates a beta program access code against the beta_codes table
- * (docs/TODO.md §16, database/migrations/028_add_beta_codes.sql). Same shape
- * as validateInvestorCode — client-side check for instant UI feedback only;
- * api/seed.js (type: "beta") re-validates server-side before granting anything.
- */
-export async function validateBetaCode(code) {
-  // ilike, not eq — beta_codes is dashboard-managed (migration 028), so a
-  // code typed in any case must still match; api/seed.js's real
-  // (server-side) check uses the same case-insensitive match.
-  const { data, error } = await supabase
-    .from("beta_codes")
-    .select("id")
-    .ilike("code", code.trim().toLowerCase())
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error) return false;
-  return data !== null;
-}

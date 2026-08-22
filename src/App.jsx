@@ -224,12 +224,19 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
     <div style={{
       background: "var(--color-bg-gradient)",
       minHeight: "100vh",
+      position: "relative",
+      overflow: "hidden",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
       gap: "32px",
     }}>
+      {/* Same ambient teal/green glow orbs as the auth Shell (LoginScreen.jsx)
+          — this is the very first thing a cold load shows, so it gets the
+          same premium first-impression treatment. */}
+      <div className="auth-orb auth-orb-1" aria-hidden="true" />
+      <div className="auth-orb auth-orb-2" aria-hidden="true" />
       <style>{`
         @keyframes afPulse {
           0%, 100% { opacity: 0.25; transform: scale(0.85); }
@@ -239,50 +246,64 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
           0%   { transform: translateX(-100%); }
           100% { transform: translateX(400%);  }
         }
+        @keyframes afGlow {
+          0%, 100% { opacity: 0.35; }
+          50%       { opacity: 0.85; }
+        }
       `}</style>
 
       {/* Brand label */}
       <div className="text-xs" style={{
+        position: "relative",
         letterSpacing: "4px",
         textTransform: "uppercase",
-        color: "var(--color-text-disabled)",
+        color: "var(--color-text-secondary)",
+        textShadow: "0 0 20px rgba(0,200,150,0.3)",
       }}>
         Authority Finance
       </div>
 
-      {/* Three breathing dots */}
-      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-        {[0, 1, 2].map(i => (
-          <div key={i} style={{
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "var(--color-accent-primary)",
-            animation: `afPulse 1.4s ease-in-out ${i * 0.22}s infinite`,
-          }} />
-        ))}
+      {/* Three breathing dots, sitting on a soft pulsing glow */}
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{
+          position: "absolute", width: "90px", height: "40px", borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(0,200,150,0.35), transparent 70%)",
+          filter: "blur(10px)", animation: "afGlow 1.4s ease-in-out infinite",
+        }} />
+        <div style={{ position: "relative", display: "flex", gap: "10px", alignItems: "center" }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: "var(--color-accent-primary)",
+              boxShadow: "0 0 8px rgba(0,200,150,0.7)",
+              animation: `afPulse 1.4s ease-in-out ${i * 0.22}s infinite`,
+            }} />
+          ))}
+        </div>
       </div>
 
-      {/* Progress bar track */}
+      {/* Progress bar track — soft-edged gradient sweep instead of a flat block */}
       <div style={{
+        position: "relative",
         width: "160px",
-        height: "2px",
+        height: "3px",
         background: "var(--color-border-subtle)",
         borderRadius: "2px",
         overflow: "hidden",
       }}>
         <div style={{
-          width: "40%",
+          width: "55%",
           height: "100%",
-          background: "var(--color-accent-primary)",
-          borderRadius: "2px",
+          background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)",
           animation: "afBar 1.6s ease-in-out infinite",
-          opacity: 0.8,
         }} />
       </div>
 
       {/* Status label */}
       <div className="text-xs" style={{
+        position: "relative",
         letterSpacing: "1.5px",
         textTransform: "uppercase",
         color: "var(--color-text-disabled)",

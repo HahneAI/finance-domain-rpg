@@ -180,10 +180,11 @@ export function Shell({ title, subtitle, children }) {
     <div style={{ minHeight: "100vh", position: "relative", overflow: "hidden", background: "var(--color-bg-gradient)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div className="auth-orb auth-orb-1" aria-hidden="true" />
       <div className="auth-orb auth-orb-2" aria-hidden="true" />
+      <div className="auth-orb auth-orb-3" aria-hidden="true" />
       <LiquidGlass
         purpose="modal"
         tone="teal"
-        intensity="light"
+        intensity="strong"
         className="auth-card-in"
         style={{
           position: "relative",
@@ -191,11 +192,11 @@ export function Shell({ title, subtitle, children }) {
           maxWidth: "360px",
           borderRadius: "18px",
           padding: "34px 28px",
-          boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.55), 0 0 60px rgba(0,200,150,0.25), 0 0 0 1px rgba(0,200,150,0.12)",
         }}
       >
         <div style={{ marginBottom: "28px", textAlign: "center" }}>
-          <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px", textShadow: "0 0 18px rgba(0,200,150,0.35)" }}>Authority Finance</div>
+          <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px", textShadow: "0 0 22px rgba(0,200,150,0.6)" }}>Authority Finance</div>
           <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "22px", letterSpacing: "0.01em", lineHeight: 1.2, color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
           {subtitle && <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
         </div>

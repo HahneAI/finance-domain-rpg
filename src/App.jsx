@@ -237,6 +237,7 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
           same premium first-impression treatment. */}
       <div className="auth-orb auth-orb-1" aria-hidden="true" />
       <div className="auth-orb auth-orb-2" aria-hidden="true" />
+      <div className="auth-orb auth-orb-3" aria-hidden="true" />
       <style>{`
         @keyframes afPulse {
           0%, 100% { opacity: 0.25; transform: scale(0.85); }
@@ -258,7 +259,7 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
         letterSpacing: "4px",
         textTransform: "uppercase",
         color: "var(--color-text-secondary)",
-        textShadow: "0 0 20px rgba(0,200,150,0.3)",
+        textShadow: "0 0 26px rgba(0,200,150,0.55)",
       }}>
         Authority Finance
       </div>
@@ -266,9 +267,9 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
       {/* Three breathing dots, sitting on a soft pulsing glow */}
       <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{
-          position: "absolute", width: "90px", height: "40px", borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(0,200,150,0.35), transparent 70%)",
-          filter: "blur(10px)", animation: "afGlow 1.4s ease-in-out infinite",
+          position: "absolute", width: "130px", height: "60px", borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(0,200,150,0.55), transparent 70%)",
+          filter: "blur(14px)", animation: "afGlow 1.4s ease-in-out infinite",
         }} />
         <div style={{ position: "relative", display: "flex", gap: "10px", alignItems: "center" }}>
           {[0, 1, 2].map(i => (
@@ -277,7 +278,7 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
               height: "8px",
               borderRadius: "50%",
               background: "var(--color-accent-primary)",
-              boxShadow: "0 0 8px rgba(0,200,150,0.7)",
+              boxShadow: "0 0 14px rgba(0,200,150,0.9)",
               animation: `afPulse 1.4s ease-in-out ${i * 0.22}s infinite`,
             }} />
           ))}

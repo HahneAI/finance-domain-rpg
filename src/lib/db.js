@@ -131,6 +131,7 @@ export async function loadUserData() {
       baseRateHistory:    [],
       isEmployerDHL:              false,
       isAdmin:            false,
+      isAiAdmin:          false,
       isTester:           false,
       betaCodeUsed:       null,
       betaStartedAt:      null,
@@ -143,7 +144,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, beta_code_used, beta_started_at, pto_goal, is_investor, tax_projections_enabled")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_ai_admin, is_tester, beta_code_used, beta_started_at, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -214,6 +215,7 @@ export async function loadUserData() {
       baseRateHistory:    [],
       isEmployerDHL:              false,
       isAdmin:            false,
+      isAiAdmin:          false,
       isTester:           false,
       betaCodeUsed:       null,
       betaStartedAt:      null,
@@ -455,6 +457,7 @@ export async function loadUserData() {
     baseRateHistory,
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
+    isAiAdmin:            data.is_ai_admin ?? false,
     isTester:             data.is_tester   ?? false,
     betaCodeUsed:         data.beta_code_used ?? null,
     betaStartedAt:        data.beta_started_at ?? null,

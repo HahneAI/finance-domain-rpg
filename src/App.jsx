@@ -349,6 +349,17 @@ export default function App() {
   // Upgrade modal triggered from the read-only Home/Budget notice (§17.E).
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // AI Admin flag (docs/admin-toolkit-reference.md "AI Admin") — a narrower
+  // sibling to isAdmin for accounts used by an AI agent team. Unlocks only
+  // the read-only/self-diagnostic subset of the Admin Tools drawer (Lock
+  // Date, Force Sync Pull, Config JSON view, DB Row Viewer, Tax Weeks Grid
+  // view, Live State Inspector, Week Inspector). Deliberately must NEVER be
+  // OR'd into isAdmin itself or into any paywall/entitlement/Coach-access
+  // check — see database/migrations/042_add_is_ai_admin_flag.sql.
+  const [isAiAdmin, setIsAiAdmin] = useState(false);
+  // Combined gate for the diagnostic-only tools both isAdmin and isAiAdmin
+  // may use (read-only inspectors) — never use this for a mutating tool.
+  const isDiagnosticAdmin = isAdmin || isAiAdmin;
   // Beta tester flag (docs/active-systems.md "Beta Tester Accounts") — set
   // manually via SQL, never client-writable. Grants AI features only; NOT an
   // investor-equivalent (no demo accounts, no investor code path).
@@ -896,6 +907,7 @@ export default function App() {
       }
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
+      setIsAiAdmin(data.isAiAdmin);
       setIsTester(data.isTester);
       setBetaCodeUsed(data.betaCodeUsed);
       // Beta usage tracking: log one "login" event per real sign-in, only for the
@@ -2149,10 +2161,10 @@ export default function App() {
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
-        isAdmin={isAdmin}
+        isAdmin={isDiagnosticAdmin}
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
-        onWeekInspect={isAdmin ? setInspectedWeek : null}
+        onWeekInspect={isDiagnosticAdmin ? setInspectedWeek : null}
         saveConfigNow={saveConfigNow}
       />)}
       {currentView === "budget" && (config.newJobSeasonMode ? (
@@ -2191,7 +2203,7 @@ export default function App() {
         />
       ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
-        logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
+        logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isDiagnosticAdmin}
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
@@ -2727,6 +2739,173 @@ export default function App() {
                     </Pressable>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── AI Admin Tools — slimmed, read-only diagnostic subset for is_ai_admin
+              accounts. Deliberately omits Force Sync Push, Reopen Last Check-In, Beta
+              Report export, and Demo Account editing — see
+              docs/admin-toolkit-reference.md "AI Admin" and migration 042's header
+              comment for why each is excluded. Hidden for a full isAdmin account
+              (which already sees the complete Admin Tools block above). ── */}
+          {isAiAdmin && !isAdmin && (
+            <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
+              <div style={{ padding: "8px 20px 6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+                  AI Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                </span>
+              </div>
+              <div style={{ padding: "4px 20px 12px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+                {tempLockDate ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span className="text-xs" style={{ color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                    <Pressable
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      className="text-2xs" style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                    >Clear</Pressable>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <input
+                      type="date"
+                      value={adminDateDraft}
+                      onChange={e => setAdminDateDraft(e.target.value)}
+                      className="text-xs" style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", padding: "4px 6px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
+                    />
+                    <Pressable
+                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
+                      disabled={!adminDateDraft}
+                      className="text-2xs" style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold" }}
+                    >Set</Pressable>
+                  </div>
+                )}
+              </div>
+              {/* Force Sync — Pull only. No Push: an AI Admin account never writes. */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+                <Pressable
+                  onClick={handleForcePull}
+                  disabled={!!syncStatus?.pending}
+                  className="text-2xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
+                >Pull ↓</Pressable>
+                {syncStatus && (
+                  <div className="text-2xs" style={{ marginTop: "5px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                    {syncStatus.pending
+                      ? "Pulling…"
+                      : syncStatus.ok
+                        ? `✓ Pulled · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                        : "✗ Pull failed"}
+                  </div>
+                )}
+              </div>
+
+              {/* Config Raw View */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                  <Pressable
+                    onClick={() => setConfigViewOpen(v => !v)}
+                    className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                  >{configViewOpen ? "Hide" : "View"}</Pressable>
+                </div>
+                {configViewOpen && (
+                  <div style={{ position: "relative" }}>
+                    {lifeEventsConfigFields.length > 0 && (
+                      <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "6px", lineHeight: "1.5" }}>
+                        <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "3px" }}>Life Events</div>
+                        {lifeEventsConfigFields.map(([k, v]) => (
+                          <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                            <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                            <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <pre className="text-2xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {JSON.stringify(config, null, 2)}
+                    </pre>
+                    <Pressable
+                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                      className="text-2xs" style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
+                    >Copy to Clipboard</Pressable>
+                  </div>
+                )}
+              </div>
+
+              {/* Supabase Row Viewer */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    {rowDiff.length > 0 && <span className="text-2xs" style={{ color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                    <Pressable onClick={handleFetchRow} disabled={rowFetching} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
+                  </div>
+                </div>
+                {rowData && rowViewOpen && (
+                  <div>
+                    {rowData.__error
+                      ? <div className="text-2xs" style={{ color: "var(--color-red)" }}>{rowData.__error}</div>
+                      : <>
+                          {rowData.updated_at && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                          {rowDiff.length > 0 && <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                          {historyLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                          {expenseTriageLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
+                          {coachChatsLine && (
+                            <div style={{ marginBottom: "4px" }}>
+                              <Pressable
+                                onClick={() => setCoachChatsListOpen(v => !v)}
+                                disabled={!coachChatsMeta?.count}
+                                className="text-2xs" style={{ background: "transparent", border: "none", padding: "0", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                              >
+                                {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
+                              </Pressable>
+                              {coachChatsListOpen && coachChatsMeta?.count > 0 && (
+                                <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                                  {coachChatsMeta.recentTitles.map((t, i) => (
+                                    <div key={i} className="text-2xs" style={{ color: "var(--color-text-disabled)" }}>· {t}</div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <pre className="text-2xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                            {JSON.stringify(rowData, null, 2)}
+                          </pre>
+                        </>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* Tax Weeks Grid */}
+              <div style={{ padding: "0 20px 12px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                  <Pressable onClick={() => setTaxGridOpen(v => !v)} className="text-2xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
+                </div>
+                {taxGridOpen && (() => {
+                  const overrides = config.pastWeekTaxStatusOverrides ?? {};
+                  return (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px" }}>
+                      {allWeeks.filter(w => w.active).map(w => {
+                        const wIso = toLocalIso(w.weekEnd);
+                        const isPast = wIso < effectiveToday;
+                        const isCurrent = w.idx === currentWeek?.idx;
+                        const hasOverride = overrides[w.idx] !== undefined;
+                        const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
+                        return (
+                          <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "14px", height: "14px", borderRadius: "2px", background: bg, border: isCurrent ? "1.5px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
+                            {hasOverride && <div style={{ position: "absolute", top: "1px", right: "1px", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-red)" }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -3577,6 +3756,170 @@ export default function App() {
           </div>
         )}
 
+        {/* ── AI Admin Tools (drawer) — slimmed, read-only diagnostic subset for
+            is_ai_admin accounts. Mirrors the desktop AI Admin Tools block above;
+            same exclusions (no Push, no Reopen Check-In, no Beta Report, no Demo
+            Accounts) — see docs/admin-toolkit-reference.md "AI Admin". Hidden for
+            a full isAdmin account. ── */}
+        {isAiAdmin && !isAdmin && (
+          <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+                AI Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+              </span>
+            </div>
+            <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+            {tempLockDate ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="text-sm" style={{ color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                <Pressable
+                  onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                  className="text-2xs" style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                >Clear</Pressable>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="date"
+                  value={adminDateDraft}
+                  onChange={e => setAdminDateDraft(e.target.value)}
+                  style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-sans)", colorScheme: "dark" }}
+                />
+                <Pressable
+                  onClick={() => { if (adminDateDraft) { setTempLockDate(adminDateDraft); setDrawerOpen(false); } }}
+                  disabled={!adminDateDraft}
+                  className="text-xs" style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
+                >Set</Pressable>
+              </div>
+            )}
+            {/* Force Sync — Pull only. No Push: an AI Admin account never writes. */}
+            <div style={{ marginTop: "12px" }}>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+              <Pressable
+                onClick={handleForcePull}
+                disabled={!!syncStatus?.pending}
+                className="text-xs" style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+              >Pull ↓</Pressable>
+              {syncStatus && (
+                <div className="text-xs" style={{ marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                  {syncStatus.pending
+                    ? "Pulling…"
+                    : syncStatus.ok
+                      ? `✓ Pulled · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                      : "✗ Pull failed"}
+                </div>
+              )}
+            </div>
+
+            {/* Config Raw View */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                <Pressable
+                  onClick={() => setConfigViewOpen(v => !v)}
+                  className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                >{configViewOpen ? "Hide" : "View"}</Pressable>
+              </div>
+              {configViewOpen && (
+                <div>
+                  {lifeEventsConfigFields.length > 0 && (
+                    <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "8px", lineHeight: "1.6" }}>
+                      <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "4px" }}>Life Events</div>
+                      {lifeEventsConfigFields.map(([k, v]) => (
+                        <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                          <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <pre className="text-xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    {JSON.stringify(config, null, 2)}
+                  </pre>
+                  <Pressable
+                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                    className="text-xs" style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
+                  >Copy to Clipboard</Pressable>
+                </div>
+              )}
+            </div>
+
+            {/* Supabase Row Viewer */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  {rowDiff.length > 0 && <span className="text-2xs" style={{ color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                  <Pressable onClick={handleFetchRow} disabled={rowFetching} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                  {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
+                </div>
+              </div>
+              {rowData && rowViewOpen && (
+                <div>
+                  {rowData.__error
+                    ? <div className="text-xs" style={{ color: "var(--color-red)" }}>{rowData.__error}</div>
+                    : <>
+                        {rowData.updated_at && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                        {rowDiff.length > 0 && <div className="text-2xs" style={{ color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                        {historyLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                        {expenseTriageLine && <div className="text-2xs" style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
+                        {coachChatsLine && (
+                          <div style={{ marginBottom: "4px" }}>
+                            <Pressable
+                              onClick={() => setCoachChatsListOpen(v => !v)}
+                              disabled={!coachChatsMeta?.count}
+                              className="text-2xs" style={{ background: "transparent", border: "none", padding: "0", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                            >
+                              {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
+                            </Pressable>
+                            {coachChatsListOpen && coachChatsMeta?.count > 0 && (
+                              <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                                {coachChatsMeta.recentTitles.map((t, i) => (
+                                  <div key={i} className="text-2xs" style={{ color: "var(--color-text-disabled)" }}>· {t}</div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <pre className="text-xs" style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {JSON.stringify(rowData, null, 2)}
+                        </pre>
+                      </>
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* Tax Weeks Grid */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                <Pressable onClick={() => setTaxGridOpen(v => !v)} className="text-xs" style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
+              </div>
+              {taxGridOpen && (() => {
+                const overrides = config.pastWeekTaxStatusOverrides ?? {};
+                return (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                    {allWeeks.filter(w => w.active).map(w => {
+                      const wIso = toLocalIso(w.weekEnd);
+                      const isPast = wIso < effectiveToday;
+                      const isCurrent = w.idx === currentWeek?.idx;
+                      const hasOverride = overrides[w.idx] !== undefined;
+                      const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
+                      return (
+                        <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "18px", height: "18px", borderRadius: "3px", background: bg, border: isCurrent ? "2px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
+                          {hasOverride && <div style={{ position: "absolute", top: "2px", right: "2px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-red)" }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* Drawer footer — week/pay-period counter (moved here from the mobile
             header/nav bar), then the active-section indicator below it. */}
         <div style={{ borderTop: "1px solid #1e1e1e" }}>
@@ -3713,7 +4056,7 @@ export default function App() {
       </div>
 
       {/* ── Live State Inspector ── */}
-      {isAdmin && (
+      {isDiagnosticAdmin && (
         <div
           className="admin-inspector"
           style={{
@@ -3816,7 +4159,7 @@ export default function App() {
       )}
 
       {/* ── Week Inspector modal ── */}
-      {isAdmin && inspectedWeek && (() => {
+      {isDiagnosticAdmin && inspectedWeek && (() => {
         const w = inspectedWeek;
         const conf = weekConfirmations[w.idx] ?? null;
         const wLookup = weekNetLookup[w.idx] ?? null;

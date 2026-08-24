@@ -2,8 +2,46 @@
 
 **Gate:** `isAdmin` (from `user_data.is_admin`) unlocks all Phase 1 tools.
 `isOwner` (`user_data.is_owner`, not yet built) unlocks Phase 2 destructive tools — never grantable via UI.
+`isAiAdmin` (`user_data.is_ai_admin`) unlocks a slimmed, read-only subset of Phase 1 for AI-agent-team
+accounts — see "AI Admin" below.
 
 **How to use:** Ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav), run the relevant tool, and paste or describe the output.
+
+---
+
+## AI Admin — `isAiAdmin` (7 tools, all read-only/self-diagnostic)
+
+**Gate:** `isAiAdmin` (from `user_data.is_ai_admin`, migration
+`042_add_is_ai_admin_flag.sql`) — a narrower sibling to `isAdmin`, intended for accounts used by
+an AI agent team to diagnose their own account's data. Rendered as a separate "AI Admin Tools"
+block (`src/App.jsx`), shown only when `isAiAdmin && !isAdmin` (a full admin already sees
+everything in the regular Admin Tools block, so the two never double up). Combined internally via
+`const isDiagnosticAdmin = isAdmin || isAiAdmin` for the tools shared with Phase 1 (Live State
+Inspector, Week Inspector, Per-Entry Impact Breakdown, and the `isAdmin` prop passed into
+`IncomePanel`/`LogPanel`, which only ever gates read-only display in those two components).
+
+**Zero elevated DB privilege.** Every tool below reads only the signed-in account's own
+`user_data` row, which default per-row RLS already permits — `is_ai_admin` is never referenced by
+any RLS policy (unlike `is_admin`, which is checked directly in migrations 013/032/037 for
+investor codes, changelog, and beta content). It is an app-level UI gate only.
+
+**Included (identical to their Phase 1 versions — see each tool's own section above for
+detail):** Lock Date · Force Sync — **Pull only** · Config Raw View · DB Row Viewer · Tax Weeks
+Grid (view) · Live State Inspector · Week Inspector · Per-Entry Impact Breakdown.
+
+**Deliberately excluded, and why:**
+
+| Tool | Why excluded |
+|------|--------------|
+| Force Sync — **Push** | Writes the current in-memory state to the DB immediately |
+| Reopen Last Check-In | Deletes a `weekConfirmations` record + its log entry |
+| Demo Account editing (1/2) | Writes to demo account rows |
+| Beta Report CSV (Usage/Feedback) | Reads other users' aggregated data, not the caller's own account |
+| Changelog / Beta Content / Beta Scores admin panels (`ProfilePanel.jsx`) | Write published, user-facing content via service-role routes |
+| Phase 2 / `isOwner` tools | Destructive by design — already excluded from Phase 1 too |
+
+If a future Phase 1 tool is added, it must be explicitly triaged into this table (included or
+excluded, with a reason) rather than silently inherited by either gate.
 
 ---
 

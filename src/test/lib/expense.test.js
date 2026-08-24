@@ -8,10 +8,12 @@ import {
   onwardStartMonthKey,
   applyQuarterForward,
   applyAllQuarters,
+  monthKeysThroughFiscalYearEnd,
   perPaycheckFromCycle,
   breakdownMonthlyEquiv,
 } from '../../lib/expense.js'
-import { getEffectiveAmountForMonth } from '../../lib/finance.js'
+import { getEffectiveAmountForMonth, buildYear, toLocalIso } from '../../lib/finance.js'
+import { FISCAL_YEAR_END_MONTH_KEY } from '../../constants/config.js'
 
 const base = {
   id: 'exp_1',
@@ -355,5 +357,74 @@ describe('breakdownMonthlyEquiv', () => {
   it('bills use a 4-week month (× 4); loans use 52/12', () => {
     expect(breakdownMonthlyEquiv(100)).toBeCloseTo(400, 5)
     expect(breakdownMonthlyEquiv(100, true)).toBeCloseTo(100 * 52 / 12, 5)
+  })
+})
+
+// monthKeysThroughFiscalYearEnd + the trailing-fiscal-week regression
+// ─────────────────────────────────────────────────────────────
+// Real live-testing bug (drift-app-warden LEDGER item, 2026-08-24): every
+// "forward through fiscal year end" writer looped a flat `m <= 12`, so the
+// fiscal-week grid's trailing week (its month is FISCAL_YEAR_END_MONTH_KEY,
+// e.g. "2027-01" for FISCAL_YEAR_START="2026-01-05") never got a
+// monthlyOverrides entry. A live repro: add a $50/wk expense, delete it with
+// "Q3+" scope — Weekly Spend correctly dropped, but "Left This Week" was $2
+// short of $858-$130 because that one trailing week fell back to the
+// expense's stale (pre-delete) history data instead of reading $0.
+
+describe('monthKeysThroughFiscalYearEnd', () => {
+  it('reaches FISCAL_YEAR_END_MONTH_KEY, not just calendar December', () => {
+    const keys = monthKeysThroughFiscalYearEnd('2026-10')
+    expect(keys).toEqual(['2026-10', '2026-11', '2026-12', FISCAL_YEAR_END_MONTH_KEY])
+  })
+
+  it('returns an empty array when starting past the fiscal year end', () => {
+    expect(monthKeysThroughFiscalYearEnd('2027-02')).toEqual([])
+  })
+
+  it('handles a same-month start/end', () => {
+    expect(monthKeysThroughFiscalYearEnd(FISCAL_YEAR_END_MONTH_KEY)).toEqual([FISCAL_YEAR_END_MONTH_KEY])
+  })
+})
+
+describe('forward-scoped writers cover the trailing fiscal week (regression)', () => {
+  const base = { id: 'exp_1', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] }
+
+  it('clearMonthForward zeros the trailing week\'s month, not just through December', () => {
+    const result = clearMonthForward(base, '2026-10')
+    expect(result.monthlyOverrides[FISCAL_YEAR_END_MONTH_KEY]).toEqual(
+      expect.objectContaining({ perPaycheck: 0, amount: 0 })
+    )
+  })
+
+  it('applyQuarterForward (Q[n]+ Onward) covers the trailing week\'s month', () => {
+    const result = applyQuarterForward(base, '2026-06', 70, 280, 'every30days')
+    expect(result.monthlyOverrides[FISCAL_YEAR_END_MONTH_KEY]).toEqual({ perPaycheck: 70, amount: 280, cycle: 'every30days' })
+  })
+
+  it('applyAllQuarters covers the trailing week\'s month', () => {
+    const result = applyAllQuarters(base, 60, 240, 'every30days')
+    expect(result.monthlyOverrides[FISCAL_YEAR_END_MONTH_KEY]).toEqual({ perPaycheck: 60, amount: 240, cycle: 'every30days' })
+  })
+
+  it('applyMonthEditForward covers the trailing week\'s month', () => {
+    const result = applyMonthEditForward(base, '2026-10', 50, 200, 'every30days')
+    expect(result.monthlyOverrides[FISCAL_YEAR_END_MONTH_KEY]).toEqual(
+      expect.objectContaining({ perPaycheck: 50, amount: 200 })
+    )
+  })
+
+  // End-to-end repro of the live bug: delete-forward an expense, then resolve
+  // its effective amount for the real fiscal-week grid's actual last week via
+  // buildYear() + getEffectiveAmountForMonth — must read 0, not stale history.
+  it('a deleted (clearMonthForward) expense reads $0 for the real last fiscal week, not stale history', () => {
+    const phoneBill = { id: 'phone', history: [{ effectiveFrom: '2026-07-01', weekly: [0, 0, 50, 50] }] }
+    const deleted = clearMonthForward(phoneBill, '2026-08')
+    const config = { firstActiveIdx: 0, employerPreset: null, userPaySchedule: 'weekly', taxedWeeks: [] }
+    const allWeeks = buildYear(config)
+    const lastWeek = allWeeks[allWeeks.length - 1]
+    const lastWeekMonthKey = toLocalIso(lastWeek.weekEnd).slice(0, 7)
+    expect(lastWeekMonthKey).toBe(FISCAL_YEAR_END_MONTH_KEY)
+    const phaseIdx = 3
+    expect(getEffectiveAmountForMonth(deleted, lastWeekMonthKey, phaseIdx)).toBe(0)
   })
 })

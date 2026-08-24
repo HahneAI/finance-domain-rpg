@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
+import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
@@ -681,10 +681,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const [year, startMon] = anchor.split("-").map(Number);
     const overrides = {};
-    for (let m = startMon; m <= 12; m++) {
-      const key = `${year}-${String(m).padStart(2, "0")}`;
+    for (const key of monthKeysThroughFiscalYearEnd(anchor)) {
       overrides[key] = { perPaycheck, amount, cycle };
     }
     const effectiveFrom = `${anchor}-01`;
@@ -736,17 +734,17 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     setEditId(null);
   };
 
-  // FROM [MON] + — force-overwrites monthlyOverrides for activeMonth through Dec
-  // AND adds a history entry so quarterly totals also update.
+  // FROM [MON] + — force-overwrites monthlyOverrides for activeMonth through the
+  // real fiscal year end (monthKeysThroughFiscalYearEnd — NOT calendar December,
+  // see that helper's comment) AND adds a history entry so quarterly totals also
+  // update.
   const saveFromMonthForward = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const [year, startMon] = activeMonth.split("-").map(Number);
     applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const overrides = { ...(e.monthlyOverrides ?? {}) };
-      for (let m = startMon; m <= 12; m++) {
-        const key = `${year}-${String(m).padStart(2, "0")}`;
+      for (const key of monthKeysThroughFiscalYearEnd(activeMonth)) {
         overrides[key] = { perPaycheck, amount, cycle };
       }
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
@@ -785,8 +783,9 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   };
 
   // Q[n]+ ONWARD — authoritative per Option A.
-  // Writes monthlyOverrides for the window start → Dec, overwriting any finer
-  // overrides already in range (Decision 1). The window starts at the viewed
+  // Writes monthlyOverrides for the window start through the real fiscal year end
+  // (applyQuarterForward → monthKeysThroughFiscalYearEnd, not calendar December),
+  // overwriting any finer overrides already in range (Decision 1). The window starts at the viewed
   // quarter's first month, but never rewrites elapsed months: for the current (or
   // a past) quarter it clamps to the current month (Decision 2 — "onward" = today
   // forward). A single cascaded history entry at the window start is kept as the
@@ -815,8 +814,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
   // ALL QTRS — authoritative full-year set. Intentionally covers every month
   // (including elapsed ones): this button's explicit purpose is "apply to the
-  // whole year." Writes monthlyOverrides Jan→Dec and collapses history to one
-  // full-year baseline entry.
+  // whole year." Writes monthlyOverrides Jan through the real fiscal year end
+  // (applyAllQuarters → monthKeysThroughFiscalYearEnd, not calendar December —
+  // this also covers the fiscal-week grid's trailing week) and collapses history
+  // to one full-year baseline entry.
   const saveAllQuartersFull = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
@@ -861,7 +862,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   // Returns month keys to clear overrides for based on restore scope:
   // "month"   → just the active month (or first month of active quarter)
   // "quarter" → all 3 months of the active quarter
-  // "year"    → current month through December (active quarters only)
+  // "year"    → current month through the real fiscal year end (active quarters only)
   const getRestoreMonthKeys = (scope) => {
     const fy = FISCAL_YEAR_START.slice(0, 4);
     if (scope === "month") {
@@ -872,11 +873,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       return Q_MONTHS[ap].map(m => `${fy}-${String(m).padStart(2, "0")}`);
     }
     // "year": mirror deleteMonthForward's start point (activeMonth or quarter start),
-    // then cover through December. Old code used Math.max(today, quarterStart) which
-    // left the quarter's opening month(s) still zeroed after restore.
+    // then cover through the real fiscal year end (monthKeysThroughFiscalYearEnd — NOT
+    // calendar December, or the grid's trailing week would keep a stale zero override
+    // even after "restore for the rest of the year"). Old code used Math.max(today,
+    // quarterStart) which left the quarter's opening month(s) still zeroed after restore.
     const fromKey = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
-    const fromMon = parseInt(fromKey.split("-")[1], 10);
-    return Array.from({ length: 12 - fromMon + 1 }, (_, i) => `${fy}-${String(fromMon + i).padStart(2, "0")}`);
+    return monthKeysThroughFiscalYearEnd(fromKey);
   };
 
   const restoreExpense = (expId, scope) => {

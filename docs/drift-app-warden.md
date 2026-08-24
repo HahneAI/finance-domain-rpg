@@ -1781,6 +1781,45 @@ of the same point-in-time-lookup shape, not yet unified.
 > hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
 > pattern.
 
+**F149 · Forward-scoped expense writers must reach the fiscal grid's trailing week, not
+calendar December** — `expense.js`: `applyMonthEditForward:229`, `applyQuarterForward:256`,
+`applyAllQuarters:267`, `clearMonthForward:287`; `BudgetPanel.jsx`: `saveFromMonthForward:741`,
+`addExpFromMonthForward:678`, `getRestoreMonthKeys("year"):866` — real live-testing bug found and
+fixed 2026-08-24 (same session as F148) — **[L]**
+Every one of these "forward through fiscal year end" writers looped a flat `for (m = start; m
+<= 12; m++)`, building `"${year}-MM"` keys. But F148 established the fiscal-week grid's real
+last week can fall in the *next* calendar year's January (`FISCAL_YEAR_END_MONTH_KEY`,
+`constants/config.js` — "2027-01" for the current `FISCAL_YEAR_START`) — a month that `<= 12`
+never reaches. Live repro: add a $50/wk expense, delete it with "Q3+" scope — Weekly Spend
+correctly showed $0 for the deleted line, but Home's "Left This Week" was $2 short of
+`thisWeekCheck - avgWeeklySpend`, because `computeRemainingSpend` (F36-adjacent) iterates every
+*real* future week including that trailing one, and `getEffectiveAmountForMonth` (F102) falls
+back to the expense's stale `history` for any month missing a `monthlyOverrides` entry — the
+"deleted" $50 silently reappeared for that one week and skewed the whole-year average. Fixed by
+routing all seven writers through a new shared `monthKeysThroughFiscalYearEnd(startMonthKey)`
+(`expense.js`) that walks to `FISCAL_YEAR_END_MONTH_KEY` instead of a hardcoded month bound —
+single source, same shape as F148's `TOTAL_FISCAL_WEEKS` fix. **Not in scope, correctly**:
+`clearQuarterMonths` (F143 — "Q4 only" is explicitly the 3 named Oct/Nov/Dec months shown in
+the UI's own tabs, never meant to reach a 4th unlisted month) and `BudgetPanel.jsx`'s
+`getNextNonZeroIso:261`/`yearlyExpenseCost:271` (explicitly a 12-calendar-month "annual cost"
+concept, not a "rest of fiscal year" one — don't reflexively extend these too).
+**Also found in the same pass**: `applyMonthEditForward` (`expense.js:229`, the "preserves a
+future quarter's explicit override" sibling F143 describes) has **zero callers anywhere in the
+app** — F143's real "Bulk Edit preserves" behavior is implemented by a different function
+(`buildCascadedWeekly`, F42), not this one. `applyMonthEditForward` is fully unit-tested but
+unreachable from any UI path — dead code wearing a live function's clothes. Left in place (its
+tests still assert real behavior, and it's now also drift-safe via this fix) rather than
+deleted, since removing it wasn't asked for; flagging so a future "let me just call the existing
+forward-preserve helper" doesn't wire up a function nothing else has ever exercised in
+production.
+> **IF** a new "apply/clear/restore this expense forward through the rest of the fiscal year"
+> writer is ever added, **THEN** it must use `monthKeysThroughFiscalYearEnd`, never a literal
+> `<= 12` — grep `<= 12` in `expense.js`/`BudgetPanel.jsx` before trusting a new one is complete.
+> Check: `expense.test.js`'s "forward-scoped writers cover the trailing fiscal week" describe
+> block (the regression suite for this exact bug) plus a live delete-forward → Left This Week
+> arithmetic check (`thisWeekCheck - weeklySpend` must match exactly, not be off by a couple
+> dollars).
+
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1794,6 +1833,7 @@ of the same point-in-time-lookup shape, not yet unified.
 | `canAccessTaxPlan` inputs (Spine C) | F43 here + ProfilePanel's Tax Plan section — identical gating | Tester/admin/plain × opt-in matrix | D4 |
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
+| `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
 
 ### 10.3 Block 3 — Gate matrix
 

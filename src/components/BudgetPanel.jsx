@@ -76,11 +76,11 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
-  const taxFeatureUnlocked = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
+  const taxFeatureUnlocked = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester, isAiAdmin });
   // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow setExpenses with
   // a no-op so every existing setExpenses() call in this file — expense AND loan
   // mutations both go through it — is automatically safe, without having to find

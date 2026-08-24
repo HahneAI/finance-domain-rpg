@@ -1327,7 +1327,7 @@ export default function App() {
     // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
     // entitlement, not just isAdmin/isTester/isInvestor. Every OTHER Coach
     // surface stays on canAccessAiFeatures (docs/TODO.md §2.0 build order).
-    if (canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement })) {
+    if (canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement })) {
       items.push({
         key: "__coach__",
         label: "Coach",
@@ -2073,7 +2073,7 @@ export default function App() {
   // tier as the other two by locked decision (2026-07-25, entitlements.js's
   // hasPrivilegedAccess) — a tester previously only got a long trial window
   // here, not an unconditional bypass; that asymmetry is now closed.
-  const paywallBypassed = isAdmin || isTester || config.isInvestor;
+  const paywallBypassed = isAdmin || isAiAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
 
   // Beta Homebase / Money Moves badge count+color — single source shared by
@@ -2118,6 +2118,7 @@ export default function App() {
           readOnly={isExpiredReadOnly}
           currentWeek={currentWeek}
           isAdmin={isAdmin}
+          isAiAdmin={isAiAdmin}
           isTester={isTester}
           entitlement={entitlement}
         />
@@ -2147,6 +2148,7 @@ export default function App() {
           today={effectiveToday}
           fundedGoalSpend={fundedGoalSpend}
           isAdmin={isAdmin}
+          isAiAdmin={isAiAdmin}
           isTester={isTester}
           betaCodeUsed={betaCodeUsed}
           entitlement={entitlement}
@@ -2196,6 +2198,7 @@ export default function App() {
           config={config}
           freedomAllowancePerWeek={freedomAllowancePerWeek}
           isAdmin={isAdmin}
+          isAiAdmin={isAiAdmin}
           taxProjectionsEnabled={taxProjectionsEnabled}
           isTester={isTester}
           betaCodeUsed={betaCodeUsed}
@@ -2238,6 +2241,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
+        isAiAdmin={isAiAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
         isTester={isTester}
         betaCodeUsed={betaCodeUsed}
@@ -4371,7 +4375,7 @@ export default function App() {
 
       {/* ── Ask Coach (§2.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
-      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, entitlement }) && (
+      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) && (
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
           isExiting={askCoachExiting}

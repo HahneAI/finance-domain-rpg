@@ -3300,7 +3300,7 @@ regular user population that would need it most.
 ## 11. Data Encryption & At-Rest Security Posture
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started. Read
-`docs/drift-app-warden.md` §3 F120 before touching any persisted field that might fall into a
+`docs/drift-app-warden.md` §19 F120 before touching any persisted field that might fall into a
 higher sensitivity class than what the app collects today — that entry is the authoritative
 trigger check for this whole section.*
 
@@ -3315,7 +3315,7 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 - [ ] **No action needed on current fields.** This section is a readiness/gap flag, not a
   "go encrypt `user_data`" ticket — don't build anything here speculatively (see CLAUDE.md's
-  no-speculative-abstraction rule). The actionable trigger is §3 F120: a *new* field in a
+  no-speculative-abstraction rule). The actionable trigger is §19 F120: a *new* field in a
   genuinely high-sensitivity class (SSN, DOB, bank account/routing, government ID).
 - [ ] **If/when that trigger fires** — decide app-layer encrypt-before-write /
   decrypt-after-read (in the `db.js` write path / `loadUserData`, F67) vs. a `pgcrypto`-backed

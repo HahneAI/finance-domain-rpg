@@ -4788,3 +4788,80 @@ for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — i
       session** (§19.1 field parity → §19.2 life-event re-entry → §19.3 jobless hand-off removal).
       `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
       experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.
+
+---
+
+## 20. Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts
+
+*Seeded 2026-08-24, not yet started. Grew out of a live-testing session that traced exactly what
+"Left This Week" computes today (`HomePanel.jsx`/`BudgetPanel.jsx`, `finalizedWeekNet −
+avgWeeklySpend`) — see `docs/drift-app-warden.md` §8 F16 and §10 F150. That figure blends a real
+single-week income number with an **averaged** spend number (`computeRemainingSpend()`'s
+`total / futureWeeks.length` across every remaining week of the fiscal year), so it answers "at my
+planned average pace, what's free" — not "what will I actually have left after this week's real
+bills." The two are legitimately different questions; users should eventually be able to see both.
+
+**Keep the "Left This Week" component's name exactly as it is today — do not rename it as part of
+this work.** The averaged figure stays; this section is about adding a second, real figure
+alongside it once the data exists to compute one, not replacing what's there.
+
+### A. Optional per-expense due date field
+
+- [ ] **Add an optional `dueDate`-shaped field to the expense schema** (exact shape TBD at
+  implementation time — a fixed day-of-month for recurring bills is probably closer to how bills
+  actually work than a single ISO date, but decide against `expense.js`'s existing
+  `billingMeta`/`history`/`monthlyOverrides` shape rather than bolting on a fourth, disconnected
+  field). **Must be optional** — consistent with the app's existing "most things like this are
+  optional" posture (mirrors Freedom Allowance, benefits enrollment, tips/commission opt-in, all
+  of which default to off/unset rather than forcing an answer). No existing expense should require
+  a migration or a forced prompt to keep working exactly as it does today.
+- [ ] **Where it's entered** — likely the expense edit sheet (`BudgetPanel.jsx`'s per-expense
+  sheet, same place `SAVE SCOPE` lives today), as a clearly-optional field a user can skip.
+  Decide whether it's asked anywhere in Setup Wizard/`SetupWizardAdlib.jsx` at all, or left purely
+  as a Budget-panel-only enhancement — leaning toward the latter given the optional framing (no
+  need to add a wizard step for something users can ignore entirely).
+
+### B. A real "this week's actual" figure, once due dates exist
+
+- [ ] **Decide the partial-coverage rule** — because due dates are optional, most accounts will
+  have *some* expenses with a due date and some without, for a long time (possibly forever). Decide
+  how the "actual this week" figure handles that: options include (a) only ever compute/show it
+  once every currently-active expense has a due date (strict, but may never trigger for most
+  users), (b) compute it as "due-dated bills actually due this week" + "the averaged share of
+  everything else" (a hybrid — needs its own careful math writeup so it doesn't quietly become a
+  third parallel formula alongside `leftThisWeek`/`avgWeeklySpend`), or (c) something else. This is
+  the central design decision the rest of §B depends on — do not start building against an assumed
+  answer.
+- [ ] **Surface both figures together** — once B's math is decided, show the existing averaged
+  "Left This Week" alongside the new actual-this-week figure (same card, a secondary line, a toggle
+  — exact layout TBD), not as a replacement. The averaged figure remains the default/primary
+  number Home leads with.
+- [ ] **Feed the real math functions, not a new parallel one** — whatever resolves "is this expense
+  due this week" must live in `finance.js`/`expense.js` alongside `computeRemainingSpend`/
+  `getEffectiveAmountForMonth`, not as Home/Budget-panel-local logic — both panels need the same
+  answer (see F150 — don't add a *third* place this kind of figure gets independently derived).
+- [ ] **F150 cleanup rides along** — while touching this math, also resolve F150 (BudgetPanel
+  independently re-deriving `avgWeeklySpend`/`leftThisWeek` instead of reading `App.jsx`'s already-
+  computed value) so the new actual-this-week figure has one source of truth from the start instead
+  of inheriting the existing duplication.
+
+### C. "Due today" pop-up
+
+- [ ] **Small notification/pop-up surfacing bills due today** — only meaningful once at least one
+  expense has a due date set (§A). Decide trigger conditions (app open, a specific time of day,
+  once per day max) and where it renders (a dismissible card similar to existing Home banners, not
+  a native push notification for v1 — PWA push is a separate, larger scope question if wanted
+  later).
+- [ ] **Decide what counts as "due today"** — a single due-date expense is straightforward; a
+  recurring monthly bill's "due today" needs the same day-of-month → real-calendar-date resolution
+  the rest of the expense system already does via `getEffectiveAmountForMonth`/`getPhaseIndex` —
+  reuse that resolution path, don't hand-roll a new date match.
+
+### D. Stretch — external calendar sync
+
+- [ ] **Long-scope, not gated on A–C landing first but doesn't make sense before they do**: sync
+  due-dated bills to the user's phone/Apple/Google calendar (likely one-way, app → calendar, via
+  each platform's calendar API/`.ics` export — exact mechanism TBD). Treat as its own future
+  brainstorm-and-scope pass, not something to design in this section — flagged here so the due-date
+  field (§A) is built with an eye toward "this needs to export cleanly later" rather than a shape
+  that would need reworking to support it.

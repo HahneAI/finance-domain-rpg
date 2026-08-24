@@ -4779,7 +4779,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F146) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F146 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column, via `stableStringify` — order-independent since F154) + config-history line + Coach Chats line (2026-07-25, F146) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F146 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure), **DW-12/F154 fixed** (drift comparison was key-order-sensitive, so `config` false-positived on every account, always) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `freedomAllowancePerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`freedomAllowancePerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
@@ -4822,6 +4822,37 @@ No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden
 *uses* them, which is new coupling information, not a restatement.
+
+**F154 — DB Row Viewer's `rowDiff` flagged "config" as drifted on every account, always, whether
+or not anything actually diverged (2026-08-24, DW-12, fixed).** Found immediately while verifying
+F153 live: a fresh Fetch, zero edits since page load, still showed "1 drift" / "Drift: config".
+Root cause: `rowDiff` (`App.jsx` ~L1352) compared `JSON.stringify(config)` against
+`JSON.stringify(rowData.config)` — plain string equality, which is key-order-sensitive. The two
+sides are built by fundamentally different code paths: in-memory `config` is
+`{ ...DEFAULT_CONFIG, ...data.config }` (`db.js:258`), preserving `DEFAULT_CONFIG`'s hand-written
+declaration order (`constants/config.js`); `rowData.config`, fetched raw by the DB Row Viewer's
+own query, reflects Postgres jsonb's canonical storage order (keys sorted shortest-first, then
+alphabetically — confirmed live: `ltd, ptoCap, dhlSite, dhlTeam, baseRate, diffRate, ficaRate,
+k401Rate, bucketCap, fsaWeekly, hsaWeekly, startDate, stdWeekly, userState, w1FedRate…`, strictly
+increasing length). These two orders never match, so the "config" comparison was structurally
+guaranteed to report drift on every account, on every fetch — the exact "lying instrument"
+pattern §23.4 already has precedent for (DW-2/DW-5): a diagnostic tool whose own output can't be
+trusted, this time from day one rather than via a later regression. Verified live: script-level
+deep comparison (`JSON.stringify` after recursively sorting keys) showed the fetched `rowData.config`
+and in-memory `config` were byte-identical in content — the "drift" was 100% key-order noise, zero
+real divergence. **Fix:** added `stableStringify()` (`App.jsx`, top-level, recursively sorts object
+keys before serializing) and switched all five array/object fields in `rowDiff`'s comparison pairs
+(`config`, `expenses`, `goals`, `logs`, `week_confirmations`) to use it instead of plain
+`JSON.stringify` — the two scalar fields (`show_extra`, `pto_goal`) were never affected since
+`String()` coercion has no key-order concept. Verified live post-fix: an identical Fetch on the
+same account with no edits shows no drift badge at all. Full test suite (1681 tests) unaffected.
+Not unit-tested directly — `stableStringify`/`rowDiff` are both inline in `App.jsx` with no module
+export, same limitation DW-2/DW-3 already note for this file; live verification is the standing
+substitute per this section's own "trust but verify visually" precedent. **Blast radius: `App.jsx`
+only** — no other file reads or duplicates this comparison. This was very likely masking every
+*real* config drift this tool was built to catch (F67/F68/F110's "the 4th save site") the entire
+time it's existed, since a real one-field divergence would have been indistinguishable from the
+permanent false positive.
 
 **F153 — Lock Date silently no-op for `isAiAdmin`-only accounts (2026-08-24, DW-11, fixed).**
 The test account was upgraded to carry `is_ai_admin: true` (`isAdmin: false`); live-testing with

@@ -138,6 +138,21 @@ const BOTTOM_NAV = [
 // out of sync with it.
 const NAV_ICONS = Object.fromEntries(BOTTOM_NAV.map(i => [i.key, i.icon]));
 
+// DB Row Viewer's rowDiff needs an order-independent equality check: Postgres jsonb
+// re-canonicalizes object key order on storage (length-then-alphabetical) while the
+// in-memory config is built via `{ ...DEFAULT_CONFIG, ...data.config }` (db.js), which
+// preserves DEFAULT_CONFIG's hand-written declaration order — so plain JSON.stringify
+// comparison flags every account's "config" as drifted on every fetch, real edits or
+// not (F153-adjacent finding, 2026-08-24). Recursively sorts object keys before
+// stringifying so only real content differences trigger the drift badge.
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 // §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
@@ -1352,12 +1367,12 @@ export default function App() {
   const rowDiff = useMemo(() => {
     if (!rowData || rowData.__error) return [];
     const pairs = [
-      ["config", JSON.stringify(config), JSON.stringify(rowData.config)],
-      ["expenses", JSON.stringify(expenses), JSON.stringify(rowData.expenses)],
-      ["goals", JSON.stringify(goals), JSON.stringify(rowData.goals)],
-      ["logs", JSON.stringify(logs), JSON.stringify(rowData.logs)],
+      ["config", stableStringify(config), stableStringify(rowData.config)],
+      ["expenses", stableStringify(expenses), stableStringify(rowData.expenses)],
+      ["goals", stableStringify(goals), stableStringify(rowData.goals)],
+      ["logs", stableStringify(logs), stableStringify(rowData.logs)],
       ["show_extra", String(showExtra), String(rowData.show_extra)],
-      ["week_confirmations", JSON.stringify(weekConfirmations), JSON.stringify(rowData.week_confirmations)],
+      ["week_confirmations", stableStringify(weekConfirmations), stableStringify(rowData.week_confirmations)],
       ["pto_goal", String(ptoGoal ?? ""), String(rowData.pto_goal ?? "")],
     ];
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);

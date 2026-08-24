@@ -1282,7 +1282,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             })() : undefined}
           />
         ) : (
-          <Card label={`Left ${thisCheckLabel}`} val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+          <Card label={`Left ${thisCheckLabel}`} labelTooltip="A strategic average" val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
             insight={weeklyIncome > 0 ? (() => {
               const nextCheck = futureWeekNets?.[0] ?? null;
               const lastCheck = prevWeekNet ?? weeklyIncome;

@@ -4790,6 +4790,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | Dimension | Cells | Expected behavior |
 |---|---|---|
 | `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
+| `isDiagnosticAdmin` (`isAdmin \|\| isAiAdmin`) | false / true | true: **Lock Date**'s `effectiveToday` fork + its two hour-gate bypasses (`isPayPeriodPast`, `isTipsCommissionDayEligible`) + both lock-active banners — F153/DW-11 fixed the gap where these 5 sites read plain `isAdmin`, silently no-op-ing Lock Date for `isAiAdmin`-only accounts even though the Lock Date *control* itself (a separate "AI Admin Tools" panel) was already reachable for them |
 | `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
 | Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
 | Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5 — both fixed) — an L-grade defect despite the toolkit being a Gateway |
@@ -4821,3 +4822,32 @@ No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden
 *uses* them, which is new coupling information, not a restatement.
+
+**F153 — Lock Date silently no-op for `isAiAdmin`-only accounts (2026-08-24, DW-11, fixed).**
+The test account was upgraded to carry `is_ai_admin: true` (`isAdmin: false`); live-testing with
+it found the Lock Date control fully reachable (its own "AI Admin Tools" panel, distinct from
+the `isAdmin`-only "Admin Tools" panel — both exist side by side in `App.jsx`) and appearing to
+persist correctly (localStorage `admin_temp_lock_date` set, banner showing the picked date), yet
+Live State Inspector's `EFFECTIVE TODAY` stayed on the real date. Root cause: `effectiveToday`
+(`App.jsx` ~L1306) gated strictly on `isAdmin && tempLockDate`, not the existing combined
+diagnostic gate `isDiagnosticAdmin = isAdmin || isAiAdmin` (defined for exactly this kind of
+shared-tool purpose, per the comment at its declaration) — so for an `isAiAdmin`-only account the
+control wrote real state that every downstream reader ignored. Same `isAdmin && tempLockDate`
+pattern was duplicated at 4 more sites, all fixed the same way: `isPayPeriodPast`'s DHL
+Monday-6am hour-gate bypass, `isTipsCommissionDayEligible`'s noon hour-gate bypass, and both
+lock-active warning banners (the small header badge + the notifications-panel banner) — an
+`isAiAdmin` account was seeing its own lock date reflected back with no functional effect and no
+visual confirmation beyond the two AI Admin Tools panel headers, which read `tempLockDate`
+directly with no `isAdmin` gate at all (the one part of this feature that was never broken).
+`docs/admin-toolkit-reference.md` already documented Lock Date as available to `isAiAdmin`
+accounts — this was a genuine implementation gap, not a doc lag. Verified live: set Lock Date to
+2026-12-31 on the `isAiAdmin` test account, confirmed via Live State Inspector `EFFECTIVE TODAY`
+now reads `2026-12-31` (`real: 2026-08-24`) and the header week number jumped to Week 52, matching
+`isAdmin` behavior exactly. **Blast radius: `App.jsx` only** — `effectiveToday`,
+`isPayPeriodPast`, `isTipsCommissionDayEligible`, both banner render conditions, plus each
+callback's dependency array. No other file reads `tempLockDate`/`effectiveToday` through a
+narrower-than-`isDiagnosticAdmin` gate (confirmed via `grep -n "isAdmin.*tempLockDate"` returning
+zero hits post-fix). Full test suite (1681 tests) still green — this is a pure gate-widening fix
+with no math-formula change, so no new unit coverage was added; the regression surface here is
+UI-gate reachability, verified live per the toolkit's own "trust but verify visually" standard
+(§23's Block 3 registry).

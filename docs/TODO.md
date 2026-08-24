@@ -679,7 +679,7 @@ CREATE INDEX coach_chats_user_id_created_at
   `title` (or first user message truncated), `summary` preview when one exists, and `created_at`
   relative date. **No `chat_type` chip** — every row is `ask_coach` today (the list explicitly
   filters to that type), so a chip would say the same word on every row; add it when a second
-  type gets a UI caller (see drift-app-warden §8 F123).
+  type gets a UI caller (see drift-app-warden §21 F146).
 - [x] **Tap to resume** — built 2026-07-25. Loads the chat's full `messages` array back into the
   active view.
 - [x] **New Chat button** — built 2026-07-25. Header icon, not inline atop the history list as

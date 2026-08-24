@@ -63,7 +63,7 @@ recent titles). Still open: if a second `chat_type` (Job Scout, statement insigh
 gets a UI caller, that type needs its own retention/summary decision, since today's 3-chat
 retention cap and end-of-session summary are `ask_coach`-specific.
 *Reference: `docs/TODO.md` §2.H (Chat & Search History Persistence), subsections H3–H4;
-`docs/drift-app-warden.md` §8 F123.*
+`docs/drift-app-warden.md` §21 F146.*
 
 **Technical reference:** API route `POST /api/coach` · Model: **Haiku** (`claude-haiku-4-5`,
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System

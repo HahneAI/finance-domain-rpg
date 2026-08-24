@@ -2343,7 +2343,9 @@ get no time to await `getSession()`.
 > exact class `168cc4b` fixed. The snapshot must stay listener-maintained, never
 > promise-fetched at flush time.
 
-**F120 · `getCurrentUserId` session fallback** — `supabase.js:50–70` — **[L]**
+**F145 · `getCurrentUserId` session fallback** — `supabase.js:50–70` — **[L]** — *(renumbered from
+F120 2026-08-24, math-engine audit pass, to resolve a pre-existing duplicate-number collision with
+the Encryption trigger entry below — see §1's findings-offload protocol; no content changed)*
 The identity primitive every `db.js` load/save/flush path resolves through. It probes
 `auth.getUser()` first (a `/auth/v1/user` network round-trip) but **falls back to the
 persisted session (`getSession()`, a local read) when `getUser()` returns a null user
@@ -2393,7 +2395,7 @@ fields when `pendingSaveRef` is set (a load must not revert an edit made in the 
 800ms) but always applies tier flags/subscription. Failure path: retry once after
 1.5s, **never fall back to defaults** — conflating failure with "new account" is the
 `cc227ad` wizard-re-trigger bug (and `db.js:170–181`'s PGRST116 rule is the same law
-on the query side; F120's `getCurrentUserId` session fallback is the same law on the
+on the query side; F145's `getCurrentUserId` session fallback is the same law on the
 identity side — three doors, one failure).
 > **IF** the dep list, the pending-save guard, or the retry policy changes, **THEN**
 > walk the same incident set as F65 plus: transient offline reload on an existing
@@ -3436,7 +3438,7 @@ Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK
 is a full-schema recap (schema state through 021) that exists so a session reads one file
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
-continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F123), **024** (`user_data` write-
+continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F146), **024** (`user_data` write-
 permission fix — the F69 case law). **The next real migration is 025** — verify against the
 folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
@@ -3543,7 +3545,7 @@ destructure is the enforcing whitelist (migration 019 RLS is the server half).
 
 **Separate table (not `user_data`):** `account_history` (migration 020, write-only via
 `saveConfigSnapshot`, read-only via `extractBaseRateHistory` — the §5 narrow slice);
-`coach_chats` (migration 023, wired — Spine D F123); `stripe_webhook_events` (migration 018,
+`coach_chats` (migration 023, wired — Spine D F146); `stripe_webhook_events` (migration 018,
 idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
 
 ### 19.4 Block 4 — Case law & findings
@@ -3940,10 +3942,13 @@ read," they don't belong here) and still route+render exactly as before.
 > don't pass `embedded` at that call site. Check: no automated test covers this page's toggle
 > wiring or the embedded/non-embedded BackBar branch — visual-only, verify by hand per method.
 
-**F128 · Cross-posting between Beta and Money Moves — a one-time copy, never a sync** —
+**F147 · Cross-posting between Beta and Money Moves — a one-time copy, never a sync** —
 `ProfilePanel.jsx` (`ContentAdminDetail`'s `crossPost` prop, `handleSave`'s cross-post branch,
 `handleBulkCopy`) — **[G] — a stale field list here means the copy silently drops data, not a
-crash**
+crash** — *(renumbered from F128 2026-08-24, math-engine audit pass, to resolve a pre-existing
+duplicate-number collision with the SetupWizardAdlib entry in §7 — see §1's findings-offload
+protocol; no content changed; not referenced by number anywhere else in the doc or externally,
+so this is the only line touched)*
 Added 2026-08-10. Two independent write paths, both going through the SAME paired
 `saveItem`/`crossPost.saveItem` functions `UserCommunicationAdminDetail` already wires per
 method (beta_checklist↔base_checklist via Money Moves Checklist, beta_suggestion↔base_suggestion
@@ -4148,17 +4153,22 @@ note.
 > non-investor/non-entitled request returns 403 before any Anthropic call; the client cannot
 > escalate access by editing the POST body.
 
-**F116 · `coach_chats` persistence layer — now wired (superseded, see F123)** — `db.js:531–620`
+**F116 · `coach_chats` persistence layer — now wired (superseded, see F146)** — `db.js:531–620`
 (`loadCoachChats`/`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` —
 **[L/G]**
 Was dormant as of the 2026-07-20 spine pass (unit-tested, zero UI callers). **As of 2026-07-25,
 `AskCoachPanel.jsx` is a live caller** of all three functions — multi-turn Ask Coach chats now
 persist, and a chat-history list resumes a saved conversation. This entry's own IF/THEN fired
-and was actioned: see **F123** for the earned drift-map entry covering the wiring itself. Kept
+and was actioned: see **F146** for the earned drift-map entry covering the wiring itself. Kept
 here only so anything still citing "F116 dormant" gets redirected instead of relying on a stale
 fact.
 
-**F123 · `AskCoachPanel` chat persistence + retention (activates F116)** — `AskCoachPanel.jsx`
+**F146 · `AskCoachPanel` chat persistence + retention (activates F116)** — `AskCoachPanel.jsx`
+*(renumbered from F123 2026-08-24, math-engine audit pass, to resolve a pre-existing
+duplicate-number collision with the Beta Homebase entry in §20 — see §1's findings-offload
+protocol; no content changed. External docs citing "§8 F123" for this entry — `docs/TODO.md`,
+`docs/coach-entry-points.md`, `docs/coach-session-handoff.md` — updated to "§21 F146" in the
+same pass, correcting the stale section number alongside the number swap.)*
 (`persistChat`, `refreshHistory`, `finalizeSummary`, `endCurrentSession`), `coachPrompts.js`
 (`COACH_CHAT_SUMMARY_PROMPT`) — **[L/G]**
 Each completed Ask Coach turn (success *or* the request failing mid-stream) is upserted into
@@ -4228,7 +4238,7 @@ the résumé input; the *review* is a `coach_chats` row (`chat_type: 'resume_rev
 that table's check constraint by the same migration) via the existing `saveCoachChat` path — no
 new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
 scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
-system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+system yet, the same stage `AskCoachPanel` was in before F146 landed persistence for it.
 
 **v2 update, 2026-08-11 (§2.E1 v2) — `resume_profile` now also holds file metadata, and a
 Storage bucket entered the picture.** Migration `041_add_resume_profile_storage.sql` added
@@ -4275,8 +4285,8 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > on-screen New Job Season panels use, per F113's rule — this function is exempt from `buildCoachContext`
 > itself but not from the grounding rule that governs it. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
-> entry (or an extension of F123) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
-> and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
+> entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
+> and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags
 > this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
 > `ResumeReviewCard.test.jsx`, `newJobSeasonFlow.test.jsx`'s gate-verification block (confirms a real
 > trial entitlement, not just admin/tester, is correctly refused). **IF** `ResumeReviewCard.jsx`
@@ -4318,8 +4328,8 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
 | `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays` signature (converged target — both former F24 quarantines closed `3267286`, 2026-07-22) | `CoachNetWorthCard.jsx` (Red tier) and `App.jsx`'s `coachRunwayDays` → `AskCoachPanel` both call it directly now — a signature change must be verified against both, not just the two New Job Season panels | `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block + `CoachNetWorthCard.test.jsx`; New Job Season Home headline, Coach card, and Ask Coach's stated runway must all agree on one account | D1 |
-| `coach_chats` db functions get a second `chat_type` UI caller (F116/F123) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
-| `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
+| `coach_chats` db functions get a second `chat_type` UI caller (F116/F146) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
+| `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F146) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 | `buildJobHuntContext`'s source functions (F124) — `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `NewJobSeasonHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
 | `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` in `NewJobSeasonHomePanel` (F124) | Must stay narrow (admin/tester/investor, no entitlement-based path) — never silently swapped for `canAccessAskCoachGeneral`; does **not** apply to `ResumeReviewCard`'s second mount site in `ProfilePanel`'s Preferences row, which is deliberately ungated storage-only (`showReview={false}`) | `newJobSeasonFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either at the New Job Season site; `ProfilePanel.test.jsx`'s Résumé-row block confirms the Preferences site renders for any account, with no review UI | D4 |
@@ -4392,7 +4402,7 @@ other way is a §6 grounding violation (D1) by definition.
 **Standing findings from this pass:** none new filed. Both former quarantines above are
 closed and converged on the same Spine-A function (`computeNewJobSeasonRunway`) — Spine A's §2.4
 now marks its own pointer closed too. The `coach_chats` layer (F116) is no longer dormant —
-wired 2026-07-25 per F123, which is now the live entry for its eager-save/gate/RLS shape.
+wired 2026-07-25 per F146, which is now the live entry for its eager-save/gate/RLS shape.
 No further D5 corrections owed this pass beyond the quarantine staleness just corrected above
 — `active-systems.md` §6 already documents the grounding pattern and was reconciled during
 the surface passes.
@@ -4589,7 +4599,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F123) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F123 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F146) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F146 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `freedomAllowancePerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`freedomAllowancePerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |

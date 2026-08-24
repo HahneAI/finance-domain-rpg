@@ -388,13 +388,25 @@ effects: (1) DHL enforced overrides — `payPeriodEndDay: 0`, `otThreshold: 40`,
 
 **F6 · `estimateWeeklyGross` / `estimateWeeklyNet`** — `finance.js:136` / `finance.js:176` — **[L]**
 The wizard's sanctioned preview approximations (Step 1/Wrap Up live net; `PaystubCalc`).
-They are deliberately *not* `buildYear` — but they promise the user a number the app then
-recomputes for real.
-> **IF** `buildYear`/`computeNet` changes deduction ordering, any tax rule, or any benefit
-> rule, **THEN** these two must change in the same commit, or the wizard's promised net
-> diverges from the first rendered week — a D1 pair, permanently coupled. Check: complete
-> a test wizard run and diff Wrap Up's net against Week Inspector's `computeNet` for the
-> first active week.
+`estimateWeeklyNet` is deliberately *not* `buildYear`/`computeNet` (no per-week
+`extraPerCheck`/`showExtra`/`freedomAllowance`/taxed-vs-non-taxed-week split — it's a flat
+single-rate estimate) — but it promises the user a number the app then recomputes for real.
+**Fixed 2026-08-24 (DW-10):** `estimateWeeklyGross`'s DHL branch used to be a fully separate,
+hand-rolled gross-pay formula with a stale hardcoded 4-shift/5-shift rotation assumption and
+no `diffRate`/`nightDiffRate` at all — it had silently drifted ~25% high against a standard
+DHL preset. It now delegates to `(projectedGross(true, d) + projectedGross(false, d)) / 2`
+— the same function `buildYear()`'s long/short split is built from — so the gross-pay half
+of this pair can no longer diverge by construction. The base-user branch was already correct
+(verified) and is unchanged. `estimateWeeklyNet`'s own deduction math (fed/state/FICA/401k/
+benefits, all single-rate/no-`extraPerCheck`) is unchanged and still a hand-maintained
+approximation — see the IF/THEN below, now scoped to that half only.
+> **IF** `buildYear`/`computeNet` changes deduction *ordering*, any tax rule, or any benefit
+> rule, **THEN** `estimateWeeklyNet` must change in the same commit, or the wizard's promised
+> net diverges from the first rendered week — still a D1 risk, now confined to the
+> gross→net deduction stack rather than gross pay itself. Check: complete a test wizard run
+> and diff Wrap Up's net against Week Inspector's `computeNet` for the first active week.
+> **IF** a new employer preset (beyond DHL) is added, **THEN** `estimateWeeklyGross` must
+> gain a branch that also delegates to `projectedGross`, not a third hand-rolled formula.
 
 **F7 · `StructureChangeDiff` + `DIFF_FIELDS`** — `SetupWizard.jsx:1732` / `:1714–1730` — **[G]**
 Display-only "What's Changing" diff on the `structure_change` Wrap Up, compared against
@@ -1009,6 +1021,24 @@ skipped entirely).
 - *Quick Rate Update effective date didn't gate the math* (commit `955b0b3`) — the modal
   saved a date the engine ignored; fixed by the F10 chain. The whole chain exists so the
   date is load-bearing — treat any simplification of it as reopening the bug.
+- *`estimateWeeklyGross`'s DHL branch was a second, undocumented-as-such gross-pay formula*
+  (DW-10, 2026-08-24) — hardcoded a stale 4/5-shift rotation and omitted weekend/night
+  differentials entirely, overstating the DHL Wrap Up preview by ~25% against a standard
+  preset. F6 claimed these were "sanctioned approximations" kept in sync by convention; in
+  practice the gross-pay half had already drifted with zero test coverage to catch it. Fixed
+  by delegating to `projectedGross` — see F6. The lesson: a drift-map entry that says "must
+  change together" is not itself evidence that it *has* — periodically re-run the entry's own
+  Check procedure instead of trusting the prose.
+
+**Standing findings from a 2026-08-24 math-engine audit pass:**
+1. **D1, fixed — `estimateWeeklyGross` DHL formula drift.** *(DW-10 in `docs/BUG_FIX_TODO.md`)*:
+   see the precedent above and the updated F6 entry. Triggered by a user report of a
+   surprisingly low projected weekly take-home for a base-user test scenario; that specific
+   report turned out not to be a bug (verified by running `buildYear`/`computeNet`/
+   `weeklyIncome`/`prevWeekNet` against the exact reported scenario — the number is the
+   correct sum of FICA + fed/state withholding + the default $50/wk Freedom Allowance +
+   the default $100/wk Food expense), but auditing every math source function against this
+   section's own F6 Check procedure surfaced the DHL-side defect above instead.
 
 **Standing findings from this pass:**
 1. **Soft-D3, Quick Rate Update — fixed.** *(DW-1 in `docs/BUG_FIX_TODO.md`)*:

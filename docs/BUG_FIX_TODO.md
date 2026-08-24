@@ -12,8 +12,10 @@ section rather than duplicating the write-up.
 
 ## Open — Drift Warden findings
 
-DW-1 through DW-12 are all fixed — see the Fixed table below. Nothing is
-currently open; new findings get filed here as DW-13+.
+DW-13 | **Bulk Edit (`BulkEditPanel`, F42) has no reachable trigger anywhere in the shipped UI.** `BudgetPanel.jsx`'s `bulkEditOpen` state is only ever set to `false` — `setBulkEditOpen(true)` appears nowhere in the file, nowhere else in `src/`, and nowhere in the file's git history since `BulkEditPanel` was introduced. Confirmed live: the Budget panel's full button set has no Bulk Edit entry point. The component and its `buildAdvancedEditPayload`/`buildCascadedWeekly` cascade-preserve logic are fully built and correctly unit-tested (re-verified passing) — this is a complete, working feature with no door into it, not a math bug. Every real account today has only ever exercised the single-expense Save-scope buttons' always-overwrite cascade rule (F37); Bulk Edit's preserve-explicit-override rule (F42) has never actually protected any real user's data. | `BudgetPanel.jsx` (`bulkEditOpen` state, L135) | **G** — a real, tested feature is completely unreachable | **Deliberately not fixed** — adding a trigger (placement, label, whether the feature is still wanted at all) is a product decision, not an obvious one-fix bug. Needs the account owner's call. `drift-app-warden.md` §7.4 F155 (adjacent to F143) |
+
+DW-1 through DW-12 are all fixed — see the Fixed table below. New findings
+beyond DW-13 get filed here as DW-14+.
 
 ---
 

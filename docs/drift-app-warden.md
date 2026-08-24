@@ -1817,6 +1817,36 @@ of the same point-in-time-lookup shape, not yet unified.
 > hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
 > pattern.
 
+**F155 · Bulk Edit (F42/`BulkEditPanel`) has no reachable trigger in the shipped UI — F143's
+"two edit surfaces" claim is only half-true for a real user (2026-08-24, found completing the
+expense-cascade testing checklist item, DW-13, NOT fixed — flagged for a product decision) — [G]**
+`BudgetPanel.jsx`'s `bulkEditOpen` state (`useState(false)`, L135) is only ever set to `false`
+(on month-select, quarter-select, and post-save) — `setBulkEditOpen(true)` does not appear
+anywhere in `BudgetPanel.jsx`, anywhere else in `src/`, or anywhere in `BudgetPanel.jsx`'s git
+history back to `BulkEditPanel`'s introduction (`git log -p --all -S "setBulkEditOpen(true)"`
+returns nothing). Confirmed live too: the Budget panel's full button set (`overview`/
+`breakdown`/`loans` tabs, month/quarter tabs, `Restore Deleted`, `+ Add Expense Line`) has no
+Bulk Edit entry point anywhere. The `BulkEditPanel` component, its `buildAdvancedEditPayload`/
+`buildCascadedWeekly` save logic, and its dedicated test coverage (`expenseCycles.test.js`'s
+`buildAdvancedEditPayload` describe block, including "cascading edit respects existing byPhase
+overrides in later quarters" — re-verified passing this session) are all real and correct at the
+function level — this is not a math bug, it's a **fully-built feature with no door into it**.
+F143 (above) describes this as one of "two edit surfaces" a user chooses between; in the actual
+shipped app there is only one — the single-expense Save-scope buttons (F37). Every account today
+has only ever exercised F37's always-overwrite cascade rule; F42's preserve-explicit-override
+rule, while correct, has never protected a single real user's data because nothing can open the
+panel that runs it. **Deliberately not fixed in this pass** — adding a trigger is a product/UX
+decision (where should it live: a header button, a long-press, a mode toggle on the month/quarter
+tabs; is multi-expense bulk editing even still wanted as a feature, or was it superseded by
+something else and simply never cleaned up) rather than a bug with one obvious correct fix, so it
+needs the account owner's call rather than being wired up unilaterally.
+> **IF** Bulk Edit is wired up with a real trigger, **THEN** re-verify F143's two-cascade-rule
+> split live (not just via unit test) before shipping — this is the first time either rule will
+> have been exercised by a real user action end-to-end.
+> **IF** a future audit re-reads F143 as evidence Bulk Edit is a live, reachable feature,
+> **THEN** check this entry first — F143 describes the code's intent, this entry describes
+> what a real user can actually do.
+
 **F149 · Forward-scoped expense writers must reach the fiscal grid's trailing week, not
 calendar December** — `expense.js`: `applyMonthEditForward:229`, `applyQuarterForward:256`,
 `applyAllQuarters:267`, `clearMonthForward:287`; `BudgetPanel.jsx`: `saveFromMonthForward:741`,

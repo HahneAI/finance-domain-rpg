@@ -1922,30 +1922,37 @@ production.
 > arithmetic check (`thisWeekCheck - weeklySpend` must match exactly, not be off by a couple
 > dollars).
 
-**F150 · `avgWeeklySpend`/`leftThisWeek` — Budget Panel independently re-derives Home's own
-number, doesn't read it** — `BudgetPanel.jsx:365–386` (`projectableExpenses`, `avgWeeklySpend`,
-`leftThisWeek`) vs. `App.jsx:1811–1819` (`projectableExpenses`, `remainingSpend`,
-`baseWeeklyUnallocated`) — found investigating a user question about "Left This Week"'s
-semantics, 2026-08-24 — **[L]**
+**F150 · `avgWeeklySpend`/`leftThisWeek` — Budget Panel independently re-derived Home's own
+number instead of reading it (fixed 2026-08-24, DW-15)** — `BudgetPanel.jsx` (formerly
+`:365–386`, `projectableExpenses`/`avgWeeklySpend`/`leftThisWeek`) vs. `App.jsx:1838–1846`
+(`projectableExpenses`, `remainingSpend`, `baseWeeklyUnallocated`) — found investigating a user
+question about "Left This Week"'s semantics, 2026-08-24 — **[L]**
 `App.jsx` computes `remainingSpend = computeRemainingSpend(projectableExpenses, futureWeeks)`
 once and passes `remainingSpend.avgWeeklySpend` down as a prop to HomePanel (F16) and, via
 HomePanel, to Coach (`aiContext.js`, which never recomputes — it just reads the prop it's
-given). **BudgetPanel does not receive that prop at all.** It instead re-derives its own
+given). **BudgetPanel did not receive that prop at all.** It re-derived its own
 `projectableExpenses` (a byte-for-byte copy of App.jsx's New Job Season filter — same predicate,
-same comment, two separately-maintained copies) and calls `computeRemainingSpend` a **second
-time** on it (`:369–370`), then computes its own `leftThisWeek` (`:386`) from that — not from
-App.jsx's. The two values agree today only because both copies happen to filter identically and
-receive the same `expenses`/`futureWeeks` props unmodified. This corrects/supersedes DW-W5's
-"the one live call site (`App.jsx:1817`)" framing (`docs/BUG_FIX_TODO.md`) — there are **two**
-live call sites, both invoked with no `options` argument, not one.
+same comment, two separately-maintained copies) and called `computeRemainingSpend` a **second
+time** on it, then computed its own `leftThisWeek` from that — not from App.jsx's. The two values
+agreed only because both copies happened to filter identically and receive the same
+`expenses`/`futureWeeks` props unmodified — a coincidence, not a guarantee. This corrected/
+superseded DW-W5's "the one live call site (`App.jsx:1817`)" framing (`docs/BUG_FIX_TODO.md`) —
+there were **two** live call sites, both invoked with no `options` argument.
+**Fix:** `BudgetPanel` now takes `avgWeeklySpend` as a prop (default `0`); `App.jsx`'s single
+`<BudgetPanel>` call site passes `avgWeeklySpend={remainingSpend.avgWeeklySpend}` — the exact
+same value already threaded to HomePanel. `BudgetPanel.jsx`'s local `projectableExpenses`
+useMemo and second `computeRemainingSpend` call were deleted entirely (the now-unused
+`computeRemainingSpend` import was removed too) — there is only one computation of this number
+in the whole app now, App.jsx's. Verified live: Home and Budget's "Left This Week" tiles read
+identical ($728) across repeated navigation between the two views (an earlier read showing a
+few-dollar gap was the countup-animation mid-flight, not a data mismatch — confirmed by waiting
+for the animation to settle before comparing). Full test suite (1681 tests) unaffected — no
+existing test asserted the exact figure closely enough to need updating.
 > **IF** App.jsx's New Job Season filter predicate changes (or `computeRemainingSpend` itself
-> changes), **THEN** BudgetPanel.jsx's independent copy (`:365–367`) must change identically, or
-> Home's "Left This Week" and Budget's "Left [Check]" tiles will silently show two different
-> numbers for the same real-world question. No test currently cross-checks the two values
-> against each other. Check: toggle New Job Season, pause an expense, and confirm Home and
-> Budget's left-this-week figures still match; consider collapsing to one source (thread
-> `remainingSpend` down as a prop instead of recomputing) rather than trusting the two copies to
-> keep matching by hand.
+> changes), it now only needs to change in one place (`App.jsx`'s `projectableExpenses`/
+> `remainingSpend`) — BudgetPanel has no independent copy left to fall out of sync. If a future
+> change reintroduces a local recompute in BudgetPanel "for convenience," that's the regression
+> this entry exists to catch — thread the value down as a prop instead.
 
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -1961,7 +1968,7 @@ live call sites, both invoked with no `options` argument, not one.
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
 | `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
-| App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx's separately-maintained copy (F150) | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match | D1 (guarded, not open) |
+| App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx now reads the same `avgWeeklySpend` value via prop (F150, fixed) — no separate copy left to drift | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match (structurally guaranteed now, not just by convention) | D1 (closed) |
 
 ### 10.3 Block 3 — Gate matrix
 

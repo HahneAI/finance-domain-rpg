@@ -2205,6 +2205,7 @@ export default function App() {
           prevWeekNet={prevWeekNet}
           futureWeeks={futureWeeks}
           futureWeekNets={futureWeekNets}
+          avgWeeklySpend={remainingSpend.avgWeeklySpend}
           currentWeek={currentWeek}
           fiscalWeekInfo={currentWeekNumber}
           today={effectiveToday}

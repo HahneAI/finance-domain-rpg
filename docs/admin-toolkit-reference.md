@@ -2,8 +2,67 @@
 
 **Gate:** `isAdmin` (from `user_data.is_admin`) unlocks all Phase 1 tools.
 `isOwner` (`user_data.is_owner`, not yet built) unlocks Phase 2 destructive tools — never grantable via UI.
+`isAiAdmin` (`user_data.is_ai_admin`) unlocks a slimmed, read-only subset of Phase 1 for AI-agent-team
+accounts — see "AI Admin" below.
 
 **How to use:** Ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav), run the relevant tool, and paste or describe the output.
+
+---
+
+## AI Admin — `isAiAdmin` (7 diagnostic tools + full front-line feature access)
+
+**Gate:** `isAiAdmin` (from `user_data.is_ai_admin`, migration
+`042_add_is_ai_admin_flag.sql`) — a narrower sibling to `isAdmin`, intended for accounts used by
+an AI agent team to diagnose their own account's data AND exercise the product like a real user.
+Two separate things it grants, kept deliberately distinct:
+
+1. **Admin Tools (diagnostic-only).** Rendered as a separate "AI Admin Tools" block
+   (`src/App.jsx`), shown only when `isAiAdmin && !isAdmin` (a full admin already sees everything
+   in the regular Admin Tools block, so the two never double up). Combined internally via
+   `const isDiagnosticAdmin = isAdmin || isAiAdmin` for the tools shared with Phase 1 (Live State
+   Inspector, Week Inspector, Per-Entry Impact Breakdown, and the `isAdmin` prop passed into
+   `IncomePanel`/`LogPanel`, which only ever gates read-only display in those two components).
+2. **Front-line feature access (2026-08-24).** `isAiAdmin` is a full tester-tier peer in
+   `src/lib/entitlements.js` — `hasTesterAccess`/`hasPrivilegedAccess` both OR it in alongside
+   `isAdmin`/`isTester`/`isInvestor`, so `canAccessTaxPlan`, `canAccessAiFeatures`, and
+   `canAccessAskCoachGeneral` all pass for an AI Admin account exactly as they would for a real
+   beta tester — Tax Plan, Job Hunt Assistant/Résumé Review, Ask Coach, the Net Worth Check-In
+   card. `App.jsx`'s `paywallBypassed` includes it too, so an AI Admin account never hits the
+   paywall. This is verified server-side in `api/coach.js` (never trusted from the client) exactly
+   like the other three tiers.
+
+**AI Admin Coach usage cap (migration `043_add_ai_admin_coach_usage_cap.sql`).** Unlike a human
+beta tester, an AI agent can loop an Ask Coach conversation far faster than any person would,
+which could burn through the shared Anthropic API budget during routine feature testing.
+`api/coach.js` enforces a rudimentary daily call cap — default 25/day (`AI_ADMIN_COACH_DAILY_LIMIT`
+env var to override) — tracked via `user_data.ai_admin_coach_calls_date` /
+`ai_admin_coach_calls_count`, written only through a service-role client (same pattern as
+`api/delete-account.js`; the client itself has no write grant on these columns). Scoped
+**exclusively** to `is_ai_admin` accounts — admin/tester/investor/real trial-paid callers never
+touch this code path or these columns. Over the cap returns HTTP 429 before calling Anthropic.
+
+**Zero elevated DB privilege.** Every tool below reads only the signed-in account's own
+`user_data` row, which default per-row RLS already permits — `is_ai_admin` is never referenced by
+any RLS policy (unlike `is_admin`, which is checked directly in migrations 013/032/037 for
+investor codes, changelog, and beta content). It is an app-level UI gate only.
+
+**Included (identical to their Phase 1 versions — see each tool's own section above for
+detail):** Lock Date · Force Sync — **Pull only** · Config Raw View · DB Row Viewer · Tax Weeks
+Grid (view) · Live State Inspector · Week Inspector · Per-Entry Impact Breakdown.
+
+**Deliberately excluded, and why:**
+
+| Tool | Why excluded |
+|------|--------------|
+| Force Sync — **Push** | Writes the current in-memory state to the DB immediately |
+| Reopen Last Check-In | Deletes a `weekConfirmations` record + its log entry |
+| Demo Account editing (1/2) | Writes to demo account rows |
+| Beta Report CSV (Usage/Feedback) | Reads other users' aggregated data, not the caller's own account |
+| Changelog / Beta Content / Beta Scores admin panels (`ProfilePanel.jsx`) | Write published, user-facing content via service-role routes |
+| Phase 2 / `isOwner` tools | Destructive by design — already excluded from Phase 1 too |
+
+If a future Phase 1 tool is added, it must be explicitly triaged into this table (included or
+excluded, with a reason) rather than silently inherited by either gate.
 
 ---
 

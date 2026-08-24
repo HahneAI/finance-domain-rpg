@@ -46,6 +46,12 @@ describe('canAccessTaxPlan', () => {
   it('does not grant access via isInvestor — Tax Plan was not part of the paid-wall decision', () => {
     expect(canAccessTaxPlan({ isInvestor: true })).toBe(false)
   })
+
+  // 2026-08-24 — is_ai_admin gets the same front-line feature access as a
+  // beta tester (entitlements.js hasTesterAccess), Tax Plan included.
+  it('AI Admin accounts see it too, same as a beta tester', () => {
+    expect(canAccessTaxPlan({ isAiAdmin: true })).toBe(true)
+  })
 })
 
 describe('canAccessAiFeatures', () => {
@@ -77,6 +83,12 @@ describe('canAccessAiFeatures', () => {
     expect(canAccessAiFeatures({ isTester: undefined })).toBe(false)
     expect(canAccessAiFeatures({ isAdmin: 1 })).toBe(true)
     expect(canAccessAiFeatures({ isInvestor: 1 })).toBe(true)
+  })
+
+  // 2026-08-24 — is_ai_admin joins the same "bypasses every paid wall" set
+  // as admin/tester/investor (hasPrivilegedAccess).
+  it('AI Admin accounts see it too', () => {
+    expect(canAccessAiFeatures({ isAiAdmin: true })).toBe(true)
   })
 })
 
@@ -152,5 +164,13 @@ describe('canAccessAskCoachGeneral', () => {
   it('grants access via isInvestor too, even with no real subscription state (2026-07-25 decision)', () => {
     expect(canAccessAskCoachGeneral({ isInvestor: true, entitlement: { isEntitled: false } })).toBe(true)
     expect(canAccessAskCoachGeneral({ isInvestor: true })).toBe(true)
+  })
+
+  // 2026-08-24 — is_ai_admin sees Coach too, even with no real subscription
+  // state. The daily call cap for this tier is enforced server-side only
+  // (api/coach.js), not by this function — this is access, not rate-limiting.
+  it('AI Admin accounts see it too, even with no real subscription state', () => {
+    expect(canAccessAskCoachGeneral({ isAiAdmin: true, entitlement: { isEntitled: false } })).toBe(true)
+    expect(canAccessAskCoachGeneral({ isAiAdmin: true })).toBe(true)
   })
 })

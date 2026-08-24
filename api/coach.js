@@ -10,6 +10,15 @@ import { getEntitlement } from "../src/lib/subscription.js";
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
+// service_role — used ONLY for the is_ai_admin daily usage cap below (a
+// service-role client is required because ai_admin_coach_calls_* are not in
+// migration 019's client column-grant list, same as every other privileged
+// column). Same env var api/delete-account.js already relies on.
+const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+// Rudimentary daily cap on Coach calls for is_ai_admin accounts specifically
+// (see the block below). Override via env for a looser/tighter cap without a
+// code change.
+const AI_ADMIN_DAILY_COACH_LIMIT = Number(env.AI_ADMIN_COACH_DAILY_LIMIT) || 25;
 
 // Same prod/preview split as _stripeClient.js's Stripe MODE — lets a preview
 // deployment burn a separate, disposable Anthropic key/balance during
@@ -89,7 +98,7 @@ export default async function handler(req, res) {
   const { data: userRow, error: userRowError } = await userClient
     .from("user_data")
     .select(
-      "is_admin, is_tester, is_investor, subscription_status, trial_ends_at, access_ends_at, " +
+      "is_admin, is_tester, is_investor, is_ai_admin, subscription_status, trial_ends_at, access_ends_at, " +
       "current_period_end, stripe_subscription_id"
     )
     .eq("user_id", authData.user.id)
@@ -107,8 +116,50 @@ export default async function handler(req, res) {
     },
     new Date()
   );
-  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, isInvestor: userRow?.is_investor, entitlement })) {
+  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, isInvestor: userRow?.is_investor, isAiAdmin: userRow?.is_ai_admin, entitlement })) {
     return res.status(403).json({ error: "Coach requires an active trial or subscription" });
+  }
+
+  // ── AI Admin daily Coach call cap ────────────────────────────────────────
+  // is_ai_admin accounts (docs/admin-toolkit-reference.md "AI Admin") get the
+  // same front-line feature access as a beta tester, INCLUDING Coach — but
+  // unlike a human tester, an AI agent can loop a chat far faster than any
+  // person would, which would burn through the shared Anthropic API budget
+  // (§18.G cost telemetry above) during routine feature testing. This is a
+  // rudimentary, best-effort daily counter — not exact under concurrent
+  // requests — scoped ONLY to is_ai_admin; every other account (admin,
+  // tester, investor, real trial/paid) is completely unaffected.
+  if (userRow?.is_ai_admin) {
+    if (!serviceRoleKey) {
+      // Fail closed for this tier specifically — better to block an AI admin
+      // account than let a misconfigured deploy silently skip the cap.
+      console.error("[coach] AI Admin cap: SUPABASE_SERVICE_ROLE_KEY missing, denying request");
+      return res.status(500).json({ error: "AI Admin usage cap is not configured" });
+    }
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const { data: usageRow } = await adminClient
+      .from("user_data")
+      .select("ai_admin_coach_calls_date, ai_admin_coach_calls_count")
+      .eq("user_id", authData.user.id)
+      .single();
+    const sameDay = usageRow?.ai_admin_coach_calls_date === todayIso;
+    const nextCount = (sameDay ? (usageRow?.ai_admin_coach_calls_count ?? 0) : 0) + 1;
+    if (nextCount > AI_ADMIN_DAILY_COACH_LIMIT) {
+      return res.status(429).json({
+        error: `AI Admin Coach usage cap reached (${AI_ADMIN_DAILY_COACH_LIMIT}/day). Resets at midnight UTC.`,
+      });
+    }
+    const { error: usageUpdateError } = await adminClient
+      .from("user_data")
+      .update({ ai_admin_coach_calls_date: todayIso, ai_admin_coach_calls_count: nextCount })
+      .eq("user_id", authData.user.id);
+    if (usageUpdateError) {
+      // Don't block the request over a telemetry-write failure — log and continue.
+      console.error("[coach] AI Admin cap: failed to persist usage counter", usageUpdateError.message);
+    }
   }
 
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};

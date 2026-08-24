@@ -63,6 +63,7 @@ export function HomePanel({
   today,
   fundedGoalSpend = 0,
   isAdmin = false,
+  isAiAdmin = false,
   isTester = false,
   betaCodeUsed = null,
   entitlement,
@@ -1354,7 +1355,7 @@ export function HomePanel({
           rule that beta testers and investors are otherwise two distinct
           account tiers with zero overlap (docs/active-systems.md "Beta
           Tester Accounts"). */}
-      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
         <CoachNetWorthCard
           config={config}
           setConfig={setConfig}

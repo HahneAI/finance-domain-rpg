@@ -3070,11 +3070,11 @@ function BetaScoresAdminDetail({ onBack }) {
   );
 }
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
-  // Tax Plan unlock is manual-only for now (admin, beta tester, or the per-user
-  // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
-  // intentionally does NOT reveal it — see canAccessTaxPlan for why.
-  const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
+  // Tax Plan unlock is manual-only for now (admin, beta tester, AI admin, or
+  // the per-user tax_projections_enabled flag). The setup wizard's "Unlock
+  // projections" choice intentionally does NOT reveal it — see canAccessTaxPlan for why.
+  const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester, isAiAdmin });
   // docs/TODO.md §17/§20 — the real 10-week cohort only (isAdmin does NOT count,
   // same distinction isTrackedBetaTester enforces everywhere else).
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });

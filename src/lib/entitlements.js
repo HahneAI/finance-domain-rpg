@@ -8,12 +8,19 @@
  * isAdmin/isTester OR inline, so that superset relationship can't drift
  * feature-by-feature as new gates are added.
  *
+ * isAiAdmin (2026-08-24) gets the same front-line feature access as a beta
+ * tester — it is NOT a weaker isAdmin (it still unlocks none of the
+ * mutating/destructive Admin Tools; see docs/admin-toolkit-reference.md "AI
+ * Admin") but it IS a full tester-tier peer for every entitlement gate in
+ * this file, so an AI-agent-team account can exercise the product the same
+ * way a real beta tester does.
+ *
  * Deliberately does NOT include isInvestor — used by canAccessTaxPlan, which
  * investor/demo accounts have no product reason to see. See
  * hasPrivilegedAccess below for the broader "bypasses every paid wall" set.
  */
-function hasTesterAccess({ isAdmin = false, isTester = false } = {}) {
-  return Boolean(isAdmin || isTester);
+function hasTesterAccess({ isAdmin = false, isTester = false, isAiAdmin = false } = {}) {
+  return Boolean(isAdmin || isTester || isAiAdmin);
 }
 
 /**
@@ -28,9 +35,11 @@ function hasTesterAccess({ isAdmin = false, isTester = false } = {}) {
  * that one still gates Tax Plan, which investor accounts have no product
  * reason to see, so it's untouched — this helper is only for the "paid
  * wall" class of gate.
+ *
+ * isAiAdmin (2026-08-24) joins the same set — see hasTesterAccess above.
  */
-function hasPrivilegedAccess({ isAdmin = false, isTester = false, isInvestor = false } = {}) {
-  return Boolean(isAdmin || isTester || isInvestor);
+function hasPrivilegedAccess({ isAdmin = false, isTester = false, isInvestor = false, isAiAdmin = false } = {}) {
+  return Boolean(isAdmin || isTester || isInvestor || isAiAdmin);
 }
 
 /**
@@ -51,8 +60,8 @@ function hasPrivilegedAccess({ isAdmin = false, isTester = false, isInvestor = f
  * Re-enabling the wizard path later is a one-line change here — do not scatter the
  * taxExemptOptIn check back into components.
  */
-export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = false, isTester = false } = {}) {
-  return hasTesterAccess({ isAdmin, isTester }) || Boolean(taxProjectionsEnabled);
+export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = false, isTester = false, isAiAdmin = false } = {}) {
+  return hasTesterAccess({ isAdmin, isTester, isAiAdmin }) || Boolean(taxProjectionsEnabled);
 }
 
 /**
@@ -73,8 +82,8 @@ export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = fals
  * surface (i.e. anything in docs/coach-entry-points.md sections 4+) should
  * keep gating on this function, not on canAccessAskCoachGeneral.
  */
-export function canAccessAiFeatures({ isAdmin = false, isTester = false, isInvestor = false } = {}) {
-  return hasPrivilegedAccess({ isAdmin, isTester, isInvestor });
+export function canAccessAiFeatures({ isAdmin = false, isTester = false, isInvestor = false, isAiAdmin = false } = {}) {
+  return hasPrivilegedAccess({ isAdmin, isTester, isInvestor, isAiAdmin });
 }
 
 /**
@@ -116,6 +125,6 @@ export function isTrackedBetaTester({ isTester = false, betaCodeUsed = null } = 
  * @param {object} entitlement - the object from lib/subscription.js's
  *   getEntitlement() — only `.isEntitled` is read here.
  */
-export function canAccessAskCoachGeneral({ isAdmin = false, isTester = false, isInvestor = false, entitlement } = {}) {
-  return hasPrivilegedAccess({ isAdmin, isTester, isInvestor }) || Boolean(entitlement?.isEntitled);
+export function canAccessAskCoachGeneral({ isAdmin = false, isTester = false, isInvestor = false, isAiAdmin = false, entitlement } = {}) {
+  return hasPrivilegedAccess({ isAdmin, isTester, isInvestor, isAiAdmin }) || Boolean(entitlement?.isEntitled);
 }

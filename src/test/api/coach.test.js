@@ -5,7 +5,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mocks } = vi.hoisted(() => {
   const userClient = { auth: { getUser: vi.fn() }, from: vi.fn() };
-  return { mocks: { userClient } };
+  // Separate service-role client mock for the is_ai_admin daily Coach-call cap
+  // (api/coach.js creates this ONLY when userRow.is_ai_admin is true — see
+  // the "AI Admin daily Coach call cap" describe block below).
+  const adminClient = { from: vi.fn() };
+  return { mocks: { userClient, adminClient } };
 });
 
 // Chainable stub for `.from("user_data").select(...).eq(...).single()`. Subscription
@@ -13,7 +17,7 @@ const { mocks } = vi.hoisted(() => {
 // existing isAdmin/isTester-only tests are unaffected unless they opt into a
 // trial/paid shape via the subscription* overrides.
 function stubAccess({
-  isAdmin = false, isTester = false, isInvestor = false, rowError = null,
+  isAdmin = false, isTester = false, isInvestor = false, isAiAdmin = false, rowError = null,
   subscriptionStatus = null, trialEndsAt = null, accessEndsAt = null,
   currentPeriodEnd = null, stripeSubscriptionId = null,
 } = {}) {
@@ -25,6 +29,7 @@ function stubAccess({
             is_admin: isAdmin,
             is_tester: isTester,
             is_investor: isInvestor,
+            is_ai_admin: isAiAdmin,
             subscription_status: subscriptionStatus,
             trial_ends_at: trialEndsAt,
             access_ends_at: accessEndsAt,
@@ -43,13 +48,35 @@ function stubIsAdmin(isAdmin, { rowError = null } = {}) {
   stubAccess({ isAdmin, rowError });
 }
 
+// Stubs the service-role client's read (current counter state) + update
+// (persist the increment) chain used only by the is_ai_admin daily cap.
+function stubAiAdminUsage({ date = null, count = 0 } = {}) {
+  const updateEq = vi.fn().mockResolvedValue({ error: null });
+  mocks.adminClient.from.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: { ai_admin_coach_calls_date: date, ai_admin_coach_calls_count: count },
+          error: null,
+        }),
+      }),
+    }),
+    update: vi.fn().mockReturnValue({ eq: updateEq }),
+  });
+  return { updateEq };
+}
+
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(() => mocks.userClient),
+  // Routes to the service-role mock only when called with the service-role
+  // key, so the AI Admin cap's separate client doesn't collide with the
+  // regular per-request userClient mock above.
+  createClient: vi.fn((_url, key) => (key === "service-role-key" ? mocks.adminClient : mocks.userClient)),
 }));
 
 globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 
 const { default: handler } = await import("../../../api/coach.js");
 
@@ -213,6 +240,23 @@ describe("coach — canAccessAskCoachGeneral gate (docs/coach-entry-points.md §
     expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_investor/));
   });
 
+  // 2026-08-24 — is_ai_admin gets full tester-tier Coach access too, verified
+  // server-side same as every other tier. stubAiAdminUsage() configures the
+  // separate service-role cap check (see "AI Admin daily Coach call cap"
+  // below) so this test is exercising access, not the cap itself.
+  it("allows an AI Admin caller through to the Anthropic call, even with no admin/tester flag or entitlement", async () => {
+    stubAccess({ isAdmin: false, isTester: false, isAiAdmin: true });
+    stubAiAdminUsage({ date: null, count: 0 });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull();
+  });
+
   // The whole point of the DW-flip: a real, non-admin, non-tester account on
   // a trial or paid subscription must reach Coach too — verified server-side
   // from the DB row, never trusted from anything the client sends.
@@ -277,6 +321,72 @@ describe("coach — canAccessAskCoachGeneral gate (docs/coach-entry-points.md §
     for (const col of ["subscription_status", "trial_ends_at", "access_ends_at", "current_period_end"]) {
       expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(new RegExp(col)));
     }
+  });
+});
+
+// Rudimentary daily Coach-call cap scoped ONLY to is_ai_admin accounts
+// (migration 043_add_ai_admin_coach_usage_cap.sql) — every other tier
+// (admin/tester/investor/real trial-paid) never touches this code path.
+describe("coach — AI Admin daily Coach call cap", () => {
+  it("does not touch the service-role client at all for a non-AI-Admin caller", async () => {
+    stubAccess({ isAdmin: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) }));
+
+    await handler(mkReq(), mkRes());
+
+    expect(mocks.adminClient.from).not.toHaveBeenCalled();
+  });
+
+  it("allows an AI Admin caller under the cap through, and persists the incremented counter", async () => {
+    stubAccess({ isAiAdmin: true });
+    const { updateEq } = stubAiAdminUsage({ date: new Date().toISOString().slice(0, 10), count: 3 });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull();
+    expect(updateEq).toHaveBeenCalled();
+    const updateCall = mocks.adminClient.from.mock.results[0].value.update;
+    expect(updateCall).toHaveBeenCalledWith(expect.objectContaining({ ai_admin_coach_calls_count: 4 }));
+  });
+
+  it("resets the counter to 1 when the stored date is not today (new day)", async () => {
+    stubAccess({ isAiAdmin: true });
+    stubAiAdminUsage({ date: "2020-01-01", count: 999 });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handler(mkReq(), mkRes());
+
+    const updateCall = mocks.adminClient.from.mock.results[0].value.update;
+    expect(updateCall).toHaveBeenCalledWith(expect.objectContaining({ ai_admin_coach_calls_count: 1 }));
+  });
+
+  it("rejects an AI Admin caller at the cap with 429, before calling Anthropic", async () => {
+    stubAccess({ isAiAdmin: true });
+    stubAiAdminUsage({ date: new Date().toISOString().slice(0, 10), count: 25 });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not persist a counter write when the caller is already over the cap", async () => {
+    stubAccess({ isAiAdmin: true });
+    stubAiAdminUsage({ date: new Date().toISOString().slice(0, 10), count: 30 });
+    vi.stubGlobal("fetch", vi.fn());
+
+    await handler(mkReq(), mkRes());
+
+    // Only the read call, no second .from("user_data") call for the update.
+    expect(mocks.adminClient.from).toHaveBeenCalledTimes(1);
   });
 });
 

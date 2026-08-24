@@ -1,0 +1,53 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 042_add_is_ai_admin_flag.sql
+--
+-- AI Admin account flag — a fourth, narrower sibling to is_admin/is_tester/
+-- is_investor for accounts used by an AI agent team to run diagnostics
+-- against their own account data (docs/admin-toolkit-reference.md, new
+-- "AI Admin" section).
+--
+-- Purpose: unlock a slimmed, read-only subset of the Admin Diagnostic
+-- Toolkit — the 7 tools that only inspect the signed-in account's own data
+-- (Lock Date, Force Sync Pull, Config JSON view, DB Row Viewer, Tax Weeks
+-- Grid view, Live State Inspector, Week Inspector + Per-Entry Impact
+-- Breakdown) — WITHOUT granting any of the mutating/destructive/
+-- other-users'-data tools that is_admin unlocks (Force Sync Push, Reopen
+-- Last Check-In, Demo Account editing, Beta Report export, or any of the
+-- Changelog/Beta Content/Beta Scores admin-authoring panels in
+-- ProfilePanel.jsx).
+--
+-- CRUCIAL DIVISION — read before touching this column anywhere:
+--   is_ai_admin is NOT a weaker is_admin and must never be OR'd into an
+--   is_admin check anywhere it would grant a write. In particular it must
+--   NEVER be referenced by any RLS policy that currently checks
+--   `is_admin = true` (investor_codes/investor_users in migration 013,
+--   changelog_entries in 032, beta_content_items/beta_checklist_completions/
+--   beta_scores in 037, etc.) — every AI Admin tool operates on the caller's
+--   own user_data row, which default per-row RLS already permits, so this
+--   flag intentionally grants ZERO elevated database access. It is an
+--   app-level UI gate only. If a future AI Admin tool needs to read beyond
+--   the caller's own row, that is a deliberate, separately-reviewed RLS
+--   change — never an incidental one from reusing an is_admin policy.
+--
+-- Set ONLY by Anthony directly in the Supabase SQL editor on the dedicated
+-- AI-agent-team account(s) — there is no signup flow, no self-service
+-- opt-in, and no client code path that can ever set it.
+--
+-- Column privilege: is_ai_admin is a brand-new column added after migration
+-- 019's RLS lockdown (`revoke insert, update on user_data from anon,
+-- authenticated`, followed by a narrow column-level grant list). Since this
+-- column is never added to that grant list, the client has NO write access
+-- to it by default — same protection as is_admin/is_tester/is_investor, no
+-- extra policy needed here.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table user_data
+  add column if not exists is_ai_admin boolean not null default false;
+
+-- ── Verification (run after applying) ────────────────────────────────────────
+--   update user_data set is_ai_admin = true where user_id = '<ai admin account>';
+--   select is_admin, is_ai_admin from user_data where user_id = '<same user>';
+--     -> is_admin should remain false/whatever it already was; is_ai_admin true
+--   As that user, confirm the client cannot flip its own flags:
+--     update user_data set is_admin = true where user_id = auth.uid();
+--     -> should fail/affect 0 rows under the migration 019 column-grant policy

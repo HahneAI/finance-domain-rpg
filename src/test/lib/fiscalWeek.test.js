@@ -9,7 +9,8 @@ import {
   resolveActiveWeeksThisYear,
   dateToWeekIdx,
 } from '../../lib/fiscalWeek.js'
-import { FISCAL_YEAR_START } from '../../constants/config.js'
+import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS } from '../../constants/config.js'
+import { buildYear } from '../../lib/finance.js'
 
 const makeWeek = (idx, dateIso, active = true) => ({
   idx,
@@ -38,17 +39,22 @@ describe('getCurrentFiscalWeek', () => {
 })
 
 describe('resolveActiveWeeksThisYear (TODO §1 — weeklyIncome/annualSavings dilution fix, 2026-07-19)', () => {
-  it('returns the full 52 weeks for a firstActiveIdx of 0', () => {
-    expect(resolveActiveWeeksThisYear(0)).toBe(52)
+  // Uses TOTAL_FISCAL_WEEKS (the real buildYear() grid length, currently 53 —
+  // see that constant's comment), NOT the nominal FISCAL_WEEKS_PER_YEAR (52).
+  // This scales a real weekly-income figure, so it needs the real week count —
+  // using the nominal 52 here undercounted annual savings for every account
+  // (drift-app-warden LEDGER item, 2026-08).
+  it('returns the full real fiscal-week count for a firstActiveIdx of 0', () => {
+    expect(resolveActiveWeeksThisYear(0)).toBe(TOTAL_FISCAL_WEEKS)
   })
 
-  it('subtracts firstActiveIdx from the fiscal year length', () => {
-    expect(resolveActiveWeeksThisYear(28)).toBe(24)
+  it('subtracts firstActiveIdx from the real fiscal-week count', () => {
+    expect(resolveActiveWeeksThisYear(28)).toBe(TOTAL_FISCAL_WEEKS - 28)
   })
 
   it('defaults to 0 (full year) when firstActiveIdx is null/undefined', () => {
-    expect(resolveActiveWeeksThisYear(null)).toBe(52)
-    expect(resolveActiveWeeksThisYear(undefined)).toBe(52)
+    expect(resolveActiveWeeksThisYear(null)).toBe(TOTAL_FISCAL_WEEKS)
+    expect(resolveActiveWeeksThisYear(undefined)).toBe(TOTAL_FISCAL_WEEKS)
   })
 
   it('clamps to 0 rather than going negative for an out-of-range firstActiveIdx', () => {
@@ -158,7 +164,27 @@ describe('dateToWeekIdx', () => {
     expect(dateToWeekIdx('2026-01-13')).toBe(2)
   })
 
-  it('clamps a far-future date to the last week index (51)', () => {
-    expect(dateToWeekIdx('2030-01-01')).toBe(FISCAL_WEEKS_PER_YEAR - 1)
+  it('clamps a far-future date to the real last week index (TOTAL_FISCAL_WEEKS - 1)', () => {
+    expect(dateToWeekIdx('2030-01-01')).toBe(TOTAL_FISCAL_WEEKS - 1)
+  })
+
+  // Regression for the real collision this fixed (drift-app-warden LEDGER item,
+  // 2026-08): buildYear() legitimately produces TOTAL_FISCAL_WEEKS week-buckets
+  // (53 for FISCAL_YEAR_START="2026-01-05"), with the last one running
+  // 2026-12-29 → 2027-01-04. Clamping dateToWeekIdx to the nominal
+  // FISCAL_WEEKS_PER_YEAR-1 (51) instead of TOTAL_FISCAL_WEEKS-1 (52) collapsed
+  // every date in that final real week onto the SAME idx as the prior week —
+  // e.g. a tips/commission entry logged Jan 2 got silently filed under the
+  // wrong week's income.
+  it('does not collide the true final fiscal week with the prior week', () => {
+    expect(dateToWeekIdx('2026-12-28')).toBe(TOTAL_FISCAL_WEEKS - 2) // prior week's end
+    expect(dateToWeekIdx('2026-12-29')).toBe(TOTAL_FISCAL_WEEKS - 1) // true final week starts
+    expect(dateToWeekIdx('2027-01-04')).toBe(TOTAL_FISCAL_WEEKS - 1) // true final week's end
+  })
+
+  it('matches buildYear()\'s actual last week index for a representative config', () => {
+    const allWeeks = buildYear({ firstActiveIdx: 0, employerPreset: null, userPaySchedule: 'weekly', taxedWeeks: [] })
+    expect(allWeeks.length).toBe(TOTAL_FISCAL_WEEKS)
+    expect(dateToWeekIdx('2027-01-04')).toBe(allWeeks[allWeeks.length - 1].idx)
   })
 })

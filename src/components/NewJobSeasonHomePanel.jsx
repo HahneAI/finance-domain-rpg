@@ -41,7 +41,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 export function NewJobSeasonHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, effectiveToday, includeBenefits, readOnly = false,
-  currentWeek, isAdmin, isTester, entitlement,
+  currentWeek, isAdmin, isAiAdmin, isTester, entitlement,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
@@ -297,7 +297,7 @@ export function NewJobSeasonHomePanel({
       {/* §18 sections 4+ standing constraint — narrow canAccessAiFeatures gate
           (admin/tester/investor — hasPrivilegedAccess, 2026-07-25), unlike
           Ask Coach's wider trial/paid gate above. */}
-      {canAccessAiFeatures({ isAdmin, isTester, isInvestor: config?.isInvestor }) && (
+      {canAccessAiFeatures({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin }) && (
         <>
           <div style={{ marginTop: "20px" }}>
             <SH>Job Hunt Assistant</SH>
@@ -338,7 +338,7 @@ export function NewJobSeasonHomePanel({
         </>
       )}
 
-      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
         // No static header — CoachNetWorthCard renders null most of the time
         // (rate-limited, only fires on a real signal tier), so a permanent
         // section title would sit above nothing on most page loads. The

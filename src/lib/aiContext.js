@@ -1,6 +1,6 @@
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
-import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
 import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
 
@@ -111,7 +111,7 @@ export function buildCoachContext({
   const totalGoalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   const activeExpenses = expenses.filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
-  const weeksLeft = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
+  const weeksLeft = weekNumber != null ? Math.max(TOTAL_FISCAL_WEEKS - weekNumber, 0) : null;
   const mostRecentLog = logs.length
     ? [...logs].sort((a, b) => (b.weekEnd ?? "").localeCompare(a.weekEnd ?? ""))[0]
     : null;

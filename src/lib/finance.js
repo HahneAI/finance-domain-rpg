@@ -1,4 +1,4 @@
-import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -486,12 +486,14 @@ export function buildYear(cfg, baseRateHistory = null) {
   const biweeklyParity = isBiweeklyOrSalary
     ? (cfg.biweeklyPayWeekParity ?? ((cfg.firstActiveIdx ?? 0) % 2))
     : null;
-  // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
-  // constant rather than being duplicated as a hardcoded literal.
+  // Loop bound is TOTAL_FISCAL_WEEKS (constants/config.js) — derived from
+  // FISCAL_YEAR_START by the identical day-count arithmetic, so this loop
+  // can't silently drift out of sync with anything else that needs "the real
+  // number of weeks in the fiscal-week grid" the way it once did (see that
+  // constant's comment for the incident this fixed).
   const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
   let d = new Date(fyY, fyM - 1, fyD), idx = 0;
-  const fyEnd = new Date(fyY + 1, fyM - 1, fyD - 1);
-  while (d <= fyEnd) {
+  while (idx < TOTAL_FISCAL_WEEKS) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
 

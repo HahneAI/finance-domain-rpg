@@ -1,16 +1,28 @@
 import { toLocalIso } from "./finance.js";
-import { FISCAL_YEAR_START } from "../constants/config.js";
+import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 
+// Nominal weeks-per-year used ONLY for pay-period-count conversion (weekly
+// week-number -> biweekly/monthly paycheck-number, e.g. 52/26=2 weeks/check).
+// This is a calendar convention and must stay a flat 52 regardless of where
+// FISCAL_YEAR_START actually falls — do NOT use this for "how many real
+// calendar weeks are left in the fiscal-week grid"; that's TOTAL_FISCAL_WEEKS
+// (constants/config.js), which is NOT always 52 (see its comment for why, and
+// for the real bug this split fixed).
 export const FISCAL_WEEKS_PER_YEAR = 52;
 
 // Derives the fiscal week index for a given date string "YYYY-MM-DD".
 // Week 0 ends on FISCAL_YEAR_START; each subsequent week is 7 days.
 // Returns the smallest idx such that that week's end >= the given date.
+// Clamped to TOTAL_FISCAL_WEEKS - 1 (the real last idx buildYear() produces),
+// not the nominal 52 — clamping to 52 collided every date from Dec 29 through
+// Jan 4 into the SAME idx as the true previous week (drift-app-warden LEDGER
+// item: a tips/commission entry logged in that week got silently filed under
+// the wrong week's income).
 export function dateToWeekIdx(dateStr) {
   const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
   const target      = new Date(dateStr       + "T00:00:00");
   const diffDays    = (target - weekZeroEnd) / 86400000;
-  return Math.max(0, Math.min(Math.ceil(diffDays / 7), FISCAL_WEEKS_PER_YEAR - 1));
+  return Math.max(0, Math.min(Math.ceil(diffDays / 7), TOTAL_FISCAL_WEEKS - 1));
 }
 
 export function getCurrentFiscalWeek(allWeeks, todayIso = toLocalIso(new Date())) {
@@ -23,16 +35,18 @@ export function getCurrentFiscalWeek(allWeeks, todayIso = toLocalIso(new Date())
 // the inactive weeks before it (TODO §1, 2026-07-19). One shared source so
 // App.jsx, DemoAccountTree.jsx, aiContext.js and HomePanel.jsx can't drift
 // from each other on this — they all key off the same config.firstActiveIdx.
+// Uses TOTAL_FISCAL_WEEKS (the real grid length), not the nominal 52 — this
+// scales a real weekly-income figure, so it needs the real week count.
 export function resolveActiveWeeksThisYear(firstActiveIdx) {
-  return Math.max(FISCAL_WEEKS_PER_YEAR - (firstActiveIdx ?? 0), 0);
+  return Math.max(TOTAL_FISCAL_WEEKS - (firstActiveIdx ?? 0), 0);
 }
 
-export function getFiscalWeekNumber(weekIdx, totalWeeks = FISCAL_WEEKS_PER_YEAR) {
+export function getFiscalWeekNumber(weekIdx, totalWeeks = TOTAL_FISCAL_WEEKS) {
   if (!Number.isFinite(weekIdx)) return null;
   return Math.min(Math.max(weekIdx + 1, 1), totalWeeks);
 }
 
-export function getFiscalWeekInfo(currentWeek, totalWeeks = FISCAL_WEEKS_PER_YEAR) {
+export function getFiscalWeekInfo(currentWeek, totalWeeks = TOTAL_FISCAL_WEEKS) {
   if (!currentWeek) return null;
   const num = getFiscalWeekNumber(currentWeek.idx, totalWeeks);
   if (num === null) return null;
@@ -80,7 +94,7 @@ export function formatPayPeriodLabel(weekInfo, checksPerYear = 52) {
   if (!weekInfo) return "—";
   const num = Number.isFinite(weekInfo.num) ? weekInfo.num : null;
   if (num == null) return "—";
-  const total = Number.isFinite(weekInfo.total) ? weekInfo.total : FISCAL_WEEKS_PER_YEAR;
+  const total = Number.isFinite(weekInfo.total) ? weekInfo.total : TOTAL_FISCAL_WEEKS;
   const weeksLeft = Math.max(total - num, 0);
   if (checksPerYear === 52) return `Week ${num}, ${weeksLeft} left`;
   const checkNum  = weekNumToPaycheckNum(num, checksPerYear);

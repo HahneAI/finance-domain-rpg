@@ -38,7 +38,7 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly surplus: $600");
     expect(block).toContain("Next week takehome (Home tile): $1,000 (projected average — no confirmed weeks yet)");
     expect(block).toContain("Left this week (Home tile): $600");
-    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $30,700");
+    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $31,300");
     expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
     expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far, $1,500 total target");
     expect(block).toContain("Active goals total (Home tile — unfunded target sum): $1,000");
@@ -49,7 +49,7 @@ describe("buildCoachContext", () => {
     // week number weren't enough for Coach to state a real, non-abbreviated
     // calendar date. Current period now pairs the two, resolved via the same
     // getPayPeriodBounds() HomePanel/IncomePanel use.
-    expect(block).toContain(`Current period: the week of ${fmtFullDate(allWeeks[27].weekStart)} (week 28), 24 weeks left in the fiscal year`);
+    expect(block).toContain(`Current period: the week of ${fmtFullDate(allWeeks[27].weekStart)} (week 28), 25 weeks left in the fiscal year`);
     expect(block).toContain(`Today: ${fmtFullDate("2026-07-07")}`);
   });
 
@@ -61,13 +61,13 @@ describe("buildCoachContext", () => {
   // the Coach can't state a "Home tile" number the Home tile doesn't show.
   it("scales annual savings/net worth by activeWeeksThisYear from config.firstActiveIdx, not a flat 52", () => {
     const block = buildCoachContext({
-      config: { firstActiveIdx: 28 }, // 24 weeks left in the fiscal year
+      config: { firstActiveIdx: 28 }, // TOTAL_FISCAL_WEEKS(53) - 28 = 25 weeks left in the fiscal year
       weeklyIncome: 700,
       avgWeeklySpend: 200,
       fundedGoalSpend: 0,
     });
-    // 24 * (700 - 200) = 12,000 — NOT 52 * 500 = 26,000, the old drifted figure.
-    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $12,000");
+    // 25 * (700 - 200) = 12,500 — NOT 52 * 500 = 26,000, the old drifted figure.
+    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $12,500");
     expect(block).not.toContain("$26,000");
   });
 
@@ -141,7 +141,7 @@ describe("buildCoachContext", () => {
     });
     // Current period spans the whole 2-week pay period, not a single week,
     // and is labeled "paycheck," never "week," for a biweekly account.
-    expect(block).toContain(`Current period: ${fmtFullDate(allWeeks[0].weekStart)}–${fmtFullDate(allWeeks[1].weekEnd)} (paycheck 1), 25 paychecks left in the fiscal year`);
+    expect(block).toContain(`Current period: ${fmtFullDate(allWeeks[0].weekStart)}–${fmtFullDate(allWeeks[1].weekEnd)} (paycheck 1), 26 paychecks left in the fiscal year`);
     expect(block).not.toMatch(/Current period: the week of/);
     // Weeks-to-complete-all converts to paychecks (4 weeks ≈ 2 paychecks), and
     // the per-goal rate/duration unit follows the same schedule, not "wk"/"wks".
@@ -151,7 +151,7 @@ describe("buildCoachContext", () => {
 
   it("falls back to a plain period label with no date when allWeeks isn't provided", () => {
     const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, currentWeek: { idx: 27 } });
-    expect(block).toContain("Current period: week 28, 24 weeks left in the fiscal year");
+    expect(block).toContain("Current period: week 28, 25 weeks left in the fiscal year");
   });
 
   it("reports a goal as not on track rather than a bogus finish week when it can't fund within the fiscal year", () => {

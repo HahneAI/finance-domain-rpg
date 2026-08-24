@@ -21,7 +21,7 @@ Two Coach surfaces are **live and open to the full user base**, trial included:
    debounced, and not only on close), a "Chat History" view (header icon) lists the last 3
    saved conversations grouped by date with a short Coach-written summary, tapping one resumes
    it, and older conversations beyond the last 3 are pruned automatically (never the one
-   currently open). Full detail: `docs/TODO.md` §2.H3–H4, `docs/drift-app-warden.md` §8 F123.
+   currently open). Full detail: `docs/TODO.md` §2.H3–H4, `docs/drift-app-warden.md` §21 F146.
 2. **The Net Worth Check-In card.** A small card on the Home screen (both the normal Home and
    the separate New Job Season Home) that proactively speaks up about savings trends — a gentle
    heads-up, a critical job-loss warning, or a recovery acknowledgment.
@@ -140,7 +140,7 @@ again:
 - **Retention (3 chats) and the end-of-session summary are `ask_coach`-specific.** If Job
   Scout, résumé help, or statement insights ever get a UI caller using a different
   `coach_chats.chat_type`, that type needs its own retention/summary decision — don't assume
-  today's behavior generalizes. `drift-app-warden.md` §8 F123 has the full IF/THEN.
+  today's behavior generalizes. `drift-app-warden.md` §21 F146 has the full IF/THEN.
 
 Remaining, not yet built:
 1. **Admin diagnostic** — a "Coach Chats" count line in the DB Row Viewer tool

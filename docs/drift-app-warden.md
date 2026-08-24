@@ -958,6 +958,36 @@ is the source the three new pages were ported from (plus `LIFE_EVENTS`/`DIFF_FIE
 `resumeFormData` are generic, reusable wizard-navigation props with no current caller rather than
 provably-dead code — see the session report's judgment-call note for the full reasoning either way.
 
+**F144 · New Job Season Entry's Activate-time concrete-value resolvers** — `newJobSeasonRunway.js`:
+`resolveLastPayPeriodEnd:53`, `resolvePendingCheckArrivalDate:66`, `estimatePendingCheckAmount:93`,
+`resolveNextWeekdayOnOrAfter:81`, `firstUnemploymentPaymentDate:17`; `expense.js`:
+`getNextDueDate:54`, `getExpenseDisplayAmount:72`, `resolveWeekOfMonthAnchor:90`,
+`resolveDueDateAnchor:101` — all consumed by `NewJobSeasonEntry.jsx` (added 2026-08-24, math-engine
+audit pass) — **[L]**
+The pending/final-paycheck estimate (TODO §1.H15) and the per-bill due-date assignment step both
+follow the same "resolve to a concrete value once at Activate time, don't re-derive later" pattern
+F12 already names for the general case — this entry adds the concrete file:line anchors F12 only
+gestured at. `estimatePendingCheckAmount` is its own small parallel net-pay formula — "same
+flat-rate sketch `ReemploymentTracker.jsx` uses for its target-income preview," per its own header
+comment — not a `buildYear`/`computeNet` pass: `gross = workedDaysCount × shiftHours × baseRate`,
+net rate = `fedRateLow + stateRateLow + ficaRate + k401Rate` (flat, no bracket math, no benefits
+deduction, no `taxedBySchedule` distinction). `resolveLastPayPeriodEnd`/`resolvePendingCheckArrivalDate`
+chain to find the pay-period boundary the job-loss date fell inside, then the next paycheck's
+arrival weekday. The Food-shopping-day special case (`resolveNextWeekdayOnOrAfter`) is deliberately
+**not** routed through the general `resolveDueDateAnchor`/`DueDatePicker` — F12's own IF/THEN
+already governs that split.
+> **IF** `estimatePendingCheckAmount`'s flat-rate formula and `computeNet`'s real formula (F98)
+> diverge further than they already do by design (e.g. a new mandatory deduction is added to
+> `computeNet` but not mirrored here), **THEN** the one-time `newJobSeasonPendingCheckAmount`
+> stamped on Activate silently under/over-states the real final check — nothing re-derives it
+> later to catch up (by design, same as `dueDateAnchor`). Check: no automated cross-check exists
+> today — `newJobSeasonRunway.test.js`/`newJobSeasonFlow.test.jsx` verify this function in
+> isolation, not against `computeNet` (queue-visible as **DW-W6**, `docs/BUG_FIX_TODO.md`).
+> **IF** `getNextDueDate`/`resolveDueDateAnchor`'s cycle-advance math changes, **THEN** both
+> `NewJobSeasonEntry`'s due-date assignment step **and** `NewJobSeasonBudgetPanel`'s `upcomingBills`
+> countdown list (F44) move together — they share these exact functions, not parallel copies.
+> Check: `expense.test.js`'s cycle-advance cases; one bill's countdown agrees in both places.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -971,6 +1001,7 @@ provably-dead code — see the session report's judgment-call note for the full 
 | `STEP_DEFS` ids or routing comment (`:2105–2113`) | CLAUDE.md SetupWizard quick reference, `SetupWizard.test.jsx`, this section's §7.3 matrix | Re-verify matrix path by path; update both docs in the same PR | D5 |
 | `onComplete` payload shape (F5's spread) | F8, `db.js#saveUserData` column mapping, `docs/account-reference.json` expectations | `db.test.js` + DB Row Viewer drift badge after a wizard run | D3 |
 | Wizard cancel wiring (`App.jsx:3414–3420` — `onCancel` is `undefined` for first-run non-investor) | First-run users must not be able to escape setup with `setupComplete: false` but a live session; TrialExplainerScreen gate (`App.jsx:1466`) sequencing | Manual: fresh account, attempt to dismiss the wizard every way the UI offers | D4 |
+| `estimatePendingCheckAmount`'s flat withholding-rate assumption (F144, `newJobSeasonRunway.js`) | The one-time `newJobSeasonPendingCheckAmount` stamped on Activate — no other consumer | Manual: a job-loss mid-pay-period test account; compare the stamped estimate against a hand-computed `computeNet`-equivalent for the same worked days | D1 |
 | `NewJobSeasonEntry` step contents (cash-on-hand, `trackDuringNewJobSeason`, due dates) | `computeNewJobSeasonRunway()` inputs (T2/T4 surfaces), F11's reset list | `newJobSeasonFlow.test.jsx` + runway headline sanity on a test account | D1 |
 | `isFoodPrimary`/`EXPENSE_CYCLE_OPTIONS` semantics (`db.js`, `lib/expense.js`) | `NewJobSeasonEntry`'s Food special case (§1) — Step 3 skips the week-of-month/custom-date `DueDatePicker` for the Food expense specifically (`exp.isFoodPrimary`) and instead asks which day it's shopped, resolving to a weekly `dueDateAnchor` (`resolveNextWeekdayOnOrAfter`, `lib/newJobSeasonRunway.js`) and flipping `billingMeta.cycle` to `"weekly"` — a *permanent* change to the persisted expense, not scoped to New Job Season only, so it also affects normal-mode Budget's Upcoming Bills/due-date display going forward | `newJobSeasonFlow.test.jsx`'s "asks Food which day..." case; `newJobSeasonRunway.test.js`'s `resolveNextWeekdayOnOrAfter` cases | D1 |
 
@@ -1054,6 +1085,10 @@ skipped entirely).
    in this commit.
 3. **D5, corrected in this pass:** `active-systems.md` §5's "nothing reads this table"
    predated the F10 read path — annotated in this commit.
+4. **D5, corrected 2026-08-24 (math-engine audit pass):** `NewJobSeasonEntry.jsx`'s
+   pending-check/due-date resolver family (`newJobSeasonRunway.js`, `expense.js`) had no
+   drift-map entry at all despite being real, live money/date math with its own parallel
+   net-pay formula — added as F144 above, cross-referenced into §7.2's Block 2.
 
 ---
 
@@ -1266,6 +1301,28 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 > this entry's older "never fold in isInvestor" language; see F111. Check:
 > `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
+**F142 · `estimateGoalNextYear(remainingAmount, cfg, expenses)`** — `finance.js:64–124`, consumed
+by `HomePanel.jsx:361` (added 2026-08-24, math-engine audit pass) — **[L]**
+Projects a goal that won't complete within the current fiscal year into a "next year" ETA — the
+only consumer of a goal whose `computeGoalTimeline` (F18) `eW` comes back `null`/`remainingAtEnd
+> 0`. Gross pay is correctly delegated to `projectedGross(true/false, cfg)` — the same function
+`buildYear` itself is built from (script-verified 2026-08-24, same fix class as DW-10/F6). Net pay
+is a **second, hand-derived formula** (a local `weekNet()` closure), not `computeNet` (F98): it
+assumes every projected week is a taxed week (no `taxedBySchedule` split), applies no
+`extraPerCheck` tax-gap smoothing (F28), no `freedomAllowancePerWeek` (F14), and no
+`unemploymentIncome` — all self-documented in the function's own header comment ("standard
+withholding assumed... taxExemptOptIn ignored"), unlike F6's now-fixed DHL gross-pay drift, which
+was undocumented. Expenses use a Q4/December `getEffectiveAmount` proxy (F102) rather than the
+goal's own future weeks.
+> **IF** `computeNet`'s deduction ordering, tax-rate fallback chain, or `freedomAllowancePerWeek`
+> handling changes (F98/F14), **THEN** decide explicitly whether this function's local `weekNet()`
+> needs the same change — nothing forces it to, so it can silently drift the way F6's gross-pay
+> half did before DW-10. Check: for a goal whose ETA falls in the next fiscal year, compare
+> `estimateGoalNextYear`'s `weeklyNet` against a `buildYear`/`computeNet` run one fiscal year
+> forward with the same `cfg` — no automated cross-check exists today (`estimateGoalNextYear.test.js`
+> verifies the function in isolation, not against `computeNet`; queue-visible as **DW-W6**,
+> `docs/BUG_FIX_TODO.md`).
+
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1280,6 +1337,7 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 | `computeNewJobSeasonRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `newJobSeasonCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24), admin Live State Inspector's New Job Season rows (§15.I, via the same `newJobSeasonDash` memo as Ask Coach — no separate call) | `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
 | `weeklyAmountForBurn` (`newJobSeasonRunway.js`) — loan-aware `weeklyBurn`/`lifestyleWeeklySpend` getter, fixed 2026-08 (a tracked loan previously contributed $0 to both via `getEffectiveAmount`, which doesn't understand `loanMeta` without a synthetic `history` already regenerated elsewhere) | Any other `essentialActive`/`lifestyleActive` reduce added to this file must route through it too, not a bare `getEffectiveAmount(exp, ...)` — a loan silently drops back to $0 the moment a new consumer bypasses it | `newJobSeasonRunway.test.js`'s "loan payments count toward weeklyBurn" block; a tracked loan with no `history` array still moves the Runway/Weekly Burn tiles | D1 |
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `freedomAllowancePerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
+| `estimateGoalNextYear`'s local `weekNet()` closure (Home-only, F142) | The "goal completes next year" ETA card — no other consumer | For a not-this-year goal, compare the estimated `weeklyNet` against a manual `buildYear`/`computeNet` run one year forward | D1 |
 
 ### 8.3 Block 3 — Gate matrix
 
@@ -1328,6 +1386,16 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
   investigating an unrelated New Job Season documentation pass. If you find a warden
   entry that looks stale, verify against the code before trusting the doc's own
   "open"/"closed" label.
+
+**Standing findings from a 2026-08-24 math-engine audit pass:**
+1. **D5, corrected — `estimateGoalNextYear` had no drift-map entry.** A full inventory of
+   every exported `finance.js`/`fiscalWeek.js`/`expense.js`/`newJobSeasonRunway.js` function
+   against this doc's coverage (triggered by a user-reported weekly-takehome question, see
+   §7.4) found this real, HomePanel-consumed money projection with zero mentions anywhere in
+   the ledger. Added as F142. Not a live defect — the function's own header comment already
+   discloses its simplifications — but it shares F6's exact *shape* of risk (a second,
+   hand-derived net-pay formula next to the authoritative one) with no cross-check test, so
+   it's also filed as watch item **DW-W6** in `docs/BUG_FIX_TODO.md`.
 
 ---
 
@@ -1680,6 +1748,39 @@ both quote one scenario) — **[G→L]**
 > and vice
 > versa (single source of truth, `newJobSeasonFlow.test.jsx`).
 
+**F143 · Expense edit cascade primitives — TWO deliberately different forward-cascade rules** —
+`expense.js`: `latestPastEntry:179` (consumed directly by `BudgetPanel.jsx:601,753,804`),
+`getBaseEntryAt:192` (consumed by `buildAdvancedEditPayload`, F42), `buildCascadedWeekly:163`
+(consumed by `buildAdvancedEditPayload`, F42) — (added 2026-08-24, math-engine audit pass) — **[L]**
+Two structurally different "how does a forward-dated edit affect quarters after it" rules coexist
+by design, one per edit surface:
+1. **F37's single-expense Save-scope buttons** (`saveFromMonthForward`/`saveAllQuarters`/
+   `saveAllQuartersFull`) build their forward `weekly[4]` cascade inline in `BudgetPanel.jsx`
+   (`[0,1,2,3].map(q => q < ap ? base[q] : perPaycheck)`) — future quarters are **always**
+   overwritten. This is Decision 1 from the June-16 trilogy (§10.4): "broad saves overwrite finer
+   overrides in range."
+2. **F42's Bulk Edit** (`buildAdvancedEditPayload` → `buildCascadedWeekly`) instead **preserves** a
+   future quarter's value if `billingMeta.byPhase[q]` already holds an explicit override for it —
+   its own header comment: "Future phases also get perPaycheck UNLESS they already have an explicit
+   byPhase override... which means the user deliberately chose a different amount for that quarter."
+
+Both are internally consistent with their own documented intent — this is **not** a bug — but
+nothing before this entry named the split, so a future change to one cascade rule "to match the
+other" would silently reverse a deliberate product decision. `latestPastEntry`/`getBaseEntryAt`
+(both "most recent history entry with `effectiveFrom ≤ X`, fallback to the oldest entry") are
+near-duplicates of each other and of `getEffectiveAmount`'s own history walk (F102) — three copies
+of the same point-in-time-lookup shape, not yet unified.
+> **IF** either cascade rule is changed to "match" the other, **THEN** verify that's an intended
+> product decision (ask, don't assume) — Bulk Edit's preserve-explicit-override behavior and the
+> single-edit buttons' always-overwrite behavior are both currently correct for their own surface.
+> Check: an expense with an explicit Q3 override — edit forward from Q1 via a single-expense
+> button (Q3 gets overwritten) vs. via Bulk Edit (Q3 is preserved) — both must keep behaving
+> *differently*, on purpose.
+> **IF** a third point-in-time history resolver is ever added anywhere, **THEN** prefer
+> `getEffectiveAmount` (F102) — the one already covering both week- and month-based lookups — over
+> hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
+> pattern.
+
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1692,6 +1793,7 @@ both quote one scenario) — **[G→L]**
 | `newJobSeasonStatus`/`trackDuringNewJobSeason` flags | F44 readers + NewJobSeasonEntry's review step (§7 F12) + Back to Work reactivation (§7 F11) | `newJobSeasonFlow.test.jsx` | D1/D4 |
 | `canAccessTaxPlan` inputs (Spine C) | F43 here + ProfilePanel's Tax Plan section — identical gating | Tester/admin/plain × opt-in matrix | D4 |
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
+| `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -1722,7 +1824,7 @@ both quote one scenario) — **[G→L]**
 - *Tester gate + structural superset* (`a643153`) and *manual-unlock liability hold*
   (`a430fbf`) — F43's two governing commits.
 
-**Standing findings from this pass:** none new — every mutation site on this surface
+**Standing findings from the 2026-07-19 pass:** none new — every mutation site on this surface
 verified through F35's wrapper (the `764da5b`/`cd0480f` audits hold), and the readOnly
 shadows cover all threaded mutation props. The D5 corrections (goals location in
 active-systems §4 + this doc's §4.1 hierarchy rows) were applied in-pass per protocol.
@@ -1730,6 +1832,15 @@ The F41 loan D2 zone remains the surface's known open debt, already tracked as
 TODO §3's loan follow-up — not filed as a DW defect since it's a designed-in gap with
 an owned roadmap entry, but queue-visible as watch item **DW-W1** in
 `BUG_FIX_TODO.md`.
+
+**Standing findings from a 2026-08-24 math-engine audit pass:**
+1. **D5, corrected — the Bulk Edit cascade primitives (`latestPastEntry`/`getBaseEntryAt`/
+   `buildCascadedWeekly`) had no drift-map entry, and their forward-cascade rule was never
+   named as different from F37's.** Neither is a live defect — both cascade rules are
+   internally consistent with their own documented product decisions — but a full
+   `expense.js` export inventory found this real behavioral split (Bulk Edit preserves an
+   explicit future-quarter override; the single-expense Save buttons always overwrite it)
+   completely unmapped. Added as F143 above, cross-referenced into §10.2's Block 2.
 
 ---
 
@@ -2940,7 +3051,10 @@ biweeklyParity`, monthly=last active week of the calendar month (`:635`, `:660�
 > structure* (F5) — every stage must tolerate that config shape.
 
 **F97 · The week-object field contract** — `finance.js:636–657` (the `weeks.push({…})`) — **[L]**
-The shape a dozen surface F-entries read by name. Grouped: **identity** (`idx`, `weekEnd`,
+The shape a dozen surface F-entries read by name. `payPeriodEndDate` (identity group) is sourced
+from `getPayPeriodEndDate(weekStart, payPeriodEndDay)` (`finance.js:438`, added to this entry
+2026-08-24 — a pure date-offset helper with no prior drift-map anchor of its own; consumed only
+here). Grouped: **identity** (`idx`, `weekEnd`,
 `weekStart`, `payPeriodEndDate`); **schedule** (`isPayWeek`, `rotation`, `isHighWeek`,
 `adminRotationTag`, `rotationLabel`, `requiredOtShifts`, `workedDayNames`, `totalHours`/
 `regularHours`/`overtimeHours`/`weekendHours`); **pay** (`grossPay`, `taxableGross`,
@@ -3145,12 +3259,38 @@ runway formula that ignored persisted `newJobSeasonCashOnHand`/job-hunt income w
 (commit `3267286`, 2026-07-22), not patched. `CoachNetWorthCard.jsx` now calls this spine's
 `computeNewJobSeasonRunway()` directly. Owned in Spine D (§8) — full write-up there.
 
-**Standing findings from this pass:** none new. The two D2 zones above are pre-existing,
+**Standing findings from the 2026-07-20 pass:** none new. The two D2 zones above are pre-existing,
 owned, and queue-visible (DW-W1 + the §5/Master-Timeline roadmap); no new DW defect surfaced
 — every Spine-A export traces to a named consumer through the authority table, and the
 surface passes (T1–T10) already verified those consumers call the exports rather than
 re-deriving. No D5 corrections owed: `active-systems.md` §1/§2/§7/§14 describe these systems,
 this section maps their couplings — the §5 covenant boundary holds.
+
+**Standing findings from a 2026-08-24 math-engine audit pass:** a full inventory of every
+exported `finance.js`/`fiscalWeek.js`/`rollingTimeline.js`/`expense.js`/`newJobSeasonRunway.js`
+function against this doc's coverage (prompted by a user-reported weekly-takehome question — see
+§7.4 for the full trace, which cleared as correct behavior) surfaced one real defect (DW-10, F6,
+already fixed) and three coverage gaps, now closed: F142 (`estimateGoalNextYear`, §8), F143
+(expense edit cascade primitives, §10), F144 (New Job Season Entry's Activate-time resolvers,
+§7). Two exports were found to have **zero live consumers** — not a drift risk today (nothing
+reads a wrong number if nothing reads the number at all), but flagged so a future consumer
+doesn't wire into them assuming they're already correct/complete:
+- `getWeeklyBudgetBreakdownPayrollDeductions` (`finance.js:248`) — its own doc comment names it
+  the "Budget Breakdown source-of-truth," but `BudgetPanel.jsx:1714` reads
+  `currentWeek?.payrollDeductions?.total` directly instead (the same underlying value, since this
+  function is a thin wrapper over `deriveWeeklyPayrollDeductions(week, cfg).total` — not a D1
+  divergence, just an unused indirection).
+- `computeRemainingSpend`'s `monthlyNetTakeHome`/`budgetHealth`/`budgetHealthMonthKey`/
+  `shouldReevaluateForMonthBoundary` fields (`finance.js:797`) — the one live call site
+  (`App.jsx:1817`) invokes `computeRemainingSpend(projectableExpenses, futureWeeks)` with no
+  `options` argument, so these four fields always resolve from empty/default inputs
+  (`futureWeekNets: []`, `weeklyIncome: 0`, `previousMonthKey: null`) — `monthlyNetTakeHome`/
+  `budgetHealth` are silently always `0`, `shouldReevaluateForMonthBoundary` never tracks a real
+  prior month. `totalRemainingSpend`/`avgWeeklySpend`/`weekCount`/`monthlyExpenses` (the fields
+  F38's authority-table row actually documents) are unaffected — they don't depend on `options`.
+Both filed as watch item **DW-W5** in `docs/BUG_FIX_TODO.md`: becomes a real D1 defect the
+moment a UI surface starts displaying `remainingSpend.budgetHealth`/`monthlyNetTakeHome` without
+also threading real `futureWeekNets`/`weeklyIncome`/`previousMonthKey` through the call site.
 
 ---
 

@@ -1784,6 +1784,42 @@ both quote one scenario) — **[G→L]**
 > and vice
 > versa (single source of truth, `newJobSeasonFlow.test.jsx`).
 
+**F156 · Rate/dollar wizard fields accepted negative input with no floor, silently inverting pay
+math (2026-08-24, live-confirmed adversarial-input test, DW-14, fixed) — [L]** `InlineNumber`
+(`SetupWizardAdlib.jsx`) has no `min` attribute and several of its `onChange` handlers only
+guarded against `NaN` (`v === "" ? null : parseFloat(v)` — no floor), not against a negative
+numeric value passing straight through. Unlike `baseRate`/`shiftHours`/`annualSalary`, which get
+*incidental* protection because their own required-field gate checks `(value ?? 0) > 0` (a
+negative value already fails that comparison, blocking Next/Finish), several materially-important
+fields are optional and have no such gate: `diffRate` (weekend differential), `nightDiffRate`,
+`k401Rate`, per-benefit weekly cost (`[def.field]`), `commissionMonthly`. Live-confirmed: typing
+`-99` into the Weekend Differential blank on the real production wizard (`SetupWizardAdlib.jsx`,
+reached via Life Events → Pay Structure Changed) rendered "My weekend differential is $-99 an
+hour" with no red/error styling and Next left enabled — a config someone could genuinely save.
+`diffRate`/`nightDiffRate` are multiplied directly into gross pay (`finance.js` L584/L586/L711/
+L713/L1319/L1321 — `regWkndH * cfg.diffRate`), so a negative value would silently *reduce* pay for
+weekend/night work instead of adding to it; `k401Rate` is multiplied into the 401k deduction
+(`gross * k401Rate`, L84/L166/L625), so a negative rate would silently *add* money to net pay
+instead of deducting it — an inverted, exploitable-looking business rule with zero warning
+anywhere in the UI. Same gap found in `ProfilePanel.jsx`'s DHL Team editor (`handleSave`,
+`Number.isFinite(diffRate) ? ... : 0` — catches NaN, not negative) and its Benefits card
+(`handleSave`, `parseFloat(k401Rate) || 0` — same gap, `|| 0` only catches falsy/NaN, a nonzero
+negative like `-0.5` passes straight through). **Fix:** every listed handler now floor-clamps via
+`Math.max(0, parseFloat(v) || 0)` (matching `RateUpdateModal`'s pre-existing pattern for
+`baseRate`, which was already correct) before the value reaches `onChange`/`setConfig`. Verified
+live post-fix: the same `-99` keystroke now renders `$0`. Full test suite (1681 tests) unaffected
+— this is new floor-clamping on previously-uncovered handlers, not a change to any existing
+tested formula. **Not in scope, deliberately**: informational/tracking-only optional numeric
+fields (attendance thresholds, PTO balances, unemployment weekly) were left unclamped — they
+don't multiply into pay/tax math the way the fixed fields do, and a defensible non-negative
+argument exists for some (e.g. an accrual deficit) that would need a product call, not an
+obvious bug fix.
+> **IF** a new `InlineNumber`-backed field is added anywhere it feeds directly into
+> gross/net pay, tax, or a deduction rate (`finance.js` consumes it as a multiplier), **THEN**
+> floor-clamp its `onChange` with `Math.max(0, parseFloat(v) || 0)` from the start — don't rely
+> on an incidental `>0` required-field gate, since several of the fields this entry fixes were
+> never required at all.
+
 **F143 · Expense edit cascade primitives — TWO deliberately different forward-cascade rules** —
 `expense.js`: `latestPastEntry:179` (consumed directly by `BudgetPanel.jsx:601,753,804`),
 `getBaseEntryAt:192` (consumed by `buildAdvancedEditPayload`, F42), `buildCascadedWeekly:163`

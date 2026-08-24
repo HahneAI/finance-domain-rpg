@@ -913,12 +913,12 @@ function DifferentialsCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
     if (!draft) return;
     const updates = {};
     const diffRate = parseFloat(draft.diffRate);
-    updates.diffRate = Number.isFinite(diffRate) ? parseFloat(diffRate.toFixed(2)) : 0;
+    updates.diffRate = Number.isFinite(diffRate) ? Math.max(0, parseFloat(diffRate.toFixed(2))) : 0;
 
     if (isEmployerDHL) {
       updates.dhlNightShift = !!draft.dhlNightShift;
       const nightDiffRate = parseFloat(draft.nightDiffRate);
-      updates.nightDiffRate = Number.isFinite(nightDiffRate) ? parseFloat(nightDiffRate.toFixed(2)) : 0;
+      updates.nightDiffRate = Number.isFinite(nightDiffRate) ? Math.max(0, parseFloat(nightDiffRate.toFixed(2))) : 0;
     }
 
     const newConfig = { ...config, ...updates };
@@ -1383,11 +1383,11 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
     const nextSelected = [...selectedBenefits];
     const weeklyPatch = BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
-      .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
+      .reduce((acc, b) => ({ ...acc, [b.field]: Math.max(0, parseFloat(weeklyValues[b.field]) || 0) }), {});
     const newConfig = {
       ...config,
-      k401Rate:         parseFloat(k401Rate)  || 0,
-      k401MatchRate:    parseFloat(k401Match) || 0,
+      k401Rate:         Math.max(0, parseFloat(k401Rate)  || 0),
+      k401MatchRate:    Math.max(0, parseFloat(k401Match) || 0),
       k401StartDate:    k401Start || null,
       benefitsStartDate: benefitsStartDate || null,
       selectedBenefits: nextSelected,

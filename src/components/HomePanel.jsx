@@ -5,7 +5,7 @@ import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
-import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -138,7 +138,7 @@ export function HomePanel({
     : null;
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const periodLabel = weekNumber != null
-    ? formatPayPeriodLabel({ num: weekNumber, total: FISCAL_WEEKS_PER_YEAR }, checksPerYear)
+    ? formatPayPeriodLabel({ num: weekNumber, total: TOTAL_FISCAL_WEEKS }, checksPerYear)
     : null;
   const subtitle = weekdayName && dayOrdinal
     ? `Another beautiful day, ${weekdayName} the ${dayOrdinal}. You are working on your ${topGoal} goal`
@@ -400,7 +400,7 @@ export function HomePanel({
 
   const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
-  const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
+  const weeksLeft = futureWeeks?.length ?? Math.max(TOTAL_FISCAL_WEEKS - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   // Year-end-projected goal draw: unlike totalActiveGoals (full remaining target across
   // every active goal), this is scoped to only the portion each goal is actually projected
@@ -434,7 +434,7 @@ export function HomePanel({
   const buildGoalFinishLabel = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;
     const offset = Math.max(Math.ceil(offsetRaw), 0);
-    const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
+    const weekNum = Math.min(nowIdx + offset, TOTAL_FISCAL_WEEKS);
     const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
     const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
     const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;

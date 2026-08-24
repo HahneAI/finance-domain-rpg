@@ -1,8 +1,8 @@
 /* eslint-disable react-hooks/static-components */
 import { useState } from "react";
-import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
-import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
+import { getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
 import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
 import { Card, iS, lS, SmBtn, Pressable, useFoldTransition, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -400,7 +400,7 @@ export function LogPanel({
       {vals.weekEnd && (() => {
         const inlineWeekNumber = getFiscalWeekNumber(Number(vals.weekIdx));
         const inlineCheckNumber = weekNumToPaycheckNum(inlineWeekNumber, checksPerYear);
-        const inlineChecksLeft = inlineWeekNumber != null ? weeksToChecksRemaining(Math.max(FISCAL_WEEKS_PER_YEAR - inlineWeekNumber, 0), checksPerYear) : null;
+        const inlineChecksLeft = inlineWeekNumber != null ? weeksToChecksRemaining(Math.max(TOTAL_FISCAL_WEEKS - inlineWeekNumber, 0), checksPerYear) : null;
         const pUnit = payPeriodUnit(checksPerYear, 'lower');
         const inlineWeekLabel = inlineCheckNumber != null
           ? `${pUnit} ${inlineCheckNumber}, ${inlineChecksLeft} left`

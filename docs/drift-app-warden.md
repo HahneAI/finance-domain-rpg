@@ -1322,9 +1322,17 @@ goal's own future weeks.
 > needs the same change — nothing forces it to, so it can silently drift the way F6's gross-pay
 > half did before DW-10. Check: for a goal whose ETA falls in the next fiscal year, compare
 > `estimateGoalNextYear`'s `weeklyNet` against a `buildYear`/`computeNet` run one fiscal year
-> forward with the same `cfg` — no automated cross-check exists today (`estimateGoalNextYear.test.js`
-> verifies the function in isolation, not against `computeNet`; queue-visible as **DW-W6**,
-> `docs/BUG_FIX_TODO.md`).
+> forward with the same `cfg` — **now automated**: `estimateGoalNextYear.test.js`'s "cross-check
+> against computeNet (DW-W6 drift tripwire)" describe block (added 2026-08-24, discussed and
+> agreed with Anthony as the interim fix over the full delegation rewrite) asserts exact equality
+> between `weeklyNet` and a real `computeNet` call on the common ground where the three
+> simplifications don't apply (`extraPerCheck=0`, no freedom-allowance subtraction, no
+> unemployment income) — for both a base-user config and a DHL long/short-averaged config.
+> Verified the tripwire actually fires by temporarily breaking `computeNet`'s FICA formula and
+> confirming both new tests failed before reverting. The three simplifications themselves remain
+> open (queue-visible as **DW-W6**, `docs/BUG_FIX_TODO.md`) — this test only guarantees future
+> `computeNet` drift on the *shared* math gets caught immediately instead of silently producing a
+> wrong goal ETA.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 

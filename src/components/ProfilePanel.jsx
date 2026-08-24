@@ -1725,16 +1725,24 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const isPastOrConfirmed = (w) =>
     Boolean(weekConfirmations[w.idx]) || (today != null && toLocalIso(w.weekEnd) < today);
 
-  // Future schedule only shows weeks not yet past/confirmed.
-  const scheduleByMonth = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w =>
-      w.active &&
-      w.weekEnd.getFullYear() === 2026 &&
-      w.weekEnd.getMonth() === mi &&
-      !isPastOrConfirmed(w)
-    );
-    return { name, wks };
-  }).filter(m => m.wks.length > 0);
+  // Future schedule only shows weeks not yet past/confirmed. Grouped by each
+  // week's real (year, month) rather than a hardcoded calendar year — the
+  // fiscal-week grid's trailing week can land in the next calendar year's
+  // January (FISCAL_YEAR_END_MONTH_KEY, constants/config.js), which a
+  // `getFullYear() === 2026` filter silently dropped from this schedule
+  // entirely (real bug, found live 2026-08-24 — see drift-app-warden.md
+  // §12 for the fix writeup). Iterates allWeeks in its natural ascending-idx
+  // order, so bucket insertion order is already chronological — no extra sort.
+  const scheduleByMonth = (() => {
+    const buckets = new Map();
+    for (const w of allWeeks) {
+      if (!w.active || isPastOrConfirmed(w)) continue;
+      const key = `${w.weekEnd.getFullYear()}-${w.weekEnd.getMonth()}`;
+      if (!buckets.has(key)) buckets.set(key, { name: MONTH_FULL[w.weekEnd.getMonth()], wks: [] });
+      buckets.get(key).wks.push(w);
+    }
+    return [...buckets.values()];
+  })();
 
   // Pay-schedule-aware check history ─────────────────────────────────────────
   const paySchedule = config.userPaySchedule ?? "weekly";

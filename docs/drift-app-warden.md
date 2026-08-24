@@ -1547,6 +1547,39 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
 > applies to every rate field this writes. Check: after Sharpen, DB Row Viewer's config
 > history shows the rate change captured; Wrap Up preview (§7 F6) uses the new rates.
 
+**F152 · `mo`/`rollingMonthCards` — the "Monthly Rolling" mobile card view** —
+`IncomePanel.jsx:82–124` — real live-testing bug found and fixed 2026-08-24, same session as
+F148–F151 — **[L]**
+The fourth (and, per a repo-wide grep run immediately after finding it, last) instance of the
+same "trailing fiscal week" blind spot: `mo` used to build its 12 month buckets via
+`MONTH_FULL.map((name, mi) => allWeeks.filter(w => w.weekEnd.getFullYear() === 2026 &&
+w.weekEnd.getMonth() === mi))` — a hardcoded calendar year, same shape as F151. Unlike F151
+(admin-only), this one is a **regular user-facing surface** — the mobile "Monthly Rolling" card
+row (`isDesktopWeekly === false`) that replaces the desktop weekly rolling table. The trailing
+week's income (idx 52) was silently missing from any month-by-month breakdown; a second, subtler
+bug rode along in the same code: `rollingMonthCards`'s `.map((m, mi) => ({ ...m, mi, ... }))`
+**overwrote** each entry's month-of-year `mi` with its plain array *position* (0, 1, 2…), and
+`currentMonthIdx`/`isPastMonth` compared raw `Date.getMonth()` values (0–11) with no year —
+a future January would have wrapped around to compare as "less than August," mislabeling a
+future month as past (dimmed via `opacity: 0.75`) had the trailing week's bucket existed at all
+under the old code. Fixed by grouping on each week's real `(year, month)` (a `Map` keyed on
+`year*12+month`, iterating `allWeeks` in its already-ascending order) and carrying that same
+`year*12+month` **epoch** through as `mi` end to end — `currentMonthIdx`/`prevMonthIdx` now use
+the identical epoch (`todayDate.getFullYear()*12 + todayDate.getMonth()`), so every "is this
+month past/current" comparison stays correct across a calendar-year rollover instead of wrapping.
+The card list's React `key` moved from `m.name` (collides across two Januarys of different
+years) to `m.mi` (the epoch, always unique).
+> **IF** a new month-bucketed view is added anywhere (desktop or mobile), **THEN** never compare
+> raw `getMonth()` values across a window that might span the fiscal grid's trailing week — use
+> a year-aware epoch (`year*12+month`) the way this fix and F151 both now do, and never key a
+> list on a month *name* alone. Check: `mo`'s last entry must be the real last `allWeeks` entry's
+> month; a view current around the fiscal year's real end (Dec) must show the trailing week's
+> month as upcoming/current, never as past. This closes the "trailing week" pattern search F148
+> asked for — a repo-wide grep for `getFullYear() === 2026` after this fix returns only this
+> entry's and F151's own explanatory comments (documenting the fixes, not live instances of the
+> bug) and one unrelated test fixture (`buildYearNewJobSeason.test.js`, intentionally
+> year-scoped for its own fixture setup).
+
 ### 9.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -2067,6 +2100,31 @@ diverging it from §7 F5's wizard derivation is user intent, not drift.
 > *overwritten by design* on wizard completion while `pastWeekTaxStatusOverrides`
 > survive (separate field) — any change to that survivorship split is a product
 > decision, surface it.
+
+**F151 · `TaxPlanDetail`'s `scheduleByMonth`** — `ProfilePanel.jsx:1729` — real live-testing bug
+found and fixed 2026-08-24, same session as F148/F149/F150 — **[L]**
+The "Future Weekly Tax Schedule" list (admin-only, `isAdmin` gated) used to build its month
+buckets as `MONTH_FULL.map((name, mi) => allWeeks.filter(w => w.weekEnd.getFullYear() === 2026 &&
+w.weekEnd.getMonth() === mi && ...))` — a hardcoded calendar year. Same root cause as F148/F149:
+the fiscal-week grid's trailing week can land in the next calendar year's January
+(`FISCAL_YEAR_END_MONTH_KEY`, `constants/config.js`), which `=== 2026` silently excluded from
+this list entirely — live repro: "Remaining Paychecks: 20" in the summary line above it, but only
+19 rows rendered, the trailing week (idx 52) simply missing with no error or truncation notice.
+Practical impact was narrower than F148/F149 (this is a display/interaction gap, not a wrong
+number — `config.taxedWeeks` already correctly includes idx 52 from the wizard's own derivation,
+F5/§7), but a real one: an admin had no row to click to toggle that week's Taxed/Exempt status via
+this UI. Fixed by grouping every active, not-yet-past week by its **real** `(year, month)` pair
+(a `Map` keyed on `"${year}-${month}"`, built by iterating `allWeeks` in its already-ascending-idx
+order rather than mapping over a fixed 12-month array) instead of assuming a single hardcoded
+year. The sibling "Check History" list (`pastCheckWeeks`) and the separate sidebar admin "Tax
+Weeks Grid" (`App.jsx`, F87-adjacent) were checked for the same pattern and are clean — neither
+hardcodes a calendar year.
+> **IF** a new per-week admin list is added anywhere in the app, **THEN** never filter by a
+> literal year — group by each week's own real `weekEnd.getFullYear()`/`getMonth()`, or reuse
+> `monthKeysThroughFiscalYearEnd` (F149, `expense.js`) if the list is month-key-shaped rather than
+> per-week. Check: the trailing fiscal week (real last `allWeeks` entry) must appear in any
+> "future schedule"-shaped admin list, cross-checked against that list's own stated total count
+> (e.g. "Remaining Paychecks: N" must equal N rendered rows, not N−1).
 
 **F51 · `PreferencesDetail`** — `:1494–1567`; Freedom Allowance save `:1503–1509` — **[G/L]**
 Freedom Allowance editor (On/Off + amount, clamped 0–200 — same `FREEDOM_ALLOWANCE_MAX` cap as the wizard's
@@ -3278,6 +3336,17 @@ different questions and must NOT be merged:
 > `dateToWeekIdx` collision regression + the `buildYear().length === TOTAL_FISCAL_WEEKS` cross-
 > check; live: header badge vs. Year-End Outlook "Weeks remaining" should differ by exactly 1
 > (badge excludes the current week, Year-End Outlook includes it) — not more.
+> **Three more instances of this same "trailing week" blind spot surfaced in later live-testing
+> passes the same week, all fixed the same way (real per-week/real per-month grouping instead
+> of a hardcoded bound):** §10 F149 (expense forward-scope writers looping `<= 12` instead of
+> reaching `FISCAL_YEAR_END_MONTH_KEY`), §12 F151 (`TaxPlanDetail`'s admin-only future schedule
+> filtering on a literal `getFullYear() === 2026`), and §9 F152 (IncomePanel's user-facing
+> "Monthly Rolling" mobile card view — same literal-year filter, plus a second bug riding along:
+> raw `getMonth()` comparisons with no year that would mislabel a future month as past across the
+> rollover). A repo-wide grep for `getFullYear() === 2026` immediately after F152 confirmed no
+> further live instances remain (only F151/F152's own explanatory comments and one intentionally
+> year-scoped test fixture) — the pattern search this note originally asked for is done; a fifth
+> instance would mean the grep needs re-running, not that the search was incomplete.
 
 **Reverse index — surface F-entries already covering Spine-A consumers (do not restate):**
 F1 (`dateToWeekIdx`/`firstActiveIdx`), F5 (wizard `buildYear` call + `taxedWeeks` derivation),

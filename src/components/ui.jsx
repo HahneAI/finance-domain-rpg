@@ -445,7 +445,7 @@ const GLASS_TIER = {
   overlay: { background: "rgba(0, 200, 150, 0.12)", border: "rgba(0, 200, 150, 0.28)", blur: "20px" },
 };
 
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
+export function MetricCard({ label, labelTooltip, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
   const { pressed, lit, handlers } = usePressFeedback();
   const btnRef = useRef(null);
   // Press fill derived from the card's own color (status green/teal/red, etc).
@@ -520,7 +520,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 
   const content = (
     <>
-      <div className="text-xs" style={{ letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: isButton ? "2px" : "8px", fontFamily: "var(--font-sans)" }}>
+      <div className="text-xs" title={labelTooltip} style={{ letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: isButton ? "2px" : "8px", fontFamily: "var(--font-sans)", ...(labelTooltip && { cursor: "help" }) }}>
         {label}
       </div>
       <div style={{ fontSize: size, fontWeight: "bold", color: valColor, fontFamily: "var(--font-display)", lineHeight: 1, fontVariantNumeric: "tabular-nums", transition: "color 0.6s ease" }}>

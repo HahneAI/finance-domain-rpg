@@ -1,4 +1,4 @@
-import { FISCAL_YEAR_START } from "../constants/config.js";
+import { FISCAL_YEAR_START, FISCAL_YEAR_END_MONTH_KEY } from "../constants/config.js";
 
 // ─── Billing cycle math helpers ──────────────────────────────────────────────
 // Exported so BudgetPanel and BulkEditPanel share a single source of truth.
@@ -212,6 +212,25 @@ export function nextMonthIso(iso) {
 // Month-level override helpers
 // monthKey format: "YYYY-MM"
 
+// Enumerates "YYYY-MM" month keys from startMonthKey through FISCAL_YEAR_END_MONTH_KEY
+// (inclusive) — the real end of the fiscal-week grid, NOT a flat "through calendar
+// December" loop. Every "apply/clear this month forward through fiscal year end"
+// writer must use this instead of a hardcoded `m <= 12` loop: that loop shape missed
+// the grid's trailing week (its month is FISCAL_YEAR_END_MONTH_KEY, e.g. "2027-01"
+// for FISCAL_YEAR_START="2026-01-05") — a real bug (drift-app-warden LEDGER item,
+// 2026-08-24) where a "delete forward"/"edit forward" scope silently left that one
+// week's monthlyOverrides unset, so it fell back to stale `history` data and skewed
+// avgWeeklySpend/budget health. startMonthKey past the fiscal year end returns [].
+export function monthKeysThroughFiscalYearEnd(startMonthKey) {
+  const keys = [];
+  let key = startMonthKey;
+  while (key <= FISCAL_YEAR_END_MONTH_KEY) {
+    keys.push(key);
+    key = nextMonthIso(`${key}-01`).slice(0, 7);
+  }
+  return keys;
+}
+
 // Write a single month override. Does not touch any other months.
 export function applyMonthEdit(expense, monthKey, perPaycheck, amount, cycle) {
   return {
@@ -227,10 +246,8 @@ export function applyMonthEdit(expense, monthKey, perPaycheck, amount, cycle) {
 // Skips months that already have a custom override so future customizations
 // are preserved — always overwrites the explicitly selected month.
 export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cycle, fiscalYear = 2026, editedAt = new Date().toISOString()) {
-  const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
-  for (let m = startMon; m <= 12; m++) {
-    const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
+  for (const key of monthKeysThroughFiscalYearEnd(monthKey)) {
     if (!overrides[key]) overrides[key] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   }
   overrides[monthKey] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
@@ -254,10 +271,9 @@ export function onwardStartMonthKey(quarterFirstMonthKey, currentMonthKey) {
 // Q[n]+ ONWARD: write an override for every month from startMonthKey ("YYYY-MM")
 // through December, overwriting anything already in range.
 export function applyQuarterForward(expense, startMonthKey, perPaycheck, amount, cycle) {
-  const [year, startMon] = startMonthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
-  for (let m = startMon; m <= 12; m++) {
-    overrides[`${year}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+  for (const key of monthKeysThroughFiscalYearEnd(startMonthKey)) {
+    overrides[key] = { perPaycheck, amount, cycle };
   }
   return { ...expense, monthlyOverrides: overrides };
 }
@@ -266,8 +282,8 @@ export function applyQuarterForward(expense, startMonthKey, perPaycheck, amount,
 // already-elapsed months — this button's explicit "whole year" scope.
 export function applyAllQuarters(expense, perPaycheck, amount, cycle, fiscalYear = 2026) {
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
-  for (let m = 1; m <= 12; m++) {
-    overrides[`${fiscalYear}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+  for (const key of monthKeysThroughFiscalYearEnd(`${fiscalYear}-01`)) {
+    overrides[key] = { perPaycheck, amount, cycle };
   }
   return { ...expense, monthlyOverrides: overrides };
 }
@@ -285,10 +301,8 @@ export function clearMonth(expense, monthKey, editedAt = new Date().toISOString(
 
 // Zero this month and all following months through end of the fiscal year.
 export function clearMonthForward(expense, monthKey, fiscalYear = 2026, editedAt = new Date().toISOString()) {
-  const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
-  for (let m = startMon; m <= 12; m++) {
-    const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
+  for (const key of monthKeysThroughFiscalYearEnd(monthKey)) {
     overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt };
   }
   return { ...expense, monthlyOverrides: overrides };

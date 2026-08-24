@@ -1154,7 +1154,10 @@ cascade (`:119–122`), and the Pulse insight builders (`:154–214`) that must 
 `undefined` on insufficient data (never fabricate a signal — Spine E rule).
 > **IF** any tile formula changes, **THEN** the same number's other holders must move with
 > it: Coach context (`aiContext.js` quotes budget-health/savings via the same functions —
-> the grounding rule), Live State Inspector, and for `annualSavings` the F13 helper.
+> the grounding rule), Live State Inspector, and for `annualSavings` the F13 helper — **and**
+> Budget Panel's own `leftThisWeek` (§10 F150), which is a **second, independent** copy of
+> this exact formula, not a shared read of this one. `aiContext.js` avoids the duplication
+> (it receives `avgWeeklySpend` as a prop already computed here); BudgetPanel does not.
 > **IF** a new tile is added, **THEN** it must derive via the authoritative Spine-A
 > function for that fact and scale by `perCheckFactor` for display — a raw weekly number
 > on a biweekly account is a silent 2× lie.
@@ -1781,6 +1784,70 @@ of the same point-in-time-lookup shape, not yet unified.
 > hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
 > pattern.
 
+**F149 · Forward-scoped expense writers must reach the fiscal grid's trailing week, not
+calendar December** — `expense.js`: `applyMonthEditForward:229`, `applyQuarterForward:256`,
+`applyAllQuarters:267`, `clearMonthForward:287`; `BudgetPanel.jsx`: `saveFromMonthForward:741`,
+`addExpFromMonthForward:678`, `getRestoreMonthKeys("year"):866` — real live-testing bug found and
+fixed 2026-08-24 (same session as F148) — **[L]**
+Every one of these "forward through fiscal year end" writers looped a flat `for (m = start; m
+<= 12; m++)`, building `"${year}-MM"` keys. But F148 established the fiscal-week grid's real
+last week can fall in the *next* calendar year's January (`FISCAL_YEAR_END_MONTH_KEY`,
+`constants/config.js` — "2027-01" for the current `FISCAL_YEAR_START`) — a month that `<= 12`
+never reaches. Live repro: add a $50/wk expense, delete it with "Q3+" scope — Weekly Spend
+correctly showed $0 for the deleted line, but Home's "Left This Week" was $2 short of
+`thisWeekCheck - avgWeeklySpend`, because `computeRemainingSpend` (F36-adjacent) iterates every
+*real* future week including that trailing one, and `getEffectiveAmountForMonth` (F102) falls
+back to the expense's stale `history` for any month missing a `monthlyOverrides` entry — the
+"deleted" $50 silently reappeared for that one week and skewed the whole-year average. Fixed by
+routing all seven writers through a new shared `monthKeysThroughFiscalYearEnd(startMonthKey)`
+(`expense.js`) that walks to `FISCAL_YEAR_END_MONTH_KEY` instead of a hardcoded month bound —
+single source, same shape as F148's `TOTAL_FISCAL_WEEKS` fix. **Not in scope, correctly**:
+`clearQuarterMonths` (F143 — "Q4 only" is explicitly the 3 named Oct/Nov/Dec months shown in
+the UI's own tabs, never meant to reach a 4th unlisted month) and `BudgetPanel.jsx`'s
+`getNextNonZeroIso:261`/`yearlyExpenseCost:271` (explicitly a 12-calendar-month "annual cost"
+concept, not a "rest of fiscal year" one — don't reflexively extend these too).
+**Also found in the same pass**: `applyMonthEditForward` (`expense.js:229`, the "preserves a
+future quarter's explicit override" sibling F143 describes) has **zero callers anywhere in the
+app** — F143's real "Bulk Edit preserves" behavior is implemented by a different function
+(`buildCascadedWeekly`, F42), not this one. `applyMonthEditForward` is fully unit-tested but
+unreachable from any UI path — dead code wearing a live function's clothes. Left in place (its
+tests still assert real behavior, and it's now also drift-safe via this fix) rather than
+deleted, since removing it wasn't asked for; flagging so a future "let me just call the existing
+forward-preserve helper" doesn't wire up a function nothing else has ever exercised in
+production.
+> **IF** a new "apply/clear/restore this expense forward through the rest of the fiscal year"
+> writer is ever added, **THEN** it must use `monthKeysThroughFiscalYearEnd`, never a literal
+> `<= 12` — grep `<= 12` in `expense.js`/`BudgetPanel.jsx` before trusting a new one is complete.
+> Check: `expense.test.js`'s "forward-scoped writers cover the trailing fiscal week" describe
+> block (the regression suite for this exact bug) plus a live delete-forward → Left This Week
+> arithmetic check (`thisWeekCheck - weeklySpend` must match exactly, not be off by a couple
+> dollars).
+
+**F150 · `avgWeeklySpend`/`leftThisWeek` — Budget Panel independently re-derives Home's own
+number, doesn't read it** — `BudgetPanel.jsx:365–386` (`projectableExpenses`, `avgWeeklySpend`,
+`leftThisWeek`) vs. `App.jsx:1811–1819` (`projectableExpenses`, `remainingSpend`,
+`baseWeeklyUnallocated`) — found investigating a user question about "Left This Week"'s
+semantics, 2026-08-24 — **[L]**
+`App.jsx` computes `remainingSpend = computeRemainingSpend(projectableExpenses, futureWeeks)`
+once and passes `remainingSpend.avgWeeklySpend` down as a prop to HomePanel (F16) and, via
+HomePanel, to Coach (`aiContext.js`, which never recomputes — it just reads the prop it's
+given). **BudgetPanel does not receive that prop at all.** It instead re-derives its own
+`projectableExpenses` (a byte-for-byte copy of App.jsx's New Job Season filter — same predicate,
+same comment, two separately-maintained copies) and calls `computeRemainingSpend` a **second
+time** on it (`:369–370`), then computes its own `leftThisWeek` (`:386`) from that — not from
+App.jsx's. The two values agree today only because both copies happen to filter identically and
+receive the same `expenses`/`futureWeeks` props unmodified. This corrects/supersedes DW-W5's
+"the one live call site (`App.jsx:1817`)" framing (`docs/BUG_FIX_TODO.md`) — there are **two**
+live call sites, both invoked with no `options` argument, not one.
+> **IF** App.jsx's New Job Season filter predicate changes (or `computeRemainingSpend` itself
+> changes), **THEN** BudgetPanel.jsx's independent copy (`:365–367`) must change identically, or
+> Home's "Left This Week" and Budget's "Left [Check]" tiles will silently show two different
+> numbers for the same real-world question. No test currently cross-checks the two values
+> against each other. Check: toggle New Job Season, pause an expense, and confirm Home and
+> Budget's left-this-week figures still match; consider collapsing to one source (thread
+> `remainingSpend` down as a prop instead of recomputing) rather than trusting the two copies to
+> keep matching by hand.
+
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1794,6 +1861,8 @@ of the same point-in-time-lookup shape, not yet unified.
 | `canAccessTaxPlan` inputs (Spine C) | F43 here + ProfilePanel's Tax Plan section — identical gating | Tester/admin/plain × opt-in matrix | D4 |
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
+| `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
+| App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx's separately-maintained copy (F150) | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match | D1 (guarded, not open) |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -3318,13 +3387,20 @@ doesn't wire into them assuming they're already correct/complete:
   function is a thin wrapper over `deriveWeeklyPayrollDeductions(week, cfg).total` — not a D1
   divergence, just an unused indirection).
 - `computeRemainingSpend`'s `monthlyNetTakeHome`/`budgetHealth`/`budgetHealthMonthKey`/
-  `shouldReevaluateForMonthBoundary` fields (`finance.js:797`) — the one live call site
-  (`App.jsx:1817`) invokes `computeRemainingSpend(projectableExpenses, futureWeeks)` with no
-  `options` argument, so these four fields always resolve from empty/default inputs
-  (`futureWeekNets: []`, `weeklyIncome: 0`, `previousMonthKey: null`) — `monthlyNetTakeHome`/
-  `budgetHealth` are silently always `0`, `shouldReevaluateForMonthBoundary` never tracks a real
-  prior month. `totalRemainingSpend`/`avgWeeklySpend`/`weekCount`/`monthlyExpenses` (the fields
-  F38's authority-table row actually documents) are unaffected — they don't depend on `options`.
+  `shouldReevaluateForMonthBoundary` fields (`finance.js:797`) — **correction, 2026-08-24 (see
+  F150, §10):** there are actually **two** live call sites, not one — `App.jsx:1817` and
+  `BudgetPanel.jsx:369–370` (found independently while investigating a "Left This Week"
+  question; missed on the original 2026-08-24 pass because that pass only grepped for the
+  function name from `finance.js` outward, not from every component inward). Both invoke
+  `computeRemainingSpend(projectableExpenses, futureWeeks)` with no `options` argument, so these
+  four fields always resolve from empty/default inputs (`futureWeekNets: []`, `weeklyIncome: 0`,
+  `previousMonthKey: null`) at both sites — `monthlyNetTakeHome`/`budgetHealth` are silently
+  always `0`, `shouldReevaluateForMonthBoundary` never tracks a real prior month.
+  `totalRemainingSpend`/`avgWeeklySpend`/`weekCount`/`monthlyExpenses` (the fields F38's
+  authority-table row actually documents) are unaffected — they don't depend on `options`. The
+  bigger finding from the same investigation isn't the missing `options` arg — it's that a
+  second call site exists at all: see F150 for BudgetPanel's independent (not shared)
+  `avgWeeklySpend`/`leftThisWeek` computation.
 Both filed as watch item **DW-W5** in `docs/BUG_FIX_TODO.md`: becomes a real D1 defect the
 moment a UI surface starts displaying `remainingSpend.budgetHealth`/`monthlyNetTakeHome` without
 also threading real `futureWeekNets`/`weeklyIncome`/`previousMonthKey` through the call site.

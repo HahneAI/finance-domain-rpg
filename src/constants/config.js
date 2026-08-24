@@ -253,6 +253,25 @@ export const TOTAL_FISCAL_WEEKS = (() => {
   return count;
 })();
 
+// "YYYY-MM" of the fiscal-week grid's actual LAST week (idx TOTAL_FISCAL_WEEKS-1),
+// whose weekEnd = FISCAL_YEAR_START + (TOTAL_FISCAL_WEEKS-1)*7 days — "2027-01" for
+// FISCAL_YEAR_START="2026-01-05" (that trailing week runs Dec 29, 2026 - Jan 4, 2027).
+// Real bug this fixed (drift-app-warden LEDGER item, 2026-08-24): every "apply/clear
+// this month forward through year-end" writer in expense.js/BudgetPanel.jsx looped
+// only through calendar month 12 of the fiscal year, so this trailing week's month
+// never got a monthlyOverrides entry — an edit or delete that was supposed to cover
+// "the rest of the fiscal year" silently missed its last real week, which then fell
+// back to stale `history` data for that one week and skewed avgWeeklySpend/budget
+// health by a small but real amount. Any "forward through fiscal year end" writer
+// must loop through this month key, not a hardcoded "<= 12".
+export const FISCAL_YEAR_END_MONTH_KEY = (() => {
+  const [fyY, fyM, fyD] = FISCAL_YEAR_START.split("-").map(Number);
+  const lastWeekEnd = new Date(fyY, fyM - 1, fyD);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() + (TOTAL_FISCAL_WEEKS - 1) * 7);
+  const y = lastWeekEnd.getFullYear(), m = String(lastWeekEnd.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+})();
+
 export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
 // Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)

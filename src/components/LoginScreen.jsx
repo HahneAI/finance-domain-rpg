@@ -33,6 +33,7 @@ import { PENDING_BETA_CODE_STORAGE_KEY, parsePendingBetaCode } from "../lib/pend
 import { BETA_CHANNEL_LABEL, resolveBetaChannel } from "../constants/betaChannels.js";
 import { iS, lS } from "./ui.jsx";
 import { LegalDocumentModal } from "./LegalDocumentModal.jsx";
+import { LiquidGlass } from "./LiquidGlass.jsx";
 
 // Resolves a pending ?beta=<value> capture (see lib/pendingBetaCode.js) down
 // to a known channel, if it is one — a marketing-site link is expected to
@@ -167,17 +168,40 @@ function BetaSeatBanner({ channel, seatsRemaining }) {
 
 // ── Shared wrapper (exported for investor auth screens) ───────────────────────
 
+// Premium first-impression treatment (2026-08-22) — shared by every
+// auth-adjacent screen (LoginScreen, ReviveScreen, InvestorRegister,
+// TrialExplainerScreen), so the whole "before you're really in the app"
+// cluster gets the same ambient-glow + frosted-glass card language, not
+// just the sign-in form itself. Card reuses LiquidGlass's existing "modal"
+// purpose (already allowed — a full-viewport auth card is the same kind of
+// hero surface a modal is) rather than opening a new placement.
 export function Shell({ title, subtitle, children }) {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-      <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
+    <div style={{ minHeight: "100vh", position: "relative", overflow: "hidden", background: "var(--color-bg-gradient)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div className="auth-orb auth-orb-1" aria-hidden="true" />
+      <div className="auth-orb auth-orb-2" aria-hidden="true" />
+      <div className="auth-orb auth-orb-3" aria-hidden="true" />
+      <LiquidGlass
+        purpose="modal"
+        tone="teal"
+        intensity="strong"
+        className="auth-card-in"
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: "360px",
+          borderRadius: "18px",
+          padding: "34px 28px",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.55), 0 0 60px rgba(0,200,150,0.25), 0 0 0 1px rgba(0,200,150,0.12)",
+        }}
+      >
         <div style={{ marginBottom: "28px", textAlign: "center" }}>
-          <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
-          <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
+          <div className="text-xs" style={{ letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px", textShadow: "0 0 22px rgba(0,200,150,0.6)" }}>Authority Finance</div>
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "22px", letterSpacing: "0.01em", lineHeight: 1.2, color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
           {subtitle && <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
         </div>
         {children}
-      </div>
+      </LiquidGlass>
     </div>
   );
 }
@@ -445,11 +469,11 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       <form onSubmit={handleSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={lS}>New Password</label>
-          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={lS}>Confirm Password</label>
-          <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+          <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
         </div>
         {error && <ErrorBox>{error}</ErrorBox>}
         <SubmitBtn loading={loading}>{loading ? "..." : "Update Password"}</SubmitBtn>
@@ -482,11 +506,11 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
             <form onSubmit={handleReviveSignUp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={lS}>New Password</label>
-                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={lS}>Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
               </div>
               {error && <ErrorBox>{error}</ErrorBox>}
               <SubmitBtn loading={loading}>{loading ? "..." : "Continue"}</SubmitBtn>
@@ -507,7 +531,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={lS}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
         </div>
         {error && <ErrorBox>{error}</ErrorBox>}
         <SubmitBtn loading={loading}>{loading ? "..." : "Send reset link"}</SubmitBtn>
@@ -528,7 +552,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <label style={lS}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -540,7 +564,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
               </button>
             )}
           </div>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isSignUp ? "At least 6 characters" : "Your password"} required autoComplete={isSignUp ? "new-password" : "current-password"} style={{ ...iS, borderRadius: "8px" }} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isSignUp ? "At least 6 characters" : "Your password"} required autoComplete={isSignUp ? "new-password" : "current-password"} className="auth-input" style={{ ...iS, borderRadius: "8px" }} />
         </div>
 
         {isSignUp && (
@@ -603,6 +627,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleInvestorSubmit(); } }}
               placeholder="enter access code"
               autoComplete="off"
+              className="auth-input"
               style={{
                 ...iS,
                 borderRadius: "8px",
@@ -701,14 +726,14 @@ function SubmitBtn({ loading, children }) {
     <button
       type="submit"
       disabled={loading}
-      className="text-xs" style={{
+      className="text-xs auth-submit-btn" style={{
         marginTop: "4px",
         background: loading ? "var(--color-bg-raised)" : "var(--color-teal)",
         color: loading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
         border: "none", borderRadius: "8px",
         padding: "13px 0", letterSpacing: "2px", textTransform: "uppercase",
         fontWeight: "bold", cursor: loading ? "default" : "pointer",
-        transition: "background 0.15s", width: "100%",
+        width: "100%",
       }}
     >
       {children}

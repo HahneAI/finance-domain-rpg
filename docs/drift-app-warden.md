@@ -3028,8 +3028,10 @@ the point-in-time resolvers, loan internals, and the tax primitives. Consumers a
 reverse-indexed to their existing F-entries.
 
 **F96 · `buildYear(cfg, baseRateHistory)` — the trunk head** — `finance.js:481–669` — **[L]**
-Emits one object per fiscal week (idx 0…51) by walking `FISCAL_YEAR_START` forward in 7-day
-steps. Ordered internal stages, each a drift surface of its own: (1) **schedule resolution** —
+Emits one object per fiscal week (idx 0…52 — 53 weeks; `FISCAL_YEAR_START` isn't Jan 1, so this
+is NOT a flat 52, see F148) by walking `FISCAL_YEAR_START` forward in 7-day steps, bounded by
+`TOTAL_FISCAL_WEEKS` (`constants/config.js`, F148 — single source, not a locally re-derived
+`fyEnd`). Ordered internal stages, each a drift surface of its own: (1) **schedule resolution** —
 DHL alternating long/short from `firstActiveIdx` parity (`:509–555`, F99 helpers) vs. base
 flat `customWeeklyHours ?? maxWeeklyHours ?? standardWeeklyHours ?? 40` (`:556–566`);
 (2) **OT split** — `regularHours`/`overtimeHours` against `otThreshold ?? totalHours`, with
@@ -3175,6 +3177,39 @@ the `moFlatRate` legacy fallback for the DHL Missouri preset. These compute *ann
 > Live State Inspector `totalGap`/`extraPerCheck` vs. the Tax Weeks Grid; `finance.test.js`
 > tax cases; a Missouri DHL account still resolves `moFlatRate`.
 
+**F148 · `TOTAL_FISCAL_WEEKS` vs. `FISCAL_WEEKS_PER_YEAR` — two constants, not one** —
+`constants/config.js`, `fiscalWeek.js` — **[L]** — real live-testing incident, 2026-08-24.
+`FISCAL_YEAR_START = "2026-01-05"` is not Jan 1, so `buildYear`'s real week grid (F96) is
+**53** buckets (idx 0–52, last one Dec 29, 2026 – Jan 4, 2027) — not the 52 that
+`fiscalWeek.js`'s `FISCAL_WEEKS_PER_YEAR` constant had baked in everywhere. `buildYear`'s
+loop bound (F96 — correct its "idx 0…51" wording to "idx 0…52") now derives directly from
+`TOTAL_FISCAL_WEEKS` (an IIFE-computed constant, same day-count arithmetic, single source),
+so the two can't independently drift again. Two constants now exist on purpose — they answer
+different questions and must NOT be merged:
+- `TOTAL_FISCAL_WEEKS` (`constants/config.js`) — the REAL grid length. Anything meaning "how
+  many actual calendar weeks are left in the fiscal year" uses this: `dateToWeekIdx`'s clamp,
+  `getFiscalWeekNumber`/`getFiscalWeekInfo`'s default `totalWeeks`, `resolveActiveWeeksThisYear`
+  (F13 — annualizes a real weekly figure, needs the real week count), the header "X LEFT" badge,
+  Coach's stated `weeksLeft` (aiContext.js), both wizards' `firstActiveIdx` upper-bound check.
+- `FISCAL_WEEKS_PER_YEAR` (`fiscalWeek.js`, still 52) — a deliberately-flat nominal-year
+  constant used ONLY for pay-period-count conversion (`weekNumToPaycheckNum`,
+  `weeksToChecksRemaining` — e.g. biweekly = 52/26 = 2 weeks/check). Do NOT swap this one to
+  `TOTAL_FISCAL_WEEKS`; 53 isn't evenly divisible by 26/12 and would misalign every
+  biweekly/monthly paycheck-number label.
+> **IF** you see `FISCAL_WEEKS_PER_YEAR` at a new call site, **THEN** ask which of the two
+> questions above it's actually answering before touching it — the two real-money bugs this
+> fixed were both "real weeks remaining" call sites silently using the nominal constant:
+> (1) the header badge disagreeing with Home's Year-End Outlook card by 2 weeks on the same
+> screen (traced live via `curl`+the real `buildYear` output, not guessed), and (2)
+> `dateToWeekIdx` clamping every date from Dec 29 – Jan 4 onto the SAME idx as the prior real
+> week — collided the tips/commission daily check-in (App.jsx `handleTipsCommissionLog`) and a
+> Setup Wizard start-date in that week onto the wrong week's income/`firstActiveIdx`. Named
+> checks: F96 (loop bound), F13/F14/F16 (annualSavings — table row below), F1 (`dateToWeekIdx`),
+> §7 F5/id-2 (wizard `firstActiveIdx` bound). Procedure: `fiscalWeek.test.js`'s
+> `dateToWeekIdx` collision regression + the `buildYear().length === TOTAL_FISCAL_WEEKS` cross-
+> check; live: header badge vs. Year-End Outlook "Weeks remaining" should differ by exactly 1
+> (badge excludes the current week, Year-End Outlook includes it) — not more.
+
 **Reverse index — surface F-entries already covering Spine-A consumers (do not restate):**
 F1 (`dateToWeekIdx`/`firstActiveIdx`), F5 (wizard `buildYear` call + `taxedWeeks` derivation),
 F6 (`estimateWeeklyGross`/`estimateWeeklyNet` preview pair), F10 (`resolveBaseRateForWeek`
@@ -3199,8 +3234,8 @@ migrations that touch expense/loan history).
 | `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — now weekMeta-grounded via `resolveEventWeekMeta`, DW-5 fixed), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |
 | `buildLoanHistory` regeneration (F103) | F41 zone (DW-W1) — Budget cards, NewJobSeasonEntry due-date, F67 load regen | `finance.test.js` loan cases; mid-quarter payoff manual check; **do not** add past-week-truth consumer | D2 |
 | Tax primitives (`fedTax`/`stateTax`/state table, F104) | F28 gap math → `extraPerCheck` → every net (F98) | Live Inspector `totalGap`/`extraPerCheck` vs Tax Weeks Grid; MO DHL resolves `moFlatRate` | D1 |
-| `resolveActiveWeeksThisYear` (F13) / `FISCAL_WEEKS_PER_YEAR` | F14 `weeklyIncome`, F16 `annualSavings`, Coach savings line, DemoAccountTree — all four share it | Grep consumer count (only grows); mid-year `firstActiveIdx` account: Home tile = Ask Coach | D1 |
-| `FISCAL_YEAR_START` (`constants/config.js`) | Loop bounds in F96, `dateToWeekIdx` (F1), `getPhaseIndex` boundaries, every stored `firstActiveIdx`/`taxedWeeks` | Never change mid-year; if forced: migrate all three fields + `fiscalWeek.test.js` + Tax Weeks Grid | D2 |
+| `resolveActiveWeeksThisYear` (F13) / `TOTAL_FISCAL_WEEKS` (F148 — NOT `FISCAL_WEEKS_PER_YEAR`, see F148) | F14 `weeklyIncome`, F16 `annualSavings`, Coach savings line, DemoAccountTree — all four share it | Grep consumer count (only grows); mid-year `firstActiveIdx` account: Home tile = Ask Coach | D1 |
+| `FISCAL_YEAR_START` (`constants/config.js`) | `TOTAL_FISCAL_WEEKS` (F148, same arithmetic — recompute both together), loop bounds in F96, `dateToWeekIdx` (F1), `getPhaseIndex` boundaries, every stored `firstActiveIdx`/`taxedWeeks` | Never change mid-year; if forced: migrate all three fields + `fiscalWeek.test.js` (incl. F148's collision regression) + Tax Weeks Grid | D2 |
 
 ### 18.3 Block 3 — Master authority table (every displayed number → its one source → consumers)
 

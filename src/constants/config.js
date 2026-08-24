@@ -231,6 +231,28 @@ export const DEFAULT_CONFIG = {
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
+
+// Real length of the fiscal-week grid buildYear() generates: FISCAL_YEAR_START
+// through (one year later minus a day), in 7-day steps. Because FISCAL_YEAR_START
+// isn't Jan 1, this is NOT always 52 — for 2026-01-05 it's 53 (idx 0-52, the last
+// week running Dec 29, 2026 - Jan 4, 2027). buildYear()'s own loop bound is
+// derived from this identical arithmetic (see finance.js), so the two can't drift
+// apart the way FISCAL_WEEKS_PER_YEAR (fiscalWeek.js's separate, deliberately-flat
+// 52-per-year constant used for paycheck-count conversion, e.g. weekly->biweekly)
+// once silently did — that mismatch was a real bug (drift-app-warden LEDGER item):
+// the header "X LEFT" badge, dateToWeekIdx's clamp, and annual-savings scaling all
+// undercounted by up to 2 weeks relative to this real grid. Anything that means
+// "how many real calendar weeks are left in the fiscal year" must use this
+// constant; anything converting a week number into a paycheck/month number under
+// the nominal 52/26/12-per-year convention must keep using FISCAL_WEEKS_PER_YEAR.
+export const TOTAL_FISCAL_WEEKS = (() => {
+  const [fyY, fyM, fyD] = FISCAL_YEAR_START.split("-").map(Number);
+  const fyEnd = new Date(fyY + 1, fyM - 1, fyD - 1);
+  let count = 0;
+  for (let d = new Date(fyY, fyM - 1, fyD); d <= fyEnd; d.setDate(d.getDate() + 7)) count++;
+  return count;
+})();
+
 export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
 // Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)

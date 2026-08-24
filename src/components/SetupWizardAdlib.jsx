@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Pressable, StepSlide } from "./ui.jsx";
-import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
-import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
+import { dateToWeekIdx } from "../lib/fiscalWeek.js";
 import { estimateWeeklyNet } from "../lib/finance.js";
 import { finalizeWizardConfig, FREEDOM_ALLOWANCE_MAX } from "../lib/wizardComplete.js";
 // LIFE_EVENTS/DIFF_FIELDS/StructureChangeDiff are shared with SetupWizard.jsx rather than
@@ -337,7 +337,7 @@ function isIntakeValid(d, lifeEvent = null) {
 // (Schedule) in SetupWizard.jsx exactly.
 function isScheduleValid(d) {
   if (!d.startDate) return false;
-  if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
+  if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= TOTAL_FISCAL_WEEKS) return false;
   if (d.employerPreset === "DHL") return true;
   if (!((d.maxWeeklyHours ?? 0) > 0) || (d.maxWeeklyHours ?? 0) > 168) return false;
   if (!d.hoursUnderstood) return false;

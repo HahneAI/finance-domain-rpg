@@ -136,27 +136,14 @@ function parseIsoDate(value) {
 export function estimateWeeklyGross(d) {
   const isEmployerDHL = d.employerPreset === "DHL";
   if (isEmployerDHL) {
-    const gross = (h) => {
-      const base = d.baseRate || 0;
-      const reg = Math.min(h, d.otThreshold || 40);
-      const ot = Math.max(h - (d.otThreshold || 40), 0);
-      return reg * base + ot * base * (d.otMultiplier || 1.5);
-    };
-    const longCustom = d.customWeeklyHoursLong;
-    const shortCustom = d.customWeeklyHoursShort;
-    if (longCustom != null || shortCustom != null) {
-      const fallback = d.customWeeklyHours ?? 60;
-      const longHours = longCustom ?? fallback;
-      const shortHours = shortCustom ?? fallback;
-      return (gross(shortHours) + gross(longHours)) / 2;
-    }
-    if (d.customWeeklyHours != null) {
-      // Flat custom hours — same projected total every week
-      return gross(d.customWeeklyHours);
-    }
-    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
-    const hoursPerShift = d.shiftHours || 12;
-    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
+    // Delegate to projectedGross() — the same long/short-week rotation, custom-hours,
+    // weekend-diff, and night-diff formula buildYear() itself uses — instead of a second,
+    // hand-rolled approximation. The prior version here hardcoded a stale 4-shift/5-shift
+    // (48h/60h) rotation guess that no longer matched DHL_PRESET's actual 3-shift/4-shift
+    // (36h/48h) rotation, and omitted diffRate/nightDiffRate entirely — a real drift bug
+    // (docs/drift-app-warden.md §7 F6) that overstated the DHL Wrap Up preview by hundreds
+    // of dollars/week. Delegating makes this structurally unable to diverge from buildYear.
+    return (projectedGross(true, d) + projectedGross(false, d)) / 2;
   }
   // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
   const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;

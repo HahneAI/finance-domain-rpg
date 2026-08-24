@@ -679,7 +679,7 @@ CREATE INDEX coach_chats_user_id_created_at
   `title` (or first user message truncated), `summary` preview when one exists, and `created_at`
   relative date. **No `chat_type` chip** — every row is `ask_coach` today (the list explicitly
   filters to that type), so a chip would say the same word on every row; add it when a second
-  type gets a UI caller (see drift-app-warden §8 F123).
+  type gets a UI caller (see drift-app-warden §21 F146).
 - [x] **Tap to resume** — built 2026-07-25. Loads the chat's full `messages` array back into the
   active view.
 - [x] **New Chat button** — built 2026-07-25. Header icon, not inline atop the history list as
@@ -3300,7 +3300,7 @@ regular user population that would need it most.
 ## 11. Data Encryption & At-Rest Security Posture
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started. Read
-`docs/drift-app-warden.md` §3 F120 before touching any persisted field that might fall into a
+`docs/drift-app-warden.md` §19 F120 before touching any persisted field that might fall into a
 higher sensitivity class than what the app collects today — that entry is the authoritative
 trigger check for this whole section.*
 
@@ -3315,7 +3315,7 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 - [ ] **No action needed on current fields.** This section is a readiness/gap flag, not a
   "go encrypt `user_data`" ticket — don't build anything here speculatively (see CLAUDE.md's
-  no-speculative-abstraction rule). The actionable trigger is §3 F120: a *new* field in a
+  no-speculative-abstraction rule). The actionable trigger is §19 F120: a *new* field in a
   genuinely high-sensitivity class (SSN, DOB, bank account/routing, government ID).
 - [ ] **If/when that trigger fires** — decide app-layer encrypt-before-write /
   decrypt-after-read (in the `db.js` write path / `loadUserData`, F67) vs. a `pgcrypto`-backed

@@ -10,7 +10,7 @@ import { logBetaEvent } from "../lib/db.js";
 import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
-import { BulkEditPanel } from "./BulkEditPanel.jsx";
+import { BulkEditPage } from "./BulkEditPage.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -146,15 +146,32 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     setAp(currentPhaseIdx);
     setActiveMonth(null); // reset to quarter view when the real quarter advances
   }, [currentPhaseIdx]);
+  // Double-tap-to-open-Bulk-Edit on the MonthQuarterSelector's month/quarter
+  // segments — same tap-timing pattern used for the expense row shortcut below
+  // (lastTapRef), kept as its own ref so the two double-tap surfaces never
+  // share (or collide on) keys.
+  const lastSegmentTapRef = useRef({});
+  const isDoubleTap = (key) => {
+    const now = Date.now();
+    const last = lastSegmentTapRef.current[key] ?? 0;
+    if (now - last < 350) {
+      lastSegmentTapRef.current[key] = 0;
+      return true;
+    }
+    lastSegmentTapRef.current[key] = now;
+    return false;
+  };
   const handleSelectMonth = (monthKey) => {
+    const openBulkEdit = isDoubleTap(`m:${monthKey}`);
     setActiveMonth(monthKey);
     setAp(phaseIdxForMonth(monthKey));
-    setBulkEditOpen(false);
+    setBulkEditOpen(openBulkEdit);
   };
   const handleSelectQuarter = (phaseIdx) => {
+    const openBulkEdit = isDoubleTap(`q:${phaseIdx}`);
     setActiveMonth(null);
     setAp(phaseIdx);
-    setBulkEditOpen(false);
+    setBulkEditOpen(openBulkEdit);
   };
   // Expand/collapse per expense category — remembered for the session (sessionStorage),
   // defaults to all categories collapsed. A category is expanded only if its name is in the set.
@@ -247,6 +264,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   // first month of the active quarter — except the current quarter, which anchors to
   // the current month so already-elapsed months in the quarter don't read as $0 (Bug 2).
   const displayMonthKey = activeMonth ?? (ap === currentPhaseIdx ? currentMonthKey : QUARTER_FIRST_MONTHS[ap]);
+  // Full label for displayMonthKey (e.g. "August") — used by the Bulk Edit button so its
+  // label always names the same month BulkEditPage will actually open (selectedMonthIso
+  // is built from this same displayMonthKey below).
+  const displayMonthFull = MONTH_FULL[parseInt(displayMonthKey.slice(5, 7), 10) - 1];
   const displayEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, displayMonthKey, phaseIdx);
   // Override-aware analogs of the old history-only readers (used by the debug traces below):
   // currentEffective resolves at the current month; quarterEffective at each quarter's
@@ -1228,9 +1249,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       onSelectMonth={handleSelectMonth}
       onSelectQuarter={handleSelectQuarter}
     />
-    {/* Inline bulk-edit panel — opens when ADV. EDIT is tapped */}
+    {/* Bulk Edit — full standalone page (position:fixed, covers the viewport
+        regardless of where it's rendered in the tree). Opens via double-tap
+        on a MonthQuarterSelector month/quarter segment (handleSelectMonth/
+        handleSelectQuarter above) or the "Bulk Edit" button under the
+        expense category list below. */}
     {bulkEditOpen && (
-      <BulkEditPanel
+      <BulkEditPage
         phaseIdx={ap}
         selectedMonthIso={`${displayMonthKey}-01`}
         expenses={regularExpenses}
@@ -1686,6 +1711,29 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           </div>
         </div>
       </div> : <Pressable onClick={() => setAddingExp(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>)}
+
+      {/* Bulk Edit — standalone trigger for the full-page bulk editor (the
+          other trigger is double-tapping a MonthQuarterSelector segment
+          above). Reviews every expense for the currently-viewed month at
+          once instead of one expense at a time. */}
+      {!readOnly && (
+        <Pressable
+          onClick={() => setBulkEditOpen(true)}
+          className="text-xs" style={{
+            background: "transparent",
+            color: "var(--color-text-secondary)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "6px",
+            padding: "10px",
+            width: "100%",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          Bulk Edit — {displayMonthFull}
+        </Pressable>
+      )}
     </div>}
 
     {/* BREAKDOWN — cashflow summary at top, then annual projection table */}

@@ -164,7 +164,7 @@ nothing is orphaned).
 | T1 | **Setup Wizard** | G | `SetupWizard.jsx`, `LifeEventMenu.jsx`, `NewJobSeasonEntry.jsx`, `RateUpdateModal.jsx`, `constants/config.js` | §9 · §10 (entry flows) · §11 (employer preset convention — born here, enforced everywhere) | A, B, F |
 | T2 | **Home Panel** | G | `HomePanel.jsx`, `NewJobSeasonHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx`, `CashOnHandSheet.jsx` (shared with T4, §1.H17) | §14 · §10 (New Job Season home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
 | T3 | **Income Panel** | L | `IncomePanel.jsx`, `WeekConfirmModal.jsx` | §1 (display surface) · §2 · §12 · §16 (sprint 2, unshipped) | A, B, E, F |
-| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `NewJobSeasonBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, `CashOnHandSheet.jsx` (shared with T2, §1.H17) | §3 · §5 · §10 (New Job Season budget surface) · Tax Plan gate (§9 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
+| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `NewJobSeasonBudgetPanel.jsx`, `BulkEditPage.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, `CashOnHandSheet.jsx` (shared with T2, §1.H17) | §3 · §5 · §10 (New Job Season budget surface) · Tax Plan gate (§9 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
 | T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§9 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §2 · §9 | B, C |
@@ -1657,7 +1657,7 @@ New Job Season rebuild (`7375c36`, `cd0480f`, `6a3e406`). Goals are *not* on thi
 they moved wholly to Home 2026-05-12 (`50c1243`); this pass corrected active-systems §4
 and the §4.1 hierarchy rows accordingly.
 
-**Scope:** `BudgetPanel.jsx` (2,579 lines), `NewJobSeasonBudgetPanel.jsx`, `BulkEditPanel.jsx`,
+**Scope:** `BudgetPanel.jsx` (2,579 lines), `NewJobSeasonBudgetPanel.jsx`, `BulkEditPage.jsx`,
 `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, and the `expense.js` helper layer
 (Spine A) they consume.
 
@@ -1745,13 +1745,24 @@ entry ends the day *after* the quarter-end containing the payoff date.
 > paying through quarter close; past-week spend totals unchanged after a term edit is
 > the *aspiration*, currently violated by design.
 
-**F42 · Bulk edit (ADV. EDIT)** — `BulkEditPanel.jsx:16` (pure collector), wired at
-`BudgetPanel.jsx:1310–1318`, commits through `saveAdvancedEdit` →
+**F42 · Bulk edit** — `BulkEditPage.jsx` (renamed from `BulkEditPanel.jsx` 2026-08-25,
+F155's fix — a full standalone page now, `position: fixed; inset: 0`, not an inline card),
+wired at `BudgetPanel.jsx`'s `bulkEditOpen` render, commits through `saveAdvancedEdit` →
 `buildAdvancedEditPayload` (`expense.js:316`) → F35 — **[L]**
-Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month.
+Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month. Two live
+triggers as of F155: double-tapping a month or quarter segment on `MonthQuarterSelector`
+(`handleSelectMonth`/`handleSelectQuarter`'s `isDoubleTap` check, 350ms window, same pattern
+as the pre-existing expense-row `lastTapRef` shortcut), and the "Bulk Edit — {month}" button
+under the expense category list (Overview tab, `!readOnly` gated, same row as "+ Add Expense
+Line").
 > **IF** the payload builder's scope semantics diverge from the single-expense buttons
 > (F37), **THEN** the same edit made two ways produces different override sets. Check:
 > edit one expense via sheet and via bulk with identical inputs — identical stored shape.
+> **IF** `MonthQuarterSelector`'s segment layout changes, **THEN** re-verify the double-tap
+> still resolves to the tapped segment's month (`m:${monthKey}`/`q:${phaseIdx}` keys in
+> `lastSegmentTapRef` are keyed by the exact values `onSelectMonth`/`onSelectQuarter` receive
+> — a key-shape change there silently breaks double-tap detection without touching single-tap
+> select, so it's easy to miss in casual testing).
 
 **F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
 `:2103` — **[G]**
@@ -1861,35 +1872,46 @@ of the same point-in-time-lookup shape, not yet unified.
 > hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
 > pattern.
 
-**F155 · Bulk Edit (F42/`BulkEditPanel`) has no reachable trigger in the shipped UI — F143's
-"two edit surfaces" claim is only half-true for a real user (2026-08-24, found completing the
-expense-cascade testing checklist item, DW-13, NOT fixed — flagged for a product decision) — [G]**
-`BudgetPanel.jsx`'s `bulkEditOpen` state (`useState(false)`, L135) is only ever set to `false`
-(on month-select, quarter-select, and post-save) — `setBulkEditOpen(true)` does not appear
-anywhere in `BudgetPanel.jsx`, anywhere else in `src/`, or anywhere in `BudgetPanel.jsx`'s git
-history back to `BulkEditPanel`'s introduction (`git log -p --all -S "setBulkEditOpen(true)"`
-returns nothing). Confirmed live too: the Budget panel's full button set (`overview`/
-`breakdown`/`loans` tabs, month/quarter tabs, `Restore Deleted`, `+ Add Expense Line`) has no
-Bulk Edit entry point anywhere. The `BulkEditPanel` component, its `buildAdvancedEditPayload`/
-`buildCascadedWeekly` save logic, and its dedicated test coverage (`expenseCycles.test.js`'s
-`buildAdvancedEditPayload` describe block, including "cascading edit respects existing byPhase
-overrides in later quarters" — re-verified passing this session) are all real and correct at the
-function level — this is not a math bug, it's a **fully-built feature with no door into it**.
-F143 (above) describes this as one of "two edit surfaces" a user chooses between; in the actual
-shipped app there is only one — the single-expense Save-scope buttons (F37). Every account today
-has only ever exercised F37's always-overwrite cascade rule; F42's preserve-explicit-override
-rule, while correct, has never protected a single real user's data because nothing can open the
-panel that runs it. **Deliberately not fixed in this pass** — adding a trigger is a product/UX
-decision (where should it live: a header button, a long-press, a mode toggle on the month/quarter
-tabs; is multi-expense bulk editing even still wanted as a feature, or was it superseded by
-something else and simply never cleaned up) rather than a bug with one obvious correct fix, so it
-needs the account owner's call rather than being wired up unilaterally.
-> **IF** Bulk Edit is wired up with a real trigger, **THEN** re-verify F143's two-cascade-rule
-> split live (not just via unit test) before shipping — this is the first time either rule will
-> have been exercised by a real user action end-to-end.
-> **IF** a future audit re-reads F143 as evidence Bulk Edit is a live, reachable feature,
-> **THEN** check this entry first — F143 describes the code's intent, this entry describes
-> what a real user can actually do.
+**F155 · Bulk Edit (F42) had no reachable trigger in the shipped UI — fixed 2026-08-25, DW-13
+(found 2026-08-24 completing the expense-cascade testing checklist item; fix built the next
+day per Anthony's explicit direction) — [G]**
+`BudgetPanel.jsx`'s `bulkEditOpen` state was only ever set to `false` (on month-select,
+quarter-select, and post-save) — `setBulkEditOpen(true)` didn't appear anywhere in the app,
+confirmed via `git log -p --all -S "setBulkEditOpen(true)"` returning nothing and a live click
+through every Budget panel button. The `BulkEditPanel` component, its
+`buildAdvancedEditPayload`/`buildCascadedWeekly` save logic, and its dedicated test coverage
+were all real and correct at the function level — a fully-built feature with no door into it.
+**Fix:** two real triggers added, both landing on the same `setBulkEditOpen(true)` path, plus
+the component itself converted from an inline card to a full standalone page:
+1. **Double-tap a `MonthQuarterSelector` segment** (either row — a month pill or a quarter
+   pill). `handleSelectMonth`/`handleSelectQuarter` (`BudgetPanel.jsx`) now run the tap through
+   a 350ms-window `isDoubleTap()` check (same shape as the pre-existing per-expense-row
+   `lastTapRef` double-tap shortcut, kept in a separate `lastSegmentTapRef` so the two never
+   share keys) — first tap selects the segment as before, second tap within the window also
+   opens Bulk Edit scoped to that segment's month (a quarter segment resolves through the
+   existing `displayMonthKey` fallback to the quarter's first month, no special-casing needed).
+2. **A standalone "Bulk Edit — {month}" button**, `!readOnly`-gated, placed directly under the
+   expense category list in the Overview tab, right after "+ Add Expense Line" — the same
+   month `displayMonthKey`/`displayMonthFull` the segment double-tap resolves to, so the button's
+   label always names the month it will actually open.
+`BulkEditPanel.jsx` was renamed to `BulkEditPage.jsx` (`BulkEditPanel` export → `BulkEditPage`)
+and its outer wrapper changed from an inline bordered card to a full-viewport fixed overlay
+(`position: fixed; inset: 0; z-index: 30`, header with back-arrow + title, scrollable body,
+sticky footer) — the exact same shell pattern `AskCoachPanel.jsx` already uses for its own
+full-page surface, including the `fold-lift` entrance class. All internal logic (edit/delete/add
+staging, `buildAdvancedEditPayload` on save) is unchanged from before this fix — only the
+container chrome and the two new entry points are new code. Verified live: both triggers open
+the page scoped to the correct month (a double-tapped "Sep" pill opens "September"; a
+double-tapped Q4 quarter pill opens "October", Q4's first month; the standalone button opens
+whatever month is currently displayed), staging an edit and saving works end-to-end, the back
+arrow and Cancel both close cleanly. Full test suite (1683 tests) unaffected — no existing test
+asserted `BulkEditPanel`'s import path or inline-card DOM shape closely enough to need updating.
+> **IF** `MonthQuarterSelector`'s segment layout changes, **THEN** re-verify the double-tap
+> handlers' `m:${monthKey}`/`q:${phaseIdx}` keys still match what `onSelectMonth`/
+> `onSelectQuarter` actually receive.
+> **IF** F143's two-cascade-rule split (always-overwrite vs. preserve-explicit-override) is
+> ever suspected of drifting, **THEN** it can now be tested live through a real user action —
+> both rules are reachable for the first time since F143 was written.
 
 **F149 · Forward-scoped expense writers must reach the fiscal grid's trailing week, not
 calendar December** — `expense.js`: `applyMonthEditForward:229`, `applyQuarterForward:256`,

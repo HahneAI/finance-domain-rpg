@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimateGoalNextYear, projectedGross, toLocalIso } from '../../lib/finance.js'
+import { estimateGoalNextYear, projectedGross, toLocalIso, buildYear, computeNet } from '../../lib/finance.js'
 import { DEFAULT_CONFIG, FISCAL_YEAR_START } from '../../constants/config.js'
 
 // Base-user config with round numbers so the expected net is hand-derivable:
@@ -121,5 +121,57 @@ describe('estimateGoalNextYear — DHL long/short averaging', () => {
     const longNet = weekNet(projectedGross(true, cfg), cfg.fedRateHigh, cfg.stateRateHigh)
     const shortNet = weekNet(projectedGross(false, cfg), cfg.fedRateLow, cfg.stateRateLow)
     expect(r.weeklyNet).toBeCloseTo((longNet + shortNet) / 2, 2)
+  })
+})
+
+// DW-W6 drift tripwire (added 2026-08-24): estimateGoalNextYear's weekNet() is a
+// second, hand-derived copy of computeNet's deduction stack — by design it omits
+// extraPerCheck (the Tax Plan withholding-gap correction), freedomAllowancePerWeek
+// (the spendable buffer, subtracted by callers, not by computeNet itself), and
+// unemploymentIncome. None of those three apply when extraPerCheck is 0, no
+// freedom-allowance subtraction is involved, and the week isn't a job-loss week —
+// so on that common ground, estimateGoalNextYear's weeklyNet MUST exactly match
+// computeNet's real output for the same config. This doesn't remove the
+// documented simplifications (still real, still open per DW-W6) — it exists so
+// a future change to computeNet's deduction stack (payroll deductions, tax
+// formula, otherPostTaxDeductions) that ISN'T mirrored in estimateGoalNextYear's
+// local weekNet() fails a test immediately, instead of silently desyncing the
+// two formulas until a user notices a wrong goal ETA.
+describe('estimateGoalNextYear — cross-check against computeNet (DW-W6 drift tripwire)', () => {
+  it('base-user weeklyNet matches computeNet on the same config, with no tax-gap/unemployment involved', () => {
+    const cfg = { ...BASE_CFG, k401Rate: 0.05, selectedBenefits: ['health'], healthPremium: 15 }
+    const weeks = buildYear(cfg)
+    const realWeek = weeks.find(w => w.active && w.taxedBySchedule)
+    expect(realWeek).toBeTruthy()
+    // extraPerCheck=0, showExtra=false: the two conditions that make computeNet's
+    // output directly comparable to estimateGoalNextYear's (which never applies
+    // either the correction or a freedom-allowance subtraction).
+    const realNet = computeNet(realWeek, cfg, 0, false)
+
+    const r = estimateGoalNextYear(1000, cfg, [])
+    expect(r.weeklyNet).toBeCloseTo(realNet, 2)
+  })
+
+  it('DHL long/short averaged weeklyNet matches computeNet on both real weeks', () => {
+    const cfg = {
+      ...BASE_CFG,
+      employerPreset: 'DHL',
+      dhlTeam: 'B',
+      dhlCustomSchedule: false,
+      customWeeklyHours: null,
+      k401Rate: 0.06,
+      fedRateHigh: 0.12,
+      stateRateHigh: 0.06,
+    }
+    const weeks = buildYear(cfg)
+    const longWeek  = weeks.find(w => w.active && w.taxedBySchedule && w.isHighWeek)
+    const shortWeek = weeks.find(w => w.active && w.taxedBySchedule && !w.isHighWeek)
+    expect(longWeek).toBeTruthy()
+    expect(shortWeek).toBeTruthy()
+    const realLongNet  = computeNet(longWeek, cfg, 0, false)
+    const realShortNet = computeNet(shortWeek, cfg, 0, false)
+
+    const r = estimateGoalNextYear(1000, cfg, [])
+    expect(r.weeklyNet).toBeCloseTo((realLongNet + realShortNet) / 2, 2)
   })
 })

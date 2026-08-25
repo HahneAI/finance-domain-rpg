@@ -164,7 +164,7 @@ nothing is orphaned).
 | T1 | **Setup Wizard** | G | `SetupWizard.jsx`, `LifeEventMenu.jsx`, `NewJobSeasonEntry.jsx`, `RateUpdateModal.jsx`, `constants/config.js` | §9 · §10 (entry flows) · §11 (employer preset convention — born here, enforced everywhere) | A, B, F |
 | T2 | **Home Panel** | G | `HomePanel.jsx`, `NewJobSeasonHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx`, `CashOnHandSheet.jsx` (shared with T4, §1.H17) | §14 · §10 (New Job Season home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
 | T3 | **Income Panel** | L | `IncomePanel.jsx`, `WeekConfirmModal.jsx` | §1 (display surface) · §2 · §12 · §16 (sprint 2, unshipped) | A, B, E, F |
-| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `NewJobSeasonBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, `CashOnHandSheet.jsx` (shared with T2, §1.H17) | §3 · §5 · §10 (New Job Season budget surface) · Tax Plan gate (§9 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
+| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `NewJobSeasonBudgetPanel.jsx`, `BulkEditPage.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, `CashOnHandSheet.jsx` (shared with T2, §1.H17) | §3 · §5 · §10 (New Job Season budget surface) · Tax Plan gate (§9 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
 | T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§9 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §2 · §9 | B, C |
@@ -1322,9 +1322,17 @@ goal's own future weeks.
 > needs the same change — nothing forces it to, so it can silently drift the way F6's gross-pay
 > half did before DW-10. Check: for a goal whose ETA falls in the next fiscal year, compare
 > `estimateGoalNextYear`'s `weeklyNet` against a `buildYear`/`computeNet` run one fiscal year
-> forward with the same `cfg` — no automated cross-check exists today (`estimateGoalNextYear.test.js`
-> verifies the function in isolation, not against `computeNet`; queue-visible as **DW-W6**,
-> `docs/BUG_FIX_TODO.md`).
+> forward with the same `cfg` — **now automated**: `estimateGoalNextYear.test.js`'s "cross-check
+> against computeNet (DW-W6 drift tripwire)" describe block (added 2026-08-24, discussed and
+> agreed with Anthony as the interim fix over the full delegation rewrite) asserts exact equality
+> between `weeklyNet` and a real `computeNet` call on the common ground where the three
+> simplifications don't apply (`extraPerCheck=0`, no freedom-allowance subtraction, no
+> unemployment income) — for both a base-user config and a DHL long/short-averaged config.
+> Verified the tripwire actually fires by temporarily breaking `computeNet`'s FICA formula and
+> confirming both new tests failed before reverting. The three simplifications themselves remain
+> open (queue-visible as **DW-W6**, `docs/BUG_FIX_TODO.md`) — this test only guarantees future
+> `computeNet` drift on the *shared* math gets caught immediately instead of silently producing a
+> wrong goal ETA.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -1547,6 +1555,39 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
 > applies to every rate field this writes. Check: after Sharpen, DB Row Viewer's config
 > history shows the rate change captured; Wrap Up preview (§7 F6) uses the new rates.
 
+**F152 · `mo`/`rollingMonthCards` — the "Monthly Rolling" mobile card view** —
+`IncomePanel.jsx:82–124` — real live-testing bug found and fixed 2026-08-24, same session as
+F148–F151 — **[L]**
+The fourth (and, per a repo-wide grep run immediately after finding it, last) instance of the
+same "trailing fiscal week" blind spot: `mo` used to build its 12 month buckets via
+`MONTH_FULL.map((name, mi) => allWeeks.filter(w => w.weekEnd.getFullYear() === 2026 &&
+w.weekEnd.getMonth() === mi))` — a hardcoded calendar year, same shape as F151. Unlike F151
+(admin-only), this one is a **regular user-facing surface** — the mobile "Monthly Rolling" card
+row (`isDesktopWeekly === false`) that replaces the desktop weekly rolling table. The trailing
+week's income (idx 52) was silently missing from any month-by-month breakdown; a second, subtler
+bug rode along in the same code: `rollingMonthCards`'s `.map((m, mi) => ({ ...m, mi, ... }))`
+**overwrote** each entry's month-of-year `mi` with its plain array *position* (0, 1, 2…), and
+`currentMonthIdx`/`isPastMonth` compared raw `Date.getMonth()` values (0–11) with no year —
+a future January would have wrapped around to compare as "less than August," mislabeling a
+future month as past (dimmed via `opacity: 0.75`) had the trailing week's bucket existed at all
+under the old code. Fixed by grouping on each week's real `(year, month)` (a `Map` keyed on
+`year*12+month`, iterating `allWeeks` in its already-ascending order) and carrying that same
+`year*12+month` **epoch** through as `mi` end to end — `currentMonthIdx`/`prevMonthIdx` now use
+the identical epoch (`todayDate.getFullYear()*12 + todayDate.getMonth()`), so every "is this
+month past/current" comparison stays correct across a calendar-year rollover instead of wrapping.
+The card list's React `key` moved from `m.name` (collides across two Januarys of different
+years) to `m.mi` (the epoch, always unique).
+> **IF** a new month-bucketed view is added anywhere (desktop or mobile), **THEN** never compare
+> raw `getMonth()` values across a window that might span the fiscal grid's trailing week — use
+> a year-aware epoch (`year*12+month`) the way this fix and F151 both now do, and never key a
+> list on a month *name* alone. Check: `mo`'s last entry must be the real last `allWeeks` entry's
+> month; a view current around the fiscal year's real end (Dec) must show the trailing week's
+> month as upcoming/current, never as past. This closes the "trailing week" pattern search F148
+> asked for — a repo-wide grep for `getFullYear() === 2026` after this fix returns only this
+> entry's and F151's own explanatory comments (documenting the fixes, not live instances of the
+> bug) and one unrelated test fixture (`buildYearNewJobSeason.test.js`, intentionally
+> year-scoped for its own fixture setup).
+
 ### 9.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1616,7 +1657,7 @@ New Job Season rebuild (`7375c36`, `cd0480f`, `6a3e406`). Goals are *not* on thi
 they moved wholly to Home 2026-05-12 (`50c1243`); this pass corrected active-systems §4
 and the §4.1 hierarchy rows accordingly.
 
-**Scope:** `BudgetPanel.jsx` (2,579 lines), `NewJobSeasonBudgetPanel.jsx`, `BulkEditPanel.jsx`,
+**Scope:** `BudgetPanel.jsx` (2,579 lines), `NewJobSeasonBudgetPanel.jsx`, `BulkEditPage.jsx`,
 `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, and the `expense.js` helper layer
 (Spine A) they consume.
 
@@ -1704,13 +1745,24 @@ entry ends the day *after* the quarter-end containing the payoff date.
 > paying through quarter close; past-week spend totals unchanged after a term edit is
 > the *aspiration*, currently violated by design.
 
-**F42 · Bulk edit (ADV. EDIT)** — `BulkEditPanel.jsx:16` (pure collector), wired at
-`BudgetPanel.jsx:1310–1318`, commits through `saveAdvancedEdit` →
+**F42 · Bulk edit** — `BulkEditPage.jsx` (renamed from `BulkEditPanel.jsx` 2026-08-25,
+F155's fix — a full standalone page now, `position: fixed; inset: 0`, not an inline card),
+wired at `BudgetPanel.jsx`'s `bulkEditOpen` render, commits through `saveAdvancedEdit` →
 `buildAdvancedEditPayload` (`expense.js:316`) → F35 — **[L]**
-Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month.
+Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month. Two live
+triggers as of F155: double-tapping a month or quarter segment on `MonthQuarterSelector`
+(`handleSelectMonth`/`handleSelectQuarter`'s `isDoubleTap` check, 350ms window, same pattern
+as the pre-existing expense-row `lastTapRef` shortcut), and the "Bulk Edit — {month}" button
+under the expense category list (Overview tab, `!readOnly` gated, same row as "+ Add Expense
+Line").
 > **IF** the payload builder's scope semantics diverge from the single-expense buttons
 > (F37), **THEN** the same edit made two ways produces different override sets. Check:
 > edit one expense via sheet and via bulk with identical inputs — identical stored shape.
+> **IF** `MonthQuarterSelector`'s segment layout changes, **THEN** re-verify the double-tap
+> still resolves to the tapped segment's month (`m:${monthKey}`/`q:${phaseIdx}` keys in
+> `lastSegmentTapRef` are keyed by the exact values `onSelectMonth`/`onSelectQuarter` receive
+> — a key-shape change there silently breaks double-tap detection without touching single-tap
+> select, so it's easy to miss in casual testing).
 
 **F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
 `:2103` — **[G]**
@@ -1751,6 +1803,42 @@ both quote one scenario) — **[G→L]**
 > and vice
 > versa (single source of truth, `newJobSeasonFlow.test.jsx`).
 
+**F156 · Rate/dollar wizard fields accepted negative input with no floor, silently inverting pay
+math (2026-08-24, live-confirmed adversarial-input test, DW-14, fixed) — [L]** `InlineNumber`
+(`SetupWizardAdlib.jsx`) has no `min` attribute and several of its `onChange` handlers only
+guarded against `NaN` (`v === "" ? null : parseFloat(v)` — no floor), not against a negative
+numeric value passing straight through. Unlike `baseRate`/`shiftHours`/`annualSalary`, which get
+*incidental* protection because their own required-field gate checks `(value ?? 0) > 0` (a
+negative value already fails that comparison, blocking Next/Finish), several materially-important
+fields are optional and have no such gate: `diffRate` (weekend differential), `nightDiffRate`,
+`k401Rate`, per-benefit weekly cost (`[def.field]`), `commissionMonthly`. Live-confirmed: typing
+`-99` into the Weekend Differential blank on the real production wizard (`SetupWizardAdlib.jsx`,
+reached via Life Events → Pay Structure Changed) rendered "My weekend differential is $-99 an
+hour" with no red/error styling and Next left enabled — a config someone could genuinely save.
+`diffRate`/`nightDiffRate` are multiplied directly into gross pay (`finance.js` L584/L586/L711/
+L713/L1319/L1321 — `regWkndH * cfg.diffRate`), so a negative value would silently *reduce* pay for
+weekend/night work instead of adding to it; `k401Rate` is multiplied into the 401k deduction
+(`gross * k401Rate`, L84/L166/L625), so a negative rate would silently *add* money to net pay
+instead of deducting it — an inverted, exploitable-looking business rule with zero warning
+anywhere in the UI. Same gap found in `ProfilePanel.jsx`'s DHL Team editor (`handleSave`,
+`Number.isFinite(diffRate) ? ... : 0` — catches NaN, not negative) and its Benefits card
+(`handleSave`, `parseFloat(k401Rate) || 0` — same gap, `|| 0` only catches falsy/NaN, a nonzero
+negative like `-0.5` passes straight through). **Fix:** every listed handler now floor-clamps via
+`Math.max(0, parseFloat(v) || 0)` (matching `RateUpdateModal`'s pre-existing pattern for
+`baseRate`, which was already correct) before the value reaches `onChange`/`setConfig`. Verified
+live post-fix: the same `-99` keystroke now renders `$0`. Full test suite (1681 tests) unaffected
+— this is new floor-clamping on previously-uncovered handlers, not a change to any existing
+tested formula. **Not in scope, deliberately**: informational/tracking-only optional numeric
+fields (attendance thresholds, PTO balances, unemployment weekly) were left unclamped — they
+don't multiply into pay/tax math the way the fixed fields do, and a defensible non-negative
+argument exists for some (e.g. an accrual deficit) that would need a product call, not an
+obvious bug fix.
+> **IF** a new `InlineNumber`-backed field is added anywhere it feeds directly into
+> gross/net pay, tax, or a deduction rate (`finance.js` consumes it as a multiplier), **THEN**
+> floor-clamp its `onChange` with `Math.max(0, parseFloat(v) || 0)` from the start — don't rely
+> on an incidental `>0` required-field gate, since several of the fields this entry fixes were
+> never required at all.
+
 **F143 · Expense edit cascade primitives — TWO deliberately different forward-cascade rules** —
 `expense.js`: `latestPastEntry:179` (consumed directly by `BudgetPanel.jsx:601,753,804`),
 `getBaseEntryAt:192` (consumed by `buildAdvancedEditPayload`, F42), `buildCascadedWeekly:163`
@@ -1783,6 +1871,47 @@ of the same point-in-time-lookup shape, not yet unified.
 > `getEffectiveAmount` (F102) — the one already covering both week- and month-based lookups — over
 > hand-rolling a fourth `.filter(...).reduce(...)` copy of `latestPastEntry`/`getBaseEntryAt`'s
 > pattern.
+
+**F155 · Bulk Edit (F42) had no reachable trigger in the shipped UI — fixed 2026-08-25, DW-13
+(found 2026-08-24 completing the expense-cascade testing checklist item; fix built the next
+day per Anthony's explicit direction) — [G]**
+`BudgetPanel.jsx`'s `bulkEditOpen` state was only ever set to `false` (on month-select,
+quarter-select, and post-save) — `setBulkEditOpen(true)` didn't appear anywhere in the app,
+confirmed via `git log -p --all -S "setBulkEditOpen(true)"` returning nothing and a live click
+through every Budget panel button. The `BulkEditPanel` component, its
+`buildAdvancedEditPayload`/`buildCascadedWeekly` save logic, and its dedicated test coverage
+were all real and correct at the function level — a fully-built feature with no door into it.
+**Fix:** two real triggers added, both landing on the same `setBulkEditOpen(true)` path, plus
+the component itself converted from an inline card to a full standalone page:
+1. **Double-tap a `MonthQuarterSelector` segment** (either row — a month pill or a quarter
+   pill). `handleSelectMonth`/`handleSelectQuarter` (`BudgetPanel.jsx`) now run the tap through
+   a 350ms-window `isDoubleTap()` check (same shape as the pre-existing per-expense-row
+   `lastTapRef` double-tap shortcut, kept in a separate `lastSegmentTapRef` so the two never
+   share keys) — first tap selects the segment as before, second tap within the window also
+   opens Bulk Edit scoped to that segment's month (a quarter segment resolves through the
+   existing `displayMonthKey` fallback to the quarter's first month, no special-casing needed).
+2. **A standalone "Bulk Edit — {month}" button**, `!readOnly`-gated, placed directly under the
+   expense category list in the Overview tab, right after "+ Add Expense Line" — the same
+   month `displayMonthKey`/`displayMonthFull` the segment double-tap resolves to, so the button's
+   label always names the month it will actually open.
+`BulkEditPanel.jsx` was renamed to `BulkEditPage.jsx` (`BulkEditPanel` export → `BulkEditPage`)
+and its outer wrapper changed from an inline bordered card to a full-viewport fixed overlay
+(`position: fixed; inset: 0; z-index: 30`, header with back-arrow + title, scrollable body,
+sticky footer) — the exact same shell pattern `AskCoachPanel.jsx` already uses for its own
+full-page surface, including the `fold-lift` entrance class. All internal logic (edit/delete/add
+staging, `buildAdvancedEditPayload` on save) is unchanged from before this fix — only the
+container chrome and the two new entry points are new code. Verified live: both triggers open
+the page scoped to the correct month (a double-tapped "Sep" pill opens "September"; a
+double-tapped Q4 quarter pill opens "October", Q4's first month; the standalone button opens
+whatever month is currently displayed), staging an edit and saving works end-to-end, the back
+arrow and Cancel both close cleanly. Full test suite (1683 tests) unaffected — no existing test
+asserted `BulkEditPanel`'s import path or inline-card DOM shape closely enough to need updating.
+> **IF** `MonthQuarterSelector`'s segment layout changes, **THEN** re-verify the double-tap
+> handlers' `m:${monthKey}`/`q:${phaseIdx}` keys still match what `onSelectMonth`/
+> `onSelectQuarter` actually receive.
+> **IF** F143's two-cascade-rule split (always-overwrite vs. preserve-explicit-override) is
+> ever suspected of drifting, **THEN** it can now be tested live through a real user action —
+> both rules are reachable for the first time since F143 was written.
 
 **F149 · Forward-scoped expense writers must reach the fiscal grid's trailing week, not
 calendar December** — `expense.js`: `applyMonthEditForward:229`, `applyQuarterForward:256`,
@@ -1823,30 +1952,37 @@ production.
 > arithmetic check (`thisWeekCheck - weeklySpend` must match exactly, not be off by a couple
 > dollars).
 
-**F150 · `avgWeeklySpend`/`leftThisWeek` — Budget Panel independently re-derives Home's own
-number, doesn't read it** — `BudgetPanel.jsx:365–386` (`projectableExpenses`, `avgWeeklySpend`,
-`leftThisWeek`) vs. `App.jsx:1811–1819` (`projectableExpenses`, `remainingSpend`,
-`baseWeeklyUnallocated`) — found investigating a user question about "Left This Week"'s
-semantics, 2026-08-24 — **[L]**
+**F150 · `avgWeeklySpend`/`leftThisWeek` — Budget Panel independently re-derived Home's own
+number instead of reading it (fixed 2026-08-24, DW-15)** — `BudgetPanel.jsx` (formerly
+`:365–386`, `projectableExpenses`/`avgWeeklySpend`/`leftThisWeek`) vs. `App.jsx:1838–1846`
+(`projectableExpenses`, `remainingSpend`, `baseWeeklyUnallocated`) — found investigating a user
+question about "Left This Week"'s semantics, 2026-08-24 — **[L]**
 `App.jsx` computes `remainingSpend = computeRemainingSpend(projectableExpenses, futureWeeks)`
 once and passes `remainingSpend.avgWeeklySpend` down as a prop to HomePanel (F16) and, via
 HomePanel, to Coach (`aiContext.js`, which never recomputes — it just reads the prop it's
-given). **BudgetPanel does not receive that prop at all.** It instead re-derives its own
+given). **BudgetPanel did not receive that prop at all.** It re-derived its own
 `projectableExpenses` (a byte-for-byte copy of App.jsx's New Job Season filter — same predicate,
-same comment, two separately-maintained copies) and calls `computeRemainingSpend` a **second
-time** on it (`:369–370`), then computes its own `leftThisWeek` (`:386`) from that — not from
-App.jsx's. The two values agree today only because both copies happen to filter identically and
-receive the same `expenses`/`futureWeeks` props unmodified. This corrects/supersedes DW-W5's
-"the one live call site (`App.jsx:1817`)" framing (`docs/BUG_FIX_TODO.md`) — there are **two**
-live call sites, both invoked with no `options` argument, not one.
+same comment, two separately-maintained copies) and called `computeRemainingSpend` a **second
+time** on it, then computed its own `leftThisWeek` from that — not from App.jsx's. The two values
+agreed only because both copies happened to filter identically and receive the same
+`expenses`/`futureWeeks` props unmodified — a coincidence, not a guarantee. This corrected/
+superseded DW-W5's "the one live call site (`App.jsx:1817`)" framing (`docs/BUG_FIX_TODO.md`) —
+there were **two** live call sites, both invoked with no `options` argument.
+**Fix:** `BudgetPanel` now takes `avgWeeklySpend` as a prop (default `0`); `App.jsx`'s single
+`<BudgetPanel>` call site passes `avgWeeklySpend={remainingSpend.avgWeeklySpend}` — the exact
+same value already threaded to HomePanel. `BudgetPanel.jsx`'s local `projectableExpenses`
+useMemo and second `computeRemainingSpend` call were deleted entirely (the now-unused
+`computeRemainingSpend` import was removed too) — there is only one computation of this number
+in the whole app now, App.jsx's. Verified live: Home and Budget's "Left This Week" tiles read
+identical ($728) across repeated navigation between the two views (an earlier read showing a
+few-dollar gap was the countup-animation mid-flight, not a data mismatch — confirmed by waiting
+for the animation to settle before comparing). Full test suite (1681 tests) unaffected — no
+existing test asserted the exact figure closely enough to need updating.
 > **IF** App.jsx's New Job Season filter predicate changes (or `computeRemainingSpend` itself
-> changes), **THEN** BudgetPanel.jsx's independent copy (`:365–367`) must change identically, or
-> Home's "Left This Week" and Budget's "Left [Check]" tiles will silently show two different
-> numbers for the same real-world question. No test currently cross-checks the two values
-> against each other. Check: toggle New Job Season, pause an expense, and confirm Home and
-> Budget's left-this-week figures still match; consider collapsing to one source (thread
-> `remainingSpend` down as a prop instead of recomputing) rather than trusting the two copies to
-> keep matching by hand.
+> changes), it now only needs to change in one place (`App.jsx`'s `projectableExpenses`/
+> `remainingSpend`) — BudgetPanel has no independent copy left to fall out of sync. If a future
+> change reintroduces a local recompute in BudgetPanel "for convenience," that's the regression
+> this entry exists to catch — thread the value down as a prop instead.
 
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -1862,7 +1998,7 @@ live call sites, both invoked with no `options` argument, not one.
 | A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
 | `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
-| App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx's separately-maintained copy (F150) | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match | D1 (guarded, not open) |
+| App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx now reads the same `avgWeeklySpend` value via prop (F150, fixed) — no separate copy left to drift | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match (structurally guaranteed now, not just by convention) | D1 (closed) |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -2067,6 +2203,31 @@ diverging it from §7 F5's wizard derivation is user intent, not drift.
 > *overwritten by design* on wizard completion while `pastWeekTaxStatusOverrides`
 > survive (separate field) — any change to that survivorship split is a product
 > decision, surface it.
+
+**F151 · `TaxPlanDetail`'s `scheduleByMonth`** — `ProfilePanel.jsx:1729` — real live-testing bug
+found and fixed 2026-08-24, same session as F148/F149/F150 — **[L]**
+The "Future Weekly Tax Schedule" list (admin-only, `isAdmin` gated) used to build its month
+buckets as `MONTH_FULL.map((name, mi) => allWeeks.filter(w => w.weekEnd.getFullYear() === 2026 &&
+w.weekEnd.getMonth() === mi && ...))` — a hardcoded calendar year. Same root cause as F148/F149:
+the fiscal-week grid's trailing week can land in the next calendar year's January
+(`FISCAL_YEAR_END_MONTH_KEY`, `constants/config.js`), which `=== 2026` silently excluded from
+this list entirely — live repro: "Remaining Paychecks: 20" in the summary line above it, but only
+19 rows rendered, the trailing week (idx 52) simply missing with no error or truncation notice.
+Practical impact was narrower than F148/F149 (this is a display/interaction gap, not a wrong
+number — `config.taxedWeeks` already correctly includes idx 52 from the wizard's own derivation,
+F5/§7), but a real one: an admin had no row to click to toggle that week's Taxed/Exempt status via
+this UI. Fixed by grouping every active, not-yet-past week by its **real** `(year, month)` pair
+(a `Map` keyed on `"${year}-${month}"`, built by iterating `allWeeks` in its already-ascending-idx
+order rather than mapping over a fixed 12-month array) instead of assuming a single hardcoded
+year. The sibling "Check History" list (`pastCheckWeeks`) and the separate sidebar admin "Tax
+Weeks Grid" (`App.jsx`, F87-adjacent) were checked for the same pattern and are clean — neither
+hardcodes a calendar year.
+> **IF** a new per-week admin list is added anywhere in the app, **THEN** never filter by a
+> literal year — group by each week's own real `weekEnd.getFullYear()`/`getMonth()`, or reuse
+> `monthKeysThroughFiscalYearEnd` (F149, `expense.js`) if the list is month-key-shaped rather than
+> per-week. Check: the trailing fiscal week (real last `allWeeks` entry) must appear in any
+> "future schedule"-shaped admin list, cross-checked against that list's own stated total count
+> (e.g. "Remaining Paychecks: N" must equal N rendered rows, not N−1).
 
 **F51 · `PreferencesDetail`** — `:1494–1567`; Freedom Allowance save `:1503–1509` — **[G/L]**
 Freedom Allowance editor (On/Off + amount, clamped 0–200 — same `FREEDOM_ALLOWANCE_MAX` cap as the wizard's
@@ -3278,6 +3439,17 @@ different questions and must NOT be merged:
 > `dateToWeekIdx` collision regression + the `buildYear().length === TOTAL_FISCAL_WEEKS` cross-
 > check; live: header badge vs. Year-End Outlook "Weeks remaining" should differ by exactly 1
 > (badge excludes the current week, Year-End Outlook includes it) — not more.
+> **Three more instances of this same "trailing week" blind spot surfaced in later live-testing
+> passes the same week, all fixed the same way (real per-week/real per-month grouping instead
+> of a hardcoded bound):** §10 F149 (expense forward-scope writers looping `<= 12` instead of
+> reaching `FISCAL_YEAR_END_MONTH_KEY`), §12 F151 (`TaxPlanDetail`'s admin-only future schedule
+> filtering on a literal `getFullYear() === 2026`), and §9 F152 (IncomePanel's user-facing
+> "Monthly Rolling" mobile card view — same literal-year filter, plus a second bug riding along:
+> raw `getMonth()` comparisons with no year that would mislabel a future month as past across the
+> rollover). A repo-wide grep for `getFullYear() === 2026` immediately after F152 confirmed no
+> further live instances remain (only F151/F152's own explanatory comments and one intentionally
+> year-scoped test fixture) — the pattern search this note originally asked for is done; a fifth
+> instance would mean the grep needs re-running, not that the search was incomplete.
 
 **Reverse index — surface F-entries already covering Spine-A consumers (do not restate):**
 F1 (`dateToWeekIdx`/`firstActiveIdx`), F5 (wizard `buildYear` call + `taxedWeeks` derivation),
@@ -4710,7 +4882,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F146) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F146 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column, via `stableStringify` — order-independent since F154) + config-history line + Coach Chats line (2026-07-25, F146) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F146 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure), **DW-12/F154 fixed** (drift comparison was key-order-sensitive, so `config` false-positived on every account, always) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `freedomAllowancePerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`freedomAllowancePerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
@@ -4721,6 +4893,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | Dimension | Cells | Expected behavior |
 |---|---|---|
 | `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
+| `isDiagnosticAdmin` (`isAdmin \|\| isAiAdmin`) | false / true | true: **Lock Date**'s `effectiveToday` fork + its two hour-gate bypasses (`isPayPeriodPast`, `isTipsCommissionDayEligible`) + both lock-active banners — F153/DW-11 fixed the gap where these 5 sites read plain `isAdmin`, silently no-op-ing Lock Date for `isAiAdmin`-only accounts even though the Lock Date *control* itself (a separate "AI Admin Tools" panel) was already reachable for them |
 | `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
 | Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
 | Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5 — both fixed) — an L-grade defect despite the toolkit being a Gateway |
@@ -4752,3 +4925,63 @@ No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden
 *uses* them, which is new coupling information, not a restatement.
+
+**F154 — DB Row Viewer's `rowDiff` flagged "config" as drifted on every account, always, whether
+or not anything actually diverged (2026-08-24, DW-12, fixed).** Found immediately while verifying
+F153 live: a fresh Fetch, zero edits since page load, still showed "1 drift" / "Drift: config".
+Root cause: `rowDiff` (`App.jsx` ~L1352) compared `JSON.stringify(config)` against
+`JSON.stringify(rowData.config)` — plain string equality, which is key-order-sensitive. The two
+sides are built by fundamentally different code paths: in-memory `config` is
+`{ ...DEFAULT_CONFIG, ...data.config }` (`db.js:258`), preserving `DEFAULT_CONFIG`'s hand-written
+declaration order (`constants/config.js`); `rowData.config`, fetched raw by the DB Row Viewer's
+own query, reflects Postgres jsonb's canonical storage order (keys sorted shortest-first, then
+alphabetically — confirmed live: `ltd, ptoCap, dhlSite, dhlTeam, baseRate, diffRate, ficaRate,
+k401Rate, bucketCap, fsaWeekly, hsaWeekly, startDate, stdWeekly, userState, w1FedRate…`, strictly
+increasing length). These two orders never match, so the "config" comparison was structurally
+guaranteed to report drift on every account, on every fetch — the exact "lying instrument"
+pattern §23.4 already has precedent for (DW-2/DW-5): a diagnostic tool whose own output can't be
+trusted, this time from day one rather than via a later regression. Verified live: script-level
+deep comparison (`JSON.stringify` after recursively sorting keys) showed the fetched `rowData.config`
+and in-memory `config` were byte-identical in content — the "drift" was 100% key-order noise, zero
+real divergence. **Fix:** added `stableStringify()` (`App.jsx`, top-level, recursively sorts object
+keys before serializing) and switched all five array/object fields in `rowDiff`'s comparison pairs
+(`config`, `expenses`, `goals`, `logs`, `week_confirmations`) to use it instead of plain
+`JSON.stringify` — the two scalar fields (`show_extra`, `pto_goal`) were never affected since
+`String()` coercion has no key-order concept. Verified live post-fix: an identical Fetch on the
+same account with no edits shows no drift badge at all. Full test suite (1681 tests) unaffected.
+Not unit-tested directly — `stableStringify`/`rowDiff` are both inline in `App.jsx` with no module
+export, same limitation DW-2/DW-3 already note for this file; live verification is the standing
+substitute per this section's own "trust but verify visually" precedent. **Blast radius: `App.jsx`
+only** — no other file reads or duplicates this comparison. This was very likely masking every
+*real* config drift this tool was built to catch (F67/F68/F110's "the 4th save site") the entire
+time it's existed, since a real one-field divergence would have been indistinguishable from the
+permanent false positive.
+
+**F153 — Lock Date silently no-op for `isAiAdmin`-only accounts (2026-08-24, DW-11, fixed).**
+The test account was upgraded to carry `is_ai_admin: true` (`isAdmin: false`); live-testing with
+it found the Lock Date control fully reachable (its own "AI Admin Tools" panel, distinct from
+the `isAdmin`-only "Admin Tools" panel — both exist side by side in `App.jsx`) and appearing to
+persist correctly (localStorage `admin_temp_lock_date` set, banner showing the picked date), yet
+Live State Inspector's `EFFECTIVE TODAY` stayed on the real date. Root cause: `effectiveToday`
+(`App.jsx` ~L1306) gated strictly on `isAdmin && tempLockDate`, not the existing combined
+diagnostic gate `isDiagnosticAdmin = isAdmin || isAiAdmin` (defined for exactly this kind of
+shared-tool purpose, per the comment at its declaration) — so for an `isAiAdmin`-only account the
+control wrote real state that every downstream reader ignored. Same `isAdmin && tempLockDate`
+pattern was duplicated at 4 more sites, all fixed the same way: `isPayPeriodPast`'s DHL
+Monday-6am hour-gate bypass, `isTipsCommissionDayEligible`'s noon hour-gate bypass, and both
+lock-active warning banners (the small header badge + the notifications-panel banner) — an
+`isAiAdmin` account was seeing its own lock date reflected back with no functional effect and no
+visual confirmation beyond the two AI Admin Tools panel headers, which read `tempLockDate`
+directly with no `isAdmin` gate at all (the one part of this feature that was never broken).
+`docs/admin-toolkit-reference.md` already documented Lock Date as available to `isAiAdmin`
+accounts — this was a genuine implementation gap, not a doc lag. Verified live: set Lock Date to
+2026-12-31 on the `isAiAdmin` test account, confirmed via Live State Inspector `EFFECTIVE TODAY`
+now reads `2026-12-31` (`real: 2026-08-24`) and the header week number jumped to Week 52, matching
+`isAdmin` behavior exactly. **Blast radius: `App.jsx` only** — `effectiveToday`,
+`isPayPeriodPast`, `isTipsCommissionDayEligible`, both banner render conditions, plus each
+callback's dependency array. No other file reads `tempLockDate`/`effectiveToday` through a
+narrower-than-`isDiagnosticAdmin` gate (confirmed via `grep -n "isAdmin.*tempLockDate"` returning
+zero hits post-fix). Full test suite (1681 tests) still green — this is a pure gate-widening fix
+with no math-formula change, so no new unit coverage was added; the regression surface here is
+UI-gate reachability, verified live per the toolkit's own "trust but verify visually" standard
+(§23's Block 3 registry).

@@ -913,12 +913,12 @@ function DifferentialsCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
     if (!draft) return;
     const updates = {};
     const diffRate = parseFloat(draft.diffRate);
-    updates.diffRate = Number.isFinite(diffRate) ? parseFloat(diffRate.toFixed(2)) : 0;
+    updates.diffRate = Number.isFinite(diffRate) ? Math.max(0, parseFloat(diffRate.toFixed(2))) : 0;
 
     if (isEmployerDHL) {
       updates.dhlNightShift = !!draft.dhlNightShift;
       const nightDiffRate = parseFloat(draft.nightDiffRate);
-      updates.nightDiffRate = Number.isFinite(nightDiffRate) ? parseFloat(nightDiffRate.toFixed(2)) : 0;
+      updates.nightDiffRate = Number.isFinite(nightDiffRate) ? Math.max(0, parseFloat(nightDiffRate.toFixed(2))) : 0;
     }
 
     const newConfig = { ...config, ...updates };
@@ -1383,11 +1383,11 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
     const nextSelected = [...selectedBenefits];
     const weeklyPatch = BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
-      .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
+      .reduce((acc, b) => ({ ...acc, [b.field]: Math.max(0, parseFloat(weeklyValues[b.field]) || 0) }), {});
     const newConfig = {
       ...config,
-      k401Rate:         parseFloat(k401Rate)  || 0,
-      k401MatchRate:    parseFloat(k401Match) || 0,
+      k401Rate:         Math.max(0, parseFloat(k401Rate)  || 0),
+      k401MatchRate:    Math.max(0, parseFloat(k401Match) || 0),
       k401StartDate:    k401Start || null,
       benefitsStartDate: benefitsStartDate || null,
       selectedBenefits: nextSelected,
@@ -1725,16 +1725,24 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const isPastOrConfirmed = (w) =>
     Boolean(weekConfirmations[w.idx]) || (today != null && toLocalIso(w.weekEnd) < today);
 
-  // Future schedule only shows weeks not yet past/confirmed.
-  const scheduleByMonth = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w =>
-      w.active &&
-      w.weekEnd.getFullYear() === 2026 &&
-      w.weekEnd.getMonth() === mi &&
-      !isPastOrConfirmed(w)
-    );
-    return { name, wks };
-  }).filter(m => m.wks.length > 0);
+  // Future schedule only shows weeks not yet past/confirmed. Grouped by each
+  // week's real (year, month) rather than a hardcoded calendar year — the
+  // fiscal-week grid's trailing week can land in the next calendar year's
+  // January (FISCAL_YEAR_END_MONTH_KEY, constants/config.js), which a
+  // `getFullYear() === 2026` filter silently dropped from this schedule
+  // entirely (real bug, found live 2026-08-24 — see drift-app-warden.md
+  // §12 for the fix writeup). Iterates allWeeks in its natural ascending-idx
+  // order, so bucket insertion order is already chronological — no extra sort.
+  const scheduleByMonth = (() => {
+    const buckets = new Map();
+    for (const w of allWeeks) {
+      if (!w.active || isPastOrConfirmed(w)) continue;
+      const key = `${w.weekEnd.getFullYear()}-${w.weekEnd.getMonth()}`;
+      if (!buckets.has(key)) buckets.set(key, { name: MONTH_FULL[w.weekEnd.getMonth()], wks: [] });
+      buckets.get(key).wks.push(w);
+    }
+    return [...buckets.values()];
+  })();
 
   // Pay-schedule-aware check history ─────────────────────────────────────────
   const paySchedule = config.userPaySchedule ?? "weekly";

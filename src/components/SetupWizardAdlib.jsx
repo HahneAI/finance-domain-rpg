@@ -469,7 +469,7 @@ function AdvancedPayRulesCard({ formData, onChange }) {
                 <div className="text-2xs" style={cardLabelStyle}>Night Diff Rate ($/hr)</div>
                 <InlineNumber
                   value={formData.nightDiffRate ?? ""}
-                  onChange={v => onChange({ nightDiffRate: v === "" ? null : parseFloat(v) })}
+                  onChange={v => onChange({ nightDiffRate: v === "" ? null : Math.max(0, parseFloat(v) || 0) })}
                   placeholder="1.50"
                   width="72px"
                   ariaLabel="Night differential rate, dollars per hour"
@@ -481,7 +481,7 @@ function AdvancedPayRulesCard({ formData, onChange }) {
             <div className="text-2xs" style={cardLabelStyle}>Weekend Differential ($/hr, 0 = none)</div>
             <InlineNumber
               value={formData.diffRate ?? ""}
-              onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
+              onChange={v => onChange({ diffRate: v === "" ? null : Math.max(0, parseFloat(v) || 0) })}
               placeholder="0"
               width="72px"
               ariaLabel="Weekend differential, dollars per hour"
@@ -958,7 +958,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                       <FadeIn delay={typeDuration(weekendDiffText)}>
                         <InlineNumber
                           value={formData.diffRate ?? ""}
-                          onChange={v => onChange({ diffRate: v === "" ? null : parseFloat(v) })}
+                          onChange={v => onChange({ diffRate: v === "" ? null : Math.max(0, parseFloat(v) || 0) })}
                           placeholder="1.75"
                           width="56px"
                           ariaLabel="Weekend differential, dollars per hour"
@@ -1098,7 +1098,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                   <FadeIn delay={typeDuration(commissionAmountText)}>
                     <InlineNumber
                       value={formData.commissionMonthly ?? ""}
-                      onChange={v => onChange({ commissionMonthly: v === "" ? null : parseFloat(v) })}
+                      onChange={v => onChange({ commissionMonthly: v === "" ? null : Math.max(0, parseFloat(v) || 0) })}
                       placeholder="800"
                       width="72px"
                       ariaLabel="Commission monthly average, dollars"
@@ -1379,7 +1379,7 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
                   {def.type === "k401" ? (
                     <InlineNumber
                       value={formData.k401Rate != null ? +(formData.k401Rate * 100).toFixed(2) : ""}
-                      onChange={v => onChange({ k401Rate: v === "" ? null : parseFloat(v) / 100 })}
+                      onChange={v => onChange({ k401Rate: v === "" ? null : Math.max(0, parseFloat(v) || 0) / 100 })}
                       placeholder="6"
                       width="44px"
                       ariaLabel="401k contribution percentage"
@@ -1388,7 +1388,7 @@ function DeductionsPage({ formData, onChange, attempted = false }) {
                   ) : (
                     <InlineNumber
                       value={formData[def.field] ?? ""}
-                      onChange={v => onChange({ [def.field]: v === "" ? null : parseFloat(v) })}
+                      onChange={v => onChange({ [def.field]: v === "" ? null : Math.max(0, parseFloat(v) || 0) })}
                       placeholder={def.placeholder?.replace("e.g. ", "") ?? "0"}
                       width="64px"
                       ariaLabel={`${def.label} weekly cost, dollars`}

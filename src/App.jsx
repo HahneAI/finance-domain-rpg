@@ -138,6 +138,21 @@ const BOTTOM_NAV = [
 // out of sync with it.
 const NAV_ICONS = Object.fromEntries(BOTTOM_NAV.map(i => [i.key, i.icon]));
 
+// DB Row Viewer's rowDiff needs an order-independent equality check: Postgres jsonb
+// re-canonicalizes object key order on storage (length-then-alphabetical) while the
+// in-memory config is built via `{ ...DEFAULT_CONFIG, ...data.config }` (db.js), which
+// preserves DEFAULT_CONFIG's hand-written declaration order — so plain JSON.stringify
+// comparison flags every account's "config" as drifted on every fetch, real edits or
+// not (F153-adjacent finding, 2026-08-24). Recursively sorts object keys before
+// stringifying so only real content differences trigger the drift badge.
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 // §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
@@ -1304,8 +1319,8 @@ export default function App() {
   }, [tempLockDate]);
 
   const effectiveToday = useMemo(
-    () => (isAdmin && tempLockDate) ? tempLockDate : today,
-    [isAdmin, tempLockDate, today]
+    () => (isDiagnosticAdmin && tempLockDate) ? tempLockDate : today,
+    [isDiagnosticAdmin, tempLockDate, today]
   );
 
   // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
@@ -1352,12 +1367,12 @@ export default function App() {
   const rowDiff = useMemo(() => {
     if (!rowData || rowData.__error) return [];
     const pairs = [
-      ["config", JSON.stringify(config), JSON.stringify(rowData.config)],
-      ["expenses", JSON.stringify(expenses), JSON.stringify(rowData.expenses)],
-      ["goals", JSON.stringify(goals), JSON.stringify(rowData.goals)],
-      ["logs", JSON.stringify(logs), JSON.stringify(rowData.logs)],
+      ["config", stableStringify(config), stableStringify(rowData.config)],
+      ["expenses", stableStringify(expenses), stableStringify(rowData.expenses)],
+      ["goals", stableStringify(goals), stableStringify(rowData.goals)],
+      ["logs", stableStringify(logs), stableStringify(rowData.logs)],
       ["show_extra", String(showExtra), String(rowData.show_extra)],
-      ["week_confirmations", JSON.stringify(weekConfirmations), JSON.stringify(rowData.week_confirmations)],
+      ["week_confirmations", stableStringify(weekConfirmations), stableStringify(rowData.week_confirmations)],
       ["pto_goal", String(ptoGoal ?? ""), String(rowData.pto_goal ?? "")],
     ];
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
@@ -1449,14 +1464,14 @@ export default function App() {
       triggerDate.setDate(triggerDate.getDate() + 1); // Sunday → Monday
       const triggerIso = toLocalIso(triggerDate);
       if (effectiveToday < triggerIso) return false;
-      if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+      if (effectiveToday === triggerIso && !(isDiagnosticAdmin && tempLockDate)) {
         return new Date().getHours() >= 6;
       }
       return true;
     }
     // Base user: any time after midnight following payPeriodEndDay.
     return payPeriodEndIso < effectiveToday;
-  }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
+  }, [config.employerPreset, effectiveToday, isDiagnosticAdmin, tempLockDate]);
 
   // ── Tips/Commission daily check-in eligibility ──
   // A given calendar day becomes askable at noon the day after it — mirrors the
@@ -1469,11 +1484,11 @@ export default function App() {
     triggerDate.setDate(triggerDate.getDate() + 1);
     const triggerIso = toLocalIso(triggerDate);
     if (effectiveToday < triggerIso) return false;
-    if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+    if (effectiveToday === triggerIso && !(isDiagnosticAdmin && tempLockDate)) {
       return new Date().getHours() >= 12;
     }
     return true;
-  }, [effectiveToday, isAdmin, tempLockDate]);
+  }, [effectiveToday, isDiagnosticAdmin, tempLockDate]);
 
   // Weeks before this fiscal idx are auto-assumed worked and never prompt the
   // confirm modal; only weeks from account creation onward are confirmable.
@@ -2190,6 +2205,7 @@ export default function App() {
           prevWeekNet={prevWeekNet}
           futureWeeks={futureWeeks}
           futureWeekNets={futureWeekNets}
+          avgWeeklySpend={remainingSpend.avgWeeklySpend}
           currentWeek={currentWeek}
           fiscalWeekInfo={currentWeekNumber}
           today={effectiveToday}
@@ -2458,7 +2474,7 @@ export default function App() {
                 : "Notifications — up to date"}
             </span>
           </Pressable>
-          {isAdmin && tempLockDate && (
+          {isDiagnosticAdmin && tempLockDate && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -2978,7 +2994,7 @@ export default function App() {
                 a label. Same weight/letter-spacing tier as the display-font headings
                 (see index.css's font-weight:900 heading tier). */}
             <div style={{ fontFamily: "var(--font-display)", fontSize: "19px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1, flexShrink: 0 }}>A:Fin</div>
-            {isAdmin && tempLockDate && (
+            {isDiagnosticAdmin && tempLockDate && (
               <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <span className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>

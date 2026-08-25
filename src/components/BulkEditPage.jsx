@@ -2,9 +2,31 @@ import { useState } from "react";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { getEffectiveAmount } from "../lib/finance.js";
 import { getBaseEntryAt, buildAdvancedEditPayload, EXPENSE_CYCLE_OPTIONS, perPaycheckFromCycle, cycleAmountFromPerPaycheck } from "../lib/expense.js";
-import { SmBtn, SH, iS, lS } from "./ui.jsx";
+import { SmBtn, SH, iS, lS, Pressable } from "./ui.jsx";
 
 const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const headerIconBtnStyle = {
+  background: "var(--color-bg-raised)",
+  border: "1px solid var(--color-border-subtle)",
+  borderRadius: "50%",
+  width: "40px",
+  height: "40px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  color: "var(--color-text-secondary)",
+  flexShrink: 0,
+};
+
+function BackArrowIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
 
 const resolveExpenseCycle = (exp, phaseIdx) => {
   const phaseMeta = exp.billingMeta?.byPhase?.[phaseIdx];
@@ -12,8 +34,13 @@ const resolveExpenseCycle = (exp, phaseIdx) => {
   return EXPENSE_CYCLE_OPTIONS.find(o => o.value === raw) ? raw : "every30days";
 };
 
-// selectedMonthIso: "YYYY-MM-01" full ISO date of the month to edit
-export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSave, onClose }) {
+// A full standalone page (not an inline card/modal) — takes over the whole
+// viewport, same fixed-overlay pattern AskCoachPanel.jsx uses. Reached two
+// ways from BudgetPanel: double-tapping a month/quarter segment on the
+// MonthQuarterSelector (scoped to whichever segment was tapped), or the
+// "Bulk Edit" button under the expense category list. selectedMonthIso is
+// the "YYYY-MM-01" full ISO date of the month being edited.
+export function BulkEditPage({ phaseIdx, selectedMonthIso, expenses, cpm, onSave, onClose }) {
   const [edits, setEdits] = useState({});
   const [expandedExpId, setExpandedExpId] = useState(null);
   const [draftVals, setDraftVals] = useState({ amount: "", cycle: "every30days" });
@@ -28,7 +55,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
   // perPaycheckFromCycle stores weekly amounts; multiply by perCheckFactor to show per-check.
   const perCheckFactor = 4 / cpm;
 
-  // ── Month label for hint text ─────────────────────────────────────────────
+  // ── Month label for header/hint text ────────────────────────────────────
   const monthLabel = (() => {
     const m = parseInt(selectedMonthIso.slice(5, 7), 10);
     return ["January","February","March","April","May","June","July","August","September","October","November","December"][m - 1] ?? "";
@@ -120,39 +147,45 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
   const categories = ["Needs", "Lifestyle"];
 
   return (
-    <div style={{
-      background: "var(--color-bg-surface)",
-      border: "1px solid var(--color-border-subtle)",
-      borderRadius: "14px",
-      marginBottom: "16px",
-      overflow: "hidden",
-    }}>
-      {/* ── Header ── */}
-      <div style={{
+    <div
+      className="fold-lift"
+      data-fold="entering"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 30,
+        background: "var(--color-bg-base)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "12px 14px 10px",
-        borderBottom: "1px solid var(--color-border-subtle)",
-      }}>
-        <div>
-          <div className="text-xs" style={{ fontWeight: "700", color: "var(--color-accent-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-            Bulk edit — {monthLabel}
+        flexDirection: "column",
+      }}
+    >
+      {/* ── Header ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          padding: "14px 16px",
+          paddingTop: "calc(14px + env(safe-area-inset-top, 0px))",
+          borderBottom: "1px solid var(--color-border-subtle)",
+          flexShrink: 0,
+        }}
+      >
+        <Pressable onClick={onClose} aria-label="Back" style={headerIconBtnStyle}>
+          <BackArrowIcon />
+        </Pressable>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="text-base" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
+            Bulk Edit
           </div>
           <div className="text-2xs" style={{ color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase", marginTop: "2px" }}>
-            Stage changes then save all at once
+            {monthLabel} · stage changes then save all at once
           </div>
         </div>
-        <SmBtn
-          onClick={onClose}
-          className="text-sm" style={{ padding: "3px 9px", minHeight: "28px", lineHeight: 1, flexShrink: 0 }}
-        >
-          ✕
-        </SmBtn>
       </div>
 
-      {/* ── Expense list ── */}
-      <div style={{ padding: "12px 14px" }}>
+      {/* ── Scrollable body ── */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
         {categories.map(cat => {
           const catExps = expenses.filter(e => e.category === cat);
           const catAdditions = additions.filter(a => a.category === cat);
@@ -532,8 +565,10 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
       <div style={{
         display: "flex",
         gap: "8px",
-        padding: "8px 14px 12px",
+        padding: "8px 16px",
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
         borderTop: "1px solid var(--color-border-subtle)",
+        flexShrink: 0,
       }}>
         <SmBtn
           onClick={onClose}

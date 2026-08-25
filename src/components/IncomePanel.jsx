@@ -79,15 +79,31 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
   // For biweekly users: even-offset weeks from firstActiveIdx are paycheck weeks
   const isPaycheckWeek = (w) => isBiweekly && ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0;
 
-  const mo = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi);
-    return {
-      name,
+  // Grouped by each week's real (year, month) rather than a hardcoded calendar
+  // year — the fiscal-week grid's trailing week can land in the next calendar
+  // year's January (FISCAL_YEAR_END_MONTH_KEY, constants/config.js), which a
+  // `getFullYear() === 2026` filter silently dropped from this monthly
+  // breakdown entirely (real bug, found live 2026-08-24 — drift-app-warden.md
+  // §9 F151-adjacent). `mi` is a year-rollover-safe chronological epoch
+  // (`year*12+month`, not a raw 0–11 calendar-month index) so isPastMonth/
+  // isCurrentMonth comparisons below stay correct across the rollover instead
+  // of a future January wrapping around to compare less-than an August "today".
+  const mo = (() => {
+    const buckets = new Map();
+    for (const w of allWeeks) {
+      if (!w.active) continue;
+      const y = w.weekEnd.getFullYear(), m = w.weekEnd.getMonth();
+      const key = y * 12 + m;
+      if (!buckets.has(key)) buckets.set(key, { name: MONTH_FULL[m], mi: key, wks: [] });
+      buckets.get(key).wks.push(w);
+    }
+    return [...buckets.values()].map(({ name, mi, wks }) => ({
+      name, mi,
       gross: wks.reduce((s, w) => s + w.grossPay, 0),
       net: wks.reduce((s, w) => s + resolveWeekNet(w), 0),
       wks, n: wks.length, tx: wks.filter(w => w.taxedBySchedule).length, ex: wks.filter(w => !w.taxedBySchedule).length
-    };
-  });
+    }));
+  })();
   const yG = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay, 0);
   const yN = adjustedTakeHome;
   // Format job start date for sub-label display (e.g. "Feb 9")
@@ -101,11 +117,15 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
   const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
 
-  const currentMonthIdx = new Date(`${todayIso}T12:00:00`).getMonth();
-  const prevMonthIdx = currentMonthIdx > 0 ? currentMonthIdx - 1 : null;
+  // Same year-rollover-safe epoch as mo's own `mi` (year*12+month) — a raw
+  // getMonth() here would wrap a future January in the trailing fiscal week
+  // back around to "less than August," mislabeling it a past month.
+  const todayForMonthIdx = new Date(`${todayIso}T12:00:00`);
+  const currentMonthIdx = todayForMonthIdx.getFullYear() * 12 + todayForMonthIdx.getMonth();
+  const prevMonthIdx = currentMonthIdx - 1;
   const rollingMonthCards = mo
-    .map((m, mi) => ({ ...m, mi, isCurrentMonth: mi === currentMonthIdx }))
-    .filter(m => m.n > 0 && m.mi >= (prevMonthIdx !== null ? prevMonthIdx : currentMonthIdx));
+    .map(m => ({ ...m, isCurrentMonth: m.mi === currentMonthIdx }))
+    .filter(m => m.n > 0 && m.mi >= prevMonthIdx);
 
   const [isDesktopWeekly, setIsDesktopWeekly] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
 
@@ -360,7 +380,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
             const isPastMonth = m.mi < currentMonthIdx;
             return (
               <div
-                key={m.name}
+                key={m.mi}
                 style={{
                   background: "var(--color-bg-surface)",
                   border: `1px solid ${m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES, FISCAL_YEAR_START } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
@@ -1075,9 +1075,36 @@ export default function App() {
     // between today and that future date would incorrectly fall back to the new
     // live baseRate instead of holding the old one until the chosen date arrives.
     if (changedFields.includes("baseRate")) {
-      setBaseRateHistory(prev => [...prev, { effectiveFrom, baseRate: config.baseRate }]);
+      // Anchor gap fix (2026-08-26, F157 follow-up, DW-18): resolveBaseRateForWeek
+      // falls back to the LIVE (current) baseRate — never the true historical one —
+      // for any week older than the earliest entry in the array. Every account's
+      // first-ever baseRate change (and any week before whatever its earliest
+      // captured entry happens to be) has no entry covering it, so those already-
+      // elapsed "ACTUAL" weeks silently start reading the brand-new rate the moment
+      // any later rate change is made — the exact retroactive-rewrite the modal's
+      // own copy promises never happens. Backfilling one FISCAL_YEAR_START-dated
+      // anchor (the rate that was true immediately before *this* edit) the first
+      // time the array has no entry old enough to cover the whole fiscal year
+      // closes the gap permanently — every subsequent change layers on top of it
+      // normally, and the check is a no-op once an anchor already exists. Read
+      // from the `baseRateHistory` state directly (not a functional updater) so
+      // the conditional `saveConfigSnapshot` call stays a plain side effect, not
+      // something React could re-invoke from inside a state updater.
+      const hasAnchor = baseRateHistory.some(e => e.effectiveFrom <= FISCAL_YEAR_START);
+      const nextHistory = hasAnchor
+        ? baseRateHistory
+        : [{ effectiveFrom: FISCAL_YEAR_START, baseRate: prev.baseRate }, ...baseRateHistory];
+      if (!hasAnchor) {
+        saveConfigSnapshot({
+          config: { ...config, baseRate: prev.baseRate },
+          changedFields: ["baseRate"],
+          source: "baseRate_history_anchor",
+          effectiveFrom: FISCAL_YEAR_START,
+        });
+      }
+      setBaseRateHistory([...nextHistory, { effectiveFrom, baseRate: config.baseRate }]);
     }
-  }, [config, loading]);
+  }, [config, loading, baseRateHistory]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;

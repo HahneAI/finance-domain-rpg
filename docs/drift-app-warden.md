@@ -458,6 +458,77 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
+**F159 · `resolveBaseRateForWeek`'s "no entry covers the date" fallback silently rewrote every
+past-actual week's gross pay to the CURRENT rate — a second, deeper gap in the same F10 chain
+(2026-08-26, live-testing-checklist.md item 4's "Pay Structure Changed"/"Rate Update full
+save-through" check, DW-18, fixed) — [L]** F10's own fix (DW-1) and its own prescribed check
+("a future-dated rate update shows the old rate on weeks before its effective date") only ever
+exercised the case where `baseRateHistory` already has an anchor covering the account's full
+active-week range. Live-testing surfaced the case that check doesn't cover: **the first-ever
+`baseRate`-changing edit an account ever makes.** `resolveBaseRateForWeek` (`finance.js:461`)
+returns `liveBaseRate` — always `cfg.baseRate`, i.e. the newest rate — whenever no history entry's
+`effectiveFrom` covers the target week. That's correct only when `baseRateHistory` is empty
+outright (nothing has ever changed, so "the live rate" and "the true historical rate" are the same
+number by definition). The moment even one change is ever recorded, that fallback becomes wrong
+for any week older than the *earliest* entry: `App.jsx`'s watcher only ever appends the NEW rate at
+the edit's `effectiveFrom` (`setBaseRateHistory(prev => [...prev, {effectiveFrom, baseRate:
+config.baseRate}])`) — it never captures what the rate *was* before that first edit — so every
+already-elapsed "ACTUAL" week predating the account's first-ever rate change permanently loses its
+true rate and instead silently tracks whatever `cfg.baseRate` happens to be at read time, drifting
+again with every subsequent change. This directly contradicts both `RateUpdateModal`'s and
+`SetupWizardAdlib`'s own displayed promise ("Goals, expenses, and logs are untouched — only
+forward-looking projections use the new rate") — past pay history is exactly what silently changed.
+Confirmed live and reproducible on the real shared test account, not just a synthetic case: fetched
+the account's actual `account_history` rows directly (`supabase.from("account_history")` via a
+page-context script) and found exactly the vulnerable shape — one entry at `2026-08-24` (an earlier
+session's incidental `profile_edit`) plus the just-made `2026-08-26` rate change, nothing anchoring
+further back. Running `buildYear(config, realHistory)` against the real fetched config/history
+showed weeks from `firstActiveIdx` (idx 19, `2026-05-18`, months before the earliest captured entry)
+all resolving to the brand-new live rate — live-confirmed in the actual Income panel too (every
+"ACTUAL" week before `2026-08-24` was reading the post-raise rate at the moment of the raise,
+before this fix). The existing `resolveBaseRateForWeek` unit test asserting this exact fallback
+("falls back to the live baseRate when no entry covers the target date") is not wrong as a pure-
+function contract test, but its `liveBaseRate` argument (`20`, deliberately chosen to *equal* what
+a human would expect the true old rate to be) doesn't reflect how `buildYear` actually invokes it in
+production (`cfg.baseRate`, always the newest value) — the test passing gave false confidence this
+case was safe. **Fix (write-path, not the pure resolver):** `App.jsx`'s config-history watcher now
+backfills one `FISCAL_YEAR_START`-dated anchor entry (`{effectiveFrom: FISCAL_YEAR_START, baseRate:
+prev.baseRate}` — the rate that was true immediately before *this specific* edit) the first time
+`baseRateHistory` has no entry old enough to cover the whole fiscal-week range (`.some(e =>
+e.effectiveFrom <= FISCAL_YEAR_START)`), persisted via the same `saveConfigSnapshot` path tagged
+`source: "baseRate_history_anchor"` (clearly distinct from a real edit event in any account_history
+consumer) so it survives reload, plus the matching optimistic local append. Every later change layers
+on top of this floor entry normally; the check is a no-op once an anchor exists, so this touches the
+write path exactly once per account, ever. **Known limitation, not fully solvable from the read
+side:** this anchors the earliest-known rate at the moment of the FIRST fix-covered edit, not
+necessarily the *true* rate from account creation if multiple undocumented rate changes happened
+before that — there is no way to recover a rate that was never captured anywhere. It does
+permanently stop further drift: once anchored, past weeks stay pinned to a fixed historical value
+instead of continuing to silently re-track the live rate on every future change. Verified live,
+before/after: pre-fix, weeks 19/25 tracked whatever was currently live (`$1,404` at rate 27, would
+have become `$1,456` at rate 28 with no anchor); post-fix, a second real rate change (27→28) wrote
+the anchor row and those same weeks stayed pinned at `$1,404` (rate 27) while only weeks on/after the
+new change's effective date moved to `$1,456` — confirmed both via a direct `buildYear` script run
+against the real fetched config/history and in the live Income panel. Full `npm run test:run` (1683
+tests) unaffected — the fix is additive to the write path; `resolveBaseRateForWeek`'s own contract
+and existing tests are untouched. | `App.jsx`'s config-history watcher (`useEffect` around
+`diffSensitiveFields`) | **D1** — silent retroactive rewrite of real "ACTUAL" pay history, live-
+reachable on every account's first-ever Quick Rate Update or Pay Structure Changed touching
+`baseRate` (the overwhelming majority of accounts, since most start with zero prior baseRate
+history) | Confirmed F10's own IF/THEN check and its "future-dated rate update" test coverage before
+concluding this was an *uncovered* case, not a regression of the covered one; re-verified
+`resolveBaseRateForWeek`'s own unit tests still pass unmodified (the fix lives entirely upstream of
+that function).
+> **IF** `baseRateHistory`'s shape or the anchor's `source` tag changes, **THEN** re-verify the
+> `hasAnchor` check (`.some(e => e.effectiveFrom <= FISCAL_YEAR_START)`) still matches whatever
+> `extractBaseRateHistory` (`db.js`) hands back — a mismatched date format or an unfiltered anchor
+> row silently reopens this exact gap. **IF** any other field ever gains its own point-in-time
+> `resolve*ForWeek`-style read path (per §3's deferred Master Timeline), **THEN** it inherits this
+> same "no anchor for the first-ever change" gap unless it backfills the same way — this is a
+> pattern to replicate, not a one-off baseRate special case. Check: a brand-new account's very
+> first rate change, immediately followed by a second one, correctly keeps the original weeks
+> pinned to the first (anchored) rate rather than drifting to the second.
+
 **F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
 nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets

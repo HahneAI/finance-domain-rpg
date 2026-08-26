@@ -129,14 +129,33 @@ representative loans — a $1,000/$100-weekly loan and a $2,000/$150-biweekly lo
   delete/status-change) — the math above was checked by reading + a script-level formula
   cross-check, not by driving the actual panel in a browser.
 
-### 4. Life Events — full save-through flows ⬜
+### 4. Life Events — full save-through flows ✅ (DW-18 — 2026-08-26)
 This session only tested adversarial *input* on the wizard page (negative/huge/decimal
 values, now fixed — DW-14/F156). Never finished watching a save propagate all the way to
 Home/Income's displayed numbers.
-- "Pay Structure Changed" — change a real field, save, confirm Home/Income/Budget all update
-  consistently with no stale figures.
-- "Rate Update" (`RateUpdateModal`) — same, full save-through (base math already cross-checked
-  in an earlier pass, DW-1 — this is about the *whole* flow, not just the modal's own preview).
+- **"Rate Update" (`RateUpdateModal`)** — full save-through walked live on the real test account
+  (baseRate $25→$27, confirmed, then $27→$28, then reverted back to $25). Home's "next week vs.
+  this" delta and Income's rolling window both reflected the new rate consistently, no stale
+  figures. Found and fixed a serious real bug in the process (**DW-18**): the very first rate
+  change an account ever makes has no `baseRateHistory` entry old enough to anchor the OLD rate,
+  so every already-elapsed "ACTUAL" week before the change silently starts tracking whatever the
+  CURRENT live rate is instead — directly contradicting the modal's own "only forward-looking
+  projections use the new rate" promise. Confirmed live via a direct `account_history` fetch +
+  `buildYear` re-run against the real account's data (not just a synthetic case), fixed with a
+  one-time `FISCAL_YEAR_START`-anchor backfill in `App.jsx`'s config-history watcher, and
+  re-verified live with a second rate change that this time correctly left earlier weeks pinned
+  to their historical rate instead of drifting again.
+- **"Pay Structure Changed"** — full 5-page wizard (Intake → Schedule → Deductions → Tax Rates →
+  Wrap Up) walked live in `structure_change` re-entry mode: confirmed every page pre-fills
+  correctly from the real account config, changed a real field (weekend differential $1.75→$2.00),
+  confirmed the Wrap Up diff card correctly showed "Weekend diff $1.75/hr → $2.00/hr" and a live
+  net-pay preview, clicked Finish Setup, and confirmed the new value persisted to the DB
+  (`diffRate: 2`) with `baseRate` and everything else untouched — no stale figures, no unintended
+  side effects. Reverted back to $1.75 the same way afterward. No new defect found on this path
+  beyond the DW-18 gap already covered above (which applies to any `baseRate` edit regardless of
+  which of the two entry points makes it).
+- Account left in a clean, fully-reverted state (`baseRate: 25`, `diffRate: 1.75`) after both
+  flows; full `npm run test:run` (1683 tests) green throughout.
 
 ---
 

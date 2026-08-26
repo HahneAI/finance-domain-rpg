@@ -3418,6 +3418,37 @@ change with D3-grade consequences. Updates now wait for the user.
 > preserves in-flight state (the eager-save net catches what the debounce would lose,
 > but only for completed actions).
 
+**F162 · Duplicate/drifted PWA manifest — `vite.config.js`'s `manifest` object silently
+generated a second, divergent manifest file (2026-08-26, live-testing-checklist.md item 8,
+DW-21, fixed) — [G]** Two manifests shipped in the same build: the hand-authored
+`public/manifest.json` (linked via `index.html`'s own `<link rel="manifest">`, with an explicit
+troubleshooting comment naming it the one to check for Android install-prompt issues) and
+`dist/manifest.webmanifest`, auto-generated *and auto-injected as a second competing
+`<link rel="manifest">` tag* by VitePWA from `vite.config.js`'s `manifest: {...}` object —
+nothing in the build wires the two together, so they drift independently. Confirmed genuinely
+diverged, not just theoretically able to: `manifest.webmanifest` was missing the
+`apple-touch-icon.png` (180×180) icon entry that `manifest.json` carries, and carried a
+`"lang":"en"` key `manifest.json` doesn't — directly contradicting the source comment's own
+assumption ("both should have matching content"). Two `<link rel="manifest">` tags in one
+document is spec-ambiguous for which one a browser's install-prompt logic actually reads —
+not confirmed to be causing a live install failure, but a needless, silently-drifting duplicate
+either way. **Fix:** `vite.config.js`'s `manifest:` key set to `false` (with a comment
+explaining why) — this disables both VitePWA's manifest generation and its auto-injected
+`<link>` tag, leaving `public/manifest.json` as the single canonical manifest exactly as
+`index.html`'s own troubleshooting comment already assumed. `includeAssets` extended to name
+`manifest.json` explicitly so workbox still precaches it. Verified via a full `npm run build` +
+`npm run preview` cycle: `dist/index.html` now contains exactly one `<link rel="manifest">`
+(→ `/manifest.json`), `dist/manifest.webmanifest` is no longer generated at all, and a live
+Playwright check against the preview server confirmed the service worker still registers and
+activates normally (`scope: /`, `active: activated`) — this fix is manifest-only, it doesn't
+touch the SW/workbox config. `npm run test:run` unaffected (no test asserted on the removed
+file). | `vite.config.js` | **D3** — install-prompt-adjacent surface, no math/time risk, but a
+silent content drift the source code's own comment explicitly assumed couldn't happen |
+> **IF** `public/manifest.json`'s fields (icons, name, colors) change, **THEN** there is now
+> only one file to update — this fix removes the "did I update both?" drift risk F162 itself
+> found, don't reintroduce a second manifest source by re-adding an object to `manifest:` in
+> `vite.config.js` without also removing/reconciling `public/manifest.json`.
+
 **F95 · Input/label standards** — `iS`/`lS` style objects (`ui.jsx:42–44`) — **[G]**
 `iS`: 16px font (blocks iOS auto-zoom), 44px min-height (tap target), JetBrains Mono.
 `lS`: 10px/2px-tracking uppercase labels. Every input/select spreads these; the

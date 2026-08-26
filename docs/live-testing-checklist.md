@@ -213,6 +213,18 @@ available, worth a pass: these were the DW-3 fix (eager-save on reopen) from an 
 session — confirm they still work post this session's `isDiagnosticAdmin` gate changes
 (F153) without having actually re-tested them live this time.
 
-### 8. PWA install / offline behavior ⬜
-Not touched at all. Lower priority — no math/time risk, but untested this whole live-testing
-arc.
+### 8. PWA install / offline behavior ✅
+Tested against a real production build (`npm run build` + `npm run preview`) since the SW never
+activates under plain `npm run dev`. Found and fixed **DW-21**: `vite.config.js`'s VitePWA
+`manifest` object was auto-generating `dist/manifest.webmanifest` *and* auto-injecting a second
+`<link rel="manifest">` tag alongside the pre-existing hand-authored `public/manifest.json` — and
+the two had already drifted apart (missing apple-touch-icon entry, mismatched `lang` field),
+directly contradicting `index.html`'s own comment assuming they'd match. Fixed by setting
+`manifest: false` in `vite.config.js`, leaving `public/manifest.json` as the single canonical
+manifest; verified `dist/index.html` now ships exactly one manifest link and the service worker
+still registers/activates normally post-fix. Offline behavior separately verified live via
+Playwright (`context.setOffline(true)` + reload): the cached app shell (full login screen, not an
+error page) rendered correctly with zero network access, confirming workbox's `navigateFallback`
++ precache setup works as configured. Full test suite (1687 tests) green throughout — no test
+exercises the manifest file directly. Documented in `drift-app-warden.md` F162 /
+`BUG_FIX_TODO.md` DW-21.

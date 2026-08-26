@@ -3,7 +3,7 @@ import { Pressable, PanelHero, SectionHeader, SH, iS, lS } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
-import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
+import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix } from "../lib/expense.js";
 import { computeNewJobSeasonRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
 
 const STATUS_OPTIONS = [
@@ -368,7 +368,7 @@ export function NewJobSeasonBudgetPanel({
             const status = exp.newJobSeasonStatus ?? "active";
             const isLoan = exp.type === "loan";
             const flexible = isFlexibleCategory(exp.category);
-            const monthly = getExpenseDisplayAmount(exp) || null;
+            const displayAmount = getExpenseDisplayAmount(exp) || null;
             const autoReactivate = exp.autoReactivateOnIncome ?? true;
             const catColor = CATEGORY_COLORS[exp.category] ?? "var(--color-text-secondary)";
             return (
@@ -408,7 +408,7 @@ export function NewJobSeasonBudgetPanel({
                       )}
                     </div>
                     <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                      {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
+                      {exp.category ?? "—"}{displayAmount != null ? ` · $${Number(displayAmount).toLocaleString()}/${getExpenseDisplaySuffix(exp)}` : ""}
                     </div>
                   </div>
                   {!readOnly && (

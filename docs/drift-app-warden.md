@@ -458,6 +458,130 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
+**F159 · `resolveBaseRateForWeek`'s "no entry covers the date" fallback silently rewrote every
+past-actual week's gross pay to the CURRENT rate — a second, deeper gap in the same F10 chain
+(2026-08-26, live-testing-checklist.md item 4's "Pay Structure Changed"/"Rate Update full
+save-through" check, DW-18, fixed) — [L]** F10's own fix (DW-1) and its own prescribed check
+("a future-dated rate update shows the old rate on weeks before its effective date") only ever
+exercised the case where `baseRateHistory` already has an anchor covering the account's full
+active-week range. Live-testing surfaced the case that check doesn't cover: **the first-ever
+`baseRate`-changing edit an account ever makes.** `resolveBaseRateForWeek` (`finance.js:461`)
+returns `liveBaseRate` — always `cfg.baseRate`, i.e. the newest rate — whenever no history entry's
+`effectiveFrom` covers the target week. That's correct only when `baseRateHistory` is empty
+outright (nothing has ever changed, so "the live rate" and "the true historical rate" are the same
+number by definition). The moment even one change is ever recorded, that fallback becomes wrong
+for any week older than the *earliest* entry: `App.jsx`'s watcher only ever appends the NEW rate at
+the edit's `effectiveFrom` (`setBaseRateHistory(prev => [...prev, {effectiveFrom, baseRate:
+config.baseRate}])`) — it never captures what the rate *was* before that first edit — so every
+already-elapsed "ACTUAL" week predating the account's first-ever rate change permanently loses its
+true rate and instead silently tracks whatever `cfg.baseRate` happens to be at read time, drifting
+again with every subsequent change. This directly contradicts both `RateUpdateModal`'s and
+`SetupWizardAdlib`'s own displayed promise ("Goals, expenses, and logs are untouched — only
+forward-looking projections use the new rate") — past pay history is exactly what silently changed.
+Confirmed live and reproducible on the real shared test account, not just a synthetic case: fetched
+the account's actual `account_history` rows directly (`supabase.from("account_history")` via a
+page-context script) and found exactly the vulnerable shape — one entry at `2026-08-24` (an earlier
+session's incidental `profile_edit`) plus the just-made `2026-08-26` rate change, nothing anchoring
+further back. Running `buildYear(config, realHistory)` against the real fetched config/history
+showed weeks from `firstActiveIdx` (idx 19, `2026-05-18`, months before the earliest captured entry)
+all resolving to the brand-new live rate — live-confirmed in the actual Income panel too (every
+"ACTUAL" week before `2026-08-24` was reading the post-raise rate at the moment of the raise,
+before this fix). The existing `resolveBaseRateForWeek` unit test asserting this exact fallback
+("falls back to the live baseRate when no entry covers the target date") is not wrong as a pure-
+function contract test, but its `liveBaseRate` argument (`20`, deliberately chosen to *equal* what
+a human would expect the true old rate to be) doesn't reflect how `buildYear` actually invokes it in
+production (`cfg.baseRate`, always the newest value) — the test passing gave false confidence this
+case was safe. **Fix (write-path, not the pure resolver):** `App.jsx`'s config-history watcher now
+backfills one `FISCAL_YEAR_START`-dated anchor entry (`{effectiveFrom: FISCAL_YEAR_START, baseRate:
+prev.baseRate}` — the rate that was true immediately before *this specific* edit) the first time
+`baseRateHistory` has no entry old enough to cover the whole fiscal-week range (`.some(e =>
+e.effectiveFrom <= FISCAL_YEAR_START)`), persisted via the same `saveConfigSnapshot` path tagged
+`source: "baseRate_history_anchor"` (clearly distinct from a real edit event in any account_history
+consumer) so it survives reload, plus the matching optimistic local append. Every later change layers
+on top of this floor entry normally; the check is a no-op once an anchor exists, so this touches the
+write path exactly once per account, ever. **Known limitation, not fully solvable from the read
+side:** this anchors the earliest-known rate at the moment of the FIRST fix-covered edit, not
+necessarily the *true* rate from account creation if multiple undocumented rate changes happened
+before that — there is no way to recover a rate that was never captured anywhere. It does
+permanently stop further drift: once anchored, past weeks stay pinned to a fixed historical value
+instead of continuing to silently re-track the live rate on every future change. Verified live,
+before/after: pre-fix, weeks 19/25 tracked whatever was currently live (`$1,404` at rate 27, would
+have become `$1,456` at rate 28 with no anchor); post-fix, a second real rate change (27→28) wrote
+the anchor row and those same weeks stayed pinned at `$1,404` (rate 27) while only weeks on/after the
+new change's effective date moved to `$1,456` — confirmed both via a direct `buildYear` script run
+against the real fetched config/history and in the live Income panel. Full `npm run test:run` (1683
+tests) unaffected — the fix is additive to the write path; `resolveBaseRateForWeek`'s own contract
+and existing tests are untouched. | `App.jsx`'s config-history watcher (`useEffect` around
+`diffSensitiveFields`) | **D1** — silent retroactive rewrite of real "ACTUAL" pay history, live-
+reachable on every account's first-ever Quick Rate Update or Pay Structure Changed touching
+`baseRate` (the overwhelming majority of accounts, since most start with zero prior baseRate
+history) | Confirmed F10's own IF/THEN check and its "future-dated rate update" test coverage before
+concluding this was an *uncovered* case, not a regression of the covered one; re-verified
+`resolveBaseRateForWeek`'s own unit tests still pass unmodified (the fix lives entirely upstream of
+that function).
+> **IF** `baseRateHistory`'s shape or the anchor's `source` tag changes, **THEN** re-verify the
+> `hasAnchor` check (`.some(e => e.effectiveFrom <= FISCAL_YEAR_START)`) still matches whatever
+> `extractBaseRateHistory` (`db.js`) hands back — a mismatched date format or an unfiltered anchor
+> row silently reopens this exact gap. **IF** any other field ever gains its own point-in-time
+> `resolve*ForWeek`-style read path (per §3's deferred Master Timeline), **THEN** it inherits this
+> same "no anchor for the first-ever change" gap unless it backfills the same way — this is a
+> pattern to replicate, not a one-off baseRate special case. Check: a brand-new account's very
+> first rate change, immediately followed by a second one, correctly keeps the original weeks
+> pinned to the first (anchored) rate rather than drifting to the second.
+
+**F160 · Ask Coach broad-question compression regressed under live model output — a previously
+"fixed" rule silently stopped holding (2026-08-26, live personality test against a real
+`claude-haiku-4-5` call, DW-19, partially fixed) — [prompt tuning, not a code defect]**
+`coachPrompts.js`'s `ASK_COACH_SYSTEM_PROMPT` already carried an explicit broad-question
+compression rule with its own regression-test coverage (`coachPrompts.test.js`, comment citing a
+prior live incident: *"Give me a full rundown of my Home panel" produced a two-screen wall of
+text"*). Live-testing Coach for the first time this session (previously blocked entirely —
+this sandbox has no `/api/coach` route and no Anthropic key; unblocked mid-session by an
+AI-Admin-scoped test key, `AI_ADMIN_COACH_TEST_KEY`, called directly against the real
+`claude-haiku-4-5` endpoint with the exact `systemPrompt`/`contextBlock` captured live from the
+running app via a `page.route` interceptor — see `docs/live-testing-checklist.md` item 5) found
+the rule holding on paper but failing in the model's actual output: asking the rubric's own
+canonical trigger phrase verbatim ("Give me a full breakdown of my whole dashboard —
+everything.") produced 7 distinct numbers across 3 paragraphs and no follow-up invitation,
+despite the prompt explicitly requiring "the two or three numbers that actually matter" and an
+explicit invite. A second, narrower gap found in the same pass: the base persona's "two to
+three sentences, never more" rule was being applied loosely to *every* Ask Coach question
+because the mode-level exception ("a real explanation can run a short paragraph or two") read as
+exempting the whole mode rather than only genuine "how does X work" mechanics questions — 3 of 4
+live test messages (none of them mechanics questions) ran 2-3 full paragraphs. **Fix (prompt-only,
+`coachPrompts.js`):** (1) rescoped the paragraph-length exception explicitly to mechanics
+questions only, with a default-to-brevity tiebreaker for ambiguous cases; (2) rewrote the
+broad-question cap as a hard, self-checkable rule ("no more than three, full stop... count the
+numbers you named: four or more... means the rule was broken... cut it back rather than send
+it") and made the follow-up invitation explicitly mandatory rather than a suggested closer.
+**Verified live, same 4 messages, before/after:** 3 of 4 improved cleanly — paragraph count down
+1-2 messages, a previously-stacked figurative-touch violation (two flourishes in one message,
+violating the explicit "never stacked" rule) resolved to a single touch, and the broad-question
+follow-up invitation went from entirely absent to present verbatim. **Residual gap, not fully
+closed:** the same "give me everything" retest, even against the hard-capped rewrite, still cited
+7 numbers — the number-count cap did not hold even with an explicit self-check framing. This
+reads as a real Haiku limitation on enumerative compression instructions stated in prose, not a
+wording problem the last edit could fix; the next lever would be a few-shot worked example
+embedded in the prompt, not another rewrite of the same instruction. Full `npm run test:run`
+(1683 tests) green after the edit — one pre-existing regex assertion in `coachPrompts.test.js`
+needed updating to match the new phrasing ("invite a follow-up" → "inviting a follow-up"), no
+other test touched this text. Total live-call cost across both rounds (8 calls): ~25K input /
+~1.2K output tokens, ≈$0.03. | `src/lib/coachPrompts.js` (`ASK_COACH_SYSTEM_PROMPT`),
+`src/test/lib/coachPrompts.test.js` | Not a code-correctness defect — a live-verified gap between
+the system prompt's stated rules and the model's actual behavior on Haiku, previously untestable
+in this environment and apparently already regressed once before per the test file's own cited
+incident | Read `docs/coach-personality-rubric.md`'s Metaphor Intensity target (3, "light
+seasoning") before evaluating the figurative-touch results; confirmed the pre-existing
+regression test's intent before editing its regex rather than loosening what it actually checks.
+> **IF** this prompt is edited again for length/compression, **THEN** re-run the same 4-message
+> live test (or equivalent) before calling it fixed — this class of rule already regressed once
+> silently after being "fixed," and a code-level regex test against the prompt *text* cannot
+> catch a model that stops following text it can still literally see, only a live call can.
+> **IF** the broad-question number cap is tackled again, **THEN** try a worked few-shot example in
+> the prompt before another prose rewrite — two rewrites of the same instruction shape already
+> failed to hold the count down. Check: the rubric's own canonical broad-question phrasing
+> ("give me everything") is the one to re-test with, not an easier-to-compress paraphrase.
+
 **F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
 nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets
@@ -1838,6 +1962,73 @@ obvious bug fix.
 > floor-clamp its `onChange` with `Math.max(0, parseFloat(v) || 0)` from the start — don't rely
 > on an incidental `>0` required-field gate, since several of the fields this entry fixes were
 > never required at all.
+
+**F157 · New Job Season entry/budget bill labels hardcoded "/mo"; wizard step counter hardcoded
+"of 3" (2026-08-26, live click-through of `live-testing-checklist.md` item 1, both fixed) —
+[G]** Two small but real display bugs found walking the full "Quit My Job" flow live (not
+previously exercised — checklist item 1 was script-verified for math only). (1) **Wrong unit
+suffix:** `NewJobSeasonEntry.jsx`'s bill-tracking checklist (step 2) and
+`NewJobSeasonBudgetPanel.jsx`'s tracked-bills list both read `getExpenseDisplayAmount(exp)` — the
+raw per-cycle `billingMeta.amount`, never normalized to monthly — but hardcoded a literal `/mo`
+suffix on the result regardless of the expense's actual `billingMeta.cycle`. Food is *always*
+weekly (F8's cycle flip to `"weekly"` is permanent, not New-Job-Season-scoped), so every account
+going through this flow saw its Food bill mislabeled "$130/mo" when the real cost is $130/*week*
+(~4x understated) — live-confirmed on the real test account (`billingMeta.cycle: "weekly"`,
+`amount: 130`, rendered `$130/mo`) at exactly the moment (job-loss triage) a user is deciding
+financial risk. **Fix:** added `getExpenseDisplaySuffix(exp)` to `expense.js` (cycle → suffix map:
+`weekly→wk, biweekly→2wk, every30days→mo, yearly→yr`; loans keep `loanMeta.paymentFrequency` as
+before) and swapped both hardcoded `"/mo"` sites to call it. Verified live post-fix: same bill now
+renders "$130/wk". (2) **Off-by-one step counter:** the modal has 4 real steps (`step` 0–3 —
+Start/Pending-check/Bill-review/Due-dates) but the header hardcoded `Step ${step+1} of 3`; step 3
+(due dates) only exists when `keptPickableExpenses.length > 0` after the bill-review step, so any
+account with at least one trackable non-loan bill saw "Step 4 of 3" on the last screen — a
+nonsensical, confusing total. **Fix:** total now computed as
+`keptPickableExpenses.length > 0 ? 4 : 3`, matching the same live condition `goNext`/`nextLabel`
+already branch on just above. Verified live: "Step 3 of 4" → "Step 4 of 4". Full `npm run
+test:run` (1683 tests) unaffected by either fix — pure display, no formula touched. Touches
+`NewJobSeasonEntry.jsx` (bill-review list, header step counter) and
+`NewJobSeasonBudgetPanel.jsx` (tracked-bills list), plus the new `getExpenseDisplaySuffix` export
+in `expense.js`. Correct underlying amount/data throughout — wrong presentation only, not a
+math-engine defect. Same live click-through also confirmed the item's other open question — "Back
+to Work" — see F158 immediately below.
+> **IF** a new `EXPENSE_CYCLE_OPTIONS` value is ever added, **THEN** add it to
+> `CYCLE_SUFFIXES` in the same commit or it silently falls back to the `"mo"` default (same
+> `normalizeCycle` fallback pattern as the rest of `expense.js` — a reasonable default, not
+> silent wrongness, but still worth a deliberate check).
+
+**F158 · "Back to Work" (`handleBackToWork`, App.jsx) relied solely on the 800ms debounce
+autosave, not an eager save — CLAUDE.md Persistence pattern gap (2026-08-26, live-confirmed the
+`live-testing-checklist.md` item 1 revert-path check, fixed) — [D1]** `handleBackToWork` is
+exactly the "discrete I'm-done-with-this-action" gesture CLAUDE.md's Persistence section
+describes (a mode-exit toggle, same class as Save/Confirm/Add/Delete) — it flips
+`newJobSeasonMode` off, clears the job-loss fields, and opens the `structure_change` wizard, all
+via a bare `setConfig(prev => ({...prev, ...}))`/`setExpenses(prev => ...)` functional updater
+with **no** `savePersistedStateNow` call, leaving the revert to ride the ordinary debounced
+autosave alone — the exact gap class that caused real production data loss before (setup wizard,
+weekly check-ins, tax-plan toggles — CLAUDE.md's own history for this section). A tab backgrounded
+before the 800ms fires (mobile Safari's aggressive reclaim, the same scenario CLAUDE.md's
+Persistence section names) would leave the account silently still `newJobSeasonMode: true` in the
+DB despite the UI already having moved on to the re-entry wizard. Live-verified the gap was real
+before fixing: computed values were still only reachable via the functional updaters, no eager
+call existed anywhere in the function. **Fix:** `nextExpenses`/`nextConfig` are now computed
+synchronously (not via a functional updater), passed to `setExpenses`/`setConfig` as before, and
+also handed to a new `savePersistedStateNow({ config: nextConfig, expenses: nextExpenses })` call
+— same pattern `NewJobSeasonEntry`'s own `onActivate` handler already uses two screens away in the
+same file. Verified live: clicked "Back to Work", waited 1.5s (well under the old 800ms-reliant
+window but past the new eager call), fetched the DB row directly via the admin DB Row Viewer —
+`newJobSeasonMode: false`, `newJobSeasonDate: null`, `returnToWorkDate: null` all persisted.
+Cancelling out of the follow-up `structure_change` wizard afterward leaves the account in a clean,
+fully-reverted, `setupComplete: true` normal state (confirmed via full DB row + UI screenshot —
+nav back to 5 normal tabs, Home showing the pre-New-Job-Season numbers). Full `npm run test:run`
+(1683 tests) unaffected. Touches `App.jsx`'s `handleBackToWork` only — **D1**, the same severity
+class as the CLAUDE.md-documented incidents this Persistence pattern exists to prevent, and
+live-reachable any time a tracked-beta/admin/investor account exits New Job Season. Confirmed §7
+Persistence pattern (CLAUDE.md) and this doc's own T2/T4 New Job Season rows (F22/F44) before
+fixing — no other `handleBackToWork` caller exists (single button, `App.jsx:3313`), so no blast
+radius beyond this one function.
+> **IF** `handleBackToWork` grows a new field to reset, **THEN** compute it into the same
+> `nextConfig`/`nextExpenses` synchronous objects — never reintroduce a bare functional
+> `setState` updater here, since `savePersistedStateNow` needs the resolved value, not a closure.
 
 **F143 · Expense edit cascade primitives — TWO deliberately different forward-cascade rules** —
 `expense.js`: `latestPastEntry:179` (consumed directly by `BudgetPanel.jsx:601,753,804`),

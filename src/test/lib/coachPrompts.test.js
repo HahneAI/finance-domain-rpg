@@ -65,7 +65,7 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
   // times over.
   it("instructs compressed treatment for broad multi-topic questions, with narrow questions still getting full explanations", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/do not explain what each metric means or walk every tile in turn/i);
-    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/invite a follow-up for whatever you didn't cover/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/inviting a follow-up for whatever you didn't cover/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/only a narrow \*scope\* \(one number, one panel\) earns the fuller per-item explanation/i);
   });
 

@@ -190,13 +190,21 @@ just bypassing the serverless hop itself.
   and DW-9's rate-limiter/cost-guardrail behavior — deliberately out of scope to keep the live-call
   count lean per the explicit rate-limiting instruction for this pass.
 
-### 6. Bulk Edit — second pass now that it's reachable ⬜
-F155/DW-13 shipped this session (double-tap trigger + standalone button, full-page
-`BulkEditPage.jsx`). Verified live that both triggers open correctly and a single staged
-edit saves. Not yet done: a *multi*-change session (stage an edit + a deletion + a new
-expense in the same visit, confirm the change-count badge and the actual saved payload are
-all correct together — `buildAdvancedEditPayload` has unit coverage for this shape, but it's
-never been driven from the real page).
+### 6. Bulk Edit — second pass now that it's reachable ✅ (DW-20 — 2026-08-26)
+F155/DW-13 shipped last session (double-tap trigger + standalone button, full-page
+`BulkEditPage.jsx`). This pass drove a full multi-change session live for the first time: staged
+an edit (Food $130→$135, forward scope) + a deletion (Phone Bill, forward) + a new $8/wk addition
+in one Bulk Edit visit, confirmed the change-count badge tracked correctly at every step (1 → 2 →
+3), and saved. Found and fixed a real bug in the process (**DW-20**): the edit and deletion
+patches never wrote `monthlyOverrides` — a live regression of the original F37 "editing does
+nothing" defect, this time on the Bulk Edit save path specifically. The staged-edit UI and the
+save itself both looked correct; only Budget's own totals (reading the authoritative
+`monthlyOverrides` layer) revealed the change hadn't actually taken effect. Confirmed via direct
+DB fetch with a distinctive test value (not just eyeballing a screenshot), fixed by reusing the
+exact same override-writing helpers the single-expense Save-scope buttons already use, and
+re-verified live post-fix with the same distinctive-value test. 4 new unit tests added. Full test
+suite (1687 tests) green. Test account left clean — Food back to $130, throwaway test expenses
+zeroed out. Documented in `drift-app-warden.md` F161 / `BUG_FIX_TODO.md` DW-20.
 
 ### 7. Reopen Last Check-In / Force Sync Push (isAdmin-only, not isAiAdmin) ⬜
 Deliberately not exercised this session (out of scope for the `isAiAdmin` test account per

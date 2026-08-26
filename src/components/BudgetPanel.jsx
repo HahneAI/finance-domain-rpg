@@ -617,7 +617,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       cycle,
     });
   };
-  const saveAdvancedEdit = ({ patches = [], additions = [] }) => {
+  const saveAdvancedEdit = ({ patches = [], additions = [], overridesByExpId = {} }) => {
     applyExpenseUpdate(prev => {
       // Group patches by expId so multiple patches per expense are all applied
       const patchMap = {};
@@ -640,7 +640,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           }
           if (newByPhase) billingMeta = { ...billingMeta, byPhase: newByPhase };
         }
-        return { ...e, history, billingMeta };
+        // monthlyOverrides is the authoritative read layer (getEffectiveAmountForMonth
+        // checks it before ever falling back to history) — without also writing it
+        // here, an expense with an existing override for the target month would
+        // silently mask this whole edit (Bug 1's "editing does nothing" defect,
+        // reopened for the Bulk Edit path specifically; see buildAdvancedEditPayload).
+        const monthlyOverrides = overridesByExpId[e.id] ?? e.monthlyOverrides;
+        return { ...e, history, billingMeta, monthlyOverrides };
       });
 
       const newExps = additions.map(a => ({

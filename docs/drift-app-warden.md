@@ -1888,6 +1888,63 @@ Line").
 > — a key-shape change there silently breaks double-tap detection without touching single-tap
 > select, so it's easy to miss in casual testing).
 
+**F161 · Bulk Edit's edit/deletion patches never wrote `monthlyOverrides` — a live regression
+of F37's own Bug 1 ("editing does nothing"), exactly the divergence F42's own IF/THEN check
+above warned about (2026-08-26, live-testing-checklist.md item 6, DW-20, fixed) — [L]**
+`saveAdvancedEdit` (`BudgetPanel.jsx`) wrote only `history`/`billingMeta` from
+`buildAdvancedEditPayload`'s patches — never `monthlyOverrides`, the layer
+`getEffectiveAmountForMonth` (`finance.js`) checks *first* and returns from directly, never
+falling through to `history` at all when an override exists for that month. Any expense that
+already carries a `monthlyOverrides` entry for the target month(s) — which, per F37's own Bug
+1/2 saga, is the normal state for most real expenses once anyone has ever used a single-expense
+Save-scope button on them — silently swallowed a Bulk Edit change with zero error and zero
+visual difference in the Bulk Edit UI itself (the staged-edit card correctly showed "CHANGED →
+$135.00/check"; the save even round-tripped through Supabase cleanly), while every other real
+UI surface (Budget's own expense list, the Needs total, "Weekly Spend") kept reading the stale
+pre-edit override and never moved. Live-confirmed and reproduced exactly this way: staged Food
+$130→$135 (`forward` scope) + a deletion of Phone Bill (`forward`) + a new $8/wk addition in one
+Bulk Edit visit — the save-confirmation badge correctly showed "(3)" and the page returned
+cleanly to Budget, but Budget's own "Needs" total read $138/wk (`$130 stale-Food + $8 new`, not
+the real `$135 + $8 = $143`) because Food's `monthlyOverrides["2026-08"]` was still `$130`.
+Confirmed via a direct `account_history`-adjacent DB fetch, not just a screenshot: `history`/
+`billingMeta.byPhase` correctly held `135`, `monthlyOverrides` still held `130` — the exact
+split F37's "Core defect" writeup describes. **Fix:** `buildAdvancedEditPayload` (`expense.js`)
+now also computes and returns `overridesByExpId` — reusing the *exact same* helpers the
+single-expense Save-scope buttons already call (`applyQuarterForward`/`applyMonthEdit` for
+edits, `clearMonthForward`/`clearMonth` for deletions — F37's own functions, not new logic),
+keyed per touched expense. `saveAdvancedEdit` merges `overridesByExpId[e.id]` into each patched
+expense alongside `history`/`billingMeta`. New expense additions were already correct and
+untouched by this fix — a brand-new expense has no pre-existing override to be shadowed by, so
+its `history` entry was always authoritative on its own. Verified live, before/after, with a
+distinctive test value (Food → $141) specifically to rule out "looks the same by coincidence":
+pre-fix, `monthlyOverrides["2026-08"]` stayed `$130` after saving `$141` via Bulk Edit; post-fix,
+the same edit correctly wrote `$141` into `monthlyOverrides` for every month from the edit's
+start through fiscal year end, matching `history`. Added 4 new `buildAdvancedEditPayload` unit
+tests asserting `overridesByExpId`'s shape for all four edit/deletion-scope combinations
+(forward edit, month-only edit, forward deletion, month-only deletion); one pre-existing
+shape-assertion test updated for the new return key. Full `npm run test:run` (1687 tests,
++4 from this fix) green. Test account left clean: Food reverted to its real $130, the two
+throwaway test expenses created during live verification zeroed out the same way any
+deprecated expense already sits inactive in this account (this app never hard-deletes an
+expense row — confirmed no such affordance exists anywhere in `BudgetPanel.jsx`). |
+`src/lib/expense.js` (`buildAdvancedEditPayload`), `src/components/BudgetPanel.jsx`
+(`saveAdvancedEdit`), `src/test/lib/expenseCycles.test.js` | **D1** — silently masked write,
+live-reachable on Bulk Edit's very first real live-testing pass since F155 shipped it two
+sessions ago; every account with prior single-edit history on a Bulk-Edited expense hits this |
+This is precisely the check F42's own IF/THEN already told a future session to run
+("edit one expense via sheet and via bulk with identical inputs — identical stored shape") —
+it had just never actually been run live until this pass; confirmed F37's Bug 1 writeup
+(`docs/BUG_FIX_TODO.md`'s original "Core defect" section) to reuse its exact helpers rather
+than re-deriving the override-write logic a third time.
+> **IF** `BulkEditPage.jsx`/`buildAdvancedEditPayload` grows a new staged-change type (a third
+> scope, a new field type beyond amount/cycle), **THEN** it needs its own `overridesByExpId`
+> entry using the matching F37 helper — the pattern established here, not a fresh one. **IF**
+> any other bulk/multi-expense save path is ever added anywhere in the app, **THEN** run F42's
+> own prescribed check against it before shipping, not after: this exact defect class is now
+> proven to survive a full save→reload round-trip with zero UI-visible symptom in the feature
+> that introduced it, only surfacing on a *different* screen (Budget's own totals) that a
+> feature-scoped test of Bulk Edit alone would never think to re-check.
+
 **F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
 `:2103` — **[G]**
 `canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})` — display-only here

@@ -12,8 +12,12 @@ section rather than duplicating the write-up.
 
 ## Open — Drift Warden findings
 
-Nothing currently open. DW-1 through DW-18 are all fixed — see the Fixed
-table below. New findings beyond DW-18 get filed here as DW-19+.
+| # | Finding | Where | Status |
+|---|---------|-------|--------|
+| DW-19 | **Ask Coach's broad-question number cap ("no more than three numbers") doesn't hold in live model output, even after a hard self-checkable rewrite.** Live-tested for the first time this session (previously blocked — no `/api/coach` route or Anthropic key in this sandbox; unblocked via a scoped `AI_ADMIN_COACH_TEST_KEY` called directly against the real `claude-haiku-4-5` endpoint with the exact system prompt/context captured from the running app). Asking the rubric's own canonical trigger phrase ("Give me a full breakdown of my whole dashboard — everything.") cited 7 numbers both before *and after* rewriting the cap as an explicit, self-checkable hard limit — three other symptoms from the same test round (paragraph length, stacked figurative touches, missing follow-up invitation) all resolved cleanly with the prompt edit; this one didn't. | `src/lib/coachPrompts.js` (`ASK_COACH_SYSTEM_PROMPT`) | 🔶 Prompt-tuning gap, not a code defect — likely needs a few-shot worked example rather than another prose rewrite of the same instruction. See `drift-app-warden.md` F160 for the full before/after. |
+
+DW-1 through DW-18 are all fixed — see the Fixed table below. New findings
+beyond DW-19 get filed here as DW-20+.
 
 ---
 

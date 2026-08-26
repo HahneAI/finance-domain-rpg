@@ -529,6 +529,59 @@ that function).
 > first rate change, immediately followed by a second one, correctly keeps the original weeks
 > pinned to the first (anchored) rate rather than drifting to the second.
 
+**F160 · Ask Coach broad-question compression regressed under live model output — a previously
+"fixed" rule silently stopped holding (2026-08-26, live personality test against a real
+`claude-haiku-4-5` call, DW-19, partially fixed) — [prompt tuning, not a code defect]**
+`coachPrompts.js`'s `ASK_COACH_SYSTEM_PROMPT` already carried an explicit broad-question
+compression rule with its own regression-test coverage (`coachPrompts.test.js`, comment citing a
+prior live incident: *"Give me a full rundown of my Home panel" produced a two-screen wall of
+text"*). Live-testing Coach for the first time this session (previously blocked entirely —
+this sandbox has no `/api/coach` route and no Anthropic key; unblocked mid-session by an
+AI-Admin-scoped test key, `AI_ADMIN_COACH_TEST_KEY`, called directly against the real
+`claude-haiku-4-5` endpoint with the exact `systemPrompt`/`contextBlock` captured live from the
+running app via a `page.route` interceptor — see `docs/live-testing-checklist.md` item 5) found
+the rule holding on paper but failing in the model's actual output: asking the rubric's own
+canonical trigger phrase verbatim ("Give me a full breakdown of my whole dashboard —
+everything.") produced 7 distinct numbers across 3 paragraphs and no follow-up invitation,
+despite the prompt explicitly requiring "the two or three numbers that actually matter" and an
+explicit invite. A second, narrower gap found in the same pass: the base persona's "two to
+three sentences, never more" rule was being applied loosely to *every* Ask Coach question
+because the mode-level exception ("a real explanation can run a short paragraph or two") read as
+exempting the whole mode rather than only genuine "how does X work" mechanics questions — 3 of 4
+live test messages (none of them mechanics questions) ran 2-3 full paragraphs. **Fix (prompt-only,
+`coachPrompts.js`):** (1) rescoped the paragraph-length exception explicitly to mechanics
+questions only, with a default-to-brevity tiebreaker for ambiguous cases; (2) rewrote the
+broad-question cap as a hard, self-checkable rule ("no more than three, full stop... count the
+numbers you named: four or more... means the rule was broken... cut it back rather than send
+it") and made the follow-up invitation explicitly mandatory rather than a suggested closer.
+**Verified live, same 4 messages, before/after:** 3 of 4 improved cleanly — paragraph count down
+1-2 messages, a previously-stacked figurative-touch violation (two flourishes in one message,
+violating the explicit "never stacked" rule) resolved to a single touch, and the broad-question
+follow-up invitation went from entirely absent to present verbatim. **Residual gap, not fully
+closed:** the same "give me everything" retest, even against the hard-capped rewrite, still cited
+7 numbers — the number-count cap did not hold even with an explicit self-check framing. This
+reads as a real Haiku limitation on enumerative compression instructions stated in prose, not a
+wording problem the last edit could fix; the next lever would be a few-shot worked example
+embedded in the prompt, not another rewrite of the same instruction. Full `npm run test:run`
+(1683 tests) green after the edit — one pre-existing regex assertion in `coachPrompts.test.js`
+needed updating to match the new phrasing ("invite a follow-up" → "inviting a follow-up"), no
+other test touched this text. Total live-call cost across both rounds (8 calls): ~25K input /
+~1.2K output tokens, ≈$0.03. | `src/lib/coachPrompts.js` (`ASK_COACH_SYSTEM_PROMPT`),
+`src/test/lib/coachPrompts.test.js` | Not a code-correctness defect — a live-verified gap between
+the system prompt's stated rules and the model's actual behavior on Haiku, previously untestable
+in this environment and apparently already regressed once before per the test file's own cited
+incident | Read `docs/coach-personality-rubric.md`'s Metaphor Intensity target (3, "light
+seasoning") before evaluating the figurative-touch results; confirmed the pre-existing
+regression test's intent before editing its regex rather than loosening what it actually checks.
+> **IF** this prompt is edited again for length/compression, **THEN** re-run the same 4-message
+> live test (or equivalent) before calling it fixed — this class of rule already regressed once
+> silently after being "fixed," and a code-level regex test against the prompt *text* cannot
+> catch a model that stops following text it can still literally see, only a live call can.
+> **IF** the broad-question number cap is tackled again, **THEN** try a worked few-shot example in
+> the prompt before another prose rewrite — two rewrites of the same instruction shape already
+> failed to hold the count down. Check: the rubric's own canonical broad-question phrasing
+> ("give me everything") is the one to re-test with, not an easier-to-compress paraphrase.
+
 **F11 · `handleBackToWork()`** — `App.jsx:1749–1781` — **[G]**
 The single reset point for leaving New Job Season: auto-reactivates flagged expenses,
 nulls the `newJobSeason*`/unemployment/`returnToWorkDate` fields, resets

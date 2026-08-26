@@ -161,14 +161,34 @@ Home/Income's displayed numbers.
 
 ## Headless Browser UI Testing
 
-### 5. Ask Coach ⬜
-Never opened this session. Reads a lot of the exact figures this session touched or fixed
-(`avgWeeklySpend`, `remainingSpend`, goal timelines, New Job Season runway via
-`buildCoachContext`) — worth confirming it reflects the DW-15 (Budget/Home `avgWeeklySpend`
-unification) and DW-11/DW-12 (Lock Date, DB Row drift badge) fixes rather than a stale
-context shape. Also worth a quick adversarial pass on chat input itself (very long message,
-rapid-fire sends) given DW-9's rate-limiter/cost-guardrail work referenced in
-`drift-app-warden.md`.
+### 5. Ask Coach ✅ (data pull verified live; personality tightened, DW-19 partial — 2026-08-26)
+This sandbox has no `/api/coach` route (plain `vite`, not `vercel dev`) and no Anthropic key by
+default — confirmed blocked with a zero-cost probe (`/api/coach` 404'd before reaching Anthropic
+at all) before spending anything. Unblocked mid-session via a scoped `AI_ADMIN_COACH_TEST_KEY`
+env var, called directly against the real `claude-haiku-4-5` endpoint with the exact
+`systemPrompt`/`contextBlock` captured live from the running app (a `page.route` interceptor on
+the outgoing `/api/coach` POST, not a hand-reconstruction) — faithful to the real request shape,
+just bypassing the serverless hop itself.
+- **Data pull:** every figure Coach cited across 8 live calls (4 messages × 2 rounds) matched the
+  captured context exactly — Left This Week, Next Week Takehome, Net Worth Trend, Budget Health,
+  and the Food/Phone Bill weekly-cost breakdown all agreed with what Home/Budget display directly.
+  Confirms DW-15's `avgWeeklySpend` unification reaches Coach with zero drift.
+- **Personality:** live-tested against the real model (previously impossible to verify — only the
+  prompt *text* could be read, never actual output) and found real, reproducible deviations from
+  the system prompt's own rules: 3 of 4 messages ran well past the "two to three sentences" target
+  even on non-mechanics questions, the canonical broad-question trigger ("give me everything")
+  cited 7 numbers instead of ≤3 and skipped the required follow-up invite, and one message stacked
+  two figurative touches in violation of the explicit "never stacked" rule. Tightened
+  `coachPrompts.js`'s wording (scoped the paragraph-length exception to genuine mechanics
+  questions only; rewrote the broad-question cap as a hard, self-checkable rule) and re-ran the
+  identical 4 messages: length and the stacked-metaphor issue resolved cleanly, the follow-up
+  invite now fires, but the broad-question number cap still didn't hold even after the rewrite —
+  filed open as **DW-19** (prompt-tuning gap, not a code defect; `drift-app-warden.md` F160).
+- Full `npm run test:run` (1683 tests) green after the prompt edit. Total live-call cost across
+  both rounds: ~25K input / ~1.2K output tokens, ≈$0.03.
+- Not covered this pass: the adversarial chat-input angle (very long message, rapid-fire sends)
+  and DW-9's rate-limiter/cost-guardrail behavior — deliberately out of scope to keep the live-call
+  count lean per the explicit rate-limiting instruction for this pass.
 
 ### 6. Bulk Edit — second pass now that it's reachable ⬜
 F155/DW-13 shipped this session (double-tap trigger + standalone button, full-page

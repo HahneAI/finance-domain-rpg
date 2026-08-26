@@ -61,21 +61,29 @@ Notes learned the hard way this session:
 
 ## Math / Time Calculations
 
-### 1. New Job Season — live UI walkthrough ⬜
+### 1. New Job Season — live UI walkthrough ✅ (DW-16, DW-17 — 2026-08-26)
 Script-level math already verified (`computeNewJobSeasonRunway`'s burn/cash-decay/benefits/
 pending-check piecewise formula all matched hand-calculation exactly, incl. both branches of
-the "check arrives before vs. after dry-out" edge case — see chat history 2026-08-25). Not yet
-done: the actual click-through.
-- Confirm the revert path first: does "Back to Work" (`returnToWorkDate`) cleanly restore
-  normal mode, or does something (nav items, `config.newJobSeasonMode`) stick? Check this on
-  a throwaway/synthetic account state before touching the shared test account, or use the DB
-  Row Viewer to snapshot `config` first and confirm you can restore it.
-- Walk the full "Quit My Job" wizard (`NewJobSeasonEntry.jsx`) end to end.
-- Confirm `NewJobSeasonHomePanel`/`NewJobSeasonBudgetPanel` render the same runway numbers
-  the script-level check already validated, for the *actual* account's real cash-on-hand/
-  expenses/benefits config — not just a synthetic fixture.
-- Confirm Coach's context (`aiContext.js`) reflects New Job Season numbers correctly if Coach
-  is tested in the same pass (see Headless UI §5 below).
+the "check arrives before vs. after dry-out" edge case — see chat history 2026-08-25). Full
+live click-through completed 2026-08-26 on the real shared test account (DHL Warehouse):
+- Snapshotted `config`/`expenses` via the DB Row Viewer first, per this file's own guidance.
+  Walked the full "Quit My Job" wizard (`NewJobSeasonEntry.jsx`) end to end, both with and
+  without a pending final paycheck (all 4 real steps, including the days-worked/arrival-day
+  pending-check sub-flow). Found and fixed two real bugs along the way: bill labels hardcoded
+  "/mo" regardless of the expense's real billing cycle (DW-16), and the step-count header read
+  "Step 4 of 3" whenever the due-dates step existed (also DW-16).
+- `NewJobSeasonHomePanel`/`NewJobSeasonBudgetPanel` rendered runway numbers that were
+  cross-checked against the real persisted config/expenses (cash on hand, pending-check
+  amount/date, weekly burn, cash runway end date) — all consistent with each other and with
+  `computeNewJobSeasonRunway`'s inputs.
+- **Revert path** (this file's own stated prerequisite): "Back to Work" was confirmed to cleanly
+  restore normal mode (nav tabs, Home panel) — but only via the 800ms debounce; the button itself
+  had no eager save at all, a real CLAUDE.md Persistence-pattern gap (DW-17), now fixed and
+  live-verified (DB row confirmed `newJobSeasonMode: false` within 1.5s of the click). Re-entered
+  and exited New Job Season a second time post-fix to confirm both fixes together and leave the
+  shared account in a clean, fully-reverted, `setupComplete: true` state.
+- Coach's New Job Season context line was not separately re-tested this pass — still tracked as
+  Headless UI item 5 below.
 
 ### 2. Loans tab math ⬜
 Flagged as DW-W1 (`drift-app-warden.md` §10 F41) — loan `history` is regenerated retroactively

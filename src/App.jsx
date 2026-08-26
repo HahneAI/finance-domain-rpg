@@ -1982,17 +1982,22 @@ export default function App() {
   // Work" button and the new Account panel entry point (setup wizard rewrite,
   // 2026-07-18), so there's exactly one place that resets the job-loss fields.
   function handleBackToWork() {
-    // Auto-reactivate flagged expenses on exit (§1.C3).
-    setExpenses(prev => prev.map(exp => {
+    // Auto-reactivate flagged expenses on exit (§1.C3). Computed synchronously
+    // (not a bare functional setState) so the same value can be eager-saved
+    // below — see CLAUDE.md's Persistence eager-save pattern. Without this,
+    // a backgrounded tab could lose the exit before the 800ms debounce
+    // autosave fires, leaving the account silently stuck in New Job Season.
+    const nextExpenses = expenses.map(exp => {
       const status = exp.newJobSeasonStatus ?? "active";
       const auto = exp.autoReactivateOnIncome ?? true;
       if (status !== "active" && auto) {
         return { ...exp, newJobSeasonStatus: "active" };
       }
       return exp;
-    }));
-    setConfig(prev => ({
-      ...prev,
+    });
+    setExpenses(nextExpenses);
+    const nextConfig = {
+      ...config,
       newJobSeasonMode: false,
       newJobSeasonDate: null,
       unemploymentEnabled: null,
@@ -2011,7 +2016,9 @@ export default function App() {
       // newJobSeasonMode is true) until the *next* job loss, then reappeared
       // and got summed into a runway it has nothing to do with.
       jobHuntIncomeLog: [],
-    }));
+    };
+    setConfig(nextConfig);
+    savePersistedStateNow({ config: nextConfig, expenses: nextExpenses });
     setWizardEntry("structure_change");
   }
 

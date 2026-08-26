@@ -1839,6 +1839,73 @@ obvious bug fix.
 > on an incidental `>0` required-field gate, since several of the fields this entry fixes were
 > never required at all.
 
+**F157 · New Job Season entry/budget bill labels hardcoded "/mo"; wizard step counter hardcoded
+"of 3" (2026-08-26, live click-through of `live-testing-checklist.md` item 1, both fixed) —
+[G]** Two small but real display bugs found walking the full "Quit My Job" flow live (not
+previously exercised — checklist item 1 was script-verified for math only). (1) **Wrong unit
+suffix:** `NewJobSeasonEntry.jsx`'s bill-tracking checklist (step 2) and
+`NewJobSeasonBudgetPanel.jsx`'s tracked-bills list both read `getExpenseDisplayAmount(exp)` — the
+raw per-cycle `billingMeta.amount`, never normalized to monthly — but hardcoded a literal `/mo`
+suffix on the result regardless of the expense's actual `billingMeta.cycle`. Food is *always*
+weekly (F8's cycle flip to `"weekly"` is permanent, not New-Job-Season-scoped), so every account
+going through this flow saw its Food bill mislabeled "$130/mo" when the real cost is $130/*week*
+(~4x understated) — live-confirmed on the real test account (`billingMeta.cycle: "weekly"`,
+`amount: 130`, rendered `$130/mo`) at exactly the moment (job-loss triage) a user is deciding
+financial risk. **Fix:** added `getExpenseDisplaySuffix(exp)` to `expense.js` (cycle → suffix map:
+`weekly→wk, biweekly→2wk, every30days→mo, yearly→yr`; loans keep `loanMeta.paymentFrequency` as
+before) and swapped both hardcoded `"/mo"` sites to call it. Verified live post-fix: same bill now
+renders "$130/wk". (2) **Off-by-one step counter:** the modal has 4 real steps (`step` 0–3 —
+Start/Pending-check/Bill-review/Due-dates) but the header hardcoded `Step ${step+1} of 3`; step 3
+(due dates) only exists when `keptPickableExpenses.length > 0` after the bill-review step, so any
+account with at least one trackable non-loan bill saw "Step 4 of 3" on the last screen — a
+nonsensical, confusing total. **Fix:** total now computed as
+`keptPickableExpenses.length > 0 ? 4 : 3`, matching the same live condition `goNext`/`nextLabel`
+already branch on just above. Verified live: "Step 3 of 4" → "Step 4 of 4". Full `npm run
+test:run` (1683 tests) unaffected by either fix — pure display, no formula touched. Touches
+`NewJobSeasonEntry.jsx` (bill-review list, header step counter) and
+`NewJobSeasonBudgetPanel.jsx` (tracked-bills list), plus the new `getExpenseDisplaySuffix` export
+in `expense.js`. Correct underlying amount/data throughout — wrong presentation only, not a
+math-engine defect. Same live click-through also confirmed the item's other open question — "Back
+to Work" — see F158 immediately below.
+> **IF** a new `EXPENSE_CYCLE_OPTIONS` value is ever added, **THEN** add it to
+> `CYCLE_SUFFIXES` in the same commit or it silently falls back to the `"mo"` default (same
+> `normalizeCycle` fallback pattern as the rest of `expense.js` — a reasonable default, not
+> silent wrongness, but still worth a deliberate check).
+
+**F158 · "Back to Work" (`handleBackToWork`, App.jsx) relied solely on the 800ms debounce
+autosave, not an eager save — CLAUDE.md Persistence pattern gap (2026-08-26, live-confirmed the
+`live-testing-checklist.md` item 1 revert-path check, fixed) — [D1]** `handleBackToWork` is
+exactly the "discrete I'm-done-with-this-action" gesture CLAUDE.md's Persistence section
+describes (a mode-exit toggle, same class as Save/Confirm/Add/Delete) — it flips
+`newJobSeasonMode` off, clears the job-loss fields, and opens the `structure_change` wizard, all
+via a bare `setConfig(prev => ({...prev, ...}))`/`setExpenses(prev => ...)` functional updater
+with **no** `savePersistedStateNow` call, leaving the revert to ride the ordinary debounced
+autosave alone — the exact gap class that caused real production data loss before (setup wizard,
+weekly check-ins, tax-plan toggles — CLAUDE.md's own history for this section). A tab backgrounded
+before the 800ms fires (mobile Safari's aggressive reclaim, the same scenario CLAUDE.md's
+Persistence section names) would leave the account silently still `newJobSeasonMode: true` in the
+DB despite the UI already having moved on to the re-entry wizard. Live-verified the gap was real
+before fixing: computed values were still only reachable via the functional updaters, no eager
+call existed anywhere in the function. **Fix:** `nextExpenses`/`nextConfig` are now computed
+synchronously (not via a functional updater), passed to `setExpenses`/`setConfig` as before, and
+also handed to a new `savePersistedStateNow({ config: nextConfig, expenses: nextExpenses })` call
+— same pattern `NewJobSeasonEntry`'s own `onActivate` handler already uses two screens away in the
+same file. Verified live: clicked "Back to Work", waited 1.5s (well under the old 800ms-reliant
+window but past the new eager call), fetched the DB row directly via the admin DB Row Viewer —
+`newJobSeasonMode: false`, `newJobSeasonDate: null`, `returnToWorkDate: null` all persisted.
+Cancelling out of the follow-up `structure_change` wizard afterward leaves the account in a clean,
+fully-reverted, `setupComplete: true` normal state (confirmed via full DB row + UI screenshot —
+nav back to 5 normal tabs, Home showing the pre-New-Job-Season numbers). Full `npm run test:run`
+(1683 tests) unaffected. Touches `App.jsx`'s `handleBackToWork` only — **D1**, the same severity
+class as the CLAUDE.md-documented incidents this Persistence pattern exists to prevent, and
+live-reachable any time a tracked-beta/admin/investor account exits New Job Season. Confirmed §7
+Persistence pattern (CLAUDE.md) and this doc's own T2/T4 New Job Season rows (F22/F44) before
+fixing — no other `handleBackToWork` caller exists (single button, `App.jsx:3313`), so no blast
+radius beyond this one function.
+> **IF** `handleBackToWork` grows a new field to reset, **THEN** compute it into the same
+> `nextConfig`/`nextExpenses` synchronous objects — never reintroduce a bare functional
+> `setState` updater here, since `savePersistedStateNow` needs the resolved value, not a closure.
+
 **F143 · Expense edit cascade primitives — TWO deliberately different forward-cascade rules** —
 `expense.js`: `latestPastEntry:179` (consumed directly by `BudgetPanel.jsx:601,753,804`),
 `getBaseEntryAt:192` (consumed by `buildAdvancedEditPayload`, F42), `buildCascadedWeekly:163`

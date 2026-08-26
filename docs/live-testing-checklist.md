@@ -85,19 +85,49 @@ live click-through completed 2026-08-26 on the real shared test account (DHL War
 - Coach's New Job Season context line was not separately re-tested this pass — still tracked as
   Headless UI item 5 below.
 
-### 2. Loans tab math ⬜
+### 2. Loans tab math ✅ (script-verified 2026-08-26, no defect found)
 Flagged as DW-W1 (`drift-app-warden.md` §10 F41) — loan `history` is regenerated retroactively
-on every edit (`buildLoanHistory(meta)`), a known designed-in gap, but never live-verified.
-- Add a loan, confirm `computeLoanPayoffDate` matches a hand calculation for a simple
-  amount/payment/frequency combo.
-- Edit loan terms mid-quarter, confirm past weeks' spend doesn't silently change (the DW-W1
-  risk) — or confirm it does and that's expected/acceptable.
-- Check `loanWeeklyAmount` feeds `weeklyAmountForBurn` correctly when a loan is
-  `trackDuringNewJobSeason` (already exercised indirectly by item 1, worth a direct check too).
+on every edit (`buildLoanHistory(meta)`), a known designed-in gap. Script-level check (real
+`computeLoanPayoffDate`/`buildLoanHistory`/`loanPaymentsRemaining`/`loanWeeklyAmount` against two
+representative loans — a $1,000/$100-weekly loan and a $2,000/$150-biweekly loan):
+- `computeLoanPayoffDate` matched a hand calculation exactly for both combos (weekly: 10 payments
+  → 2026-03-16; biweekly: 14 payments → 2026-12-14), including the quarter-safe zero-out date
+  (`buildLoanHistory`'s second entry starts the day after the payoff's containing quarter ends).
+- `loanPaymentsRemaining` matched a hand-calculated elapsed-payments count exactly for a loan
+  actively mid-payoff (7 of 14 biweekly payments remaining as of today).
+- Edited loan terms mid-quarter (`paymentAmount` $150→$200) and confirmed the DW-W1 risk is real
+  and exactly as documented: `buildLoanHistory` regenerates the **entire** `weekly[4]` array from
+  the new terms, including the `effectiveFrom` anchor that predates today — past weeks' spend
+  *does* silently change. Not a new bug; matches F41's documented, accepted design debt exactly —
+  no action taken, no new F-entry needed.
+- `weeklyAmountForBurn` (`newJobSeasonRunway.js`) calls `loanWeeklyAmount(exp.loanMeta)` directly
+  for `exp.type === "loan"`, bypassing `getEffectiveAmount`/`history` entirely — confirmed via
+  code read + the same $150-biweekly loan numerically (`loanWeeklyAmount` → $75/wk, matches
+  `weeklyAmountForBurn`'s only consumer path for loans). Correct and independent of the DW-W1
+  regeneration gap, as F41 already documents.
 
-### 3. Résumé Review / job-hunt tracking math ⬜
-`ReemploymentTracker.jsx` — target income derivation (`baseRate × hours`), job application
-log. Untouched this session; ties into New Job Season (item 1).
+### 3. Résumé Review / job-hunt tracking math ✅ (script-verified 2026-08-26, no defect found)
+`ReemploymentTracker.jsx` — target income derivation (`baseRate × hours`), job application log.
+- `defaultTargetAnnual = rate * hours * 52` (fallback placeholder shown only until the user sets
+  `targetIncomeAnnual` explicitly — the stored value always wins via `config?.targetIncomeAnnual ??
+  defaultTargetAnnual`) matched a hand calculation exactly against the real test account's rate
+  ($25/hr × 40hr × 52 = $52,000).
+- Noted, not a bug: the jobless-onboarding wizard pages (`SetupWizard.jsx`/`SetupWizardAdlib.jsx`,
+  "My prior rate was $X an hour") write `targetIncomeAnnual` directly using a *hardcoded* 40-hour
+  assumption (`rate * 40 * 52`), a different formula from this component's own `hours` (which
+  prefers the account's real `maxWeeklyHours`/`standardWeeklyHours`). Not drift — the two serve
+  different purposes (an explicit answer once a prior rate is known, vs. a same-job-hours
+  placeholder guess before one is), and once the wizard's value is stored this component just
+  displays it rather than recomputing — confirmed by reading `applyConfigUpdate`'s call sites.
+- `targetWeeklyNet`'s flat-rate net estimate is self-documented in its own comment as a rough
+  sketch (same simplification class as DW-W6/F142's `estimateGoalNextYear`), not the authoritative
+  `computeNet` path — no live defect, matches its stated intent.
+- `applyConfigUpdate` (target income, return-to-work date, application CRUD/status) already
+  follows the CLAUDE.md eager-save pattern correctly — synchronous compute + `setConfig` +
+  `saveConfigNow`, no debounce-only gap like DW-17's `handleBackToWork` had.
+- Not covered this pass: a live UI click-through of the application log CRUD itself (add/edit/
+  delete/status-change) — the math above was checked by reading + a script-level formula
+  cross-check, not by driving the actual panel in a browser.
 
 ### 4. Life Events — full save-through flows ⬜
 This session only tested adversarial *input* on the wizard page (negative/huge/decimal

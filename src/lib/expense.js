@@ -74,6 +74,16 @@ export function getExpenseDisplayAmount(expense) {
   return expense?.billingMeta?.amount ?? 0;
 }
 
+// The unit suffix matching getExpenseDisplayAmount's raw per-cycle amount —
+// that amount is never normalized to a monthly figure, so a caller hardcoding
+// "/mo" mislabels any weekly/biweekly/yearly-cycle bill (Food is always
+// weekly, F8). Loans keep their own paymentFrequency, not billingMeta.cycle.
+const CYCLE_SUFFIXES = { weekly: "wk", biweekly: "2wk", every30days: "mo", yearly: "yr" };
+export function getExpenseDisplaySuffix(expense) {
+  if (expense?.type === "loan") return expense.loanMeta?.paymentFrequency ?? "mo";
+  return CYCLE_SUFFIXES[normalizeCycle(expense?.billingMeta?.cycle)] ?? "mo";
+}
+
 // ─── New Job Season due-date assignment (TODO §1 expense review) ─────────────────
 // Quick "week of month" presets for the payment-date step, plus a resolver
 // that turns a pick into a concrete anchor date. The day picks (1/8/15/22)

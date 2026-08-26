@@ -83,6 +83,43 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 
 ---
 
+## Known Limitations (live-tested, not yet resolved)
+
+**Ask Coach broad-question number cap doesn't hold in live model output (2026-08-26, DW-19,
+`drift-app-warden.md` F160).** First-ever live test of Coach against a real model this session
+(previously blocked — no working `/api/coach` route or Anthropic key existed in the sandbox this
+was tested from; unblocked via a scoped test key called directly against `claude-haiku-4-5` with
+the exact `systemPrompt`/`contextBlock` captured live from the running app).
+
+`ASK_COACH_SYSTEM_PROMPT` (`coachPrompts.js`) instructs, for a broad question: "pick at most three
+numbers total — no more than three, full stop... count the numbers you named: four or more...
+means the rule was broken... cut it back rather than send it." Asked the rubric's own canonical
+broad-question phrasing verbatim — *"Give me a full breakdown of my whole dashboard —
+everything."* — twice, once before and once after rewriting this instruction to the hard,
+self-checkable form quoted above:
+
+- **Before the rewrite:** 7 numbers cited (net income, spend, surplus, savings rate, budget
+  health, next-paycheck delta, projected annual savings), 3 paragraphs, no follow-up invitation.
+- **After the rewrite:** still 7 numbers cited, same set — but paragraph count dropped to 2 and
+  the follow-up invitation now fires verbatim ("Ask me about your goals, budget, or income
+  specifically and I'll go deeper on that one").
+
+So the rewrite fixed two of the three symptoms (length, missing follow-up) but the number-count
+cap itself — an enumerative "stay under N items" instruction stated in prose — did not move at
+all between two different phrasings of the same constraint, one of them written explicitly as a
+self-check. This reads as a real Haiku limitation on this instruction *shape*, not a wording
+problem solvable with another prose rewrite of the same rule.
+
+**For whoever picks up the "Sentence economy" axis above:** this is real anchor data for Ask
+Coach's target score on that axis, and a documented case where a plain textual constraint isn't
+enough on its own. The next thing worth trying is a worked few-shot example embedded in the
+prompt (a full model-answer example showing exactly 3 numbers picked from a longer real list),
+not a third rewrite of the same prose instruction — re-test with the same canonical "give me
+everything" phrasing before calling it resolved, since an easier-to-compress paraphrase won't
+reproduce this.
+
+---
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis:

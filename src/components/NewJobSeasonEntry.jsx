@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
-import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
+import { resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix } from "../lib/expense.js";
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount, resolveNextWeekdayOnOrAfter } from "../lib/newJobSeasonRunway.js";
 import { toLocalIso } from "../lib/finance.js";
 
@@ -299,7 +299,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
-            Life Event{hasExpenses ? ` · Step ${step + 1} of 3` : ""}
+            Life Event{hasExpenses ? ` · Step ${step + 1} of ${keptPickableExpenses.length > 0 ? 4 : 3}` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
             {step === 0 && "Start Your New Job Season"}
@@ -624,7 +624,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                         </div>
                         <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
                           <span style={{ color: catColor }}>{exp.category ?? "—"}</span>
-                          {amount > 0 ? ` · $${Number(amount).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
+                          {amount > 0 ? ` · $${Number(amount).toLocaleString()}/${getExpenseDisplaySuffix(exp)}` : ""}
                         </div>
                       </div>
                     </label>

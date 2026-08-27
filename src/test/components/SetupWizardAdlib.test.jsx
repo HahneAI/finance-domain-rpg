@@ -104,6 +104,7 @@ function advanceToDeductions_baseUser() {
   advanceToScheduleTax_baseUser()
   fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
   fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+  fireEvent.blur(screen.getByLabelText('Max weekly hours'))
   fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
   fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
   fireEvent.change(screen.getByLabelText('Filing status'), { target: { value: 'single' } })
@@ -363,16 +364,38 @@ describe('SetupWizardAdlib — merged Schedule + Tax Rates page (base user)', ()
     expect(screen.getByText(byText(/I work up to/i))).toBeTruthy()
   })
 
-  it('reveals the acknowledgment clause once hours are entered, and gates on answering "do"', () => {
+  it('delays revealing the acknowledgment clause until the hours blank is blurred ("clicked off of"), not on every keystroke', () => {
     renderAdlib()
     advanceToScheduleTax_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    // Mid-typing (e.g. the "4" of "40") already satisfies the >0 validity check, but the
+    // next clause must not appear until the user is actually done with this blank —
+    // the real, reported complaint this behavior fixes.
+    fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '4' } })
+    expect(screen.queryByText(byText(/understand this hours number/i))).toBeNull()
     fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    expect(screen.queryByText(byText(/understand this hours number/i))).toBeNull()
+
+    fireEvent.blur(screen.getByLabelText('Max weekly hours'))
     expect(screen.getByText(byText(/understand this hours number/i))).toBeTruthy()
     expect(screen.queryByText(byText(/pay period closes on/i))).toBeNull()
 
     fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
     expect(screen.getByText(byText(/pay period closes on/i))).toBeTruthy()
+  })
+
+  it('treats an already-valid resumed/pre-filled hours value as already committed — no blur needed', () => {
+    // Re-entry (structure_change), unlike first-run, pre-fills formData from the real
+    // account config instead of blanking it — maxWeeklyHours: 40 below survives init.
+    const preFilled = { ...DEFAULT_CONFIG, employerPreset: null, userPaySchedule: 'weekly', maxWeeklyHours: 40 }
+    render(<SetupWizardAdlib config={preFilled} lifeEvent="structure_change" onComplete={vi.fn()} onCancel={vi.fn()} />)
+    // structure_change's page set is Intake, Schedule+Tax, Deductions, Wrap Up — advance
+    // past Intake's pivot picker + pre-filled pay-structure clause straight to Schedule+Tax.
+    fireEvent.click(primaryBtn())
+    fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
+    // maxWeeklyHours came in pre-filled at 40 — the acknowledgment clause should already be
+    // visible without the user ever touching (let alone blurring) the hours blank.
+    expect(screen.getByText(byText(/understand this hours number/i))).toBeTruthy()
   })
 
   it('does not carry over startDate/maxWeeklyHours/hoursUnderstood from an already-answered real config', () => {
@@ -435,6 +458,7 @@ describe('SetupWizardAdlib — merged Schedule + Tax Rates page (base user)', ()
 
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    fireEvent.blur(screen.getByLabelText('Max weekly hours'))
     fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
     fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
     expect(screen.getByText(byText(/one of my paydays/i))).toBeTruthy()
@@ -458,6 +482,7 @@ describe('SetupWizardAdlib — merged Schedule + Tax Rates page (base user)', ()
     advanceToScheduleTax_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    fireEvent.blur(screen.getByLabelText('Max weekly hours'))
     fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
     fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
     fireEvent.change(screen.getByLabelText('Filing status'), { target: { value: 'single' } })
@@ -477,6 +502,7 @@ describe('SetupWizardAdlib — merged Schedule + Tax Rates page (base user)', ()
     advanceToScheduleTax_baseUser()
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    fireEvent.blur(screen.getByLabelText('Max weekly hours'))
     fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
     fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
     expect(primaryBtn()).toBeDisabled() // Schedule alone isn't enough — Tax Rates still unanswered
@@ -763,6 +789,7 @@ describe('SetupWizardAdlib — full ad-lib-to-production completion (round-4 fie
     // ── Schedule + Tax Rates (merged, F161) ──
     fireEvent.change(dateField(), { target: { value: '2026-03-01' } })
     fireEvent.change(screen.getByLabelText('Max weekly hours'), { target: { value: '40' } })
+    fireEvent.blur(screen.getByLabelText('Max weekly hours'))
     fireEvent.change(screen.getByLabelText('Hours understood acknowledgment'), { target: { value: 'do' } })
     fireEvent.change(screen.getByLabelText('Pay period closing day'), { target: { value: '1' } }) // Monday
 

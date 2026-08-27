@@ -61,7 +61,19 @@ should become its own destination as the feature grows. The admin diagnostic cou
 saved chats shipped 2026-07-25 (DB Row Viewer → "Coach Chats" line, tap to expand the 5 most
 recent titles). Still open: if a second `chat_type` (Job Scout, statement insights, etc.) ever
 gets a UI caller, that type needs its own retention/summary decision, since today's 3-chat
-retention cap and end-of-session summary are `ask_coach`-specific.
+retention cap and end-of-session summary are `ask_coach`-specific. **2026-08-26 (DW-19,
+`drift-app-warden.md` F160):** the first-ever live test of this chat against a real model call —
+not just a read of the prompt text — found the broad-question compression rule holding on paper
+but not in actual output (7 numbers cited against an instructed ≤3, missing follow-up invite),
+plus the "2-3 sentences" default being applied too loosely outside genuine mechanics questions.
+Both are prompt-only fixes in `coachPrompts.js`; the sentence-length and follow-up-invite issues
+resolved cleanly on retest, but the number-count cap is still open — see
+`docs/coach-personality-rubric.md`'s "Known Limitations" section for the before/after transcripts.
+This live-call method (a scoped `AI_ADMIN_COACH_TEST_KEY` against `claude-haiku-4-5`, exact
+`systemPrompt`/`contextBlock` captured via a `page.route` interceptor on the real `/api/coach`
+request) is the reusable pattern for personality-testing any other Coach surface once it has real
+traffic — see the `authority-finance-coach-live-test` skill and `docs/live-testing-checklist.md`
+item 5.
 *Reference: `docs/TODO.md` §2.H (Chat & Search History Persistence), subsections H3–H4;
 `docs/drift-app-warden.md` §21 F146.*
 
@@ -69,15 +81,15 @@ retention cap and end-of-session summary are `ask_coach`-specific.
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
 prompt: `ASK_COACH_SYSTEM_PROMPT` in `src/lib/coachPrompts.js` (shared Coach voice + Ask-Coach
 answering rules + the app feature guide from `src/lib/coachFeatureGuide.js`, all frozen
-together into one prompt). Gate: `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})` in
-`src/lib/entitlements.js` — true for isAdmin/isTester (unchanged) or a real
-`"trial"`/`"grace"`/`"active"` entitlement from `src/lib/subscription.js`. Checked at every
-mount point (bottom nav, panel render) and independently re-verified server-side in
-`api/coach.js` from the DB row, never trusted from the client. Persistence: `coach_chats`
-(migration 023) via `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` in `src/lib/db.js`,
-called from `AskCoachPanel.jsx` — every completed turn is an eager save, not debounced. Summary
-generation uses a separate, narrower prompt, `COACH_CHAT_SUMMARY_PROMPT`, that never faces the
-user.
+together into one prompt). Gate: `canAccessAskCoachGeneral({isAdmin, isTester, isInvestor,
+isAiAdmin, entitlement})` in `src/lib/entitlements.js` — true for admin/tester/investor/AI-Admin
+(`hasPrivilegedAccess`, unconditional) or a real `"trial"`/`"grace"`/`"active"` entitlement from
+`src/lib/subscription.js`. Checked at every mount point (bottom nav, panel render) and
+independently re-verified server-side in `api/coach.js` from the DB row, never trusted from the
+client. Persistence: `coach_chats` (migration 023) via `loadCoachChats`/`saveCoachChat`/
+`deleteCoachChat` in `src/lib/db.js`, called from `AskCoachPanel.jsx` — every completed turn is
+an eager save, not debounced. Summary generation uses a separate, narrower prompt,
+`COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---
 

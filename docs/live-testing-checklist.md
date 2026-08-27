@@ -22,28 +22,15 @@ permanent record (see `BUG_FIX_TODO.md`'s own header for that distinction).
 
 ## Playwright harness (for every Headless UI item below)
 
-```js
-// scratchpad/_scratch_base.cjs — proxy + auth-state boilerplate this session settled on
-const { chromium } = require('playwright');
-const path = require('path');
-const SCRATCH = '<session scratchpad dir>';
-async function launch() {
-  const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium',
-    args: [
-      `--proxy-server=${process.env.HTTPS_PROXY}`,
-      '--proxy-bypass-list=127.0.0.1;localhost',
-      '--ssl-version-max=tls1.2',
-    ],
-  });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: path.join(SCRATCH, 'auth-state.json') });
-  const page = await context.newPage();
-  return { browser, context, page, SCRATCH };
-}
-module.exports = { launch, SCRATCH };
-```
+Use the `authority-finance-live-test` skill ("live test the app" / "run a testing pass" /
+work through this checklist) — it bundles the launch helper, login script, and modal-dismiss
+helpers this session settled on, plus the process for driving each item end to end (investigate
+→ fix → test → document → commit → push) and the doc-conventions this file feeds into
+(`drift-app-warden.md` F-entries, `BUG_FIX_TODO.md` DW-entries). Anything touching Ask Coach
+specifically goes through the `authority-finance-coach-live-test` skill instead — it has its own
+token-budget/API-key handling this one doesn't cover.
 
-Notes learned the hard way this session:
+Notes learned the hard way this session (worth knowing beyond what the skill already covers):
 - Use `waitUntil: "domcontentloaded"` + an explicit `waitForTimeout(8000-9000)`, not
   `networkidle` — the app's own polling keeps `networkidle` from ever firing.
 - Button `textContent` is literal JSX text, not CSS-transformed — a button styled
@@ -190,13 +177,21 @@ just bypassing the serverless hop itself.
   and DW-9's rate-limiter/cost-guardrail behavior — deliberately out of scope to keep the live-call
   count lean per the explicit rate-limiting instruction for this pass.
 
-### 6. Bulk Edit — second pass now that it's reachable ⬜
-F155/DW-13 shipped this session (double-tap trigger + standalone button, full-page
-`BulkEditPage.jsx`). Verified live that both triggers open correctly and a single staged
-edit saves. Not yet done: a *multi*-change session (stage an edit + a deletion + a new
-expense in the same visit, confirm the change-count badge and the actual saved payload are
-all correct together — `buildAdvancedEditPayload` has unit coverage for this shape, but it's
-never been driven from the real page).
+### 6. Bulk Edit — second pass now that it's reachable ✅ (DW-20 — 2026-08-26)
+F155/DW-13 shipped last session (double-tap trigger + standalone button, full-page
+`BulkEditPage.jsx`). This pass drove a full multi-change session live for the first time: staged
+an edit (Food $130→$135, forward scope) + a deletion (Phone Bill, forward) + a new $8/wk addition
+in one Bulk Edit visit, confirmed the change-count badge tracked correctly at every step (1 → 2 →
+3), and saved. Found and fixed a real bug in the process (**DW-20**): the edit and deletion
+patches never wrote `monthlyOverrides` — a live regression of the original F37 "editing does
+nothing" defect, this time on the Bulk Edit save path specifically. The staged-edit UI and the
+save itself both looked correct; only Budget's own totals (reading the authoritative
+`monthlyOverrides` layer) revealed the change hadn't actually taken effect. Confirmed via direct
+DB fetch with a distinctive test value (not just eyeballing a screenshot), fixed by reusing the
+exact same override-writing helpers the single-expense Save-scope buttons already use, and
+re-verified live post-fix with the same distinctive-value test. 4 new unit tests added. Full test
+suite (1687 tests) green. Test account left clean — Food back to $130, throwaway test expenses
+zeroed out. Documented in `drift-app-warden.md` F161 / `BUG_FIX_TODO.md` DW-20.
 
 ### 7. Reopen Last Check-In / Force Sync Push (isAdmin-only, not isAiAdmin) ⬜
 Deliberately not exercised this session (out of scope for the `isAiAdmin` test account per
@@ -205,6 +200,18 @@ available, worth a pass: these were the DW-3 fix (eager-save on reopen) from an 
 session — confirm they still work post this session's `isDiagnosticAdmin` gate changes
 (F153) without having actually re-tested them live this time.
 
-### 8. PWA install / offline behavior ⬜
-Not touched at all. Lower priority — no math/time risk, but untested this whole live-testing
-arc.
+### 8. PWA install / offline behavior ✅
+Tested against a real production build (`npm run build` + `npm run preview`) since the SW never
+activates under plain `npm run dev`. Found and fixed **DW-21**: `vite.config.js`'s VitePWA
+`manifest` object was auto-generating `dist/manifest.webmanifest` *and* auto-injecting a second
+`<link rel="manifest">` tag alongside the pre-existing hand-authored `public/manifest.json` — and
+the two had already drifted apart (missing apple-touch-icon entry, mismatched `lang` field),
+directly contradicting `index.html`'s own comment assuming they'd match. Fixed by setting
+`manifest: false` in `vite.config.js`, leaving `public/manifest.json` as the single canonical
+manifest; verified `dist/index.html` now ships exactly one manifest link and the service worker
+still registers/activates normally post-fix. Offline behavior separately verified live via
+Playwright (`context.setOffline(true)` + reload): the cached app shell (full login screen, not an
+error page) rendered correctly with zero network access, confirming workbox's `navigateFallback`
++ precache setup works as configured. Full test suite (1687 tests) green throughout — no test
+exercises the manifest file directly. Documented in `drift-app-warden.md` F162 /
+`BUG_FIX_TODO.md` DW-21.

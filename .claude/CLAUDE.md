@@ -651,6 +651,8 @@ miscompilation invisible to the entire test suite — §12.4).
 - This document is the foundation for a future **Drift Warden AI agent** that will be
   mandatory for all development-team changes — write entries machine-actionable (named
   triggers, named blast radii, executable procedures), never as prose warnings.
+- A live-testing pass is this mandate in practice — see the Development Workflow section below
+  for the two skills that drive one end to end.
 
 ---
 
@@ -664,6 +666,13 @@ miscompilation invisible to the entire test suite — §12.4).
 - `docs/TODO.md` — prioritized backlog (open items only)
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth
+- `docs/live-testing-checklist.md` — the live-testing punch list. Say "live test the app," "run
+  a testing pass," or name a checklist item to trigger the account-level
+  **`authority-finance-live-test`** skill — it drives the real app against the shared test
+  account and encodes the whole find → fix → test → document → commit → push loop, including
+  the drift-doc conventions above. Anything touching Ask Coach specifically goes through
+  **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
+  handling since it calls Anthropic directly and real money is on the line.
 
 **Schema bookmarks:** `database/migrations/0NN_BOOKMARK_schema_snapshot_<date>.sql` files are
 periodic full-schema recaps, not real migrations — never assign one the actual next migration

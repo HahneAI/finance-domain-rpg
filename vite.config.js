@@ -20,36 +20,14 @@ export default defineConfig({
       // check-ins. 'prompt' leaves the reload to an explicit user action
       // (main.jsx's onNeedRefresh → UpdateAvailableBanner) instead.
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icons/*.png'],
-      manifest: {
-        name: 'Authority Finance',
-        short_name: 'A:Fin',
-        description: 'Personal finance dashboard — DHL/P&G Jackson MO',
-        theme_color: '#0d0d0d',
-        background_color: '#0d0d0d',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/icons/icon-maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      includeAssets: ['favicon.svg', 'icons/*.png', 'manifest.json'],
+      // manifest: false — index.html hand-authors <link rel="manifest" href="/manifest.json">
+      // (public/manifest.json) as the one canonical manifest. Leaving this key set to an
+      // object made VitePWA also generate dist/manifest.webmanifest and auto-inject a SECOND
+      // <link rel="manifest"> tag into dist/index.html, and the two had drifted out of sync
+      // (webmanifest was missing the apple-touch-icon entry present in manifest.json) — found
+      // live-testing checklist item 8. `false` disables both the generation and the injection.
+      manifest: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         // Take control on the next load instead of waiting for every tab to close,

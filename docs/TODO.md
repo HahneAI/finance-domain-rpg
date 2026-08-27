@@ -266,6 +266,78 @@ financial advisor — Coach answers questions about the app using the user's rea
 
 ---
 
+### B1. Coach-Guided In-App Tour ("Show Me") *(new — scoped 2026-08-12, HIGH PRIORITY, not yet built)*
+
+*Origin: user request — Coach "takes over the user's device" to physically show them a feature
+instead of just describing it in chat, triggered from Ask Coach. Scoping only, nothing below is
+implemented. Flagged high priority per explicit instruction — sequence this against whatever else
+is open in this section when picking up next AI work.*
+
+- **Architecture correction, settled before scoping further — this is not remote control.**
+  Puppeteer / headless-browser device control is the wrong tool entirely: that's for a server
+  automating a browser *it* owns (this app's own live-testing skills use it exactly that way — see
+  `authority-finance-live-test`), not for reaching into a real user's live device, which is a
+  different, consent-and-security-loaded category (remote-desktop/screen-share software) this app
+  has no reason to build and every reason to avoid — the phrase "takes over your device" must
+  never appear in real user-facing copy for this feature, only ever "Coach walks you through it,"
+  since the former is both untrue and alarming for a finance app to imply. **What actually gets
+  the same user-facing result:** Coach is already running inside the same React SPA the user is
+  looking at — it doesn't need to control anything remotely, it just needs to drive the app's own
+  existing UI the same way a click or nav-tap already does. Chat exits, the app navigates itself
+  to the relevant panel, an overlay spotlights the real on-screen element, Coach narrates step by
+  step, control hands back. Net-new infrastructure risk is small specifically because this reuses
+  machinery that already exists rather than inventing a remote-control stack.
+- [ ] **Trigger — from Ask Coach chat, on request or Coach's own offer.** A user asking "how do I
+  set up a goal" (a genuine mechanics question — DW-19's 2026-08-26 tuning pass, `coachPrompts.js`,
+  already carves this question type out from the 2-3 sentence default for exactly this kind of
+  answer) gets, alongside Coach's normal text reply, a "Show Me" action the user can tap to launch
+  the tour instead of/in addition to reading the explanation. Scope whether Coach can also
+  proactively offer it unprompted (e.g., after a repeated question about the same feature) as a
+  v2 decision — v1 should be user-initiated only, simpler to reason about and to gate.
+- [ ] **Exit/entry animation — reuse the existing fold-lift system, don't build a second one.**
+  `AskCoachPanel.jsx` already has a close/exit transition via the shared fold-lift pattern
+  (`useFoldTransition`, `data-fold`, `index.css` — CLAUDE.md's Animation Rules). The tour's
+  "Coach steps out of the chat" moment should be this same exit, not a new one-off animation.
+- [ ] **Navigation — reuse `App.jsx`'s existing `navigate()`, don't hand-roll view switching.**
+  The tour needs to land the user on a real panel/tab (Home, Budget, a specific goal card) — this
+  is exactly what `navigate()`/`navigateDirect()` already do for every other in-app destination
+  (BetaHomebase, ProductivityHub, etc. per §2.K's own note on this). No new routing concept needed.
+- [ ] **New piece — a spotlight/overlay component, the one genuinely new UI primitive this needs.**
+  Dims the screen, cuts out or outlines the real target element (by a stable selector/ref, not a
+  screenshot or recreation of it), and renders a Coach speech-bubble callout near it with the
+  step's narration + Next/Skip controls. This is the one piece of net-new infrastructure the
+  feature actually requires.
+- [ ] **Step content — scripted per-feature step sequences for v1, not live LLM-driven staging.**
+  Recommend a small step array per tour (`{ target, narration, action? }[]`), hand-authored per
+  feature the same way `coachFeatureGuide.js`'s panel copy is hand-written today — matches this
+  section's own precedent for starting simple (Job Hunt Assistant v1 shipped plain-text output,
+  not structured extraction; that came later as its own v3). Coach generating step sequences live
+  via the model is a real v2+ idea but adds a real failure mode (the model naming a UI element or
+  selector that doesn't actually exist on screen) that a hand-authored v1 sidesteps entirely.
+- [ ] **Cheaper first version — the video-clip idea from the original ask, worth keeping as an
+  actual phase 0, not just a fallback.** A short pre-recorded (or Coach-narrated) walkthrough clip
+  per feature, surfaced inline in the chat as a video card — zero new UI-orchestration engineering,
+  ships faster, and validates whether users actually want this before building the live spotlight
+  version. Real tradeoff: static and not personalized to *this* user's actual data (can't spotlight
+  *their* real goal card), whereas the live overlay version can. Recommend building phase 0 first
+  and using its usage numbers to justify phase 1's larger build, same "prove it before building the
+  bigger version" precedent as §2.E1's résumé-upload v1→v2 phasing.
+- [ ] **Gate — same `canAccessAiFeatures` as every other not-yet-general AI surface in this
+  section,** no new gate needed; this is Ask-Coach-triggered so it inherits whichever gate Ask
+  Coach itself is checked under at the trigger point.
+- [ ] **Cross-reference — §10 (In-App Tutorials, Onboarding & Help) already scopes a first-run
+  coachmark/tour system, deliberately as a separate, non-AI, universally-available product** (its
+  own note: "these are different products... shouldn't inherit Coach's gate by default just
+  because the content originated there"). **Do not build two competing spotlight/overlay
+  mechanisms** — whichever of the two ships first, the other should reuse its overlay component
+  rather than reinventing one; the trigger/gating/content-source differ (first-run-automatic vs.
+  Ask-Coach-triggered-on-request), but the on-screen spotlight primitive itself should be shared.
+- [ ] **Mobile checklist applies** — same as §10's own note: any spotlight/callout overlay must
+  clear the existing Mobile Checklist (CLAUDE.md) — 44×44px targets, no horizontal scroll at
+  375/390px, safe-area insets.
+
+---
+
 ### C. Net Worth Trend Mental Health Trigger + Coach Response
 
 *`NetWorthHealthTips.jsx` already exists and fires static "Financial Breakthrough" copy. This
@@ -3299,9 +3371,16 @@ there is no in-app system that teaches a user how to *use* the app once setup is
 tooltip layer, no coachmark/walkthrough, no "?" help modal anywhere in `src/components/`. The one
 real step-by-step tutorial in the codebase is `PwaInstallModal.jsx`'s 5-step "Add to Home Screen"
 walkthrough — install-specific, not feature education. The closest thing to a help surface is the
-AI Coach (`AskCoachPanel.jsx` + `coachFeatureGuide.js`'s hand-written feature reference), but it's
-gated to `isAdmin`/`isTester` only and is Q&A, not guided onboarding — not available to the
-regular user population that would need it most.
+AI Coach (`AskCoachPanel.jsx` + `coachFeatureGuide.js`'s hand-written feature reference) — open to
+the full user base since 2026-07-24 (§2.B), no longer `isAdmin`/`isTester`-gated — but it's Q&A by
+text, not guided visual onboarding.
+
+**See also §2.B1 (Coach-Guided In-App Tour, "Show Me")** — a separate, higher-priority, AI/Ask-
+Coach-triggered scoping of the same underlying spotlight/overlay need, added 2026-08-12. The two
+are deliberately different products (this section's tour is first-run/universal and non-AI; §2.B1
+is on-request and Coach-initiated) and may ship in either order, but **must not end up as two
+separate spotlight/overlay implementations** — whichever ships first, the other should reuse its
+overlay component. Read §2.B1 before making a mechanism decision below if it hasn't shipped yet.
 
 - [ ] **Decide the mechanism** — first-run feature tour (coachmarks over Home/Income/Budget on
   first login post-setup), a persistent "?" help affordance per panel, or opening up

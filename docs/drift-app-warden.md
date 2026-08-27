@@ -73,6 +73,11 @@ gaps. The division of labor is fixed:
 - Doc-drift findings (D5) are the exception: those are **corrected in the same pass**
   (per the §5 maintenance covenant), not queued.
 
+A live-testing pass is the main way this offload process actually runs today — the
+`authority-finance-live-test`/`authority-finance-coach-live-test` skills drive it end to end
+against `docs/live-testing-checklist.md`. This doc stays the authoritative reference for the
+entry format itself (§5) regardless of what triggered the pass.
+
 ---
 
 ## 2. What Drift Is — Case Law

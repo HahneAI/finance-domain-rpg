@@ -22,28 +22,15 @@ permanent record (see `BUG_FIX_TODO.md`'s own header for that distinction).
 
 ## Playwright harness (for every Headless UI item below)
 
-```js
-// scratchpad/_scratch_base.cjs — proxy + auth-state boilerplate this session settled on
-const { chromium } = require('playwright');
-const path = require('path');
-const SCRATCH = '<session scratchpad dir>';
-async function launch() {
-  const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium',
-    args: [
-      `--proxy-server=${process.env.HTTPS_PROXY}`,
-      '--proxy-bypass-list=127.0.0.1;localhost',
-      '--ssl-version-max=tls1.2',
-    ],
-  });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: path.join(SCRATCH, 'auth-state.json') });
-  const page = await context.newPage();
-  return { browser, context, page, SCRATCH };
-}
-module.exports = { launch, SCRATCH };
-```
+Use the `authority-finance-live-test` skill ("live test the app" / "run a testing pass" /
+work through this checklist) — it bundles the launch helper, login script, and modal-dismiss
+helpers this session settled on, plus the process for driving each item end to end (investigate
+→ fix → test → document → commit → push) and the doc-conventions this file feeds into
+(`drift-app-warden.md` F-entries, `BUG_FIX_TODO.md` DW-entries). Anything touching Ask Coach
+specifically goes through the `authority-finance-coach-live-test` skill instead — it has its own
+token-budget/API-key handling this one doesn't cover.
 
-Notes learned the hard way this session:
+Notes learned the hard way this session (worth knowing beyond what the skill already covers):
 - Use `waitUntil: "domcontentloaded"` + an explicit `waitForTimeout(8000-9000)`, not
   `networkidle` — the app's own polling keeps `networkidle` from ever firing.
 - Button `textContent` is literal JSX text, not CSS-transformed — a button styled

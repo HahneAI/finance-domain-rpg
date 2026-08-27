@@ -5,6 +5,30 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.4 — Ad-Lib Wizard Schedule + Tax Rates pages merged, empty-viewport fix (2026-08-27)
+
+*Live Playwright screenshots at 390×844 showed ~650px of empty space below the content on both
+the Schedule and Tax Rates pages individually (thinnest case: DHL Warehouse + already-known tax
+rates). Merged into one page, `ScheduleTaxPage`, under a combined gate. Drift-app-warden §7 F161.*
+
+- [x] `SchedulePage`/`TaxRatesPage` composed into `ScheduleTaxPage` (both unchanged internally),
+  each under its own subheader; `isScheduleTaxValid = isScheduleValid && isTaxRatesValid`.
+- [x] Tax Rates now precedes Deductions in answer order — verified safe (no deduction-field reads).
+  Deductions and Wrap Up deliberately left standalone (already substantial on their own).
+- [x] Page counts updated for all six wizard paths (5→4 employed/`structure_change`/`changed_jobs`;
+  4→3 `lost_job`/`commission_job`; unchanged at 4 first-run jobless).
+- [x] `SetupWizardAdlib.test.jsx` restructured to match — helpers renamed to the new page
+  boundaries, field lookups moved to `getByLabelText` for the merged page's shifting DOM order, new
+  subheader-rendering test added; 59/59 tests in the file passing, `npm run test:run` (1680 tests)
+  and `vite build --mode production` both pass.
+- [x] Live-verified via Playwright against the shared test account (DHL Warehouse,
+  `structure_change` re-entry) — no scrolling required, modest empty space remains for that one
+  thinnest-account case but the ~650px gap is gone.
+- [x] `.claude/CLAUDE.md` and `docs/drift-app-warden.md` §7 (new F161 entry) updated in the same
+  round.
+
+---
+
 ## §19.3 — Ad-Lib Wizard jobless mini-flow ad-libbed, last hand-off removed (2026-08-11)
 
 *Closes the entire "wire ad-lib in as production" saga: §19.1 (field parity) → §19.2 (life-event

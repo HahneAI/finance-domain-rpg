@@ -106,6 +106,17 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
   const [pwSaved, setPwSaved]       = useState(false);
   const [pwLoading, setPwLoading]   = useState(false);
 
+  // Google-only accounts have no password identity, so Change Email and Change
+  // Password are collapsed into one "Add Traditional Email & Password" flow —
+  // both fields are set together via a single updateUser call. Once that
+  // completes (and the confirmation email is verified), hasEmailIdentity flips
+  // true and the two controls below split apart into their normal independent forms.
+  const [showAddCredForm, setShowAddCredForm]     = useState(false);
+  const [addCredEmail, setAddCredEmail]           = useState(authedUser?.email ?? "");
+  const [addCredPassword, setAddCredPassword]     = useState("");
+  const [addCredConfirm, setAddCredConfirm]       = useState("");
+  const [addCredStatus, setAddCredStatus]         = useState({ error: null, success: null, loading: false });
+
   const [globalSignoutState, setGlobalSignoutState] = useState({ error: null, success: null, loading: false });
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -186,6 +197,40 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     setNewPw("");
     setConfirmPw("");
     setTimeout(() => { setPwSaved(false); setShowPwForm(false); }, 2000);
+  }
+
+  async function handleAddCredentials(e) {
+    e.preventDefault();
+    const trimmed = addCredEmail.trim();
+    setAddCredStatus({ error: null, success: null, loading: false });
+
+    if (!trimmed || !trimmed.includes("@")) {
+      setAddCredStatus({ error: "Enter a valid email address.", success: null, loading: false });
+      return;
+    }
+    if (addCredPassword.length < 8) {
+      setAddCredStatus({ error: "Use at least 8 characters for your password.", success: null, loading: false });
+      return;
+    }
+    if (addCredPassword !== addCredConfirm) {
+      setAddCredStatus({ error: "Passwords don't match.", success: null, loading: false });
+      return;
+    }
+
+    setAddCredStatus({ error: null, success: null, loading: true });
+    const { error } = await supabase.auth.updateUser({ email: trimmed, password: addCredPassword });
+    if (error) {
+      setAddCredStatus({ error: error.message, success: null, loading: false });
+      return;
+    }
+
+    setAddCredStatus({
+      error: null,
+      success: `Check ${trimmed} to confirm. Once confirmed, you can sign in with either Google or email/password, and Change Email and Change Password become independent options.`,
+      loading: false,
+    });
+    setAddCredPassword("");
+    setAddCredConfirm("");
   }
 
   async function handleGlobalSignOut() {
@@ -442,6 +487,52 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
       </DetailCard>
 
       <div className="text-xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Security</div>
+      {hasGoogleLinked && !hasEmailIdentity ? (
+      <DetailCard>
+        {!showAddCredForm ? (
+          <Pressable
+            onClick={() => setShowAddCredForm(true)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+          >
+            <span className="text-md" style={{ color: "var(--color-text-primary)", fontWeight: "500" }}>Add Traditional Email &amp; Password</span>
+            <span style={{ fontSize: "18px", color: "var(--color-text-primary)", lineHeight: 1 }}>›</span>
+          </Pressable>
+        ) : (
+          <form onSubmit={handleAddCredentials} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Add Traditional Email &amp; Password</div>
+            <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>
+              You signed up with Google, so Change Email and Change Password aren't separate options
+              yet — set both here first. Your Google sign-in keeps working either way.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lSp}>Email</label>
+              <input type="email" value={addCredEmail} onChange={e => setAddCredEmail(e.target.value)} required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lSp}>Password</label>
+              <input type="password" value={addCredPassword} onChange={e => setAddCredPassword(e.target.value)} placeholder="At least 8 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lSp}>Confirm Password</label>
+              <input type="password" value={addCredConfirm} onChange={e => setAddCredConfirm(e.target.value)} placeholder="Repeat password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            {addCredStatus.error && (
+              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{addCredStatus.error}</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Pressable type="button" onClick={() => { setShowAddCredForm(false); setAddCredStatus({ error: null, success: null, loading: false }); setAddCredPassword(""); setAddCredConfirm(""); }} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable type="submit" disabled={addCredStatus.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: addCredStatus.loading ? "default" : "pointer" }}>{addCredStatus.loading ? "..." : "Save"}</Pressable>
+            </div>
+          </form>
+        )}
+        {addCredStatus.success && (
+          <div className="text-xs" style={{ padding: "0 16px 14px", color: "var(--color-green)" }}>
+            {addCredStatus.success}
+          </div>
+        )}
+      </DetailCard>
+      ) : (
+      <>
       <DetailCard>
         {!showEmailForm ? (
           <Pressable
@@ -515,6 +606,8 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
           </form>
         )}
       </DetailCard>
+      )}
+      </>
       )}
 
       <DetailCard>

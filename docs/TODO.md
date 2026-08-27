@@ -4825,6 +4825,39 @@ for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — i
       `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
       experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.
 
+### 19.4 Schedule + Tax Rates Pages Merged — Empty-Viewport Fix — CLOSED
+
+*Opened and closed 2026-08-27, drift-app-warden §7 F161. Live Playwright screenshots against the
+running dev server at 390×844 showed ~650px of empty black space below the content on both the
+Schedule page and the Tax Rates page individually — a DHL Warehouse account's Schedule page is a
+single start-date blank, Tax Rates is two selects plus a button reveal by default, and every other
+page in this flow fills the viewport.*
+
+- [x] `SchedulePage` and `TaxRatesPage` (both unchanged internally) composed into one new page
+      component, `ScheduleTaxPage`, under one `PAGES` entry (`id: "scheduleTax"`), each section
+      under its own small `cardLabelStyle` subheader.
+- [x] Combined gate `isScheduleTaxValid(d) = isScheduleValid(d) && isTaxRatesValid(d)` — Next
+      requires both sections' required fields, not just whichever one is visible.
+- [x] Tax Rates now precedes Deductions in answer order (previously came after) — verified safe,
+      since neither `isTaxRatesValid` nor the paystub calculator read any deduction field.
+- [x] Deductions and Wrap Up deliberately left standalone — both already substantial; merging Tax
+      Rates onto either risked reintroducing the same empty/scrolling-viewport problem.
+- [x] Page-count updated for all six wizard paths: first-run employed/`structure_change`/
+      `changed_jobs` 5→4; `lost_job`/`commission_job` 4→3; first-run jobless unchanged at 4 (never
+      touches this page).
+- [x] `SetupWizardAdlib.test.jsx` restructured — helper functions renamed to reflect the new page
+      boundaries (`advanceToScheduleTax_*` lands on the merged page; `advanceToDeductions_*` now
+      fills both Schedule and Tax Rates fields), field lookups moved from positional
+      `selects()`/`numbers()` indices to `getByLabelText` (the merged page's select/number DOM
+      order shifts as Schedule's cascading clauses reveal, so indices were fragile), and a new test
+      asserts both subheaders render. All distinct behavior from the old separate-page tests is
+      still covered — no coverage lost, 59 tests in the file passing.
+- [x] Live-verified against the shared test account (DHL Warehouse, `structure_change` re-entry) at
+      390×844 — the merged page still leaves a modest amount of empty space below the fold for this
+      specific thinnest-account case (Warehouse Schedule + already-known Tax Rates), but no longer
+      the ~650px gap from before, and no scrolling is required. `.claude/CLAUDE.md` and
+      `docs/drift-app-warden.md` §7 (new F161 entry) updated in the same round.
+
 ---
 
 ## 20. Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts

@@ -73,6 +73,11 @@ gaps. The division of labor is fixed:
 - Doc-drift findings (D5) are the exception: those are **corrected in the same pass**
   (per the §5 maintenance covenant), not queued.
 
+A live-testing pass is the main way this offload process actually runs today — the
+`authority-finance-live-test`/`authority-finance-coach-live-test` skills drive it end to end
+against `docs/live-testing-checklist.md`. This doc stays the authoritative reference for the
+entry format itself (§5) regardless of what triggered the pass.
+
 ---
 
 ## 2. What Drift Is — Case Law
@@ -1112,6 +1117,52 @@ already governs that split.
 > countdown list (F44) move together — they share these exact functions, not parallel copies.
 > Check: `expense.test.js`'s cycle-advance cases; one bill's countdown agrees in both places.
 
+**F161 · `SetupWizardAdlib.jsx`'s Schedule and Tax Rates pages merged into one —
+`ScheduleTaxPage`** — `SetupWizardAdlib.jsx` — **[G]** — *(added 2026-08-27 — live Playwright
+screenshots against the running dev server at 390×844 showed ~650px of empty black space below
+the content on both the Schedule page and the Tax Rates page individually: a DHL Warehouse
+account's Schedule page is a single start-date blank, and Tax Rates is just two selects plus a
+button reveal by default — every other page in this flow fills the viewport, these two didn't)*
+`SchedulePage` and `TaxRatesPage` (both unchanged internally — same components, same
+`isScheduleValid`/`isTaxRatesValid` functions) are now composed into one page component,
+`ScheduleTaxPage`, rendered under a single `PAGES` entry (`id: "scheduleTax"`) with a small
+`cardLabelStyle` subheader ("Schedule" / "Tax Rates") above each section — the same label
+treatment already used for Wrap Up's "Tax-Exempt Week Projections" sub-section, not a new pattern.
+The combined gate, `isScheduleTaxValid(d) = isScheduleValid(d) && isTaxRatesValid(d)`, means Next
+on this page requires *both* sections' required fields, not just whichever section a user happens
+to be looking at — this is a real, user-visible behavior change (see the "requires the
+payday-parity answer... on top of the Tax Rates section" and DHL Warehouse tests in
+`SetupWizardAdlib.test.jsx` for the two-sided gating demonstrated explicitly). Tax Rates now comes
+**before** Deductions in answer order (it used to come after) — safe, since neither
+`isTaxRatesValid` nor the paystub calculator read any deduction field. Deductions and Wrap Up were
+deliberately left as standalone pages, not folded in further — both are already substantial for a
+typical account (Deductions has the benefits chip row + attendance/PTO cards; Wrap Up has the live
+net-estimate table + buffer + diff card for `structure_change`) and piling Tax Rates' paystub
+calculator onto either risked reintroducing the same empty/scrolling-viewport problem this change
+fixes, just relocated instead of solved. **Page-count effect on all six wizard paths** (§7.3's
+gate matrix lists `SetupWizard.jsx` `STEP_DEFS` ids, which are unaffected — this is purely a
+`SetupWizardAdlib.jsx` `PAGES`-array/page-count change on top of that same step set):
+- First-run employed / `structure_change` / `changed_jobs`: 5 ad-lib pages → **4** (Intake,
+  ScheduleTax, Deductions, WrapUp).
+- `lost_job` / `commission_job` (no Wrap Up): 4 ad-lib pages → **3** (Intake, ScheduleTax,
+  Deductions) — Deductions is now the last page and shows "Finish Setup" for these two paths.
+- First-run jobless (`startedUnemployed === true`): **unchanged at 4** (Intake + the three native
+  jobless pages, F141) — this path never touches Schedule/Deductions/Tax Rates, so it's untouched.
+  Don't conflate this still-4 case with `lost_job`/`commission_job`'s 4→3 change above — both said
+  "4" before the merge, only one of them actually moved.
+> **IF** a required field is added to either `isScheduleValid` or `isTaxRatesValid`, **THEN** it
+> automatically participates in the combined `isScheduleTaxValid` gate with no extra wiring — but
+> any test asserting "Next enables once section X is complete" must also fill the *other* merged
+> section, or it will incorrectly observe Next still disabled. Grep `SetupWizardAdlib.test.jsx`'s
+> "merged Schedule + Tax Rates page" describe blocks for the pattern already in place.
+> **IF** Deductions or Wrap Up ever needs trimming for viewport space in the future, **THEN**
+> re-check this entry's reasoning for why they were left alone this round (already substantial;
+> merging Tax Rates onto either was rejected for that reason) before reaching for a further merge
+> — the fix that generalizes is shrinking that page's own content, not merging it with a neighbor.
+> **IF** `ScheduleTaxPage`'s two subheaders or their `cardLabelStyle` treatment change, **THEN**
+> update `SetupWizardAdlib.test.jsx`'s subheader-rendering test (`renders both "Schedule" and "Tax
+> Rates" subheaders...`) to match — it's the one test that would first drift on that copy/style.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1154,6 +1205,13 @@ the source of the three jobless page components (`StepJoblessBenefits`/`StepJobl
 `StepJoblessWrapUp`, F141) and as `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared export
 home (F7/F140) — never mounted, never rendered. docs/TODO.md §19.2/§19.3 (both now fully closed)
 have the path-by-path history.
+
+**F161 note:** this table's "Steps shown" column lists `SetupWizard.jsx` `STEP_DEFS` ids (0-4/7/
+10-12), which F161 (2026-08-27) did not touch or reduce — the real wizard's step set is unchanged.
+F161 only merged `SetupWizardAdlib.jsx`'s own `PAGES`-array presentation of steps 2 ("2") and 4
+("4") into one page — see F161 for the resulting ad-lib page-count-per-path table (5→4 employed/
+`structure_change`/`changed_jobs`, 4→3 `lost_job`/`commission_job`, unchanged at 4 for first-run
+jobless).
 
 Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
 hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**
@@ -1887,6 +1945,63 @@ Line").
 > `lastSegmentTapRef` are keyed by the exact values `onSelectMonth`/`onSelectQuarter` receive
 > — a key-shape change there silently breaks double-tap detection without touching single-tap
 > select, so it's easy to miss in casual testing).
+
+**F161 · Bulk Edit's edit/deletion patches never wrote `monthlyOverrides` — a live regression
+of F37's own Bug 1 ("editing does nothing"), exactly the divergence F42's own IF/THEN check
+above warned about (2026-08-26, live-testing-checklist.md item 6, DW-20, fixed) — [L]**
+`saveAdvancedEdit` (`BudgetPanel.jsx`) wrote only `history`/`billingMeta` from
+`buildAdvancedEditPayload`'s patches — never `monthlyOverrides`, the layer
+`getEffectiveAmountForMonth` (`finance.js`) checks *first* and returns from directly, never
+falling through to `history` at all when an override exists for that month. Any expense that
+already carries a `monthlyOverrides` entry for the target month(s) — which, per F37's own Bug
+1/2 saga, is the normal state for most real expenses once anyone has ever used a single-expense
+Save-scope button on them — silently swallowed a Bulk Edit change with zero error and zero
+visual difference in the Bulk Edit UI itself (the staged-edit card correctly showed "CHANGED →
+$135.00/check"; the save even round-tripped through Supabase cleanly), while every other real
+UI surface (Budget's own expense list, the Needs total, "Weekly Spend") kept reading the stale
+pre-edit override and never moved. Live-confirmed and reproduced exactly this way: staged Food
+$130→$135 (`forward` scope) + a deletion of Phone Bill (`forward`) + a new $8/wk addition in one
+Bulk Edit visit — the save-confirmation badge correctly showed "(3)" and the page returned
+cleanly to Budget, but Budget's own "Needs" total read $138/wk (`$130 stale-Food + $8 new`, not
+the real `$135 + $8 = $143`) because Food's `monthlyOverrides["2026-08"]` was still `$130`.
+Confirmed via a direct `account_history`-adjacent DB fetch, not just a screenshot: `history`/
+`billingMeta.byPhase` correctly held `135`, `monthlyOverrides` still held `130` — the exact
+split F37's "Core defect" writeup describes. **Fix:** `buildAdvancedEditPayload` (`expense.js`)
+now also computes and returns `overridesByExpId` — reusing the *exact same* helpers the
+single-expense Save-scope buttons already call (`applyQuarterForward`/`applyMonthEdit` for
+edits, `clearMonthForward`/`clearMonth` for deletions — F37's own functions, not new logic),
+keyed per touched expense. `saveAdvancedEdit` merges `overridesByExpId[e.id]` into each patched
+expense alongside `history`/`billingMeta`. New expense additions were already correct and
+untouched by this fix — a brand-new expense has no pre-existing override to be shadowed by, so
+its `history` entry was always authoritative on its own. Verified live, before/after, with a
+distinctive test value (Food → $141) specifically to rule out "looks the same by coincidence":
+pre-fix, `monthlyOverrides["2026-08"]` stayed `$130` after saving `$141` via Bulk Edit; post-fix,
+the same edit correctly wrote `$141` into `monthlyOverrides` for every month from the edit's
+start through fiscal year end, matching `history`. Added 4 new `buildAdvancedEditPayload` unit
+tests asserting `overridesByExpId`'s shape for all four edit/deletion-scope combinations
+(forward edit, month-only edit, forward deletion, month-only deletion); one pre-existing
+shape-assertion test updated for the new return key. Full `npm run test:run` (1687 tests,
++4 from this fix) green. Test account left clean: Food reverted to its real $130, the two
+throwaway test expenses created during live verification zeroed out the same way any
+deprecated expense already sits inactive in this account (this app never hard-deletes an
+expense row — confirmed no such affordance exists anywhere in `BudgetPanel.jsx`). |
+`src/lib/expense.js` (`buildAdvancedEditPayload`), `src/components/BudgetPanel.jsx`
+(`saveAdvancedEdit`), `src/test/lib/expenseCycles.test.js` | **D1** — silently masked write,
+live-reachable on Bulk Edit's very first real live-testing pass since F155 shipped it two
+sessions ago; every account with prior single-edit history on a Bulk-Edited expense hits this |
+This is precisely the check F42's own IF/THEN already told a future session to run
+("edit one expense via sheet and via bulk with identical inputs — identical stored shape") —
+it had just never actually been run live until this pass; confirmed F37's Bug 1 writeup
+(`docs/BUG_FIX_TODO.md`'s original "Core defect" section) to reuse its exact helpers rather
+than re-deriving the override-write logic a third time.
+> **IF** `BulkEditPage.jsx`/`buildAdvancedEditPayload` grows a new staged-change type (a third
+> scope, a new field type beyond amount/cycle), **THEN** it needs its own `overridesByExpId`
+> entry using the matching F37 helper — the pattern established here, not a fresh one. **IF**
+> any other bulk/multi-expense save path is ever added anywhere in the app, **THEN** run F42's
+> own prescribed check against it before shipping, not after: this exact defect class is now
+> proven to survive a full save→reload round-trip with zero UI-visible symptom in the feature
+> that introduced it, only surfacing on a *different* screen (Budget's own totals) that a
+> feature-scoped test of Bulk Edit alone would never think to re-check.
 
 **F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
 `:2103` — **[G]**
@@ -3360,6 +3475,37 @@ change with D3-grade consequences. Updates now wait for the user.
 > caching strategy changes, **THEN** re-verify a deploy → update → reload cycle
 > preserves in-flight state (the eager-save net catches what the debounce would lose,
 > but only for completed actions).
+
+**F162 · Duplicate/drifted PWA manifest — `vite.config.js`'s `manifest` object silently
+generated a second, divergent manifest file (2026-08-26, live-testing-checklist.md item 8,
+DW-21, fixed) — [G]** Two manifests shipped in the same build: the hand-authored
+`public/manifest.json` (linked via `index.html`'s own `<link rel="manifest">`, with an explicit
+troubleshooting comment naming it the one to check for Android install-prompt issues) and
+`dist/manifest.webmanifest`, auto-generated *and auto-injected as a second competing
+`<link rel="manifest">` tag* by VitePWA from `vite.config.js`'s `manifest: {...}` object —
+nothing in the build wires the two together, so they drift independently. Confirmed genuinely
+diverged, not just theoretically able to: `manifest.webmanifest` was missing the
+`apple-touch-icon.png` (180×180) icon entry that `manifest.json` carries, and carried a
+`"lang":"en"` key `manifest.json` doesn't — directly contradicting the source comment's own
+assumption ("both should have matching content"). Two `<link rel="manifest">` tags in one
+document is spec-ambiguous for which one a browser's install-prompt logic actually reads —
+not confirmed to be causing a live install failure, but a needless, silently-drifting duplicate
+either way. **Fix:** `vite.config.js`'s `manifest:` key set to `false` (with a comment
+explaining why) — this disables both VitePWA's manifest generation and its auto-injected
+`<link>` tag, leaving `public/manifest.json` as the single canonical manifest exactly as
+`index.html`'s own troubleshooting comment already assumed. `includeAssets` extended to name
+`manifest.json` explicitly so workbox still precaches it. Verified via a full `npm run build` +
+`npm run preview` cycle: `dist/index.html` now contains exactly one `<link rel="manifest">`
+(→ `/manifest.json`), `dist/manifest.webmanifest` is no longer generated at all, and a live
+Playwright check against the preview server confirmed the service worker still registers and
+activates normally (`scope: /`, `active: activated`) — this fix is manifest-only, it doesn't
+touch the SW/workbox config. `npm run test:run` unaffected (no test asserted on the removed
+file). | `vite.config.js` | **D3** — install-prompt-adjacent surface, no math/time risk, but a
+silent content drift the source code's own comment explicitly assumed couldn't happen |
+> **IF** `public/manifest.json`'s fields (icons, name, colors) change, **THEN** there is now
+> only one file to update — this fix removes the "did I update both?" drift risk F162 itself
+> found, don't reintroduce a second manifest source by re-adding an object to `manifest:` in
+> `vite.config.js` without also removing/reconciling `public/manifest.json`.
 
 **F95 · Input/label standards** — `iS`/`lS` style objects (`ui.jsx:42–44`) — **[G]**
 `iS`: 16px font (blocks iOS auto-zoom), 44px min-height (tap target), JetBrains Mono.

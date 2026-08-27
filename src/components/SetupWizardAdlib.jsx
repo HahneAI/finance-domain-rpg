@@ -1142,9 +1142,9 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                 />
               </FadeIn>.
               {formData.tipsOrCommissionEnabled && (
-                <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "6px" }}>
+                <span className="text-sm" style={{ display: "block", color: "var(--color-text-secondary)", marginTop: "6px" }}>
                   We&rsquo;ll ask a quick daily check-in — did you make any {formData.tipsOrCommissionLabel} that day?
-                </div>
+                </span>
               )}
               {formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission" && (
                 <>
@@ -2258,10 +2258,10 @@ function JoblessDetailsPage({ formData, onChange, attempted = false }) {
             />
           </FadeIn>{" "}
           <TypedText text={rateTailText} />
-          <div className="text-sm" style={{ marginTop: "8px", lineHeight: 1.5, color: "var(--color-text-secondary)" }}>
+          <span className="text-sm" style={{ display: "block", marginTop: "8px", lineHeight: 1.5, color: "var(--color-text-secondary)" }}>
             Optional — used only to suggest a target income goal on your Re-employment Tracker
             (assumes a standard 40hr week). Skip this if you&rsquo;d rather set a target manually later.
-          </div>
+          </span>
         </>
       )}
     </p>

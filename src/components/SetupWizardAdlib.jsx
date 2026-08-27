@@ -805,14 +805,33 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
       ? !!formData.dhlTeam && (formData.shiftHours ?? 0) > 0
       : false;
 
+  // Base-user pay-structure numbers (annualSalary / baseRate / shiftHours) all feed
+  // payStructureComplete below, which gates several downstream cascading clauses (OT
+  // Threshold, Commission, Tips, AdvancedPayRulesCard) — same partial-keystroke problem
+  // maxWeeklyHours had (drift-app-warden §7 F162): typing "5" of "52,000" would otherwise
+  // reveal OT Threshold mid-keystroke. DHL never enters these via InlineNumber here (baseRate/
+  // shiftHours come from setEmployer()'s DHL_PRESET defaults), so it's exempt.
+  const [committed, commit] = useCommitTracking(() => {
+    const seed = new Set();
+    if ((formData.annualSalary ?? 0) > 0) seed.add("annualSalary");
+    if ((formData.baseRate ?? 0) > 0) seed.add("baseRate");
+    if ((formData.shiftHours ?? 0) > 0) seed.add("shiftHours");
+    return seed;
+  });
+  const payStructureNumbersCommitted = isEmployerDHL
+    ? true
+    : isSalary
+      ? committed.has("annualSalary")
+      : committed.has("baseRate") && committed.has("shiftHours");
+
   // "Pay structure fully answered" gate — real Step1's Advanced Pay Rules/OT
   // Threshold/tips-commission opt-in all appear once the core rate/schedule
   // questions are answered; same threshold used here for the trailing clauses below
   // (DHL Weekend Differential, base-user OT Threshold, Tips/Commission opt-in).
-  const payStructureComplete = isEmployerDHL
+  const payStructureComplete = payStructureNumbersCommitted && (isEmployerDHL
     ? dhlTeamReady && !!formData.userPaySchedule
     : (employerChoice === "OTHER" || isInvestor) && !!formData.userPaySchedule &&
-      (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0);
+      (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0));
 
   const introText = "Let's set you up. Right now, I am";
   // Life-event re-entry intro copy — there's no real Step0 branch specific to lost_job/
@@ -1045,6 +1064,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                         const sal = v === "" ? null : parseFloat(v);
                         onChange({ annualSalary: sal, baseRate: sal != null ? Math.round((sal / 2080) * 100) / 100 : null, shiftHours: 8 });
                       }}
+                      onCommit={() => commit("annualSalary")}
                       placeholder="52,000"
                       ariaLabel="Annual salary, dollars"
                       error={attempted && !((formData.annualSalary ?? 0) > 0)}
@@ -1059,6 +1079,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                     <InlineNumber
                       value={formData.baseRate ?? ""}
                       onChange={v => onChange({ baseRate: v === "" ? null : parseFloat(v) })}
+                      onCommit={() => commit("baseRate")}
                       placeholder="19.65"
                       width="72px"
                       ariaLabel="Hourly rate, dollars"
@@ -1070,6 +1091,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                     <InlineNumber
                       value={formData.shiftHours ?? ""}
                       onChange={v => onChange({ shiftHours: v === "" ? null : parseFloat(v) })}
+                      onCommit={() => commit("shiftHours")}
                       placeholder="10"
                       width="52px"
                       ariaLabel="Shift length, hours"

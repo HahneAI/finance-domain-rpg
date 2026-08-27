@@ -277,8 +277,11 @@ describe('SetupWizardAdlib — Intake page field-parity additions (OT Threshold,
     fireEvent.change(selects()[2], { target: { value: 'weekly' } })
     expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull()
     fireEvent.change(numbers()[0], { target: { value: '21.15' } })
-    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull() // shiftHours still blank
+    fireEvent.blur(numbers()[0])
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull() // shiftHours still blank/uncommitted
     fireEvent.change(numbers()[1], { target: { value: '10' } })
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull() // shiftHours entered but not blurred yet
+    fireEvent.blur(numbers()[1])
     expect(screen.getByText(byText(/my overtime kicks in at/i))).toBeTruthy()
     expect(screen.getByText(byText(/on top of that, i/i))).toBeTruthy() // tips/commission clause too
     expect(primaryBtn()).not.toBeDisabled() // neither field is required
@@ -290,7 +293,9 @@ describe('SetupWizardAdlib — Intake page field-parity additions (OT Threshold,
     fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
     fireEvent.change(selects()[2], { target: { value: 'weekly' } })
     fireEvent.change(numbers()[0], { target: { value: '21.15' } })
+    fireEvent.blur(numbers()[0])
     fireEvent.change(numbers()[1], { target: { value: '10' } })
+    fireEvent.blur(numbers()[1])
     const otSelect = screen.getAllByRole('combobox').at(-2) // second-to-last select is OT threshold (tips is last)
     fireEvent.change(otSelect, { target: { value: 'custom' } })
     const customNum = numbers().at(-1)
@@ -321,11 +326,46 @@ describe('SetupWizardAdlib — Intake page field-parity additions (OT Threshold,
     fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
     fireEvent.change(selects()[2], { target: { value: 'weekly' } })
     fireEvent.change(numbers()[0], { target: { value: '21.15' } })
+    fireEvent.blur(numbers()[0])
     fireEvent.change(numbers()[1], { target: { value: '10' } })
+    fireEvent.blur(numbers()[1])
     const tipsSelect = screen.getAllByRole('combobox').at(-1)
     fireEvent.change(tipsSelect, { target: { value: 'commission' } })
     expect(screen.getByText(byText(/this is/i))).toBeTruthy()
     expect(screen.getByText(byText(/we.ll ask a quick daily check-in/i))).toBeTruthy()
+  })
+
+  // Salary path (annualSalary) — same partial-keystroke/blur pattern as baseRate/shiftHours,
+  // gating the same payStructureComplete-driven clauses (drift-app-warden §7 F162).
+  it('delays revealing pay-structure-complete clauses until the annual salary blank is blurred, not on every keystroke', () => {
+    renderAdlib()
+    chooseEmployed()
+    fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
+    fireEvent.change(selects()[2], { target: { value: 'salary' } })
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull()
+    fireEvent.change(numbers()[0], { target: { value: '5' } }) // partial keystroke of "52000"
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull()
+    fireEvent.change(numbers()[0], { target: { value: '52000' } })
+    expect(screen.queryByText(byText(/my overtime kicks in at/i))).toBeNull() // not blurred yet
+    fireEvent.blur(numbers()[0])
+    expect(screen.getByText(byText(/my overtime kicks in at/i))).toBeTruthy()
+  })
+
+  // Re-entry/resume accounts init formData from real config, not blanked — an already-valid
+  // baseRate/shiftHours must count as already-committed so a re-entry user never has to blur
+  // a field that's already correctly filled (drift-app-warden §7 F162).
+  it('treats an already-valid resumed/pre-filled baseRate + shiftHours as already committed — no blur needed', () => {
+    const reEntry = {
+      ...DEFAULT_CONFIG,
+      employerPreset: null,
+      userPaySchedule: 'weekly',
+      baseRate: 21.15,
+      shiftHours: 10,
+    }
+    render(<SetupWizardAdlib config={reEntry} lifeEvent="structure_change" onHandoff={vi.fn()} onComplete={vi.fn()} onCancel={vi.fn()} />)
+    // structure_change re-entry pre-fills formData and skips the employment-status question,
+    // so payStructureComplete's clauses should already be visible with no blur at all.
+    expect(screen.getByText(byText(/my overtime kicks in at/i))).toBeTruthy()
   })
 })
 
@@ -769,7 +809,9 @@ describe('SetupWizardAdlib — full ad-lib-to-production completion (round-4 fie
     fireEvent.change(selects()[1], { target: { value: 'OTHER' } })
     fireEvent.change(selects()[2], { target: { value: 'weekly' } })
     fireEvent.change(numbers()[0], { target: { value: '21.15' } }) // baseRate
+    fireEvent.blur(numbers()[0])
     fireEvent.change(numbers()[1], { target: { value: '10' } })    // shiftHours
+    fireEvent.blur(numbers()[1])
 
     // Base-user Overtime Threshold -> 48h
     fireEvent.change(screen.getByLabelText('Overtime threshold'), { target: { value: '48' } })

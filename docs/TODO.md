@@ -14,18 +14,29 @@ summaries tied to the user's real data. All AI calls run through the Claude API 
 *Items consolidated here from: §1.E (Job Hunt AI), §1.F (Application Assistant), §9 (Statements
 AI layer), and archived past-TODO-tasks.md §16 (Financial alert copy + Net Worth mental health trigger).*
 
-**⚠️ Standing constraint — all AI features are `isAdmin`/`isTester`-gated for now.** Every
-Coach-facing surface (chat entry points, triggered insight cards, statement summaries, any future
-§2/§8 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
-on both sides: client-side to hide the entry point from ungated users, and server-side in the
-relevant `api/*.js` route so a request is rejected even if called directly. `is_tester`
-(`user_data.is_tester`, migration `021_add_is_tester_beta_flag.sql`) is a manually-granted beta
-flag — set only by Anthony via SQL on an already-existing account, never self-service — that exists
-specifically so AI features can get real usage outside the personal admin account. **Beta testers
-are NOT investors:** this check must never fold in `isInvestor`; see
-`docs/active-systems.md` §9 (Beta Tester Accounts) and §2 (Investor & Demo Accounts) for the
-full division. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
-(and update this note) once Coach is ready for a general rollout.
+**⚠️ Standing constraint — updated 2026-08-12, superseded by two real gate-flips below; kept as
+a live status note, not a stale warning.** Sections 1–2 (Ask Coach general chat, the Net Worth
+Check-In card) left the privileged-only gate on **2026-07-24** and are now live to the full user
+base via `canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor, isAiAdmin, entitlement })` —
+true unconditionally for admin/tester/investor/AI-Admin accounts (`hasPrivilegedAccess`), or for
+anyone else with a real `"trial"`/`"grace"`/`"active"` entitlement. **Every other Coach-facing
+surface below this line** (Job Hunt Assistant §2.E, Résumé Review §2.E1, Tax Onboarding §2.J, the
+new §2.K hub context) stays on the narrower `canAccessAiFeatures({ isAdmin, isTester, isInvestor,
+isAiAdmin })` — privileged tiers only, **no** entitlement-based path in — checked both client-side
+to hide the entry point and server-side in the relevant `api/*.js` route so a direct request is
+rejected too. Locked decision (2026-07-25): when one of those narrower-gated surfaces eventually
+opens further, everyone outside the privileged tier needs a real **paid** subscription
+specifically (`entitlement.state === "active"`), not the wider trial/grace/active check §1–2 use
+— see each section's own "Locked decision" note. `is_tester` (`user_data.is_tester`, migration
+`021_add_is_tester_beta_flag.sql`) is a manually-granted beta flag — set only by Anthony via SQL
+on an already-existing account, never self-service. **The account-tier separation itself is
+untouched and still real:** `isTrackedBetaTester`, the Demo Account Tree, and beta-cohort scoring
+still treat beta testers and investors as genuinely different account types — only the *paid-wall*
+gates above deliberately overlap by design (`hasPrivilegedAccess`, superseding the older "beta
+testers are NOT investors, this check must never fold in `isInvestor`" language that used to sit
+here). See `docs/active-systems.md` §23 (Beta Tester Accounts) and §18 (Investor & Demo Accounts)
+for the full division, and `src/lib/entitlements.js`'s own docstrings for the two-base gate
+architecture (`hasTesterAccess` vs. `hasPrivilegedAccess`).
 
 ---
 
@@ -209,6 +220,31 @@ financial advisor — Coach answers questions about the app using the user's rea
   raw array `computeGoalTimeline()` needs) and replicated `HomePanel.jsx`'s exact fallback chain
   (confirmed/scheduled next week → last confirmed week → plain average), status thresholds, the
   "vs your average" delta, and `perCheckFactor` scaling, so the figure can't drift from the tile.
+  **2026-08-26, fourth follow-up (DW-19, `drift-app-warden.md` F160) — first-ever live model
+  test, not just a read of the prompt text.** Every prior follow-up above was verified by
+  re-reading `ASK_COACH_SYSTEM_PROMPT`'s text; this sandbox has no working `/api/coach` route or
+  Anthropic key by default, so the prompt had never actually been run against a real model until
+  this pass, unblocked via a scoped `AI_ADMIN_COACH_TEST_KEY` called directly against
+  `claude-haiku-4-5` with the exact `systemPrompt`/`contextBlock` captured live from the running
+  app (a `page.route` interceptor on the outgoing `/api/coach` POST — see the
+  `authority-finance-coach-live-test` skill, `docs/live-testing-checklist.md` item 5). Data pull
+  came back clean (every figure across 8 live calls matched the captured context exactly,
+  confirming DW-15's `avgWeeklySpend` unification reaches Coach with zero drift), but personality
+  did not: most responses ran past the 2-3 sentence target on non-mechanics questions, and the
+  canonical broad-question trigger ("give me everything") cited 7 numbers against an instructed
+  ≤3 and skipped the required follow-up invite. Tightened `coachPrompts.js` — scoped the
+  paragraph-length exception to genuine mechanics questions only (it previously read as exempting
+  the whole mode), and rewrote the number cap as a hard, self-checkable rule ("count the numbers
+  you named... four or more means the rule was broken"). Re-tested the identical messages: length
+  and a stacked-figurative-touch violation resolved cleanly, the follow-up invite now fires, but
+  **the number cap still didn't hold even after the rewrite** — filed open as DW-19, a
+  prompt-tuning gap rather than a code defect (a few-shot worked example is the likely next
+  lever, not another prose rewrite). Full before/after transcripts:
+  `docs/coach-personality-rubric.md`'s "Known Limitations" section. **Reusable for every other
+  Coach surface this doc scopes (Job Hunt Assistant, Résumé Review, Tax Onboarding, the new §2.K
+  hub context):** a regex test against prompt text cannot catch a model that stops following an
+  instruction it can still literally see — a live call is the only way to confirm tuning actually
+  landed, and this exact rule class had already silently regressed once before without one.
 - [ ] **Benefits / 401k context — deferred, not built.** Per explicit instruction: hold off wiring
   `BenefitsPanel` (401k contribution/match, PTO accrual/usage) into Coach's context until we've
   looked closer at how a **base (non-DHL) user** onboards other forms of employer compensation —

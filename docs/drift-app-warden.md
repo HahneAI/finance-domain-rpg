@@ -1117,6 +1117,52 @@ already governs that split.
 > countdown list (F44) move together — they share these exact functions, not parallel copies.
 > Check: `expense.test.js`'s cycle-advance cases; one bill's countdown agrees in both places.
 
+**F161 · `SetupWizardAdlib.jsx`'s Schedule and Tax Rates pages merged into one —
+`ScheduleTaxPage`** — `SetupWizardAdlib.jsx` — **[G]** — *(added 2026-08-27 — live Playwright
+screenshots against the running dev server at 390×844 showed ~650px of empty black space below
+the content on both the Schedule page and the Tax Rates page individually: a DHL Warehouse
+account's Schedule page is a single start-date blank, and Tax Rates is just two selects plus a
+button reveal by default — every other page in this flow fills the viewport, these two didn't)*
+`SchedulePage` and `TaxRatesPage` (both unchanged internally — same components, same
+`isScheduleValid`/`isTaxRatesValid` functions) are now composed into one page component,
+`ScheduleTaxPage`, rendered under a single `PAGES` entry (`id: "scheduleTax"`) with a small
+`cardLabelStyle` subheader ("Schedule" / "Tax Rates") above each section — the same label
+treatment already used for Wrap Up's "Tax-Exempt Week Projections" sub-section, not a new pattern.
+The combined gate, `isScheduleTaxValid(d) = isScheduleValid(d) && isTaxRatesValid(d)`, means Next
+on this page requires *both* sections' required fields, not just whichever section a user happens
+to be looking at — this is a real, user-visible behavior change (see the "requires the
+payday-parity answer... on top of the Tax Rates section" and DHL Warehouse tests in
+`SetupWizardAdlib.test.jsx` for the two-sided gating demonstrated explicitly). Tax Rates now comes
+**before** Deductions in answer order (it used to come after) — safe, since neither
+`isTaxRatesValid` nor the paystub calculator read any deduction field. Deductions and Wrap Up were
+deliberately left as standalone pages, not folded in further — both are already substantial for a
+typical account (Deductions has the benefits chip row + attendance/PTO cards; Wrap Up has the live
+net-estimate table + buffer + diff card for `structure_change`) and piling Tax Rates' paystub
+calculator onto either risked reintroducing the same empty/scrolling-viewport problem this change
+fixes, just relocated instead of solved. **Page-count effect on all six wizard paths** (§7.3's
+gate matrix lists `SetupWizard.jsx` `STEP_DEFS` ids, which are unaffected — this is purely a
+`SetupWizardAdlib.jsx` `PAGES`-array/page-count change on top of that same step set):
+- First-run employed / `structure_change` / `changed_jobs`: 5 ad-lib pages → **4** (Intake,
+  ScheduleTax, Deductions, WrapUp).
+- `lost_job` / `commission_job` (no Wrap Up): 4 ad-lib pages → **3** (Intake, ScheduleTax,
+  Deductions) — Deductions is now the last page and shows "Finish Setup" for these two paths.
+- First-run jobless (`startedUnemployed === true`): **unchanged at 4** (Intake + the three native
+  jobless pages, F141) — this path never touches Schedule/Deductions/Tax Rates, so it's untouched.
+  Don't conflate this still-4 case with `lost_job`/`commission_job`'s 4→3 change above — both said
+  "4" before the merge, only one of them actually moved.
+> **IF** a required field is added to either `isScheduleValid` or `isTaxRatesValid`, **THEN** it
+> automatically participates in the combined `isScheduleTaxValid` gate with no extra wiring — but
+> any test asserting "Next enables once section X is complete" must also fill the *other* merged
+> section, or it will incorrectly observe Next still disabled. Grep `SetupWizardAdlib.test.jsx`'s
+> "merged Schedule + Tax Rates page" describe blocks for the pattern already in place.
+> **IF** Deductions or Wrap Up ever needs trimming for viewport space in the future, **THEN**
+> re-check this entry's reasoning for why they were left alone this round (already substantial;
+> merging Tax Rates onto either was rejected for that reason) before reaching for a further merge
+> — the fix that generalizes is shrinking that page's own content, not merging it with a neighbor.
+> **IF** `ScheduleTaxPage`'s two subheaders or their `cardLabelStyle` treatment change, **THEN**
+> update `SetupWizardAdlib.test.jsx`'s subheader-rendering test (`renders both "Schedule" and "Tax
+> Rates" subheaders...`) to match — it's the one test that would first drift on that copy/style.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1159,6 +1205,13 @@ the source of the three jobless page components (`StepJoblessBenefits`/`StepJobl
 `StepJoblessWrapUp`, F141) and as `LIFE_EVENTS`/`DIFF_FIELDS`/`StructureChangeDiff`'s shared export
 home (F7/F140) — never mounted, never rendered. docs/TODO.md §19.2/§19.3 (both now fully closed)
 have the path-by-path history.
+
+**F161 note:** this table's "Steps shown" column lists `SetupWizard.jsx` `STEP_DEFS` ids (0-4/7/
+10-12), which F161 (2026-08-27) did not touch or reduce — the real wizard's step set is unchanged.
+F161 only merged `SetupWizardAdlib.jsx`'s own `PAGES`-array presentation of steps 2 ("2") and 4
+("4") into one page — see F161 for the resulting ad-lib page-count-per-path table (5→4 employed/
+`structure_change`/`changed_jobs`, 4→3 `lost_job`/`commission_job`, unchanged at 4 for first-run
+jobless).
 
 Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
 hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**

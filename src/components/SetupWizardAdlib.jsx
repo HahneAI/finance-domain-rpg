@@ -367,6 +367,13 @@ function isTaxRatesValid(d) {
   return d.fedRateLow > 0 && d.userState != null;
 }
 
+// Combined gate for the merged Schedule + Tax Rates page (ScheduleTaxPage,
+// drift-app-warden §7 F161) — both sections' required fields must be filled
+// before advancing, same as if they were still two separate pages.
+function isScheduleTaxValid(d) {
+  return isScheduleValid(d) && isTaxRatesValid(d);
+}
+
 // Wrap Up has no required fields at all — mirrors STEP_DEFS id 7's
 // `isValid: () => true` exactly. It's a live summary plus two optional,
 // non-blocking settings, not a form to fill in.
@@ -1294,6 +1301,29 @@ function SchedulePage({ formData, onChange, attempted = false }) {
         )
       )}
     </p>
+  );
+}
+
+// ── Combined page: Schedule + Tax Rates. Both are consistently short on their
+// own (Schedule can be a single blank — just the start date — for a DHL
+// Warehouse account; Tax Rates is two selects plus a button reveal by
+// default) and were leaving most of the viewport empty on a real device,
+// unlike every other page in this flow. Merged into one page with a small
+// subheader above each section (reusing the same `cardLabelStyle` label
+// already used for Wrap Up's "Tax-Exempt Week Projections" sub-section)
+// rather than a page each — Deductions and Wrap Up are left standalone since
+// both are already substantial (Wrap Up in particular is already near a full
+// screen for most accounts; adding Tax Rates' paystub calculator on top of
+// it risked reintroducing the exact scrolling problem this change fixes).
+// See drift-app-warden §7 F161.
+function ScheduleTaxPage(props) {
+  return (
+    <>
+      <div className="text-2xs" style={{ ...cardLabelStyle, marginBottom: "10px" }}>Schedule</div>
+      <SchedulePage {...props} />
+      <div className="text-2xs" style={{ ...cardLabelStyle, marginTop: "26px", marginBottom: "10px" }}>Tax Rates</div>
+      <TaxRatesPage {...props} />
+    </>
   );
 }
 
@@ -2324,13 +2354,18 @@ const JOBLESS_PAGE_IDS = ["joblessBenefits", "joblessDetails", "joblessWrapUp"];
 // pages below (STEP_DEFS id 10/11/12's ad-lib ports).
 const PAGES = [
   { id: "intake", isValid: isIntakeValid, Component: IntakePage },
-  { id: "schedule", isValid: isScheduleValid, Component: SchedulePage },
+  // Schedule + Tax Rates merged into one page (drift-app-warden §7 F161) — both were
+  // consistently too thin on their own (Schedule can be a single blank, Tax Rates two
+  // selects, on a real device leaving most of the screen empty). This moves Tax Rates
+  // ahead of Deductions in answer order; nothing downstream depends on Deductions being
+  // answered before Tax Rates (isTaxRatesValid/the paystub calculator only read
+  // formData.userState, never a deduction field), so the reorder is safe.
+  { id: "scheduleTax", isValid: isScheduleTaxValid, Component: ScheduleTaxPage },
   // skippable: true mirrors real STEP_DEFS id 3 (Deductions) — the only step the real
   // wizard lets a user bypass entirely (benefits/attendance answers are all optional to
   // the account, unlike Pay Structure/Schedule/Tax Rates). Missing this affordance was a
   // functional regression vs. the real wizard — see docs/TODO.md §19.1.A.
   { id: "deductions", isValid: isDeductionsValid, Component: DeductionsPage, skippable: true },
-  { id: "taxRates", isValid: isTaxRatesValid, Component: TaxRatesPage },
   { id: "wrapUp", isValid: isWrapUpValid, Component: WrapUpPage },
   { id: "joblessBenefits", isValid: isJoblessBenefitsValid, Component: JoblessBenefitsPage },
   { id: "joblessDetails", isValid: isJoblessDetailsValid, Component: JoblessDetailsPage },
@@ -2347,9 +2382,10 @@ const PAGES = [
 //     life-event path).
 //   - lost_job / commission_job → every page except Wrap Up and the jobless pages (real
 //     wizard: STEP_DEFS id 7's showIf excludes both — §7.3's gate matrix, "No" Wrap Up
-//     column).
-//   - everything else (first-run employed, structure_change, changed_jobs) → all five
-//     employed pages, jobless pages excluded.
+//     column). Three pages now (Intake, Schedule+Tax, Deductions) since F161 merged
+//     Schedule and Tax Rates into one page.
+//   - everything else (first-run employed, structure_change, changed_jobs) → all four
+//     employed pages (Intake, Schedule+Tax, Deductions, Wrap Up), jobless pages excluded.
 function computeActivePages(d, lifeEvent) {
   if (lifeEvent === null && d.startedUnemployed === true) {
     return [PAGES[0], ...PAGES.filter(p => JOBLESS_PAGE_IDS.includes(p.id))];

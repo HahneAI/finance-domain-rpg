@@ -121,13 +121,19 @@ current caller, not dead code that needs deleting.
 
 **`SetupWizardAdlib.jsx` — the REAL production first-run onboarding wizard.** A
 "fill-in-the-blank" reimagining of the entire first-run, employed-signup flow — all six real
-`SetupWizard.jsx` steps — as five cascading mad-libs pages with inline `<select>`/`<input>`
+`SetupWizard.jsx` steps — as four cascading mad-libs pages with inline `<select>`/`<input>`
 blanks, instead of stacked form fields or a page-per-step flow. Page 1 (`IntakePage`) merges
-Welcome + Pay Structure into one continuous sentence; page 2 (`SchedulePage`) covers Schedule as
-its own page; page 3 (`DeductionsPage`) covers Deductions as its own page (with a Skip button,
-mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`TaxRatesPage`) covers Tax Rates as
-its own page; page 5 (`WrapUpPage`) covers Wrap Up as its own page — all in the same cascading
-style.
+Welcome + Pay Structure into one continuous sentence; page 2 (`ScheduleTaxPage`) merges Schedule
+and Tax Rates onto one page, each under its own small subheader (drift-app-warden §7 F161,
+2026-08-27 — both sections were consistently too short on their own, leaving ~650px of empty
+viewport below the content on a real device for the thinnest accounts; the merge's combined gate,
+`isScheduleTaxValid = isScheduleValid && isTaxRatesValid`, requires both sections' required fields
+before Next enables, and Tax Rates now comes before Deductions in answer order since nothing in
+Tax Rates reads a deduction field); page 3 (`DeductionsPage`) covers Deductions as its own page
+(with a Skip button, mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`WrapUpPage`)
+covers Wrap Up as its own page — all in the same cascading style. `SchedulePage`/`TaxRatesPage`
+still exist as their own components (unchanged internally, still each with their own
+`isScheduleValid`/`isTaxRatesValid`) — `ScheduleTaxPage` just composes the two.
 
 **Scope: the ENTIRE first-run flow (employed and jobless) plus all four life-event re-entry
 strings (2026-08-11, docs/TODO.md §19.2/§19.3, now fully closed).** `App.jsx` mounts
@@ -246,9 +252,10 @@ which `App.jsx` wires straight to `handleWizardComplete()`, the same function ev
 food-seed logic). Cancel (`onCancel`, only present for investor first-run) has zero save side
 effects, matching the real wizard's uncancelable-first-run rule for everyone else.
 
-- **Eight real pages total, each internally cascading — five employed + three native jobless.**
-  `PAGES = [{Component: IntakePage}, {Component: SchedulePage}, {Component: DeductionsPage},
-  {Component: TaxRatesPage}, {Component: WrapUpPage}, {Component: JoblessBenefitsPage},
+- **Seven real pages total, each internally cascading — four employed + three native jobless**
+  (was eight/five before Schedule and Tax Rates merged into one page, drift-app-warden §7 F161,
+  2026-08-27). `PAGES = [{Component: IntakePage}, {id: "scheduleTax", Component: ScheduleTaxPage},
+  {Component: DeductionsPage}, {Component: WrapUpPage}, {Component: JoblessBenefitsPage},
   {Component: JoblessDetailsPage}, {Component: JoblessWrapUpPage}]`, navigated with a page-level
   Next/Back via `StepSlide` (same slide transition the real wizard uses) — but *within* each page,
   clauses still cascade in as plain `formData`-gated conditionals (`isEmployed && (…)`,
@@ -257,10 +264,12 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   first-run jobless (`lifeEvent === null && startedUnemployed === true`) gets Intake plus the
   three jobless pages only (`[PAGES[0], joblessBenefits, joblessDetails, joblessWrapUp]`), same as
   the real wizard's `isFirstRunJobless` gate skipping STEP_DEFS id 2/3/4/7 in favor of id 10/11/12
-  — but natively now, not via a hand-off (F141). Everyone else gets the five employed pages, minus
-  Wrap Up for `lost_job`/`commission_job` (§19.2's gate matrix). `JOBLESS_PAGE_IDS` factors the
-  three jobless page ids out so `computeActivePages` never repeats the literal list.
-  Back is hidden on page 1 (`pageIdx > 0`) and reappears on pages 2–5, returning to the prior page
+  — but natively now, not via a hand-off (F141), and unaffected by the F161 merge since this path
+  never reaches Schedule/Deductions/Tax Rates at all. Everyone else gets the four employed pages
+  (Intake, Schedule+Tax, Deductions, Wrap Up), minus Wrap Up for `lost_job`/`commission_job`
+  (§19.2's gate matrix — now 3 pages for those two paths, down from 4). `JOBLESS_PAGE_IDS` factors
+  the three jobless page ids out so `computeActivePages` never repeats the literal list.
+  Back is hidden on page 1 (`pageIdx > 0`) and reappears on pages 2–4, returning to the prior page
   with its answers intact — this Back is a real page-level navigation, distinct from undoing an
   earlier answer within the current page (just re-picking that blank directly). The outer
   page-count/resume machinery (`activePages`, `pageIdx`, the header's "N of M" progress display,

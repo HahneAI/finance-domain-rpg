@@ -535,9 +535,14 @@ since migration 019's RLS column grants).
 
 Coach is an in-app AI companion — corner-man persona, full voice brief and scored tuning rubric
 in `docs/coach-personality-rubric.md` — that answers questions about how Authority Finance works,
-grounded in the user's real data. Gated behind `canAccessAiFeatures({isAdmin, isTester})` (§9)
-client **and** server side; every AI surface stays admin/tester-only until Coach leaves its
-build-out phase (`docs/TODO.md` §2 standing constraint).
+grounded in the user's real data. **Live and open to the full user base since 2026-07-24** — no
+longer admin/tester-only. Gated via `canAccessAskCoachGeneral({isAdmin, isTester, isInvestor,
+isAiAdmin, entitlement})` (`src/lib/entitlements.js`) client **and** server side: admin, tester,
+investor, and AI-Admin accounts bypass unconditionally (`hasPrivilegedAccess`, §18/§23), everyone
+else needs a real `"trial"`/`"grace"`/`"active"` entitlement from `lib/subscription.js`. Other,
+not-yet-built AI surfaces (Job Hunt Assistant, Résumé Review) stay on the narrower
+`canAccessAiFeatures` (privileged tiers only, no entitlement path) — see `docs/TODO.md` §2's
+standing constraint and `docs/coach-entry-points.md` for the current per-surface split.
 
 - **Pieces:** `api/coach.js` (Vercel function; streams Anthropic SSE through; re-checks the gate
   server-side; prod/test key split via `ANTHROPIC_API_KEY`/`ANTHROPIC_API_KEY_TEST`, same MODE
@@ -545,9 +550,15 @@ build-out phase (`docs/TODO.md` §2 standing constraint).
   (`COACH_PERSONA_PROMPT` shared voice + `buildNetWorthSystemPrompt`/`ASK_COACH_SYSTEM_PROMPT`)
   · `lib/coachFeatureGuide.js` (`COACH_FEATURE_GUIDE`, hand-written panel tutorial, concatenated
   into the Ask Coach system prompt) · `lib/aiContext.js` (`buildCoachContext()`, the per-user data
-  snapshot) · `components/AskCoachPanel.jsx` (chat UI; gated bottom-nav entry mirrors the admin
-  `__tools__` pattern; no persistence yet) · `components/CoachNetWorthCard.jsx` (§C's proactive
-  Net Worth Trend trigger, rate-limited to once/tier/fiscal-week).
+  snapshot) · `components/AskCoachPanel.jsx` (chat UI; persisted to `coach_chats`, see below)
+  · `components/CoachNetWorthCard.jsx` (§C's proactive Net Worth Trend trigger, rate-limited to
+  once/tier/fiscal-week).
+- **Persistence — live since 2026-07-25.** Every completed turn is an eager save (not debounced)
+  to `coach_chats` (migration 023) via `loadCoachChats`/`saveCoachChat`/`deleteCoachChat`
+  (`db.js`). A header-icon "Chat History" view inside `AskCoachPanel.jsx` lists the last 3 saved
+  conversations grouped by date with a short Coach-written summary (`COACH_CHAT_SUMMARY_PROMPT`,
+  a separate narrower prompt that never faces the user); tapping one resumes it. Older
+  conversations beyond the last 3 are pruned automatically. Full detail: `docs/TODO.md` §2.H.
 - **Grounding pattern — the rule to follow when extending this:** every context field must resolve
   through the *same* authoritative function the UI itself displays that number with, never a
   parallel approximation. Concretely: per-expense weekly cost goes through
@@ -558,12 +569,35 @@ build-out phase (`docs/TODO.md` §2 standing constraint).
   instead of `history` that disagreed with the real number by double digits; an ambiguous
   "M/N completed" goals line the model misread as "no goals set"; and a flat "I don't have that
   data" on the Home "Budget Health" tile, which context simply never carried. Reuse the exported
-  pure function — don't hand-derive a shortcut.
+  pure function — don't hand-derive a shortcut. **2026-08-26 follow-up (DW-19,
+  `drift-app-warden.md` F160):** the first-ever live test against a *real* model call (not just
+  reading the prompt text) reconfirmed the grounding side holds — every figure Coach cited across
+  8 live calls matched the captured context exactly, including DW-15's `avgWeeklySpend`
+  unification — but surfaced a separate, personality-side gap: see the live-testing workflow
+  bullet below.
+- **Personality tuning — live-testing workflow, first run 2026-08-26 (DW-19).** This sandbox has
+  no working `/api/coach` route or Anthropic key by default, so prompt *text* could be read but
+  never actually run against a model. Unblocked via a scoped `AI_ADMIN_COACH_TEST_KEY`, called
+  directly against `claude-haiku-4-5` with the exact `systemPrompt`/`contextBlock` captured live
+  from the running app (a `page.route` interceptor on the outgoing `/api/coach` POST — see the
+  `authority-finance-coach-live-test` skill and `docs/live-testing-checklist.md` item 5). Found
+  real, reproducible deviations from the system prompt's own stated rules: most responses ran
+  past the 2-3 sentence target on non-mechanics questions, and the canonical broad-question
+  trigger ("give me everything") cited 7 numbers instead of the instructed ≤3 and skipped the
+  required follow-up invite. Tightened `coachPrompts.js` (scoped the paragraph-length exception to
+  genuine mechanics questions only; rewrote the number cap as a hard, self-checkable rule) and
+  re-tested the identical messages — length and a stacked-metaphor violation resolved cleanly, the
+  follow-up invite now fires, but **the broad-question number cap still didn't hold even after the
+  rewrite** — open as DW-19, a prompt-tuning gap rather than a code defect (likely needs a
+  few-shot worked example, not another prose rewrite; full before/after transcripts in
+  `docs/coach-personality-rubric.md`'s "Known Limitations" section and `drift-app-warden.md`
+  F160). **Reusable takeaway for extending Coach to other features:** a regex test against the
+  prompt text cannot catch a model that stops following an instruction it can still literally
+  see — only a live call can, and this exact class of rule had already silently regressed once
+  before without one.
 - **Privacy:** goal labels are deliberately excluded from `buildCoachContext()` — goals are
   identified only by funding-priority rank ("Goal 1 of N"). Coach may use a name back only if the
   *user* volunteers it in their own message; it never learns one from data.
-- **Known gaps:** chat history persistence exists at the data layer (`coach_chats` table, migration
-  023 live, `db.js` load/save/delete functions) but isn't wired into `App.jsx`/`AskCoachPanel` yet
-  (§2.H). Benefits/401k context is intentionally not wired — blocked on a product decision about
-  how base (non-DHL) users onboard other employer comp.
+- **Known gaps:** Benefits/401k context is intentionally not wired — blocked on a product decision
+  about how base (non-DHL) users onboard other employer comp.
 - Full build log, deviations, and open questions: `docs/TODO.md` §2.

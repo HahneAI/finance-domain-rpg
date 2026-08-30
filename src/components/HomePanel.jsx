@@ -677,8 +677,13 @@ export function HomePanel({
       </div>
 
       <div>
-        <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
+        {/* margin: "0 -16px" cancels out .main-content's own 16px horizontal padding
+            (App.jsx's inline `padding: "18px 16px"` on the .main-content div) so this
+            box runs edge-to-edge as a true full-bleed bar, not just visually wide within
+            its column. Coupled to that literal value — if App.jsx's main-content padding
+            ever changes, update this to match. */}
+        <div style={{ margin: "0 -16px 16px", padding: "16px 0", borderTop: "1px solid #222", borderBottom: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "14px" : "0", padding: "0 16px" }}>
             <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {tl.length > 0 && setConfigProp && !readOnly && (
@@ -702,7 +707,12 @@ export function HomePanel({
               <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{tl.length}</div>
             </div>
           </div>
-          {!tl.length && <div className="text-xs" style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
+          {!tl.length && <div className="text-xs" style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 16px" }}>No active goals yet</div>}
+          {/* The box itself has no horizontal padding (its background needs to run
+              edge-to-edge — see the full-bleed comment above), so this 16px inset
+              reproduces the margin the cards used to get for free from .main-content's
+              own page padding before the box became full-bleed. */}
+          <div style={{ padding: "0 16px" }}>
           {isMobile ? (
             <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
@@ -763,14 +773,21 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
-                            {(() => {
-                              const info = resolveGoalFinishInfo(g);
-                              return <>
-                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
-                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                              </>;
-                            })()}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            {/* minHeight reserves the badge/PAST DUE row's space even when
+                                neither shows, so a goal completing within the current fiscal
+                                year (no badge) renders the same card height as one further out
+                                (badge present) — instead of the carousel's cards visibly
+                                varying in height card to card. */}
+                            <div style={{ minHeight: "38px" }}>
+                              {(() => {
+                                const info = resolveGoalFinishInfo(g);
+                                return <>
+                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                </>;
+                              })()}
+                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            </div>
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -899,14 +916,21 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
-                            {(() => {
-                              const info = resolveGoalFinishInfo(g);
-                              return <>
-                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
-                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                              </>;
-                            })()}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            {/* minHeight reserves the badge/PAST DUE row's space even when
+                                neither shows, so a goal completing within the current fiscal
+                                year (no badge) renders the same card height as one further out
+                                (badge present) — instead of the carousel's cards visibly
+                                varying in height card to card. */}
+                            <div style={{ minHeight: "38px" }}>
+                              {(() => {
+                                const info = resolveGoalFinishInfo(g);
+                                return <>
+                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                </>;
+                              })()}
+                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            </div>
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -974,6 +998,7 @@ export function HomePanel({
               })}
             </>
           )}
+          </div>
         {/* Portaled to document.body so position:fixed resolves against the viewport,
             not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
             element nested in an overflow:auto container at a scrollTop offset, which
@@ -1290,9 +1315,9 @@ export function HomePanel({
           document.body,
         )}
 
-        <div style={{ padding: "0 12px 12px" }}>
+        <div style={{ padding: "20px 16px 16px" }}>
           {!readOnly && (addingGoal ? (
-            <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+            <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "20px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
                 <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
@@ -1303,10 +1328,10 @@ export function HomePanel({
                 <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
               </div>
             </div>
-          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
+          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "20px" }}>+ ADD GOAL</Pressable>)}
 
           {completedGoals.length > 0 && (
-            <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
+            <div style={{ border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "20px" }}>
               <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
                 <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
                 <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
@@ -1332,7 +1357,7 @@ export function HomePanel({
             const unit = payPeriodUnit(checksPerYear, checksLeft === 1 ? 'lower' : 'lowerPlural');
             const dayLabel = daysUntilPaycheck === 0 ? "today" : `in ${daysUntilPaycheck} day${daysUntilPaycheck === 1 ? "" : "s"}`;
             return (
-              <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "12px" }}>
+              <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "16px" }}>
                 <div className="text-base" style={{ color: "var(--color-green)", fontWeight: 600 }}>
                   {checksLeft} {unit} left this year. Your pay period ends {dayLabel}.
                 </div>

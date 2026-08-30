@@ -453,14 +453,34 @@ no representation here until this pass).
   Home/Budget), `UpgradePanel.jsx` as a non-dismissible full replacement. `TrialBanner.jsx` is the
   persistent countdown/warning strip, hidden only where `UpgradePanel` already replaces the view.
 - **Lifecycle emails:** own entry, §4.
-- **Account revival:** a non-payment deletion (cron, day 21+7) tombstones the row into
-  `deleted_accounts` (migration 017) before deleting — the *only* delete path that archives first;
-  the user-initiated "type DELETE" flow stays a true, unrecoverable hard delete. `LoginScreen.jsx`
+- **Account revival:** both a non-payment deletion (cron, day 21+7) and a user-initiated
+  "type DELETE" request tombstone the row into `deleted_accounts` (migration 017; user-initiated
+  added migration 044) before deleting, via the same shared `api/_accountArchive.js` function —
+  `deletion_reason` (`"non_payment_dunning_expired"` vs. `"user_requested"`) is the only thing
+  that distinguishes them; both are equally revivable. **User-initiated deletion is no longer a
+  synchronous hard delete** — `api/delete-account.js` stamps `user_data.deletion_requested_at`
+  first (locking the account, `App.jsx`'s goodbye gate) and only then attempts the real archive
+  inline, best-effort; a failed inline attempt leaves the row locked for
+  `cron-subscription-lifecycle.js`'s daily `sweepPendingDeletions()` to retry — the request is
+  always honored (200) once the account is locked, never surfaced to the user as a backend error.
+  See `docs/drift-app-warden.md` §12 F52 for the full writeup and the incident (a raw
+  `auth.admin.deleteUser` failure) that drove it. `LoginScreen.jsx`
   + `api/revival-lookup.js` detect a revivable email on a failed sign-in or a fresh Google
   sign-up (checked *before* trial seeding); `ReviveScreen.jsx` + `api/stripe-revive-checkout.js`
   require an actual successful charge (reusing the archived Stripe customer, never a free
   re-entry) before `stripe-webhook.js` restores the archived config/expenses/goals/logs/
   weekConfirmations/ptoGoal and stamps `deleted_accounts.revived_at`.
+- **Migrations 045/046 (2026-08-30, live-found the same day as the above):** the
+  `auth.admin.deleteUser()` step was failing for essentially every real account — a
+  `consent_records` foreign key to `auth.users(id)` had no `ON DELETE CASCADE` (fixed,
+  045, along with a few nullable admin-authored-content audit columns getting
+  `ON DELETE SET NULL` instead). Because that failure happened *after* `user_data` was
+  already deleted, the account was left permanently orphaned — auth still valid, no data
+  behind it, next sign-in re-runs the wizard like a first-time user, and Stripe had
+  already been correctly canceled so a resubscribe there opens a genuinely new
+  subscription (a second charge). `deleted_accounts.auth_purge_pending` (046) is the
+  durable retry signal for just that last step, since `user_data.deletion_requested_at`
+  doesn't survive to see it. See `docs/drift-app-warden.md` §12 F52 addendum.
 - **Known gaps:** Stripe Customer Portal dashboard config unconfirmed; two live-verification-only
   items parked for the pre-launch pass (cancel-on-delete Stripe cleanup, the tombstoned-email
   Google OAuth sign-in path — neither reachable by unit tests).

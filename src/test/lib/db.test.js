@@ -678,6 +678,7 @@ describe('loadUserData — subscription mapping (migration 017)', () => {
       dunningEmailCount: 0,
       currentPeriodEnd: '2026-02-01T00:00:00.000Z',
       plan: 'monthly',
+      deletionRequestedAt: null,
     })
   })
 
@@ -696,6 +697,7 @@ describe('loadUserData — subscription mapping (migration 017)', () => {
       dunningEmailCount: 0,
       currentPeriodEnd: null,
       plan: null,
+      deletionRequestedAt: null,
     })
   })
 })

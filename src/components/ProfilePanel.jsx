@@ -388,7 +388,12 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         setDeleteState({ error: payload?.error || "Failed to delete account.", loading: false });
         return;
       }
-      await supabase.auth.signOut({ scope: "global" });
+      // Migration 044 — a 200 here means the account is locked (deletion has
+      // been honored) even if the backend's full purge is still finishing up
+      // in the background. Show the goodbye state instead of yanking the
+      // modal away with an immediate sign-out; onSignOut below handles that
+      // once the user is ready.
+      setDeleteState({ error: null, loading: false, done: true });
     } catch {
       setDeleteState({ error: "Failed to delete account.", loading: false });
     }
@@ -646,21 +651,40 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
       {deleteFold.mounted && createPortal(
         <div className="fold-backdrop" data-fold={deleteFold.fold} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div className="fold-modal" data-fold={deleteFold.fold} style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
-            <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
-              This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lSp}>Type DELETE to confirm</label>
-              <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
-            </div>
-            {deleteState.error && (
-              <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+            {deleteState.done ? (
+              <>
+                <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>We're sad to see you go</div>
+                <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
+                  No matter what tools you use, you will always have the authority over your life if
+                  you act on it. We shall meet again.
+                </div>
+                <Pressable
+                  onClick={() => supabase.auth.signOut({ scope: "global" })}
+                  className="text-xs"
+                  style={{ padding: "10px 0", background: "var(--color-teal)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+                >
+                  Done
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
+                <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
+                  This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={lSp}>Type DELETE to confirm</label>
+                  <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
+                </div>
+                {deleteState.error && (
+                  <div className="text-xs" style={{ color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+                )}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Pressable onClick={() => setShowDeleteDialog(false)} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+                  <Pressable onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</Pressable>
+                </div>
+              </>
             )}
-            <div style={{ display: "flex", gap: "8px" }}>
-              <Pressable onClick={() => setShowDeleteDialog(false)} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} className="text-xs" style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</Pressable>
-            </div>
           </div>
         </div>,
         document.body,

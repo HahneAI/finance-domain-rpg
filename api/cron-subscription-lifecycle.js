@@ -11,16 +11,32 @@
 //
 // Day-21+7 archive-then-delete (§17.I, wired 2026-07-06): delete-due rows are
 // snapshotted into deleted_accounts (upsert-on-email, migration 017) BEFORE
-// the hard delete, so non-payment deletion stays revivable — this is the ONLY
-// deletion path that archives; the user-initiated flow in delete-account.js
-// stays a true hard delete with no archive.
+// the hard delete, so non-payment deletion stays revivable.
+//
+// Migration 044 (user-initiated deletion never hard-fails to the user):
+// delete-account.js now locks an account by stamping deletion_requested_at
+// BEFORE attempting the same archiveAndDeleteAccount() below inline, and
+// returns success to the user either way. If that inline attempt fails
+// partway (Stripe hiccup, transient auth-admin error, etc.), the row is left
+// locked-but-not-purged — sweepPendingDeletions() below finds those rows
+// every run and retries the exact same archive until it succeeds, same as
+// this file's own delete-due retry-by-omission pattern.
+//
+// Migration 046: sweepPendingDeletions() can only find rows that STILL have a
+// user_data row (deletion_requested_at lives there). The specific failure
+// found live 2026-08-30 — auth.admin.deleteUser() rejected by a
+// consent_records foreign key (migration 045 fixed the constraint itself) —
+// happens AFTER user_data is already deleted, so that flag is gone by the
+// time it matters and this sweep alone could never recover it. See
+// api/_accountArchive.js's finishPendingAuthPurges() (called below,
+// independent of everything else in this file) for the durable fix.
 
 import { createClient } from "@supabase/supabase-js";
 import { decideLifecycleAction } from "./_lifecycleEngine.js";
 import { buildLifecycleEmail } from "./_lifecycleEmails.js";
 import { sendEmail, isEmailConfigured } from "./_email.js";
-import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
 import { isTrackedBetaTester } from "../src/lib/entitlements.js";
+import { archiveAndDeleteAccount, finishPendingAuthPurges } from "./_accountArchive.js";
 
 // docs/TODO.md §37 — beta program halfway nudge threshold. A throttle column
 // (halfway_email_sent_at) makes exact-day precision unnecessary: this only
@@ -31,80 +47,34 @@ const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
-// §17.I archive-then-delete for one delete-due account (day 21+7, no card).
-// Order matters for retry safety — every step throws on failure, the per-row
-// catch in the handler counts it, and the next daily run retries from scratch:
-//   1. resolve the auth user (email keys the tombstone),
-//   2. snapshot the full user_data row,
-//   3. cancel any lingering Stripe subscription (same both-mode lookup as
-//      delete-account.js — a lapsed past_due sub may still exist),
-//   4. upsert the tombstone (on email, so a revive → lapse → delete cycle
-//      overwrites the same row instead of piling up duplicates),
-//   5. only then hard-delete user_data + the auth user.
-async function archiveAndDeleteAccount(adminClient, userId, now) {
-  const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId);
-  const user = userData?.user;
-  if (userError || !user?.email) {
-    throw new Error(`archive: no auth user/email (${userError?.message ?? "auth row missing"})`);
-  }
-
-  const { data: fullRow, error: rowError } = await adminClient
+// Retries archiveAndDeleteAccount() for every row delete-account.js locked
+// (deletion_requested_at set) but couldn't fully purge inline — a transient
+// Stripe/auth-admin failure at request time, or the request's own function
+// timing out. Runs every cron pass, independent of the trial-lifecycle rows
+// query below (a locked row may have no trial_started_at at all — an
+// investor or admin account, say — so it can't ride that query's filter).
+async function sweepPendingDeletions(adminClient, now, summary) {
+  const { data: pendingRows, error: pendingFetchError } = await adminClient
     .from("user_data")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (rowError || !fullRow) {
-    throw new Error(`archive: snapshot fetch failed (${rowError?.message ?? "row missing"})`);
+    .select("user_id")
+    .not("deletion_requested_at", "is", null);
+  if (pendingFetchError) {
+    console.error("cron-subscription-lifecycle: pending-deletion sweep fetch failed:", pendingFetchError.message);
+    summary.errors += 1;
+    return;
   }
 
-  if (fullRow.stripe_subscription_id) {
-    if (STRIPE_CLIENTS.length === 0) {
-      throw new Error("archive: subscription on file but no Stripe key configured");
+  for (const row of pendingRows) {
+    try {
+      await archiveAndDeleteAccount(adminClient, row.user_id, now, "user_requested");
+      summary.deleted += 1;
+      console.log(`cron-subscription-lifecycle: user ${row.user_id} archived + deleted (user-requested retry)`);
+    } catch (err) {
+      // Left locked for the next run to retry — same as the delete-due path.
+      summary.errors += 1;
+      console.error(`cron-subscription-lifecycle: pending-deletion retry failed for ${row.user_id}:`, err.message);
     }
-    await cancelStripeSubscription(fullRow.stripe_subscription_id, STRIPE_CLIENTS);
   }
-
-  // Supabase reports "email" as the provider for password accounts; the
-  // tombstone only records real OAuth providers (so the revival screen knows
-  // to show "Continue with Google" instead of a password field).
-  const provider = user.app_metadata?.provider ?? null;
-  const { error: archiveError } = await adminClient.from("deleted_accounts").upsert(
-    {
-      email: user.email,
-      former_user_id: userId,
-      display_name: fullRow.display_name ?? null,
-      avatar_url: fullRow.avatar_url ?? null,
-      oauth_provider: provider && provider !== "email" ? provider : null,
-      archived_config: fullRow.config ?? null,
-      archived_expenses: fullRow.expenses ?? null,
-      archived_goals: fullRow.goals ?? null,
-      archived_logs: fullRow.logs ?? null,
-      archived_show_extra: fullRow.show_extra ?? null,
-      archived_week_confirmations: fullRow.week_confirmations ?? null,
-      archived_pto_goal: fullRow.pto_goal ?? null,
-      stripe_customer_id: fullRow.stripe_customer_id ?? null,
-      plan: fullRow.plan ?? null,
-      deletion_reason: "non_payment_dunning_expired",
-      deleted_at: now.toISOString(),
-      // Reopen the tombstone fresh on a second deletion cycle.
-      revived_at: null,
-      revival_attempt_count: 0,
-      last_revival_attempt_at: null,
-      last_decline_code: null,
-      last_decline_message: null,
-    },
-    { onConflict: "email" }
-  );
-  if (archiveError) throw new Error(`archive: tombstone upsert failed (${archiveError.message})`);
-
-  const { error: dataDeleteError } = await adminClient
-    .from("user_data")
-    .delete()
-    .eq("user_id", userId);
-  if (dataDeleteError) throw new Error(`archive: user_data delete failed (${dataDeleteError.message})`);
-
-  const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(userId);
-  if (authDeleteError) throw new Error(`archive: auth delete failed (${authDeleteError.message})`);
 }
 
 export default async function handler(req, res) {
@@ -151,7 +121,7 @@ export default async function handler(req, res) {
 
   const now = new Date();
   const appUrl = env.APP_URL ? env.APP_URL.replace(/\/+$/, "") : "";
-  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0, betaHalfwaySent: 0 };
+  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0, betaHalfwaySent: 0, authPurgesFinished: 0 };
 
   for (const row of rows) {
     try {
@@ -161,7 +131,7 @@ export default async function handler(req, res) {
         summary.deleteDue += 1;
         // The account is being removed — archive+delete takes precedence over
         // any same-run deletion_warning email (nothing to warn about anymore).
-        await archiveAndDeleteAccount(adminClient, row.user_id, now);
+        await archiveAndDeleteAccount(adminClient, row.user_id, now, "non_payment_dunning_expired");
         summary.deleted += 1;
         console.log(`cron-subscription-lifecycle: user ${row.user_id} archived + deleted (non-payment, day 21+7)`);
         continue;
@@ -237,6 +207,25 @@ export default async function handler(req, res) {
       summary.errors += 1;
       console.error(`cron-subscription-lifecycle: user ${row.user_id} failed:`, err.message);
     }
+  }
+
+  // Runs after the trial-lifecycle loop so any row deleteDue already purged
+  // above is naturally gone from this query and never double-processed.
+  await sweepPendingDeletions(adminClient, now, summary);
+
+  // Migration 046 — independent of everything above: retries the final
+  // auth.users purge for any tombstone still marked auth_purge_pending,
+  // regardless of whether that account got there via this cron's own
+  // delete-due path or delete-account.js's user-initiated one. Never let a
+  // problem here abort the run — same "one bad thing doesn't sink the whole
+  // pass" posture as every other step in this file.
+  try {
+    const purgeResults = await finishPendingAuthPurges(adminClient, now);
+    summary.authPurgesFinished = purgeResults.purged;
+    summary.errors += purgeResults.errors;
+  } catch (err) {
+    summary.errors += 1;
+    console.error("cron-subscription-lifecycle: finishPendingAuthPurges failed:", err.message);
   }
 
   console.log("cron-subscription-lifecycle summary:", JSON.stringify(summary));

@@ -663,6 +663,19 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
+      <div style={{ marginBottom: "20px", textAlign: "center", padding: "6px 0" }}>
+        <div style={{
+          fontSize: "52px",
+          fontWeight: 900,
+          fontFamily: "var(--font-display)",
+          color: "var(--color-accent-primary)",
+          letterSpacing: "0.04em",
+          lineHeight: 1.15,
+        }}>
+          Goals
+        </div>
+      </div>
+
       <div>
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
@@ -961,7 +974,6 @@ export function HomePanel({
               })}
             </>
           )}
-        </div>
         {/* Portaled to document.body so position:fixed resolves against the viewport,
             not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
             element nested in an overflow:auto container at a scrollTop offset, which
@@ -1278,55 +1290,60 @@ export function HomePanel({
           document.body,
         )}
 
-        {!readOnly && (addingGoal ? (
-          <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-              <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-              <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
-              <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
+        <div style={{ padding: "0 12px 12px" }}>
+          {!readOnly && (addingGoal ? (
+            <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
+                <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
+                <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
-              <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
-            </div>
-          </div>
-        ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
+          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
 
-        {completedGoals.length > 0 && (
-          <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
-            <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
-              <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
-              <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
-            </Pressable>
-            {fundedFold.mounted && (
-              <div className="fold-scale" data-fold={fundedFold.fold}>
-                {completedGoals.map((g) => (
-                  <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
-                      <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
+          {completedGoals.length > 0 && (
+            <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
+              <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
+                <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
+                <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
+              </Pressable>
+              {fundedFold.mounted && (
+                <div className="fold-scale" data-fold={fundedFold.fold}>
+                  {completedGoals.map((g) => (
+                    <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
+                        <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {currentWeek && (() => {
-          const checksLeft = weeksToChecksRemaining(weeksLeft, checksPerYear);
-          const unit = payPeriodUnit(checksPerYear, checksLeft === 1 ? 'lower' : 'lowerPlural');
-          const dayLabel = daysUntilPaycheck === 0 ? "today" : `in ${daysUntilPaycheck} day${daysUntilPaycheck === 1 ? "" : "s"}`;
-          return (
-            <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginTop: "16px" }}>
-              <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                {checksLeft} {unit} left this year. Your pay period ends {dayLabel}.
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
-          );
-        })()}
+          )}
 
+          {currentWeek && (() => {
+            const checksLeft = weeksToChecksRemaining(weeksLeft, checksPerYear);
+            const unit = payPeriodUnit(checksPerYear, checksLeft === 1 ? 'lower' : 'lowerPlural');
+            const dayLabel = daysUntilPaycheck === 0 ? "today" : `in ${daysUntilPaycheck} day${daysUntilPaycheck === 1 ? "" : "s"}`;
+            return (
+              <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "12px" }}>
+                <div className="text-base" style={{ color: "var(--color-green)", fontWeight: 600 }}>
+                  {checksLeft} {unit} left this year. Your pay period ends {dayLabel}.
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        </div>
+      </div>
+
+      <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />

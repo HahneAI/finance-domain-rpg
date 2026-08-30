@@ -100,7 +100,12 @@ function setupAdmin({ listRows, fullRow, archiveError = null, authUser }) {
     if (table === "deleted_accounts") return { upsert };
     return {
       select: vi.fn().mockReturnValue({
-        not: vi.fn().mockResolvedValue({ data: listRows, error: null }),
+        // sweepPendingDeletions' own .not("deletion_requested_at", ...) query
+        // is unrelated to these delete-due-by-trial-age fixtures — always
+        // empty here, so it never double-processes the trial-lifecycle rows.
+        not: vi.fn((field) => Promise.resolve(
+          field === "deletion_requested_at" ? { data: [], error: null } : { data: listRows, error: null }
+        )),
         eq: vi.fn().mockReturnValue({
           maybeSingle: vi.fn().mockResolvedValue({ data: fullRow, error: null }),
         }),
@@ -224,5 +229,75 @@ describe("cron-subscription-lifecycle — §17.I archive-then-delete", () => {
     const res = mkRes();
     await handler({ method: "GET", headers: {} }, res);
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// Migration 044 — delete-account.js locks a row (deletion_requested_at set)
+// then attempts the same archive inline; if that inline attempt fails, this
+// sweep is what actually finishes the job. Independent of the trial-lifecycle
+// rows query above (no trial_started_at filter), so it must run its own pass
+// even for a run with zero trial-lifecycle rows at all.
+describe("cron-subscription-lifecycle — pending-deletion sweep (migration 044)", () => {
+  it("retries and finishes a locked user-requested deletion the inline attempt left unpurged", async () => {
+    const pendingRow = { user_id: "user-locked" };
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    mocks.adminClient.from.mockImplementation((table) => {
+      if (table === "deleted_accounts") return { upsert };
+      return {
+        select: vi.fn().mockReturnValue({
+          not: vi.fn((field) => Promise.resolve(
+            field === "deletion_requested_at"
+              ? { data: [pendingRow], error: null }
+              : { data: [], error: null } // no trial-lifecycle rows this run
+          )),
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { user_id: "user-locked", config: {}, stripe_subscription_id: null },
+              error: null,
+            }),
+          }),
+        }),
+        delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+      };
+    });
+    mocks.adminClient.auth.admin.getUserById.mockResolvedValue({
+      data: { user: { id: "user-locked", email: "locked@example.com", app_metadata: { provider: "email" } } },
+      error: null,
+    });
+    mocks.adminClient.auth.admin.deleteUser.mockResolvedValue({ error: null });
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.body).toMatchObject({ checked: 0, deleted: 1, errors: 0 });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "locked@example.com", deletion_reason: "user_requested" }),
+      { onConflict: "email" }
+    );
+    expect(deleteEq).toHaveBeenCalledWith("user_id", "user-locked");
+    expect(mocks.adminClient.auth.admin.deleteUser).toHaveBeenCalledWith("user-locked");
+  });
+
+  it("leaves a locked row alone (retried next run) when the retry fails again", async () => {
+    const pendingRow = { user_id: "user-locked" };
+    mocks.adminClient.from.mockImplementation((table) => {
+      if (table === "deleted_accounts") return {};
+      return {
+        select: vi.fn().mockReturnValue({
+          not: vi.fn((field) => Promise.resolve(
+            field === "deletion_requested_at"
+              ? { data: [pendingRow], error: null }
+              : { data: [], error: null }
+          )),
+        }),
+      };
+    });
+    // No auth user found → archiveAndDeleteAccount throws before any write.
+    mocks.adminClient.auth.admin.getUserById.mockResolvedValue({ data: { user: null }, error: null });
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.body).toMatchObject({ deleted: 0, errors: 1 });
   });
 });

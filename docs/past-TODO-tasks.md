@@ -5,6 +5,29 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §17.J — User-initiated account deletion never hard-fails to the user (2026-08-30, migration 044)
+
+*Live screenshot: a transient `auth.admin.deleteUser` failure surfaced a raw "Failed to delete
+auth account" error after `user_data` had already been wiped — a user asking to leave must never
+be told "no" by an infra hiccup. Drift-app-warden §12 F52.*
+
+- [x] `user_data.deletion_requested_at` column (migration 044) — stamped first, locks the account.
+- [x] `api/_accountArchive.js` — `archiveAndDeleteAccount()` factored out of the cron so
+  `api/delete-account.js` and `api/cron-subscription-lifecycle.js` share one archive/tombstone
+  sequence (`deletion_reason` distinguishes `"user_requested"` vs `"non_payment_dunning_expired"`).
+- [x] `api/delete-account.js` now locks the row, then attempts the same archive inline
+  best-effort — always returns 200 once locked, whatever the inline attempt does.
+- [x] `cron-subscription-lifecycle.js`'s `sweepPendingDeletions()` retries every locked-but-
+  unpurged row daily until it succeeds (no `trial_started_at` filter — covers admin/investor
+  accounts too).
+- [x] `src/lib/db.js`/`src/App.jsx` — `deletionRequestedAt` gates the dashboard behind a goodbye
+  screen instead of the old immediate client-side sign-out racing the App.jsx render ladder.
+- [x] `ProfilePanel.jsx`'s delete modal shows a goodbye state on success instead of yanking away.
+- [x] Side effect (deliberate): a user-deleted email is now revivable through the existing
+  revival flow, same as a cron-deleted one.
+
+---
+
 ## §19.4 — Ad-Lib Wizard Schedule + Tax Rates pages merged, empty-viewport fix (2026-08-27)
 
 *Live Playwright screenshots at 390×844 showed ~650px of empty space below the content on both

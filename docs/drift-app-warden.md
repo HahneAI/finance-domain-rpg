@@ -2547,15 +2547,39 @@ everyone locked, since `taxExemptOptIn` without the unlock is ignored by the mat
 
 **F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
 password `:171` (hidden for Google-only accounts — no email identity, `6e123e8`,
-`:113–117`), link Google `:198`, global sign-out `:186–193`, **hard delete**
-`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token →
-global sign-out) — **[G]**
-The delete here is the **true, unrecoverable** path — server-side it does *not*
-tombstone into `deleted_accounts`; only the cron's non-payment deletion archives first
-(§8). The two delete paths' difference is a product invariant.
-> **IF** the delete flow is touched, **THEN** preserve the archive asymmetry (user
-> delete = hard, cron delete = tombstone) or escalate it as a product decision — and
-> the confirmation text contract (`confirmationText` body field) must match
+`:113–117`), link Google `:198`, global sign-out `:186–193`, **delete account**
+`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token
+→ goodbye state → sign-out) — **[G]**
+**Migration 044 (2026-08-30) redefined this path — the prior "true, unrecoverable,
+no-archive" invariant below is gone.** A raw `auth.admin.deleteUser` failure used to
+surface as a scary "Failed to delete auth account" error to the user (screenshot-driven
+fix) *after* `user_data` had already been wiped — a request to leave must never come
+back as an infra error. `api/delete-account.js` now (1) stamps `deletion_requested_at`
+on the row first — a single-column UPDATE that should never fail, and locking on it is
+enough to honor the request from the user's perspective — then (2) attempts the exact
+same `archiveAndDeleteAccount()` (`api/_accountArchive.js`, factored out of the cron in
+this same migration) inline, best-effort. Success or failure of step 2, the route
+returns 200. A step-2 failure leaves the row locked-but-not-purged;
+`cron-subscription-lifecycle.js`'s new `sweepPendingDeletions()` retries every such row
+every day until it finishes. **User-initiated deletion now tombstones into
+`deleted_accounts` exactly like the cron's non-payment path** — deliberate, not an
+oversight: it's what makes the archive-then-retry safety net possible, and as a
+side effect a user-deleted email is now revivable through the existing revival flow
+(T8/T9) the same way a cron-deleted one is, with `deletion_reason: "user_requested"`
+distinguishing the two in the tombstone row.
+> **IF** the delete flow is touched, **THEN** both callers of
+> `archiveAndDeleteAccount()` (this route, the cron) must keep calling the *same*
+> function with only a different `deletionReason` string — never re-fork the
+> archive/tombstone/purge sequence per-caller. **IF** the lock-then-best-effort-archive
+> shape changes, **THEN** re-verify: (a) the route still returns 200 whenever the lock
+> write itself succeeds, regardless of what the inline archive attempt does; (b) a
+> locked-but-unpurged row is still picked up by `sweepPendingDeletions()` (it has no
+> `trial_started_at` filter, unlike the main cron query, since an admin/investor
+> account with no trial can still request deletion); (c) `src/lib/db.js`'s
+> `deletion_requested_at` select stays on the isolated `subData` query (migration-safe
+> fallback to `DEFAULT_SUBSCRIPTION`) and `src/App.jsx`'s goodbye gate
+> (`subscription?.deletionRequestedAt`) still runs before the paywall/dashboard checks.
+> The confirmation text contract (`confirmationText` body field) must still match
 > `api/delete-account`'s server-side check. **IF** identity-gating changes, **THEN**
 > re-walk the Google-only × email-only × linked matrix — the password form must never
 > show where re-auth can't succeed.
@@ -2584,7 +2608,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
 | Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
 | Freedom Allowance cap/default | F51 + wizard Wrap Up (§7 F5) + `freedomAllowancePerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
-| `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §8's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
+| `api/delete-account` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
 | New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
@@ -3135,15 +3159,19 @@ race guard).
 
 **F78 · Pre-session render ladder** — `App.jsx:1429–1478` — **[G]**
 Fixed precedence: `pendingPasswordReset` → `revivalInfo` (ReviveScreen — "no app, no
-wizard, no trial") → no-session LoginScreen → `loading` → entitlement resolution
-(real wall-clock, §12 F53's rule) → **TrialExplainerScreen gate** (`:1470`: first-run
-wizard entry ∧ not investor ∧ `entitlement.state === "trial"` ∧ not yet acknowledged —
-the required "I understand" checkbox gates entry into setup, `3fd8896`).
+wizard, no trial") → no-session LoginScreen → `loading` → **`AccountGoodbyeScreen`
+gate** (`subscription?.deletionRequestedAt`, migration 044 — F52; a locked-but-not-yet-
+purged deletion request must never fall through to the dashboard, wizard, or paywall
+below it) → entitlement resolution (real wall-clock, §12 F53's rule) →
+**TrialExplainerScreen gate** (`:1470`: first-run wizard entry ∧ not investor ∧
+`entitlement.state === "trial"` ∧ not yet acknowledged — the required "I understand"
+checkbox gates entry into setup, `3fd8896`).
 > **IF** ladder order changes, **THEN** walk every rung's capture: a revivable user
 > must never see the wizard or trial explainer; a recovery click must beat everything;
-> the explainer must show exactly once and only to fresh trial signups (never
-> life-event re-entries — `wizardEntry === false` is that discriminator, §7 F8's
-> source/tagging depends on the same value).
+> a locked (`deletionRequestedAt`) account must never reach the dashboard even if it
+> somehow bypasses `paywallBypassed`; the explainer must show exactly once and only to
+> fresh trial signups (never life-event re-entries — `wizardEntry === false` is that
+> discriminator, §7 F8's source/tagging depends on the same value).
 
 **F79 · Revival lookup + ReviveScreen contract** — `api/revival-lookup.js` (dual-mode:
 unauthenticated email probe for F73, session-verified probe for T7's `checkRevival`;

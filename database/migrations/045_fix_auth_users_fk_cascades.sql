@@ -39,43 +39,118 @@
 -- account is exactly this shape) must not silently delete the changelog/beta
 -- content they authored, only detach the authorship pointer.
 --
+-- First pass at this migration dropped/re-added by an ASSUMED constraint name
+-- (Postgres's usual default, "<table>_<column>_fkey") and errored live — these
+-- tables' real constraint names don't match that assumption, so
+-- DROP CONSTRAINT IF EXISTS silently no-opped and ADD CONSTRAINT then
+-- collided with the still-present original. This version never assumes a
+-- name: each block below looks up the table/column's real FK-to-auth.users
+-- constraint via pg_constraint first, drops whatever it actually finds (there
+-- should only ever be one, but the loop handles more than one defensively),
+-- then adds the replacement under a name of our own choosing.
+--
 -- api/_accountArchive.js is unaffected by this migration — same function,
 -- now able to actually complete its final step instead of throwing every
 -- single time.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- consent_records — NOT NULL, cascades (see rationale above).
-alter table consent_records
-  drop constraint if exists consent_records_user_id_fkey;
+-- consent_records.user_id — NOT NULL, cascades (see rationale above).
+do $$
+declare fk record;
+begin
+  for fk in
+    select con.conname
+    from pg_constraint con
+    join pg_attribute att on att.attrelid = con.conrelid and att.attnum = any(con.conkey)
+    where con.conrelid = 'consent_records'::regclass
+      and con.contype = 'f'
+      and con.confrelid = 'auth.users'::regclass
+      and att.attname = 'user_id'
+  loop
+    execute format('alter table consent_records drop constraint %I', fk.conname);
+  end loop;
+end $$;
 alter table consent_records
   add constraint consent_records_user_id_fkey
   foreign key (user_id) references auth.users(id) on delete cascade;
 
 -- changelog_entries.created_by — nullable audit column, detach only.
-alter table changelog_entries
-  drop constraint if exists changelog_entries_created_by_fkey;
+do $$
+declare fk record;
+begin
+  for fk in
+    select con.conname
+    from pg_constraint con
+    join pg_attribute att on att.attrelid = con.conrelid and att.attnum = any(con.conkey)
+    where con.conrelid = 'changelog_entries'::regclass
+      and con.contype = 'f'
+      and con.confrelid = 'auth.users'::regclass
+      and att.attname = 'created_by'
+  loop
+    execute format('alter table changelog_entries drop constraint %I', fk.conname);
+  end loop;
+end $$;
 alter table changelog_entries
   add constraint changelog_entries_created_by_fkey
   foreign key (created_by) references auth.users(id) on delete set null;
 
 -- beta_content_items.created_by — nullable audit column, detach only.
-alter table beta_content_items
-  drop constraint if exists beta_content_items_created_by_fkey;
+do $$
+declare fk record;
+begin
+  for fk in
+    select con.conname
+    from pg_constraint con
+    join pg_attribute att on att.attrelid = con.conrelid and att.attnum = any(con.conkey)
+    where con.conrelid = 'beta_content_items'::regclass
+      and con.contype = 'f'
+      and con.confrelid = 'auth.users'::regclass
+      and att.attname = 'created_by'
+  loop
+    execute format('alter table beta_content_items drop constraint %I', fk.conname);
+  end loop;
+end $$;
 alter table beta_content_items
   add constraint beta_content_items_created_by_fkey
   foreign key (created_by) references auth.users(id) on delete set null;
 
 -- beta_scores.updated_by — nullable audit column, detach only. (beta_scores.user_id
 -- itself is the scored tester and already has ON DELETE CASCADE from migration 037.)
-alter table beta_scores
-  drop constraint if exists beta_scores_updated_by_fkey;
+do $$
+declare fk record;
+begin
+  for fk in
+    select con.conname
+    from pg_constraint con
+    join pg_attribute att on att.attrelid = con.conrelid and att.attnum = any(con.conkey)
+    where con.conrelid = 'beta_scores'::regclass
+      and con.contype = 'f'
+      and con.confrelid = 'auth.users'::regclass
+      and att.attname = 'updated_by'
+  loop
+    execute format('alter table beta_scores drop constraint %I', fk.conname);
+  end loop;
+end $$;
 alter table beta_scores
   add constraint beta_scores_updated_by_fkey
   foreign key (updated_by) references auth.users(id) on delete set null;
 
 -- base_content_items.created_by — nullable audit column, detach only.
-alter table base_content_items
-  drop constraint if exists base_content_items_created_by_fkey;
+do $$
+declare fk record;
+begin
+  for fk in
+    select con.conname
+    from pg_constraint con
+    join pg_attribute att on att.attrelid = con.conrelid and att.attnum = any(con.conkey)
+    where con.conrelid = 'base_content_items'::regclass
+      and con.contype = 'f'
+      and con.confrelid = 'auth.users'::regclass
+      and att.attname = 'created_by'
+  loop
+    execute format('alter table base_content_items drop constraint %I', fk.conname);
+  end loop;
+end $$;
 alter table base_content_items
   add constraint base_content_items_created_by_fkey
   foreign key (created_by) references auth.users(id) on delete set null;

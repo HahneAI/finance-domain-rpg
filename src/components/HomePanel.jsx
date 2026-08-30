@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
@@ -9,7 +9,7 @@ import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../co
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { MetricCard, SmBtn, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { MetricCard, SmBtn, Pressable, useFoldTransition, useCountUp, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
@@ -32,6 +32,14 @@ const safeDate = (raw) => {
   const d = raw instanceof Date ? raw : new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
 };
+
+// Goal target amount with the same 0→target countup MetricCard uses (Animation
+// Rules, CLAUDE.md) — `animate` scopes it to just the first two goal cards so
+// the count-in reads as an intentional per-card entrance, not noise on a long list.
+function AnimatedGoalTarget({ target, animate }) {
+  const counted = useCountUp(target);
+  return fmt$(animate ? counted : target);
+}
 
 export function HomePanel({
   navigate,
@@ -59,7 +67,6 @@ export function HomePanel({
   futureWeekNets = [],
   prevWeekNet,
   currentWeek,
-  fiscalWeekInfo,
   today,
   fundedGoalSpend = 0,
   isAdmin = false,
@@ -83,7 +90,6 @@ export function HomePanel({
   // what lands in their bank account each paycheck cycle.
   const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
-  const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : null;
   const todayIso = today ?? toLocalIso(new Date());
   // Rolling 5-year goal-projection cutoff, shared by every "goal ETA falls in a
   // future fiscal year" code path below — computed from todayIso so it advances
@@ -407,7 +413,6 @@ export function HomePanel({
     )));
   }, [tl, setGoals]);
 
-  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(TOTAL_FISCAL_WEEKS - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
@@ -440,7 +445,23 @@ export function HomePanel({
     const yearSuffix = parsed.getFullYear() !== FY_YEAR ? ` '${String(parsed.getFullYear()).slice(2)}` : "";
     return `${month} ${day}${ordinalSuffix(day)}${yearSuffix}`;
   };
-  const buildGoalFinishLabel = (offsetRaw) => {
+  // Badge text for a goal landing in a future fiscal year: a specific "N YR EST"
+  // (years measured from today, ceiling — a date 2.1-3.0 years out reads "3 YR
+  // EST") for anything within the rolling horizon, or one unified
+  // "BEYOND Nyr" once it crosses goalHorizonDate. Shared by every finish-date
+  // path below so the badge always agrees with whatever date (if any) is shown
+  // next to it.
+  const resolveGoalYearBadge = (finishDate) => {
+    if (!finishDate) return null;
+    if (finishDate > goalHorizonDate) return `BEYOND ${GOAL_PROJECTION_HORIZON_YEARS}YR`;
+    const yearsOut = Math.max(1, Math.ceil((finishDate.getTime() - goalHorizonBaseDate.getTime()) / (365.25 * DAY_MS)));
+    return `${yearsOut} YR EST`;
+  };
+  // Returns { text, finishDate, badge } for a goal's offset (weeks from now).
+  // text/badge are null once finishDate crosses the horizon — callers show the
+  // single BEYOND-horizon badge in place of both a date line and a badge, not
+  // one of each.
+  const buildGoalFinishInfo = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;
     const offset = Math.max(Math.ceil(offsetRaw), 0);
     // Real calendar date for this offset, computed arithmetically from the current
@@ -450,27 +471,41 @@ export function HomePanel({
     // 128+ weeks to fund displayed a wrong "Jan 3rd '27, week 53" instead of its
     // real (much later) date.
     const finishDate = currentWeekStartMs != null ? new Date(currentWeekStartMs + offset * 7 * DAY_MS) : null;
-    if (finishDate && finishDate > goalHorizonDate) return `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
+    if (finishDate && finishDate > goalHorizonDate) return { text: null, finishDate, badge: resolveGoalYearBadge(finishDate) };
     const dateLabel = formatGoalFinishDate(finishDate);
     // No real paycheck-number sequence exists past the current single-fiscal-year
     // grid (buildYear() only generates TOTAL_FISCAL_WEEKS weeks — docs/TODO.md §9),
     // so once the offset crosses it, show the estimated date only, no "week N".
     const beyondCurrentYear = nowIdx + offset > TOTAL_FISCAL_WEEKS;
-    if (beyondCurrentYear) return dateLabel ? `~By ${dateLabel}` : null;
+    if (beyondCurrentYear) return { text: dateLabel ? `~By ${dateLabel}` : null, finishDate, badge: resolveGoalYearBadge(finishDate) };
     const weekNum = nowIdx + offset;
     const checkNum = weekNumToPaycheckNum(weekNum, checksPerYear);
     const pUnit = payPeriodUnit(checksPerYear, 'full').toLowerCase();
-    return dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`;
+    return {
+      text: dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`,
+      finishDate,
+      badge: null, // completes within the current fiscal year — no year badge needed
+    };
   };
-  const resolveGoalFinishLabel = (goal) => {
-    const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
-    if (primary) return primary;
+  // Single source of truth for a goal card's date line + badge, across the three
+  // paths a goal's ETA can come from: computeGoalTimeline's real per-week
+  // simulation (goal.eW finite), estimateGoalNextYear's flat-rate queued
+  // estimate (nextYearSequentialEstimates), or the wN/sW fallback (real average
+  // surplus, just an unclamped date instead of computeGoalTimeline's own).
+  const resolveGoalFinishInfo = (goal) => {
+    const primary = Number.isFinite(goal.eW) ? buildGoalFinishInfo(goal.eW) : null;
+    if (primary?.text) return primary;
     const nextYr = nextYearSequentialEstimates[goal.id];
-    if (nextYr) return nextYr.withinHorizon ? `~${nextYr.label}` : `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
+    if (nextYr) {
+      return nextYr.withinHorizon
+        ? { text: `~${nextYr.label}`, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) }
+        : { text: null, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) };
+    }
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
-    if (!Number.isFinite(duration)) return "Timeline pending";
-    return buildGoalFinishLabel(startOffset + duration) ?? "Timeline pending";
+    if (!Number.isFinite(duration)) return { text: "Timeline pending", finishDate: null, badge: null };
+    const fallback = buildGoalFinishInfo(startOffset + duration);
+    return fallback ?? { text: "Timeline pending", finishDate: null, badge: null };
   };
 
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
@@ -628,60 +663,7 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
-      <div id="home-goals-section" style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
-        <div className="text-2xs" style={{ letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "14px" }}>
-          Authority Finance
-        </div>
-        <div style={{
-          fontSize: "52px",
-          fontWeight: 900,
-          fontFamily: "var(--font-display)",
-          color: "var(--color-accent-primary)",
-          letterSpacing: "0.04em",
-          lineHeight: 1.15,
-          marginBottom: "16px",
-        }}>
-          Goals
-        </div>
-        <div style={{ width: "40px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 16px", borderRadius: "1px", opacity: 0.55 }} />
-        <div className="text-sm" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
-          {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
-        </div>
-      </div>
-
       <div>
-        {currentWeek && (
-          <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              {formatRotationDisplay(currentWeek, { isAdmin })}
-              {nextPayWeek
-                ? ` · pay period ends${daysUntilPaycheck === 0 ? " today" : ` in ${daysUntilPaycheck}d`} · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
-                : ` · ends ${fmtFullDate(safeDate(currentWeek.payPeriodEndDate))}`
-              }
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
-          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
-          <MetricCard
-            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
-            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
-            status={lastGoalEW <= weeksLeft ? "green" : "red"}
-          />
-          <MetricCard
-            label="Goals"
-            val={`${completedGoals.length}/${goals.length}`}
-            sub={completedGoals.length > 0
-              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
-              : `${fmt$(totalGoalTarget)} total target`}
-            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
-            insight={pulseGoals}
-          />
-        </div>
-
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
@@ -767,9 +749,14 @@ export function HomePanel({
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                            {(() => {
+                              const info = resolveGoalFinishInfo(g);
+                              return <>
+                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                              </>;
+                            })()}
                             {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
@@ -898,9 +885,14 @@ export function HomePanel({
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                            {(() => {
+                              const info = resolveGoalFinishInfo(g);
+                              return <>
+                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                              </>;
+                            })()}
                             {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
@@ -1321,6 +1313,38 @@ export function HomePanel({
             )}
           </div>
         )}
+
+        {currentWeek && (() => {
+          const checksLeft = weeksToChecksRemaining(weeksLeft, checksPerYear);
+          const unit = payPeriodUnit(checksPerYear, checksLeft === 1 ? 'lower' : 'lowerPlural');
+          const dayLabel = daysUntilPaycheck === 0 ? "today" : `in ${daysUntilPaycheck} day${daysUntilPaycheck === 1 ? "" : "s"}`;
+          return (
+            <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginTop: "16px" }}>
+              <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                {checksLeft} {unit} left this year. Your pay period ends {dayLabel}.
+              </div>
+            </div>
+          );
+        })()}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
+          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
+          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
+          <MetricCard
+            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
+            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
+            status={lastGoalEW <= weeksLeft ? "green" : "red"}
+          />
+          <MetricCard
+            label="Goals"
+            val={`${completedGoals.length}/${goals.length}`}
+            sub={completedGoals.length > 0
+              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
+              : `${fmt$(totalGoalTarget)} total target`}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
+            insight={pulseGoals}
+          />
+        </div>
 
       </div>
 

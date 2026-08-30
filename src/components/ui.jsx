@@ -7,7 +7,8 @@ import { useSwipeStack } from "../hooks/useSwipeStack.js";
 // Animates a numeric value from 0 → target over `duration` ms (ease-out cubic).
 // Restarts cleanly if target changes (data refresh mid-session).
 // ─────────────────────────────────────────────────────────────
-function useCountUp(target, duration = 1200) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function useCountUp(target, duration = 1200) {
   const [counted, setCounted] = useState(0);
   const rafRef   = useRef(null);
   const startRef = useRef(null);

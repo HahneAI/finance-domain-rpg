@@ -85,6 +85,11 @@ export function HomePanel({
   const perCheckFactor = 52 / checksPerYear;
   const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : null;
   const todayIso = today ?? toLocalIso(new Date());
+  // Rolling 5-year goal-projection cutoff, shared by every "goal ETA falls in a
+  // future fiscal year" code path below — computed from todayIso so it advances
+  // a day every real day with no stored state (see GOAL_PROJECTION_HORIZON_YEARS).
+  const goalHorizonBaseDate = new Date(`${todayIso}T00:00:00`);
+  const goalHorizonDate = getGoalProjectionHorizonDate(goalHorizonBaseDate);
   const nextPayWeek = getNextPayWeek(futureWeeks, todayIso, checksPerYear);
   const daysUntilPaycheck = nextPayWeek
     ? Math.round((nextPayWeek.payPeriodEndDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / DAY_MS)
@@ -357,11 +362,9 @@ export function HomePanel({
     if (!config) return {};
     const estimates = {};
     let cumulativeWeeks = 0;
-    const horizonBaseDate = new Date(`${todayIso}T00:00:00`);
-    const horizonDate = getGoalProjectionHorizonDate(horizonBaseDate);
     for (const g of tl) {
       if (Number.isFinite(g.eW)) continue;
-      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, horizonBaseDate);
+      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, goalHorizonBaseDate);
       if (!est) continue;
       cumulativeWeeks += est.weeksFromFYStart;
       const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);
@@ -370,7 +373,7 @@ export function HomePanel({
       // Re-derive withinHorizon against the sequential (queued-behind-other-goals)
       // estDate, not est's own standalone one — stacking cumulativeWeeks onto later
       // goals can push a goal that was individually within horizon past it.
-      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate), withinHorizon: estDate <= horizonDate, horizonDate };
+      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate), withinHorizon: estDate <= goalHorizonDate, horizonDate: goalHorizonDate };
     }
     return estimates;
   })();
@@ -440,11 +443,21 @@ export function HomePanel({
   const buildGoalFinishLabel = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;
     const offset = Math.max(Math.ceil(offsetRaw), 0);
-    const weekNum = Math.min(nowIdx + offset, TOTAL_FISCAL_WEEKS);
-    const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
-    const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
-    const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
+    // Real calendar date for this offset, computed arithmetically from the current
+    // week's start — NOT by indexing into futureWeeks (which only covers the
+    // current fiscal year). Indexing used to silently clamp any offset beyond
+    // futureWeeks.length to the year's LAST week, so a goal that actually takes
+    // 128+ weeks to fund displayed a wrong "Jan 3rd '27, week 53" instead of its
+    // real (much later) date.
+    const finishDate = currentWeekStartMs != null ? new Date(currentWeekStartMs + offset * 7 * DAY_MS) : null;
+    if (finishDate && finishDate > goalHorizonDate) return `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
     const dateLabel = formatGoalFinishDate(finishDate);
+    // No real paycheck-number sequence exists past the current single-fiscal-year
+    // grid (buildYear() only generates TOTAL_FISCAL_WEEKS weeks — docs/TODO.md §9),
+    // so once the offset crosses it, show the estimated date only, no "week N".
+    const beyondCurrentYear = nowIdx + offset > TOTAL_FISCAL_WEEKS;
+    if (beyondCurrentYear) return dateLabel ? `~By ${dateLabel}` : null;
+    const weekNum = nowIdx + offset;
     const checkNum = weekNumToPaycheckNum(weekNum, checksPerYear);
     const pUnit = payPeriodUnit(checksPerYear, 'full').toLowerCase();
     return dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`;

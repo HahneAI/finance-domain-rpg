@@ -440,7 +440,23 @@ export function HomePanel({
     const yearSuffix = parsed.getFullYear() !== FY_YEAR ? ` '${String(parsed.getFullYear()).slice(2)}` : "";
     return `${month} ${day}${ordinalSuffix(day)}${yearSuffix}`;
   };
-  const buildGoalFinishLabel = (offsetRaw) => {
+  // Badge text for a goal landing in a future fiscal year: a specific "N YR EST"
+  // (years measured from today, ceiling — a date 2.1-3.0 years out reads "3 YR
+  // EST") for anything within the rolling horizon, or one unified
+  // "BEYOND Nyr" once it crosses goalHorizonDate. Shared by every finish-date
+  // path below so the badge always agrees with whatever date (if any) is shown
+  // next to it.
+  const resolveGoalYearBadge = (finishDate) => {
+    if (!finishDate) return null;
+    if (finishDate > goalHorizonDate) return `BEYOND ${GOAL_PROJECTION_HORIZON_YEARS}YR`;
+    const yearsOut = Math.max(1, Math.ceil((finishDate.getTime() - goalHorizonBaseDate.getTime()) / (365.25 * DAY_MS)));
+    return `${yearsOut} YR EST`;
+  };
+  // Returns { text, finishDate, badge } for a goal's offset (weeks from now).
+  // text/badge are null once finishDate crosses the horizon — callers show the
+  // single BEYOND-horizon badge in place of both a date line and a badge, not
+  // one of each.
+  const buildGoalFinishInfo = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;
     const offset = Math.max(Math.ceil(offsetRaw), 0);
     // Real calendar date for this offset, computed arithmetically from the current
@@ -450,27 +466,41 @@ export function HomePanel({
     // 128+ weeks to fund displayed a wrong "Jan 3rd '27, week 53" instead of its
     // real (much later) date.
     const finishDate = currentWeekStartMs != null ? new Date(currentWeekStartMs + offset * 7 * DAY_MS) : null;
-    if (finishDate && finishDate > goalHorizonDate) return `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
+    if (finishDate && finishDate > goalHorizonDate) return { text: null, finishDate, badge: resolveGoalYearBadge(finishDate) };
     const dateLabel = formatGoalFinishDate(finishDate);
     // No real paycheck-number sequence exists past the current single-fiscal-year
     // grid (buildYear() only generates TOTAL_FISCAL_WEEKS weeks — docs/TODO.md §9),
     // so once the offset crosses it, show the estimated date only, no "week N".
     const beyondCurrentYear = nowIdx + offset > TOTAL_FISCAL_WEEKS;
-    if (beyondCurrentYear) return dateLabel ? `~By ${dateLabel}` : null;
+    if (beyondCurrentYear) return { text: dateLabel ? `~By ${dateLabel}` : null, finishDate, badge: resolveGoalYearBadge(finishDate) };
     const weekNum = nowIdx + offset;
     const checkNum = weekNumToPaycheckNum(weekNum, checksPerYear);
     const pUnit = payPeriodUnit(checksPerYear, 'full').toLowerCase();
-    return dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`;
+    return {
+      text: dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`,
+      finishDate,
+      badge: null, // completes within the current fiscal year — no year badge needed
+    };
   };
-  const resolveGoalFinishLabel = (goal) => {
-    const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
-    if (primary) return primary;
+  // Single source of truth for a goal card's date line + badge, across the three
+  // paths a goal's ETA can come from: computeGoalTimeline's real per-week
+  // simulation (goal.eW finite), estimateGoalNextYear's flat-rate queued
+  // estimate (nextYearSequentialEstimates), or the wN/sW fallback (real average
+  // surplus, just an unclamped date instead of computeGoalTimeline's own).
+  const resolveGoalFinishInfo = (goal) => {
+    const primary = Number.isFinite(goal.eW) ? buildGoalFinishInfo(goal.eW) : null;
+    if (primary?.text) return primary;
     const nextYr = nextYearSequentialEstimates[goal.id];
-    if (nextYr) return nextYr.withinHorizon ? `~${nextYr.label}` : `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
+    if (nextYr) {
+      return nextYr.withinHorizon
+        ? { text: `~${nextYr.label}`, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) }
+        : { text: null, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) };
+    }
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
-    if (!Number.isFinite(duration)) return "Timeline pending";
-    return buildGoalFinishLabel(startOffset + duration) ?? "Timeline pending";
+    if (!Number.isFinite(duration)) return { text: "Timeline pending", finishDate: null, badge: null };
+    const fallback = buildGoalFinishInfo(startOffset + duration);
+    return fallback ?? { text: "Timeline pending", finishDate: null, badge: null };
   };
 
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
@@ -768,8 +798,13 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            {(() => {
+                              const info = resolveGoalFinishInfo(g);
+                              return <>
+                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                              </>;
+                            })()}
                             {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
@@ -899,8 +934,13 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
+                            {(() => {
+                              const info = resolveGoalFinishInfo(g);
+                              return <>
+                                {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                              </>;
+                            })()}
                             {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>

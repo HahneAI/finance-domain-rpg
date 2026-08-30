@@ -1,13 +1,17 @@
-// §17.H — account deletion cancels the Stripe subscription first, so a
-// deleted user isn't billed again. The flow stays a true hard delete (no
-// archive — §I's non-payment cron path is the only one that archives).
+// Migration 044 — a user who asks to delete their account must never be told
+// "no" by an infrastructure hiccup. The route now stamps deletion_requested_at
+// FIRST (locking the account — src/App.jsx blocks further access on it) and
+// only then attempts the real archive-then-delete (api/_accountArchive.js,
+// shared with the day-21+7 non-payment cron). If that inline attempt fails,
+// the request still succeeds from the caller's perspective — the row is left
+// locked for api/cron-subscription-lifecycle.js's sweep to finish later.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { mocks } = vi.hoisted(() => {
   const userClient = { auth: { getUser: vi.fn() } };
   const adminClient = {
     from: vi.fn(),
-    auth: { admin: { deleteUser: vi.fn() } },
+    auth: { admin: { getUserById: vi.fn(), deleteUser: vi.fn() } },
   };
   const stripeA = { subscriptions: { retrieve: vi.fn(), cancel: vi.fn() } };
   const stripeB = { subscriptions: { retrieve: vi.fn(), cancel: vi.fn() } };
@@ -56,16 +60,29 @@ function mkRes() {
   };
 }
 
-/** Wire the admin client: the sub-id lookup row, then delete + deleteUser results. */
-function setupAdmin(subRow) {
+const authUser = { id: "user-1", email: "gone@example.com", app_metadata: { provider: "email" } };
+
+/** Wire the admin client: the lock update, the snapshot fetch, and the tombstone/delete writes. */
+function setupAdmin(subRow, { lockError = null, archiveError = null } = {}) {
   const maybeSingle = vi.fn().mockResolvedValue({ data: subRow, error: null });
   const deleteEq = vi.fn().mockResolvedValue({ error: null });
-  mocks.adminClient.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),
-    delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+  const updateEq = vi.fn().mockResolvedValue({ error: lockError });
+  const upsert = vi.fn().mockResolvedValue({ error: archiveError });
+  mocks.adminClient.from.mockImplementation((table) => {
+    if (table === "deleted_accounts") {
+      // archiveAndDeleteAccount's post-purge auth_purge_pending stamp
+      // (migration 046) — separate from user_data's lock-step update above.
+      return { upsert, update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) };
+    }
+    return {
+      update: vi.fn().mockReturnValue({ eq: updateEq }),
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),
+      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+    };
   });
+  mocks.adminClient.auth.admin.getUserById.mockResolvedValue({ data: { user: authUser }, error: null });
   mocks.adminClient.auth.admin.deleteUser.mockResolvedValue({ error: null });
-  return { deleteEq };
+  return { deleteEq, updateEq, upsert };
 }
 
 beforeEach(() => {
@@ -97,7 +114,25 @@ describe("delete-account — guards (unchanged behavior)", () => {
   });
 });
 
-describe("delete-account — Stripe subscription cancellation", () => {
+describe("delete-account — locks the account first, unconditionally", () => {
+  it("stamps deletion_requested_at before attempting the real archive", async () => {
+    const { updateEq } = setupAdmin({ stripe_subscription_id: null });
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("500s only when even the lock write fails — nothing to honor the request with", async () => {
+    setupAdmin({ stripe_subscription_id: null }, { lockError: { message: "db down" } });
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.statusCode).toBe(500);
+    expect(mocks.adminClient.auth.admin.deleteUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("delete-account — inline archive, best-effort", () => {
   it("deletes without touching Stripe when no subscription id is on file", async () => {
     const { deleteEq } = setupAdmin({ stripe_subscription_id: null });
     const res = mkRes();
@@ -119,15 +154,6 @@ describe("delete-account — Stripe subscription cancellation", () => {
     expect(deleteEq).toHaveBeenCalled();
   });
 
-  it("skips the cancel call when the subscription is already canceled", async () => {
-    setupAdmin({ stripe_subscription_id: "sub_123" });
-    mocks.stripeA.subscriptions.retrieve.mockResolvedValue({ id: "sub_123", status: "canceled" });
-    const res = mkRes();
-    await handler(mkReq(), res);
-    expect(res.statusCode).toBe(200);
-    expect(mocks.stripeA.subscriptions.cancel).not.toHaveBeenCalled();
-  });
-
   it("falls through to the other mode's client when the first reports resource_missing", async () => {
     setupAdmin({ stripe_subscription_id: "sub_live" });
     mocks.stripeA.subscriptions.retrieve.mockRejectedValue(missingErr());
@@ -139,24 +165,34 @@ describe("delete-account — Stripe subscription cancellation", () => {
     expect(mocks.stripeB.subscriptions.cancel).toHaveBeenCalledWith("sub_live");
   });
 
-  it("proceeds with deletion when the subscription exists in neither mode", async () => {
-    const { deleteEq } = setupAdmin({ stripe_subscription_id: "sub_gone" });
-    mocks.stripeA.subscriptions.retrieve.mockRejectedValue(missingErr());
-    mocks.stripeB.subscriptions.retrieve.mockRejectedValue(missingErr());
-    const res = mkRes();
-    await handler(mkReq(), res);
-    expect(res.statusCode).toBe(200);
-    expect(deleteEq).toHaveBeenCalled();
-  });
-
-  it("aborts the deletion (500) when the cancel fails unexpectedly — retryable, user keeps account", async () => {
-    const { deleteEq } = setupAdmin({ stripe_subscription_id: "sub_123" });
+  it("still returns 200 (locked, honored) when the inline Stripe cancel fails unexpectedly — left for the cron sweep", async () => {
+    const { deleteEq, upsert } = setupAdmin({ stripe_subscription_id: "sub_123" });
     mocks.stripeA.subscriptions.retrieve.mockResolvedValue({ id: "sub_123", status: "active" });
     mocks.stripeA.subscriptions.cancel.mockRejectedValue(new Error("stripe is down"));
     const res = mkRes();
     await handler(mkReq(), res);
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(upsert).not.toHaveBeenCalled();
     expect(deleteEq).not.toHaveBeenCalled();
     expect(mocks.adminClient.auth.admin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("still returns 200 when the tombstone upsert fails — left for the cron sweep", async () => {
+    const { deleteEq } = setupAdmin({ stripe_subscription_id: null }, { archiveError: { message: "insert failed" } });
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(deleteEq).not.toHaveBeenCalled();
+    expect(mocks.adminClient.auth.admin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("still returns 200 when auth.admin.deleteUser fails — the original production bug, no longer surfaced to the user", async () => {
+    setupAdmin({ stripe_subscription_id: null });
+    mocks.adminClient.auth.admin.deleteUser.mockResolvedValue({ error: { message: "gateway timeout" } });
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
   });
 });

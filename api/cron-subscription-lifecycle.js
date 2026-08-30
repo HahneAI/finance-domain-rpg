@@ -21,13 +21,22 @@
 // locked-but-not-purged — sweepPendingDeletions() below finds those rows
 // every run and retries the exact same archive until it succeeds, same as
 // this file's own delete-due retry-by-omission pattern.
+//
+// Migration 046: sweepPendingDeletions() can only find rows that STILL have a
+// user_data row (deletion_requested_at lives there). The specific failure
+// found live 2026-08-30 — auth.admin.deleteUser() rejected by a
+// consent_records foreign key (migration 045 fixed the constraint itself) —
+// happens AFTER user_data is already deleted, so that flag is gone by the
+// time it matters and this sweep alone could never recover it. See
+// api/_accountArchive.js's finishPendingAuthPurges() (called below,
+// independent of everything else in this file) for the durable fix.
 
 import { createClient } from "@supabase/supabase-js";
 import { decideLifecycleAction } from "./_lifecycleEngine.js";
 import { buildLifecycleEmail } from "./_lifecycleEmails.js";
 import { sendEmail, isEmailConfigured } from "./_email.js";
 import { isTrackedBetaTester } from "../src/lib/entitlements.js";
-import { archiveAndDeleteAccount } from "./_accountArchive.js";
+import { archiveAndDeleteAccount, finishPendingAuthPurges } from "./_accountArchive.js";
 
 // docs/TODO.md §37 — beta program halfway nudge threshold. A throttle column
 // (halfway_email_sent_at) makes exact-day precision unnecessary: this only
@@ -112,7 +121,7 @@ export default async function handler(req, res) {
 
   const now = new Date();
   const appUrl = env.APP_URL ? env.APP_URL.replace(/\/+$/, "") : "";
-  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0, betaHalfwaySent: 0 };
+  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0, betaHalfwaySent: 0, authPurgesFinished: 0 };
 
   for (const row of rows) {
     try {
@@ -203,6 +212,21 @@ export default async function handler(req, res) {
   // Runs after the trial-lifecycle loop so any row deleteDue already purged
   // above is naturally gone from this query and never double-processed.
   await sweepPendingDeletions(adminClient, now, summary);
+
+  // Migration 046 — independent of everything above: retries the final
+  // auth.users purge for any tombstone still marked auth_purge_pending,
+  // regardless of whether that account got there via this cron's own
+  // delete-due path or delete-account.js's user-initiated one. Never let a
+  // problem here abort the run — same "one bad thing doesn't sink the whole
+  // pass" posture as every other step in this file.
+  try {
+    const purgeResults = await finishPendingAuthPurges(adminClient, now);
+    summary.authPurgesFinished = purgeResults.purged;
+    summary.errors += purgeResults.errors;
+  } catch (err) {
+    summary.errors += 1;
+    console.error("cron-subscription-lifecycle: finishPendingAuthPurges failed:", err.message);
+  }
 
   console.log("cron-subscription-lifecycle summary:", JSON.stringify(summary));
   return res.status(200).json(summary);

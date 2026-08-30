@@ -69,7 +69,11 @@ function setupAdmin(subRow, { lockError = null, archiveError = null } = {}) {
   const updateEq = vi.fn().mockResolvedValue({ error: lockError });
   const upsert = vi.fn().mockResolvedValue({ error: archiveError });
   mocks.adminClient.from.mockImplementation((table) => {
-    if (table === "deleted_accounts") return { upsert };
+    if (table === "deleted_accounts") {
+      // archiveAndDeleteAccount's post-purge auth_purge_pending stamp
+      // (migration 046) — separate from user_data's lock-step update above.
+      return { upsert, update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) };
+    }
     return {
       update: vi.fn().mockReturnValue({ eq: updateEq }),
       select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),

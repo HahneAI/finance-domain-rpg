@@ -97,7 +97,17 @@ function setupAdmin({ listRows, fullRow, archiveError = null, authUser }) {
   const deleteEq = vi.fn().mockResolvedValue({ error: null });
   const updateEq = vi.fn().mockResolvedValue({ error: null });
   mocks.adminClient.from.mockImplementation((table) => {
-    if (table === "deleted_accounts") return { upsert };
+    if (table === "deleted_accounts") {
+      return {
+        upsert,
+        // archiveAndDeleteAccount's post-purge auth_purge_pending stamp.
+        update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        // finishPendingAuthPurges' own sweep — no pending rows in these fixtures.
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+        }),
+      };
+    }
     return {
       select: vi.fn().mockReturnValue({
         // sweepPendingDeletions' own .not("deletion_requested_at", ...) query
@@ -243,7 +253,15 @@ describe("cron-subscription-lifecycle — pending-deletion sweep (migration 044)
     const upsert = vi.fn().mockResolvedValue({ error: null });
     const deleteEq = vi.fn().mockResolvedValue({ error: null });
     mocks.adminClient.from.mockImplementation((table) => {
-      if (table === "deleted_accounts") return { upsert };
+      if (table === "deleted_accounts") {
+        return {
+          upsert,
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+          }),
+        };
+      }
       return {
         select: vi.fn().mockReturnValue({
           not: vi.fn((field) => Promise.resolve(
@@ -282,7 +300,13 @@ describe("cron-subscription-lifecycle — pending-deletion sweep (migration 044)
   it("leaves a locked row alone (retried next run) when the retry fails again", async () => {
     const pendingRow = { user_id: "user-locked" };
     mocks.adminClient.from.mockImplementation((table) => {
-      if (table === "deleted_accounts") return {};
+      if (table === "deleted_accounts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+          }),
+        };
+      }
       return {
         select: vi.fn().mockReturnValue({
           not: vi.fn((field) => Promise.resolve(

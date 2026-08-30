@@ -2584,6 +2584,48 @@ distinguishing the two in the tombstone row.
 > re-walk the Google-only × email-only × linked matrix — the password form must never
 > show where re-auth can't succeed.
 
+**F52 addendum — migrations 045/046 (2026-08-30), found live the same day as F52.**
+Deploying F52's fix did NOT actually stop the "Failed to delete auth account" step from
+failing — it just stopped the failure from reaching the user. The real cause: every
+signup writes a `consent_records` row (migration 033's ToS gate), and that table's
+`user_id REFERENCES auth.users(id)` had **no `ON DELETE CASCADE`** — Postgres blocks the
+delete outright regardless of RLS/role, so `auth.admin.deleteUser()` failed for
+essentially every real account, both from `archiveAndDeleteAccount()` (service-role,
+same as everyone else) AND from deleting a row directly in Supabase Studio's Auth table
+(same underlying call). **Compounding bug this exposed:** because
+`archiveAndDeleteAccount()` deletes `user_data` *before* attempting the auth-row delete,
+a failure at that last step left `user_data.deletion_requested_at` (F52's own retry
+signal) already gone — `sweepPendingDeletions()` could never find or retry that account,
+so the orphan was permanent. Signing back in hit the still-alive `auth.users` row with no
+`user_data` behind it → `loadUserData()` fell back to `DEFAULT_CONFIG` → wizard runs
+again, indistinguishable from a first-time signup, even though the Stripe subscription
+had already been correctly canceled during the same failed attempt. If that "fresh"
+session goes through checkout again, it opens a genuinely new Stripe customer/subscription
+— a second, separate charge.
+- **045** fixes the constraint itself: `consent_records.user_id` → `ON DELETE CASCADE`
+  (its content is promised to go with the account, matching the delete confirmation
+  copy); the nullable admin-authored-content audit columns
+  (`changelog_entries.created_by`, `beta_content_items.created_by`,
+  `beta_scores.updated_by`, `base_content_items.created_by`) → `ON DELETE SET NULL`
+  instead (detach authorship, don't delete the content).
+- **046** fixes the retry-tracking gap: `deleted_accounts.auth_purge_pending`
+  (default `true`, written in the tombstone upsert step — *before* the failure-prone
+  step, and never itself deleted) replaces `user_data.deletion_requested_at` as the
+  durable "still needs finishing" signal for the auth-row purge specifically.
+  `api/_accountArchive.js`'s new `finishPendingAuthPurges()` sweeps every tombstone
+  still marked pending, called every cron run independent of `sweepPendingDeletions()`.
+  A retry against an id that's already gone (`isAlreadyGoneError` — 404/"not found"
+  shaped) counts as success, not an infinite-retry failure.
+> **IF** any future `auth.users`-referencing table is added, **THEN** it must declare
+> `ON DELETE CASCADE` (user-owned data) or `ON DELETE SET NULL` (nullable audit/authorship
+> column) explicitly — the migration-045 verification query
+> (`pg_constraint` joined on `confrelid = 'auth.users'::regclass`) is the check: every row
+> must show a real `confdeltype`, never the default "no action." **IF**
+> `archiveAndDeleteAccount()`'s step order changes, **THEN** whatever step can still fail
+> after `user_data` is deleted must keep its own durable retry signal on a row that
+> survives that failure (`deleted_accounts`, not `user_data`) — re-introducing an
+> unretryable orphan is exactly this incident again.
+
 **F53 · Subscription card + checkout/portal** — `:206–315`: `handleCheckout:210`
 (→ `/api/stripe-create-checkout`), `handleManageSubscription:241` (→
 `/api/stripe-portal`), status resolution `:269–315` — **[G]**

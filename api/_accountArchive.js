@@ -13,9 +13,34 @@
 //   3. cancel any lingering Stripe subscription (both-mode lookup — a lapsed
 //      past_due sub may still exist),
 //   4. upsert the tombstone (on email, so a revive → lapse → delete cycle
-//      overwrites the same row instead of piling up duplicates),
-//   5. only then hard-delete user_data + the auth user.
+//      overwrites the same row instead of piling up duplicates) with
+//      auth_purge_pending: true,
+//   5. hard-delete the user_data row,
+//   6. only then delete the auth.users row — and flip auth_purge_pending false
+//      on success.
+//
+// Migration 046 — step 6 is the one step that can fail with NOTHING left to
+// retry against on the old design: step 5 already deleted the row that used
+// to carry the "still needs finishing" flag (user_data.deletion_requested_at,
+// migration 044). deleted_accounts.auth_purge_pending is that flag's
+// replacement — written in step 4, before the failure-prone step, and never
+// itself deleted, so finishPendingAuthPurges() below can always find and
+// retry a stuck row regardless of where the process failed. (Migration 045
+// fixed the single most common cause of step 6 failing at all — a
+// consent_records foreign key with no ON DELETE CASCADE — but this tracking
+// fix stands on its own for any other transient failure at that step.)
 import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
+
+// Supabase's admin API reports a delete against an id that's already gone as
+// a 404-shaped AuthApiError, not success — treated as "already purged" (a
+// no-op we should clear the pending flag for) rather than a real failure to
+// keep retrying forever. Message-substring fallback since the exact error
+// shape isn't guaranteed to carry `.status` on every supabase-js version.
+function isAlreadyGoneError(error) {
+  if (!error) return false;
+  if (error.status === 404) return true;
+  return typeof error.message === "string" && /not.?found/i.test(error.message);
+}
 
 export async function archiveAndDeleteAccount(adminClient, userId, now, deletionReason) {
   const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId);
@@ -68,6 +93,9 @@ export async function archiveAndDeleteAccount(adminClient, userId, now, deletion
       last_revival_attempt_at: null,
       last_decline_code: null,
       last_decline_message: null,
+      // migration 046 — the durable retry signal for the final step below.
+      auth_purge_pending: true,
+      auth_purged_at: null,
     },
     { onConflict: "email" }
   );
@@ -81,4 +109,67 @@ export async function archiveAndDeleteAccount(adminClient, userId, now, deletion
 
   const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(userId);
   if (authDeleteError) throw new Error(`archive: auth delete failed (${authDeleteError.message})`);
+
+  const { error: purgeStampError } = await adminClient
+    .from("deleted_accounts")
+    .update({ auth_purge_pending: false, auth_purged_at: now.toISOString() })
+    .eq("email", user.email);
+  // Not worth throwing over — the account IS fully deleted at this point;
+  // finishPendingAuthPurges() below will simply re-attempt (harmlessly — a
+  // repeat auth.admin.deleteUser() on an already-gone id counts as "already
+  // purged" via isAlreadyGoneError) if this last bookkeeping write fails.
+  if (purgeStampError) {
+    console.error(`archive: auth_purge_pending stamp failed for ${user.email}:`, purgeStampError.message);
+  }
+}
+
+// Migration 046 — retries the auth.users delete for every tombstoned account
+// still marked auth_purge_pending, independent of whatever else the daily
+// cron run is doing. This is what actually recovers an account stuck in the
+// "user_data gone, auth.users still alive" state (the "logged back in like a
+// first-time user" symptom) — sweepPendingDeletions() in
+// cron-subscription-lifecycle.js only ever sees rows that still HAVE a
+// user_data row, which this failure mode has already deleted by construction.
+export async function finishPendingAuthPurges(adminClient, now) {
+  const results = { checked: 0, purged: 0, errors: 0 };
+
+  const { data: pendingTombstones, error: fetchError } = await adminClient
+    .from("deleted_accounts")
+    .select("email, former_user_id")
+    .eq("auth_purge_pending", true)
+    .is("revived_at", null);
+  if (fetchError) {
+    console.error("finishPendingAuthPurges: fetch failed:", fetchError.message);
+    results.errors += 1;
+    return results;
+  }
+
+  results.checked = pendingTombstones.length;
+  for (const row of pendingTombstones) {
+    if (!row.former_user_id) {
+      // Nothing to delete — clear the flag so this row stops being re-checked forever.
+      await adminClient
+        .from("deleted_accounts")
+        .update({ auth_purge_pending: false, auth_purged_at: now.toISOString() })
+        .eq("email", row.email);
+      continue;
+    }
+    try {
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(row.former_user_id);
+      if (deleteError && !isAlreadyGoneError(deleteError)) {
+        throw new Error(deleteError.message);
+      }
+      const { error: stampError } = await adminClient
+        .from("deleted_accounts")
+        .update({ auth_purge_pending: false, auth_purged_at: now.toISOString() })
+        .eq("email", row.email);
+      if (stampError) throw new Error(`purge stamp failed: ${stampError.message}`);
+      results.purged += 1;
+    } catch (err) {
+      results.errors += 1;
+      console.error(`finishPendingAuthPurges: retry failed for ${row.email}:`, err.message);
+    }
+  }
+
+  return results;
 }

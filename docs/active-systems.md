@@ -470,6 +470,17 @@ no representation here until this pass).
   require an actual successful charge (reusing the archived Stripe customer, never a free
   re-entry) before `stripe-webhook.js` restores the archived config/expenses/goals/logs/
   weekConfirmations/ptoGoal and stamps `deleted_accounts.revived_at`.
+- **Migrations 045/046 (2026-08-30, live-found the same day as the above):** the
+  `auth.admin.deleteUser()` step was failing for essentially every real account — a
+  `consent_records` foreign key to `auth.users(id)` had no `ON DELETE CASCADE` (fixed,
+  045, along with a few nullable admin-authored-content audit columns getting
+  `ON DELETE SET NULL` instead). Because that failure happened *after* `user_data` was
+  already deleted, the account was left permanently orphaned — auth still valid, no data
+  behind it, next sign-in re-runs the wizard like a first-time user, and Stripe had
+  already been correctly canceled so a resubscribe there opens a genuinely new
+  subscription (a second charge). `deleted_accounts.auth_purge_pending` (046) is the
+  durable retry signal for just that last step, since `user_data.deletion_requested_at`
+  doesn't survive to see it. See `docs/drift-app-warden.md` §12 F52 addendum.
 - **Known gaps:** Stripe Customer Portal dashboard config unconfirmed; two live-verification-only
   items parked for the pre-launch pass (cancel-on-delete Stripe cleanup, the tombstoned-email
   Google OAuth sign-in path — neither reachable by unit tests).

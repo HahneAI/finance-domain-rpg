@@ -54,14 +54,39 @@ export function fiscalMonthLabel(date) {
   return _MONTH_SHORT[date.getMonth()] + (yr !== _FY_YEAR ? ` '${String(yr).slice(2)}` : "");
 }
 
-// Projects a goal that won't complete in the current fiscal year into the next one.
+// Goals project out at most this many years from today (a rolling window — since
+// it's measured from "today" at call time, not a fixed constant, the reachable
+// horizon date advances by one day for every real day that passes, with no code
+// change needed). Applies only to the flat-rate estimate below, which is the sole
+// path a goal's ETA can land in a future fiscal year through (see TODO.md §9 —
+// the underlying fiscal-week engine itself is still single-year, so this is a
+// display/estimate-level cap, not a claim that a real per-week simulation exists
+// out to 5 years).
+export const GOAL_PROJECTION_HORIZON_YEARS = 5;
+
+// The rolling cutoff date itself: `today` + GOAL_PROJECTION_HORIZON_YEARS. Exported
+// so callers needing "is this date within the goal-projection horizon" (e.g. a
+// future goal-target-date input) can reuse the exact same cutoff estimateGoalNextYear
+// applies, rather than re-deriving it.
+export function getGoalProjectionHorizonDate(today = new Date()) {
+  const horizon = new Date(today);
+  horizon.setFullYear(horizon.getFullYear() + GOAL_PROJECTION_HORIZON_YEARS);
+  return horizon;
+}
+
+// Projects a goal that won't complete in the current fiscal year into a future one.
 // Uses Q4/December deductions and expenses as the next-year proxy:
 //   - Paycheck deductions: benefits + 401k derived from cfg (fully active all next year)
 //   - Expenses: Q4 weekly total; December values take priority if they differ from Q4
 //   - Taxes: standard withholding assumed (no extra withholding, taxExemptOptIn ignored)
-// Returns { estDate, weeksFromFYStart, label, weeklyNet, weeklyExpenses, weeklySurplus }
-// or null if surplus is non-positive or inputs are invalid.
-export function estimateGoalNextYear(remainingAmount, cfg, expenses) {
+// The flat weekly surplus this derives is assumed constant for every future week —
+// so the resulting estDate is valid at any distance, but only within
+// GOAL_PROJECTION_HORIZON_YEARS of `today` (passed in, defaults to now): beyond that,
+// `withinHorizon` comes back false and callers should show "beyond N-year horizon"
+// rather than a specific date nobody should trust that far out.
+// Returns { estDate, weeksFromFYStart, label, weeklyNet, weeklyExpenses, weeklySurplus,
+// withinHorizon, horizonDate } or null if surplus is non-positive or inputs are invalid.
+export function estimateGoalNextYear(remainingAmount, cfg, expenses, today = new Date()) {
   if (!Number.isFinite(remainingAmount) || remainingAmount <= 0 || !cfg) return null;
 
   const isEmployerDHL = cfg.employerPreset === "DHL";
@@ -113,6 +138,8 @@ export function estimateGoalNextYear(remainingAmount, cfg, expenses) {
   const estDate = new Date(nextFYStart);
   estDate.setDate(estDate.getDate() + weeksNeeded * 7);
 
+  const horizonDate = getGoalProjectionHorizonDate(today);
+
   return {
     estDate,
     weeksFromFYStart: weeksNeeded,
@@ -120,6 +147,8 @@ export function estimateGoalNextYear(remainingAmount, cfg, expenses) {
     weeklyNet: avgWeeklyNet,
     weeklyExpenses,
     weeklySurplus,
+    withinHorizon: estDate <= horizonDate,
+    horizonDate,
   };
 }
 

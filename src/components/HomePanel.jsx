@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
@@ -357,15 +357,20 @@ export function HomePanel({
     if (!config) return {};
     const estimates = {};
     let cumulativeWeeks = 0;
+    const horizonBaseDate = new Date(`${todayIso}T00:00:00`);
+    const horizonDate = getGoalProjectionHorizonDate(horizonBaseDate);
     for (const g of tl) {
       if (Number.isFinite(g.eW)) continue;
-      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses);
+      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, horizonBaseDate);
       if (!est) continue;
       cumulativeWeeks += est.weeksFromFYStart;
       const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);
       const nextFYStart = new Date(fy + 1, fm - 1, fd);
       const estDate = new Date(nextFYStart.getTime() + cumulativeWeeks * 7 * DAY_MS);
-      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate) };
+      // Re-derive withinHorizon against the sequential (queued-behind-other-goals)
+      // estDate, not est's own standalone one — stacking cumulativeWeeks onto later
+      // goals can push a goal that was individually within horizon past it.
+      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate), withinHorizon: estDate <= horizonDate, horizonDate };
     }
     return estimates;
   })();
@@ -448,7 +453,7 @@ export function HomePanel({
     const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
     if (primary) return primary;
     const nextYr = nextYearSequentialEstimates[goal.id];
-    if (nextYr) return `~${nextYr.label}`;
+    if (nextYr) return nextYr.withinHorizon ? `~${nextYr.label}` : `Beyond ${GOAL_PROJECTION_HORIZON_YEARS}yr horizon`;
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
     if (!Number.isFinite(duration)) return "Timeline pending";

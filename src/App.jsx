@@ -263,9 +263,8 @@ function AccountGoodbyeScreen({ onSignOut }) {
         We're sad to see you go.
       </div>
       <div className="text-sm" style={{ maxWidth: "380px", color: "var(--color-text-secondary)", lineHeight: 1.6, zIndex: 1 }}>
-        Your account deletion request has been received and your account is no longer
-        active. We're finishing up removing your data in the background — you don't need to
-        do anything else.
+        No matter what tools you use, you will always have the authority over your life if you
+        act on it. We shall meet again.
       </div>
       <Pressable
         onClick={onSignOut}

@@ -655,8 +655,8 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
               <>
                 <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>We're sad to see you go</div>
                 <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.55" }}>
-                  Your deletion request has been received — your account is no longer active. We're
-                  finishing up removing your data in the background; you don't need to do anything else.
+                  No matter what tools you use, you will always have the authority over your life if
+                  you act on it. We shall meet again.
                 </div>
                 <Pressable
                   onClick={() => supabase.auth.signOut({ scope: "global" })}

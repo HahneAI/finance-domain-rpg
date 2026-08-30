@@ -693,25 +693,6 @@ export function HomePanel({
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
-          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
-          <MetricCard
-            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
-            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
-            status={lastGoalEW <= weeksLeft ? "green" : "red"}
-          />
-          <MetricCard
-            label="Goals"
-            val={`${completedGoals.length}/${goals.length}`}
-            sub={completedGoals.length > 0
-              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
-              : `${fmt$(totalGoalTarget)} total target`}
-            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
-            insight={pulseGoals}
-          />
-        </div>
-
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
@@ -1361,6 +1342,25 @@ export function HomePanel({
             )}
           </div>
         )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
+          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
+          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
+          <MetricCard
+            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
+            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
+            status={lastGoalEW <= weeksLeft ? "green" : "red"}
+          />
+          <MetricCard
+            label="Goals"
+            val={`${completedGoals.length}/${goals.length}`}
+            sub={completedGoals.length > 0
+              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
+              : `${fmt$(totalGoalTarget)} total target`}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
+            insight={pulseGoals}
+          />
+        </div>
 
       </div>
 

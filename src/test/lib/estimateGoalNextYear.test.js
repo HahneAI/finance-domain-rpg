@@ -76,6 +76,31 @@ describe('estimateGoalNextYear — base user projection', () => {
   })
 })
 
+describe('estimateGoalNextYear — weeklyLogAdjustment (logged Bonus/Extra Pay, Tips/Commission, losses)', () => {
+  it('defaults to 0 — omitting it leaves weeklySurplus unaffected (back-compat)', () => {
+    const r = estimateGoalNextYear(1000, BASE_CFG, [])
+    expect(r.weeklySurplus).toBeCloseTo(EXPECTED_BASE_NET, 2)
+  })
+
+  it('adds a positive per-week adjustment (e.g. a logged bonus smeared across the year) to weeklySurplus', () => {
+    // A $600 bonus netting ~$554 smeared over a 53-week fiscal year ≈ $10.45/week
+    const weeklyLogAdjustment = 554.10 / 53
+    const remaining = 20000 // large enough that +$10.45/week measurably shortens the ETA
+    const r = estimateGoalNextYear(remaining, BASE_CFG, [], new Date(), weeklyLogAdjustment)
+    expect(r.weeklySurplus).toBeCloseTo(EXPECTED_BASE_NET + weeklyLogAdjustment, 2)
+    // The extra surplus must actually move the ETA sooner, not just tag along unused.
+    const withoutBonus = estimateGoalNextYear(remaining, BASE_CFG, [])
+    expect(r.weeksFromFYStart).toBeLessThan(withoutBonus.weeksFromFYStart)
+  })
+
+  it('a negative adjustment (net logged losses) reduces weeklySurplus and can push the goal past horizon', () => {
+    const r = estimateGoalNextYear(1000, BASE_CFG, [], new Date(), -EXPECTED_BASE_NET)
+    // Surplus driven to (near) zero or negative → unfundable, same as any other
+    // non-positive-surplus case.
+    expect(r === null || r.weeklySurplus <= 0.01).toBe(true)
+  })
+})
+
 describe('estimateGoalNextYear — expense proxy (Q4 vs December)', () => {
   it('subtracts the Q4 weekly expense total from net', () => {
     const expenses = [{ weekly: [0, 0, 0, 100] }, { weekly: [50, 50, 50, 25] }]

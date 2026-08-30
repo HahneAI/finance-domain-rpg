@@ -84,9 +84,19 @@ export function getGoalProjectionHorizonDate(today = new Date()) {
 // GOAL_PROJECTION_HORIZON_YEARS of `today` (passed in, defaults to now): beyond that,
 // `withinHorizon` comes back false and callers should show "beyond N-year horizon"
 // rather than a specific date nobody should trust that far out.
+// `weeklyLogAdjustment` (default 0) folds in logged Bonus/Extra Pay, Tips/Commission,
+// and loss events — WITHOUT it, this estimate is completely blind to the Log panel:
+// a goal that doesn't finish within the current fiscal year (the only case this
+// function is ever consulted for — see HomePanel's resolveGoalFinishInfo) would show
+// an ETA that never moves no matter what gets logged, while a goal finishing within
+// the current year (computeGoalTimeline's own real per-week simulation) already
+// reflects every log entry correctly. Callers MUST pass the same
+// (logNetGained - logNetLost) / futureWeeks.length rate computeGoalTimeline itself
+// uses to smear logged events (its perWeekGain - perWeekLost) — computing a second,
+// differently-derived adjustment here would just trade one drift bug for another.
 // Returns { estDate, weeksFromFYStart, label, weeklyNet, weeklyExpenses, weeklySurplus,
 // withinHorizon, horizonDate } or null if surplus is non-positive or inputs are invalid.
-export function estimateGoalNextYear(remainingAmount, cfg, expenses, today = new Date()) {
+export function estimateGoalNextYear(remainingAmount, cfg, expenses, today = new Date(), weeklyLogAdjustment = 0) {
   if (!Number.isFinite(remainingAmount) || remainingAmount <= 0 || !cfg) return null;
 
   const isEmployerDHL = cfg.employerPreset === "DHL";
@@ -129,7 +139,7 @@ export function estimateGoalNextYear(remainingAmount, cfg, expenses, today = new
   const decExp = (expenses ?? []).reduce((s, e) => s + getEffectiveAmount(e, decDate, Q4_PHASE), 0);
   const weeklyExpenses = Math.abs(decExp - q4Exp) > 0.001 ? decExp : q4Exp;
 
-  const weeklySurplus = avgWeeklyNet - weeklyExpenses;
+  const weeklySurplus = avgWeeklyNet - weeklyExpenses + (weeklyLogAdjustment || 0);
   if (weeklySurplus <= 0) return null;
 
   const weeksNeeded = Math.ceil(remainingAmount / weeklySurplus);

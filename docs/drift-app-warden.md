@@ -2306,6 +2306,7 @@ existing test asserted the exact figure closely enough to need updating.
 | `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
 | App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx now reads the same `avgWeeklySpend` value via prop (F150, fixed) — no separate copy left to drift | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match (structurally guaranteed now, not just by convention) | D1 (closed) |
 | Any new/edited summary `Card` in BudgetPanel's top row (F163) | `perCheckFactor` — EVERY dollar `val`/`rawVal` on this row must multiply by it, with zero exceptions; the "First Check" future-quarter branch shipped without it and was invisible on the weekly default (`perCheckFactor === 1` no-ops the bug) | Render as biweekly or monthly, browse to a future quarter/month via `MonthQuarterSelector`, compare the displayed card to `leftFirstCheck * perCheckFactor` computed by hand; `panels.test.jsx`'s biweekly Q4 case pins the future-quarter branch | D1 |
+| A new value added to `EXPENSE_CYCLE_OPTIONS` (F164, TODO §21 — quarterly not yet built) | `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS`, `toMonthlyCost`/`fromMonthlyCost` — `normalizeCycle()` silently falls back any cycle missing from `EXPENSE_CYCLE_OPTIONS` to `every30days` with no error, so a partial rollout mis-prices bills 3× with zero visible failure | Add the new cycle to all four together in one PR; `expenseCycles.test.js`'s round-trip case for the new cycle must exist before merge | D1 |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -2398,6 +2399,45 @@ the current-week card to the future-quarter one.
   future test here.
 - **Drift trigger added:** §10.2 Block 2, "Any new/edited summary `Card` in BudgetPanel's top
   row (F163)" — every dollar card on this row must scale by `perCheckFactor`, full stop.
+
+**F164 — GATEWAY, found (not fixed — documented only per Anthony's call) 2026-08-31. No
+"Quarterly" billing cycle exists in the expense editor.** Investigated at Anthony's request:
+"check the flow on creating an expense and using the other payment timelines, for example a
+yearly bill versus a quarterly bill."
+
+- `EXPENSE_CYCLE_OPTIONS` (`expense.js:6-11`) defines exactly four cycles — Weekly, Biweekly,
+  Every 30 days, Yearly. No quarterly/every-90-days entry. Both the Add Expense form and the Edit
+  form render their cycle `<select>` directly from this array (`BudgetPanel.jsx:1701`/
+  `:2453-2454`), so the gap is real and uniform, not a rendering slip in one surface. Loans have
+  the identical gap (`LOAN_FREQUENCY_DAYS`, `expense.js:38` — weekly/biweekly/monthly only).
+- **Not a computation bug** — everything that DOES exist checks out. Traced `toMonthlyCost`/
+  `perPaycheckFromCycle` (used at creation, `BudgetPanel.jsx`'s `addExp*` functions) against
+  `yearlyExpenseCost`/`expenseWeeklyAvg` (used in the breakdown tab display,
+  `BudgetPanel.jsx:288-302`) for the yearly cycle specifically — both consistently apply the
+  app's 4-weeks/month, 48-weeks/year approximation for non-loan bills, and `expenseCycles.test.js`
+  already covers the yearly round-trip. No drift found between what a yearly bill computes to at
+  creation and what it displays as later.
+- **Why this matters more than a cosmetic gap**: `normalizeCycle()` (`expense.js:15-16`) silently
+  maps any unrecognized cycle string to `"every30days"` instead of erroring. A future change that
+  ever starts writing a quarterly cycle value without also adding it to `EXPENSE_CYCLE_OPTIONS`
+  first would get silently treated as monthly — a 3× under-count with no visible failure. This is
+  the actual drift risk, not the missing UI option by itself.
+- **Also found in the same pass, not a live bug**: every `perPaycheckFromCycle(amount, cycle,
+  cpm)` call site (`BudgetPanel.jsx`, `BulkEditPage.jsx`, `expense.js:360/395`) passes a `cpm`
+  third argument the function's real signature (`(amount, cycle)`, `expense.js:143-144`) doesn't
+  use — dead parameter, zero effect on output, flagged so nobody assumes `cpm` changes the
+  reserve math while reading these call sites.
+- **Disposition**: Anthony's explicit call was document-only, not build-now — tracked as
+  `docs/TODO.md` §21 with the full "if/when built" checklist (every file this ripples through:
+  `EXPENSE_CYCLE_OPTIONS`, `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS`, `toMonthlyCost`/
+  `fromMonthlyCost`, both cycle test files). Filed here as a GATEWAY finding (routes/gates a
+  choice the UI never offers) rather than LEDGER, since no stored data is computed wrong today —
+  the risk is entirely in what a *future* change could silently mis-route through
+  `normalizeCycle`'s fallback.
+- **Drift trigger:** any change that adds a new value to `EXPENSE_CYCLE_OPTIONS` must, in the
+  same PR, update `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS` (if loans should support it too), and
+  `toMonthlyCost`/`fromMonthlyCost` together — `normalizeCycle`'s silent fallback means a partial
+  rollout fails silently, not loudly.
 
 ---
 

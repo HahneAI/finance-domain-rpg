@@ -208,7 +208,14 @@ function InlineSelect({ value, onChange, options, placeholder = "(select)", aria
   );
 }
 
-function InlineNumber({ value, onChange, placeholder = "___", width = "84px", ariaLabel, error = false }) {
+// `onCommit` (optional) fires on blur — the "clicked off of" signal a page uses to delay
+// revealing its next cascading clause until the user is actually done typing, instead of
+// mid-keystroke the moment a partial value happens to satisfy a >0 check (e.g. the "4" in
+// "40" hours). onChange still fires on every keystroke as before — formData stays live for
+// anything that needs it immediately (live paystub math, the value shown in the blank
+// itself) — onCommit is purely an additional "I'm done here" signal. See useCommitTracking()
+// below and its doc comment for the full pattern; drift-app-warden §7 F162.
+function InlineNumber({ value, onChange, onCommit, placeholder = "___", width = "84px", ariaLabel, error = false }) {
   const hasValue = value !== null && value !== undefined && value !== "";
   return (
     <>
@@ -216,6 +223,7 @@ function InlineNumber({ value, onChange, placeholder = "___", width = "84px", ar
         type="number" inputMode="decimal"
         value={value ?? ""}
         onChange={e => onChange(e.target.value)}
+        onBlur={onCommit}
         placeholder={placeholder}
         aria-label={ariaLabel}
         aria-invalid={error || undefined}
@@ -230,6 +238,38 @@ function InlineNumber({ value, onChange, placeholder = "___", width = "84px", ar
       <RequiredNote show={error} />
     </>
   );
+}
+
+// Tracks which numeric blanks the user has "clicked off of" (blurred) at least once, so a
+// page can delay revealing its next cascading clause until the user is actually done with
+// the current one, rather than the instant a partial value happens to satisfy the field's
+// validity check (typing "4" of "40" would otherwise reveal the next question mid-keystroke
+// — a real, reported UX complaint, not hypothetical). InlineSelect/InlineDate need no such
+// gate — both already only fire onChange on a genuinely committed choice (a native <select>
+// fires change on selection, not per keystroke; a native date input fires change once a
+// complete date is entered or picked) — so every reveal gated on a select/date blank's value
+// is left exactly as it was; only InlineNumber-gated reveals adopt this pattern.
+//
+// Usage per page:
+//   const [committed, commit] = useCommitTracking(() => {
+//     const seed = new Set();
+//     if ((formData.someField ?? 0) > 0) seed.add("someField");   // pre-filled/resumed value
+//     return seed;                                                 // counts as already committed
+//   });
+//   <InlineNumber value={formData.someField} onChange={...} onCommit={() => commit("someField")} />
+//   {committed.has("someField") && (formData.someField ?? 0) > 0 && (
+//     <NextClause />
+//   )}
+// The lazy initializer seeds already-valid fields (a re-entry/resume page opening pre-filled
+// from real config, or `resumeFormData`) as already-committed — otherwise a perfectly valid,
+// already-filled field would hide its own downstream content behind an unnecessary blur the
+// user has no reason to trigger, a real regression for every re-entry/resume path.
+function useCommitTracking(seedFn) {
+  const [committed, setCommitted] = useState(() => (seedFn ? seedFn() : new Set()));
+  function commit(field) {
+    setCommitted(prev => (prev.has(field) ? prev : new Set(prev).add(field)));
+  }
+  return [committed, commit];
 }
 
 function InlineDate({ value, onChange, width = "168px", label = "Start date", error = false }) {
@@ -765,14 +805,33 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
       ? !!formData.dhlTeam && (formData.shiftHours ?? 0) > 0
       : false;
 
+  // Base-user pay-structure numbers (annualSalary / baseRate / shiftHours) all feed
+  // payStructureComplete below, which gates several downstream cascading clauses (OT
+  // Threshold, Commission, Tips, AdvancedPayRulesCard) — same partial-keystroke problem
+  // maxWeeklyHours had (drift-app-warden §7 F162): typing "5" of "52,000" would otherwise
+  // reveal OT Threshold mid-keystroke. DHL never enters these via InlineNumber here (baseRate/
+  // shiftHours come from setEmployer()'s DHL_PRESET defaults), so it's exempt.
+  const [committed, commit] = useCommitTracking(() => {
+    const seed = new Set();
+    if ((formData.annualSalary ?? 0) > 0) seed.add("annualSalary");
+    if ((formData.baseRate ?? 0) > 0) seed.add("baseRate");
+    if ((formData.shiftHours ?? 0) > 0) seed.add("shiftHours");
+    return seed;
+  });
+  const payStructureNumbersCommitted = isEmployerDHL
+    ? true
+    : isSalary
+      ? committed.has("annualSalary")
+      : committed.has("baseRate") && committed.has("shiftHours");
+
   // "Pay structure fully answered" gate — real Step1's Advanced Pay Rules/OT
   // Threshold/tips-commission opt-in all appear once the core rate/schedule
   // questions are answered; same threshold used here for the trailing clauses below
   // (DHL Weekend Differential, base-user OT Threshold, Tips/Commission opt-in).
-  const payStructureComplete = isEmployerDHL
+  const payStructureComplete = payStructureNumbersCommitted && (isEmployerDHL
     ? dhlTeamReady && !!formData.userPaySchedule
     : (employerChoice === "OTHER" || isInvestor) && !!formData.userPaySchedule &&
-      (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0);
+      (isSalary ? (formData.annualSalary ?? 0) > 0 : (formData.baseRate ?? 0) > 0 && (formData.shiftHours ?? 0) > 0));
 
   const introText = "Let's set you up. Right now, I am";
   // Life-event re-entry intro copy — there's no real Step0 branch specific to lost_job/
@@ -1005,6 +1064,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                         const sal = v === "" ? null : parseFloat(v);
                         onChange({ annualSalary: sal, baseRate: sal != null ? Math.round((sal / 2080) * 100) / 100 : null, shiftHours: 8 });
                       }}
+                      onCommit={() => commit("annualSalary")}
                       placeholder="52,000"
                       ariaLabel="Annual salary, dollars"
                       error={attempted && !((formData.annualSalary ?? 0) > 0)}
@@ -1019,6 +1079,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                     <InlineNumber
                       value={formData.baseRate ?? ""}
                       onChange={v => onChange({ baseRate: v === "" ? null : parseFloat(v) })}
+                      onCommit={() => commit("baseRate")}
                       placeholder="19.65"
                       width="72px"
                       ariaLabel="Hourly rate, dollars"
@@ -1030,6 +1091,7 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
                     <InlineNumber
                       value={formData.shiftHours ?? ""}
                       onChange={v => onChange({ shiftHours: v === "" ? null : parseFloat(v) })}
+                      onCommit={() => commit("shiftHours")}
                       placeholder="10"
                       width="52px"
                       ariaLabel="Shift length, hours"
@@ -1189,6 +1251,11 @@ function IntakePage({ formData, onChange, isInvestor = false, attempted = false,
 function SchedulePage({ formData, onChange, attempted = false }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
   const isBiweekly = formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary";
+  const [committed, commit] = useCommitTracking(() => {
+    const seed = new Set();
+    if ((formData.maxWeeklyHours ?? 0) > 0) seed.add("maxWeeklyHours");
+    return seed;
+  });
 
   function handleDateChange(dateStr) {
     onChange(dateStr === "" ? { startDate: null, firstActiveIdx: null } : { startDate: dateStr, firstActiveIdx: dateToWeekIdx(dateStr) });
@@ -1244,6 +1311,7 @@ function SchedulePage({ formData, onChange, attempted = false }) {
               <InlineNumber
                 value={formData.maxWeeklyHours ?? ""}
                 onChange={v => onChange({ maxWeeklyHours: v === "" ? null : parseFloat(v) })}
+                onCommit={() => commit("maxWeeklyHours")}
                 placeholder="40"
                 width="56px"
                 ariaLabel="Max weekly hours"
@@ -1251,7 +1319,7 @@ function SchedulePage({ formData, onChange, attempted = false }) {
               />
             </FadeIn>{" "}
             <TypedText text={hoursPerWeekText} />
-            {(formData.maxWeeklyHours ?? 0) > 0 && (
+            {committed.has("maxWeeklyHours") && (formData.maxWeeklyHours ?? 0) > 0 && (
               <>
                 {" "}<TypedText text={iText} />{" "}
                 <FadeIn delay={typeDuration(iText)}>

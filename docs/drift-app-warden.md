@@ -1163,6 +1163,70 @@ gate matrix lists `SetupWizard.jsx` `STEP_DEFS` ids, which are unaffected — th
 > update `SetupWizardAdlib.test.jsx`'s subheader-rendering test (`renders both "Schedule" and "Tax
 > Rates" subheaders...`) to match — it's the one test that would first drift on that copy/style.
 
+**F162 · `SetupWizardAdlib.jsx`'s `InlineNumber`-gated cascading reveals fired mid-keystroke,
+not on commit** — `SetupWizardAdlib.jsx` — **[G]** — *(added 2026-08-27, two commits — reported UX
+complaint: a cascading clause gated on a number field's value, e.g. `maxWeeklyHours > 0`, revealed
+itself the instant a partial value happened to satisfy the check — typing the "4" of "40" already
+revealed the next question mid-keystroke, before the user felt done)* `InlineSelect`/`InlineDate`
+never had this problem — a native `<select>` only fires `onChange` on a genuine selection and a
+native `<input type="date">` only on a complete date, neither fires per keystroke — so only
+`InlineNumber`-gated reveals needed a fix. `InlineNumber` gained an `onCommit` prop (fires on
+blur — the "clicked off of" signal, identical on mobile whether triggered by a virtual keyboard's
+Done/Next or tapping elsewhere) and a `useCommitTracking(seedFn)` hook (defined directly below
+`InlineNumber`/`InlineDate` in the file) that tracks, in page-local state, which numeric fields
+have been blurred at least once — seeded via a lazy initializer from any already-valid values
+present at mount, so a pre-filled/resumed value (every re-entry path inits `formData` from real
+`config`, not blanked) counts as already-committed and never forces an artificial blur-wait.
+Every reveal gate of the shape `{(formData.field ?? 0) > 0 && (<NextClause/>)}` downstream of an
+`InlineNumber` became `{committed.has("field") && (formData.field ?? 0) > 0 && (<NextClause/>)}`,
+with `onCommit={() => commit("field")}` wired on that field's `InlineNumber`. Applied across two
+rounds: round 1 (commit `400a005`) did `SchedulePage`'s `maxWeeklyHours` as the reference
+implementation; round 2 (this entry) audited every remaining `InlineNumber` usage in the file
+(~23) and found exactly **one** further genuine cascading-reveal case —
+`IntakePage`'s base-user `annualSalary`/`baseRate`/`shiftHours`, which all feed the derived
+`payStructureComplete` boolean that gates four separate downstream reveals (OT Threshold clause,
+Commission clause, Tips/Commission opt-in clause, and whether `AdvancedPayRulesCard` mounts at
+all) — the commit-tracking check was folded into `payStructureComplete`'s own derivation (one
+`useCommitTracking()` call, one seed function covering all three fields) rather than duplicated
+across its four call sites. DHL is exempt from that fix — DHL's `baseRate`/`shiftHours` come from
+`setEmployer()`'s `DHL_PRESET` defaults, never typed into an `InlineNumber` on this page.
+**Every other `InlineNumber` field in the file was checked individually and found to have no
+downstream reveal gated on its own value** — left untouched per this drift map's own
+"don't add unnecessary state" rule: `IntakePage`'s DHL weekend differential (`diffRate`), custom
+OT threshold, commission monthly amount; `AdvancedPayRulesCard`'s night differential rate and
+weekend differential (both base-user-only, nothing downstream of either); `DhlRotationCard`'s
+custom long/short-week hours (Plant-only, both rendered unconditionally together, no gate between
+them); `DeductionsPage`'s benefit weekly-cost and 401k contribution-rate fields (each followed only
+by an unconditional tail clause); `AttendanceDetailsCard`'s and `PtoDetailsCard`'s threshold/
+balance/rate fields (all rendered together once their card is expanded, none gates another);
+`TaxRatesPage`'s `CalcField`-based paystub calculator (a plain `<input>`, not `InlineNumber`, whose
+`fed1`/`sta1` derived state feeds a live rate *display* and the "Apply These Rates" button's
+enablement — not a cascading clause reveal — confirmed by reading the code, not assumed);
+`WrapUpPage`'s paycheck buffer amount; `JoblessBenefitsPage`'s weekly-benefit and duration fields
+(rendered together, no gate between them); `JoblessDetailsPage`'s prior-hourly-rate field (the note
+beneath it is unconditional, not gated on the rate having a value).
+> **IF** a new `InlineNumber`-gated cascading reveal is added anywhere in this file, **THEN** it
+> must get the same `onCommit`/`useCommitTracking()` treatment — this is now the standing pattern
+> for every numeric-field-gated clause reveal in the ad-lib wizard, not a one-off fix. Check
+> whether the field feeds a *shared* derived boolean gating multiple downstream sites (like
+> `payStructureComplete`) before wiring the same raw `committed.has(...)` check at each call site
+> separately — folding it into the shared derivation once is the DRYer fix, per this entry's
+> `IntakePage` precedent.
+> **IF** a field is later added to `payStructureComplete`'s formula, **THEN** it must also be added
+> to `IntakePage`'s `useCommitTracking()` seed function and given its own `onCommit` — an omitted
+> field would silently let `payStructureComplete` go true on a mid-keystroke partial value again,
+> reopening this exact bug for just that one field.
+> **Verification note (this round):** the DHL live-testable subset the task specified (DHL weekend
+> differential, `DhlRotationCard`'s custom rotation hours, `AdvancedPayRulesCard`'s night
+> differential rate) turned out to be smaller in practice than assumed — the session's shared DHL
+> test account is **Warehouse**, and `DhlRotationCard` is Plant-only (never reachable on this
+> account regardless of this fix), while `AdvancedPayRulesCard` is gated `isBaseUser`-only and
+> never renders for *any* DHL account, Plant or Warehouse. Only the weekend-differential field was
+> actually live-reachable; it received no fix (no downstream gate), and the live screenshots
+> confirmed identical content before and after blur, consistent with that. The other two fields'
+> "no fix needed" determination rests on code-reading + Vitest coverage only, not a live check —
+> flagged here rather than silently claimed as verified.
+
 ### 7.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

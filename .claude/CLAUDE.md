@@ -275,6 +275,23 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
   page-count/resume machinery (`activePages`, `pageIdx`, the header's "N of M" progress display,
   resume-at-last-page via `resumeFormData`) is written generically against `PAGES.length` — adding
   a page requires no changes there, only a new `PAGES` entry and its `isXValid`/`Component` pair.
+- **A cascading clause gated on an `InlineNumber` field's value reveals only once that field is
+  blurred, not on every keystroke (2026-08-27, drift-app-warden §7 F162).** A partial value
+  (typing the "4" of "40") would otherwise satisfy a `> 0` check and reveal the next question
+  mid-keystroke — a real reported UX complaint. `InlineNumber` gained an `onCommit` prop (fires on
+  blur — works identically on mobile, whether Done/Next on the virtual keyboard or tapping
+  elsewhere triggers it); each page with a numeric-gated reveal calls `useCommitTracking(seedFn)`
+  (defined right after `InlineNumber`/`InlineDate`) to track which fields have been blurred at
+  least once, seeded from any already-valid value present at mount so a pre-filled/resumed field
+  never forces an artificial blur-wait. The gate becomes
+  `{committed.has("field") && (formData.field ?? 0) > 0 && (<NextClause/>)}`. `InlineSelect`/
+  `InlineDate` never needed this — both only fire `onChange` on a genuinely committed value.
+  Applied to `SchedulePage`'s `maxWeeklyHours` and `IntakePage`'s `payStructureComplete` (which
+  folds `annualSalary`/`baseRate`/`shiftHours` commit-tracking into one shared derivation gating
+  four downstream clauses, rather than repeating the check at each call site) — every other
+  `InlineNumber` field in the file was audited and found to have no downstream reveal gated on its
+  own value, so it was left as plain `formData`-only. See `docs/drift-app-warden.md` §7 F162 for
+  the full field-by-field audit.
 - **Each newly-revealed clause rolls in with a typed reveal, not an instant appear.** `TypedText`
   runs the clause's static wording through the `adlibType` stepped `clip-path` keyframe
   (`index.css`) — a "crisp" blocky reveal, not a smooth wipe — combined with the existing

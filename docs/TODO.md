@@ -4960,6 +4960,43 @@ for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — i
       `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
       experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.
 
+### 19.5 `InlineNumber`-Gated Reveals Blur-Gated, Not Mid-Keystroke — CLOSED
+
+*Opened and closed 2026-08-27, drift-app-warden §7 F162, two commits. Reported UX complaint: a
+cascading clause gated on a number field's value (e.g. `maxWeeklyHours > 0`) revealed itself the
+instant a partial value happened to satisfy the check — typing the "4" of "40" already revealed
+the next question mid-keystroke, before the user felt done. `InlineSelect`/`InlineDate` were
+unaffected — native `onChange` only fires on a genuine commit for either.*
+
+- [x] Round 1 (`400a005`): `InlineNumber` gained an `onCommit` prop (fires on blur) +
+      `useCommitTracking(seedFn)` hook, seeded from already-valid pre-filled/resumed values so
+      re-entry accounts never hit an artificial blur-wait. Applied to `SchedulePage`'s
+      `maxWeeklyHours` as the reference implementation.
+- [x] Round 2: audited all ~23 remaining `InlineNumber` usages. Found one more genuine
+      cascading-reveal case — `IntakePage`'s base-user `annualSalary`/`baseRate`/`shiftHours`,
+      feeding the shared `payStructureComplete` boolean that gates OT Threshold/Commission/Tips
+      clauses and `AdvancedPayRulesCard`'s mount — fixed by folding commit-tracking into
+      `payStructureComplete`'s own derivation once, rather than duplicating the check at each of
+      its four call sites. DHL exempt (baseRate/shiftHours come from `DHL_PRESET` defaults there).
+- [x] Every other `InlineNumber` field audited and confirmed to have no downstream reveal gated on
+      its own value (DHL weekend differential, custom OT threshold, commission amount,
+      `AdvancedPayRulesCard`'s night-diff/weekend-diff, `DhlRotationCard`'s custom hours,
+      Deductions' benefit/401k fields, Attendance/PTO card fields, Tax Rates' paystub calculator —
+      a plain `<input>`, not `InlineNumber` — Wrap Up's buffer amount, both jobless-page numeric
+      fields) — left untouched, no unnecessary state added.
+- [x] Fixed 4 pre-existing tests that filled baseRate/shiftHours without blurring; added 2 new
+      tests (annual-salary partial-keystroke/blur, resumed baseRate+shiftHours re-entry). 1683
+      tests passing, `vite build --mode production` clean.
+- [x] Live-verified the one DHL-reachable field (weekend differential) via Playwright — confirmed
+      identical content before/after blur, consistent with "no fix needed." `DhlRotationCard`
+      (Plant-only) and `AdvancedPayRulesCard` (base-user-only) are both unreachable on the shared
+      test account (DHL Warehouse) regardless of this fix — relied on Vitest + code reading there,
+      not a live check.
+- [x] `.claude/CLAUDE.md`'s `SetupWizardAdlib.jsx` section and `docs/drift-app-warden.md` §7 (new
+      F162 entry) updated in the same round.
+
+---
+
 ### 19.4 Schedule + Tax Rates Pages Merged — Empty-Viewport Fix — CLOSED
 
 *Opened and closed 2026-08-27, drift-app-warden §7 F161. Live Playwright screenshots against the

@@ -73,6 +73,11 @@ gaps. The division of labor is fixed:
 - Doc-drift findings (D5) are the exception: those are **corrected in the same pass**
   (per the §5 maintenance covenant), not queued.
 
+A live-testing pass is the main way this offload process actually runs today — the
+`authority-finance-live-test`/`authority-finance-coach-live-test` skills drive it end to end
+against `docs/live-testing-checklist.md`. This doc stays the authoritative reference for the
+entry format itself (§5) regardless of what triggered the pass.
+
 ---
 
 ## 2. What Drift Is — Case Law
@@ -2005,6 +2010,63 @@ Line").
 > — a key-shape change there silently breaks double-tap detection without touching single-tap
 > select, so it's easy to miss in casual testing).
 
+**F161 · Bulk Edit's edit/deletion patches never wrote `monthlyOverrides` — a live regression
+of F37's own Bug 1 ("editing does nothing"), exactly the divergence F42's own IF/THEN check
+above warned about (2026-08-26, live-testing-checklist.md item 6, DW-20, fixed) — [L]**
+`saveAdvancedEdit` (`BudgetPanel.jsx`) wrote only `history`/`billingMeta` from
+`buildAdvancedEditPayload`'s patches — never `monthlyOverrides`, the layer
+`getEffectiveAmountForMonth` (`finance.js`) checks *first* and returns from directly, never
+falling through to `history` at all when an override exists for that month. Any expense that
+already carries a `monthlyOverrides` entry for the target month(s) — which, per F37's own Bug
+1/2 saga, is the normal state for most real expenses once anyone has ever used a single-expense
+Save-scope button on them — silently swallowed a Bulk Edit change with zero error and zero
+visual difference in the Bulk Edit UI itself (the staged-edit card correctly showed "CHANGED →
+$135.00/check"; the save even round-tripped through Supabase cleanly), while every other real
+UI surface (Budget's own expense list, the Needs total, "Weekly Spend") kept reading the stale
+pre-edit override and never moved. Live-confirmed and reproduced exactly this way: staged Food
+$130→$135 (`forward` scope) + a deletion of Phone Bill (`forward`) + a new $8/wk addition in one
+Bulk Edit visit — the save-confirmation badge correctly showed "(3)" and the page returned
+cleanly to Budget, but Budget's own "Needs" total read $138/wk (`$130 stale-Food + $8 new`, not
+the real `$135 + $8 = $143`) because Food's `monthlyOverrides["2026-08"]` was still `$130`.
+Confirmed via a direct `account_history`-adjacent DB fetch, not just a screenshot: `history`/
+`billingMeta.byPhase` correctly held `135`, `monthlyOverrides` still held `130` — the exact
+split F37's "Core defect" writeup describes. **Fix:** `buildAdvancedEditPayload` (`expense.js`)
+now also computes and returns `overridesByExpId` — reusing the *exact same* helpers the
+single-expense Save-scope buttons already call (`applyQuarterForward`/`applyMonthEdit` for
+edits, `clearMonthForward`/`clearMonth` for deletions — F37's own functions, not new logic),
+keyed per touched expense. `saveAdvancedEdit` merges `overridesByExpId[e.id]` into each patched
+expense alongside `history`/`billingMeta`. New expense additions were already correct and
+untouched by this fix — a brand-new expense has no pre-existing override to be shadowed by, so
+its `history` entry was always authoritative on its own. Verified live, before/after, with a
+distinctive test value (Food → $141) specifically to rule out "looks the same by coincidence":
+pre-fix, `monthlyOverrides["2026-08"]` stayed `$130` after saving `$141` via Bulk Edit; post-fix,
+the same edit correctly wrote `$141` into `monthlyOverrides` for every month from the edit's
+start through fiscal year end, matching `history`. Added 4 new `buildAdvancedEditPayload` unit
+tests asserting `overridesByExpId`'s shape for all four edit/deletion-scope combinations
+(forward edit, month-only edit, forward deletion, month-only deletion); one pre-existing
+shape-assertion test updated for the new return key. Full `npm run test:run` (1687 tests,
++4 from this fix) green. Test account left clean: Food reverted to its real $130, the two
+throwaway test expenses created during live verification zeroed out the same way any
+deprecated expense already sits inactive in this account (this app never hard-deletes an
+expense row — confirmed no such affordance exists anywhere in `BudgetPanel.jsx`). |
+`src/lib/expense.js` (`buildAdvancedEditPayload`), `src/components/BudgetPanel.jsx`
+(`saveAdvancedEdit`), `src/test/lib/expenseCycles.test.js` | **D1** — silently masked write,
+live-reachable on Bulk Edit's very first real live-testing pass since F155 shipped it two
+sessions ago; every account with prior single-edit history on a Bulk-Edited expense hits this |
+This is precisely the check F42's own IF/THEN already told a future session to run
+("edit one expense via sheet and via bulk with identical inputs — identical stored shape") —
+it had just never actually been run live until this pass; confirmed F37's Bug 1 writeup
+(`docs/BUG_FIX_TODO.md`'s original "Core defect" section) to reuse its exact helpers rather
+than re-deriving the override-write logic a third time.
+> **IF** `BulkEditPage.jsx`/`buildAdvancedEditPayload` grows a new staged-change type (a third
+> scope, a new field type beyond amount/cycle), **THEN** it needs its own `overridesByExpId`
+> entry using the matching F37 helper — the pattern established here, not a fresh one. **IF**
+> any other bulk/multi-expense save path is ever added anywhere in the app, **THEN** run F42's
+> own prescribed check against it before shipping, not after: this exact defect class is now
+> proven to survive a full save→reload round-trip with zero UI-visible symptom in the feature
+> that introduced it, only surfacing on a *different* screen (Budget's own totals) that a
+> feature-scoped test of Bulk Edit alone would never think to re-check.
+
 **F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
 `:2103` — **[G]**
 `canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})` — display-only here
@@ -2549,18 +2611,84 @@ everyone locked, since `taxExemptOptIn` without the unlock is ignored by the mat
 
 **F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
 password `:171` (hidden for Google-only accounts — no email identity, `6e123e8`,
-`:113–117`), link Google `:198`, global sign-out `:186–193`, **hard delete**
-`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token →
-global sign-out) — **[G]**
-The delete here is the **true, unrecoverable** path — server-side it does *not*
-tombstone into `deleted_accounts`; only the cron's non-payment deletion archives first
-(§8). The two delete paths' difference is a product invariant.
-> **IF** the delete flow is touched, **THEN** preserve the archive asymmetry (user
-> delete = hard, cron delete = tombstone) or escalate it as a product decision — and
-> the confirmation text contract (`confirmationText` body field) must match
+`:113–117`), link Google `:198`, global sign-out `:186–193`, **delete account**
+`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token
+→ goodbye state → sign-out) — **[G]**
+**Migration 044 (2026-08-30) redefined this path — the prior "true, unrecoverable,
+no-archive" invariant below is gone.** A raw `auth.admin.deleteUser` failure used to
+surface as a scary "Failed to delete auth account" error to the user (screenshot-driven
+fix) *after* `user_data` had already been wiped — a request to leave must never come
+back as an infra error. `api/delete-account.js` now (1) stamps `deletion_requested_at`
+on the row first — a single-column UPDATE that should never fail, and locking on it is
+enough to honor the request from the user's perspective — then (2) attempts the exact
+same `archiveAndDeleteAccount()` (`api/_accountArchive.js`, factored out of the cron in
+this same migration) inline, best-effort. Success or failure of step 2, the route
+returns 200. A step-2 failure leaves the row locked-but-not-purged;
+`cron-subscription-lifecycle.js`'s new `sweepPendingDeletions()` retries every such row
+every day until it finishes. **User-initiated deletion now tombstones into
+`deleted_accounts` exactly like the cron's non-payment path** — deliberate, not an
+oversight: it's what makes the archive-then-retry safety net possible, and as a
+side effect a user-deleted email is now revivable through the existing revival flow
+(T8/T9) the same way a cron-deleted one is, with `deletion_reason: "user_requested"`
+distinguishing the two in the tombstone row.
+> **IF** the delete flow is touched, **THEN** both callers of
+> `archiveAndDeleteAccount()` (this route, the cron) must keep calling the *same*
+> function with only a different `deletionReason` string — never re-fork the
+> archive/tombstone/purge sequence per-caller. **IF** the lock-then-best-effort-archive
+> shape changes, **THEN** re-verify: (a) the route still returns 200 whenever the lock
+> write itself succeeds, regardless of what the inline archive attempt does; (b) a
+> locked-but-unpurged row is still picked up by `sweepPendingDeletions()` (it has no
+> `trial_started_at` filter, unlike the main cron query, since an admin/investor
+> account with no trial can still request deletion); (c) `src/lib/db.js`'s
+> `deletion_requested_at` select stays on the isolated `subData` query (migration-safe
+> fallback to `DEFAULT_SUBSCRIPTION`) and `src/App.jsx`'s goodbye gate
+> (`subscription?.deletionRequestedAt`) still runs before the paywall/dashboard checks.
+> The confirmation text contract (`confirmationText` body field) must still match
 > `api/delete-account`'s server-side check. **IF** identity-gating changes, **THEN**
 > re-walk the Google-only × email-only × linked matrix — the password form must never
 > show where re-auth can't succeed.
+
+**F52 addendum — migrations 045/046 (2026-08-30), found live the same day as F52.**
+Deploying F52's fix did NOT actually stop the "Failed to delete auth account" step from
+failing — it just stopped the failure from reaching the user. The real cause: every
+signup writes a `consent_records` row (migration 033's ToS gate), and that table's
+`user_id REFERENCES auth.users(id)` had **no `ON DELETE CASCADE`** — Postgres blocks the
+delete outright regardless of RLS/role, so `auth.admin.deleteUser()` failed for
+essentially every real account, both from `archiveAndDeleteAccount()` (service-role,
+same as everyone else) AND from deleting a row directly in Supabase Studio's Auth table
+(same underlying call). **Compounding bug this exposed:** because
+`archiveAndDeleteAccount()` deletes `user_data` *before* attempting the auth-row delete,
+a failure at that last step left `user_data.deletion_requested_at` (F52's own retry
+signal) already gone — `sweepPendingDeletions()` could never find or retry that account,
+so the orphan was permanent. Signing back in hit the still-alive `auth.users` row with no
+`user_data` behind it → `loadUserData()` fell back to `DEFAULT_CONFIG` → wizard runs
+again, indistinguishable from a first-time signup, even though the Stripe subscription
+had already been correctly canceled during the same failed attempt. If that "fresh"
+session goes through checkout again, it opens a genuinely new Stripe customer/subscription
+— a second, separate charge.
+- **045** fixes the constraint itself: `consent_records.user_id` → `ON DELETE CASCADE`
+  (its content is promised to go with the account, matching the delete confirmation
+  copy); the nullable admin-authored-content audit columns
+  (`changelog_entries.created_by`, `beta_content_items.created_by`,
+  `beta_scores.updated_by`, `base_content_items.created_by`) → `ON DELETE SET NULL`
+  instead (detach authorship, don't delete the content).
+- **046** fixes the retry-tracking gap: `deleted_accounts.auth_purge_pending`
+  (default `true`, written in the tombstone upsert step — *before* the failure-prone
+  step, and never itself deleted) replaces `user_data.deletion_requested_at` as the
+  durable "still needs finishing" signal for the auth-row purge specifically.
+  `api/_accountArchive.js`'s new `finishPendingAuthPurges()` sweeps every tombstone
+  still marked pending, called every cron run independent of `sweepPendingDeletions()`.
+  A retry against an id that's already gone (`isAlreadyGoneError` — 404/"not found"
+  shaped) counts as success, not an infinite-retry failure.
+> **IF** any future `auth.users`-referencing table is added, **THEN** it must declare
+> `ON DELETE CASCADE` (user-owned data) or `ON DELETE SET NULL` (nullable audit/authorship
+> column) explicitly — the migration-045 verification query
+> (`pg_constraint` joined on `confrelid = 'auth.users'::regclass`) is the check: every row
+> must show a real `confdeltype`, never the default "no action." **IF**
+> `archiveAndDeleteAccount()`'s step order changes, **THEN** whatever step can still fail
+> after `user_data` is deleted must keep its own durable retry signal on a row that
+> survives that failure (`deleted_accounts`, not `user_data`) — re-introducing an
+> unretryable orphan is exactly this incident again.
 
 **F53 · Subscription card + checkout/portal** — `:206–315`: `handleCheckout:210`
 (→ `/api/stripe-create-checkout`), `handleManageSubscription:241` (→
@@ -2586,7 +2714,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
 | Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
 | Freedom Allowance cap/default | F51 + wizard Wrap Up (§7 F5) + `freedomAllowancePerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
-| `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §8's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
+| `api/delete-account` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
 | New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
@@ -3137,15 +3265,19 @@ race guard).
 
 **F78 · Pre-session render ladder** — `App.jsx:1429–1478` — **[G]**
 Fixed precedence: `pendingPasswordReset` → `revivalInfo` (ReviveScreen — "no app, no
-wizard, no trial") → no-session LoginScreen → `loading` → entitlement resolution
-(real wall-clock, §12 F53's rule) → **TrialExplainerScreen gate** (`:1470`: first-run
-wizard entry ∧ not investor ∧ `entitlement.state === "trial"` ∧ not yet acknowledged —
-the required "I understand" checkbox gates entry into setup, `3fd8896`).
+wizard, no trial") → no-session LoginScreen → `loading` → **`AccountGoodbyeScreen`
+gate** (`subscription?.deletionRequestedAt`, migration 044 — F52; a locked-but-not-yet-
+purged deletion request must never fall through to the dashboard, wizard, or paywall
+below it) → entitlement resolution (real wall-clock, §12 F53's rule) →
+**TrialExplainerScreen gate** (`:1470`: first-run wizard entry ∧ not investor ∧
+`entitlement.state === "trial"` ∧ not yet acknowledged — the required "I understand"
+checkbox gates entry into setup, `3fd8896`).
 > **IF** ladder order changes, **THEN** walk every rung's capture: a revivable user
 > must never see the wizard or trial explainer; a recovery click must beat everything;
-> the explainer must show exactly once and only to fresh trial signups (never
-> life-event re-entries — `wizardEntry === false` is that discriminator, §7 F8's
-> source/tagging depends on the same value).
+> a locked (`deletionRequestedAt`) account must never reach the dashboard even if it
+> somehow bypasses `paywallBypassed`; the explainer must show exactly once and only to
+> fresh trial signups (never life-event re-entries — `wizardEntry === false` is that
+> discriminator, §7 F8's source/tagging depends on the same value).
 
 **F79 · Revival lookup + ReviveScreen contract** — `api/revival-lookup.js` (dual-mode:
 unauthenticated email probe for F73, session-verified probe for T7's `checkRevival`;
@@ -3477,6 +3609,37 @@ change with D3-grade consequences. Updates now wait for the user.
 > caching strategy changes, **THEN** re-verify a deploy → update → reload cycle
 > preserves in-flight state (the eager-save net catches what the debounce would lose,
 > but only for completed actions).
+
+**F162 · Duplicate/drifted PWA manifest — `vite.config.js`'s `manifest` object silently
+generated a second, divergent manifest file (2026-08-26, live-testing-checklist.md item 8,
+DW-21, fixed) — [G]** Two manifests shipped in the same build: the hand-authored
+`public/manifest.json` (linked via `index.html`'s own `<link rel="manifest">`, with an explicit
+troubleshooting comment naming it the one to check for Android install-prompt issues) and
+`dist/manifest.webmanifest`, auto-generated *and auto-injected as a second competing
+`<link rel="manifest">` tag* by VitePWA from `vite.config.js`'s `manifest: {...}` object —
+nothing in the build wires the two together, so they drift independently. Confirmed genuinely
+diverged, not just theoretically able to: `manifest.webmanifest` was missing the
+`apple-touch-icon.png` (180×180) icon entry that `manifest.json` carries, and carried a
+`"lang":"en"` key `manifest.json` doesn't — directly contradicting the source comment's own
+assumption ("both should have matching content"). Two `<link rel="manifest">` tags in one
+document is spec-ambiguous for which one a browser's install-prompt logic actually reads —
+not confirmed to be causing a live install failure, but a needless, silently-drifting duplicate
+either way. **Fix:** `vite.config.js`'s `manifest:` key set to `false` (with a comment
+explaining why) — this disables both VitePWA's manifest generation and its auto-injected
+`<link>` tag, leaving `public/manifest.json` as the single canonical manifest exactly as
+`index.html`'s own troubleshooting comment already assumed. `includeAssets` extended to name
+`manifest.json` explicitly so workbox still precaches it. Verified via a full `npm run build` +
+`npm run preview` cycle: `dist/index.html` now contains exactly one `<link rel="manifest">`
+(→ `/manifest.json`), `dist/manifest.webmanifest` is no longer generated at all, and a live
+Playwright check against the preview server confirmed the service worker still registers and
+activates normally (`scope: /`, `active: activated`) — this fix is manifest-only, it doesn't
+touch the SW/workbox config. `npm run test:run` unaffected (no test asserted on the removed
+file). | `vite.config.js` | **D3** — install-prompt-adjacent surface, no math/time risk, but a
+silent content drift the source code's own comment explicitly assumed couldn't happen |
+> **IF** `public/manifest.json`'s fields (icons, name, colors) change, **THEN** there is now
+> only one file to update — this fix removes the "did I update both?" drift risk F162 itself
+> found, don't reintroduce a second manifest source by re-adding an object to `manifest:` in
+> `vite.config.js` without also removing/reconciling `public/manifest.json`.
 
 **F95 · Input/label standards** — `iS`/`lS` style objects (`ui.jsx:42–44`) — **[G]**
 `iS`: 16px font (blocks iOS auto-zoom), 44px min-height (tap target), JetBrains Mono.

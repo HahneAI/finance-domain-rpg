@@ -234,6 +234,49 @@ function SidebarNavItem({ item, active, onClick, badge, badgeColor }) {
   );
 }
 
+// Migration 044 — shown for the (should-be-brief) window between a user
+// asking to delete their account (subscription.deletionRequestedAt gets set
+// the instant delete-account.js locks the row) and the backend actually
+// finishing the purge. Never a scary error screen: from the user's
+// perspective their request has already been honored, this is just the
+// goodbye. Same full-screen shell/orb treatment as FullScreenLoadingState/
+// ReviveScreen for a consistent first-and-last impression.
+function AccountGoodbyeScreen({ onSignOut }) {
+  return (
+    <div style={{
+      background: "var(--color-bg-gradient)",
+      minHeight: "100vh",
+      position: "relative",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "20px",
+      padding: "24px",
+      textAlign: "center",
+    }}>
+      <div className="auth-orb auth-orb-1" aria-hidden="true" />
+      <div className="auth-orb auth-orb-2" aria-hidden="true" />
+      <div className="auth-orb auth-orb-3" aria-hidden="true" />
+      <div style={{ fontSize: "22px", fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--color-text-primary)", zIndex: 1 }}>
+        We're sad to see you go.
+      </div>
+      <div className="text-sm" style={{ maxWidth: "380px", color: "var(--color-text-secondary)", lineHeight: 1.6, zIndex: 1 }}>
+        No matter what tools you use, you will always have the authority over your life if you
+        act on it. We shall meet again.
+      </div>
+      <Pressable
+        onClick={onSignOut}
+        className="text-sm"
+        style={{ zIndex: 1, marginTop: "8px", padding: "10px 24px", background: "var(--color-teal)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontWeight: 700, cursor: "pointer" }}
+      >
+        Done
+      </Pressable>
+    </div>
+  );
+}
+
 function FullScreenLoadingState({ label = "Loading your dashboard" }) {
   return (
     <div style={{
@@ -2114,6 +2157,17 @@ export default function App() {
 
   if (loading) {
     return <FullScreenLoadingState />;
+  }
+
+  // Migration 044 — account locked via a delete-account.js request whose
+  // inline archive hasn't finished (or was retried by the cron sweep) yet.
+  // No dashboard, no wizard — just the goodbye, then sign out.
+  if (subscription?.deletionRequestedAt) {
+    return (
+      <AccountGoodbyeScreen
+        onSignOut={() => { supabase.auth.signOut({ scope: "global" }); }}
+      />
+    );
   }
 
   // Investors/demo accounts, admins, and testers never hit the paywall — they

@@ -41,6 +41,51 @@ same day. Drift-app-warden §7 F162.*
 - [x] `.claude/CLAUDE.md` and `docs/drift-app-warden.md` §7 (new F162 entry) updated in the same
   round.
 
+## §17.J — User-initiated account deletion never hard-fails to the user (2026-08-30, migration 044)
+
+*Live screenshot: a transient `auth.admin.deleteUser` failure surfaced a raw "Failed to delete
+auth account" error after `user_data` had already been wiped — a user asking to leave must never
+be told "no" by an infra hiccup. Drift-app-warden §12 F52.*
+
+- [x] `user_data.deletion_requested_at` column (migration 044) — stamped first, locks the account.
+- [x] `api/_accountArchive.js` — `archiveAndDeleteAccount()` factored out of the cron so
+  `api/delete-account.js` and `api/cron-subscription-lifecycle.js` share one archive/tombstone
+  sequence (`deletion_reason` distinguishes `"user_requested"` vs `"non_payment_dunning_expired"`).
+- [x] `api/delete-account.js` now locks the row, then attempts the same archive inline
+  best-effort — always returns 200 once locked, whatever the inline attempt does.
+- [x] `cron-subscription-lifecycle.js`'s `sweepPendingDeletions()` retries every locked-but-
+  unpurged row daily until it succeeds (no `trial_started_at` filter — covers admin/investor
+  accounts too).
+- [x] `src/lib/db.js`/`src/App.jsx` — `deletionRequestedAt` gates the dashboard behind a goodbye
+  screen instead of the old immediate client-side sign-out racing the App.jsx render ladder.
+- [x] `ProfilePanel.jsx`'s delete modal shows a goodbye state on success instead of yanking away.
+- [x] Side effect (deliberate): a user-deleted email is now revivable through the existing
+  revival flow, same as a cron-deleted one.
+
+## §17.K — Fixed the actual reason auth-account deletion kept failing (2026-08-30, migrations 045/046)
+
+*Deploying §17.J's fix stopped the failure from reaching the user, but not the failure
+itself — found live the same day. Drift-app-warden §12 F52 addendum.*
+
+- [x] Root cause: `consent_records.user_id` (every real signup has one, migration 033's
+  ToS gate) referenced `auth.users(id)` with no `ON DELETE CASCADE` — Postgres blocked
+  `auth.admin.deleteUser()` outright, both from the app's own service-role client and
+  from deleting a row directly in Supabase Studio's Auth table.
+- [x] Migration 045 — fixed that FK to `ON DELETE CASCADE`; fixed the nullable
+  admin-authored-content audit columns (`changelog_entries.created_by`,
+  `beta_content_items.created_by`, `beta_scores.updated_by`,
+  `base_content_items.created_by`) to `ON DELETE SET NULL` instead.
+- [x] Found a second, compounding bug in the process: because `user_data` gets deleted
+  BEFORE the auth-row delete is attempted, a failure at that last step destroyed its own
+  retry signal (`deletion_requested_at` lived on the now-gone row) — the orphan was
+  permanent, not just slow to clean up. Explains the "logs back in like a first-time
+  user, Stripe already charged again on resubscribe" symptom exactly.
+- [x] Migration 046 — `deleted_accounts.auth_purge_pending`, set true in the tombstone
+  upsert (before the failure-prone step, never itself deleted) as the durable signal;
+  `api/_accountArchive.js`'s new `finishPendingAuthPurges()` retries every pending
+  tombstone every cron run, treating a not-found delete as already-purged rather than an
+  infinite-retry failure.
+
 ---
 
 ## §19.4 — Ad-Lib Wizard Schedule + Tax Rates pages merged, empty-viewport fix (2026-08-27)

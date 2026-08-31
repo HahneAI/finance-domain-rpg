@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
@@ -9,7 +9,7 @@ import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../co
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { MetricCard, SmBtn, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { MetricCard, SmBtn, Pressable, useFoldTransition, useCountUp, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
@@ -32,6 +32,14 @@ const safeDate = (raw) => {
   const d = raw instanceof Date ? raw : new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
 };
+
+// Goal target amount with the same 0→target countup MetricCard uses (Animation
+// Rules, CLAUDE.md) — `animate` scopes it to just the first two goal cards so
+// the count-in reads as an intentional per-card entrance, not noise on a long list.
+function AnimatedGoalTarget({ target, animate }) {
+  const counted = useCountUp(target);
+  return fmt$(animate ? counted : target);
+}
 
 export function HomePanel({
   navigate,
@@ -59,7 +67,6 @@ export function HomePanel({
   futureWeekNets = [],
   prevWeekNet,
   currentWeek,
-  fiscalWeekInfo,
   today,
   fundedGoalSpend = 0,
   isAdmin = false,
@@ -83,8 +90,12 @@ export function HomePanel({
   // what lands in their bank account each paycheck cycle.
   const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
-  const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : null;
   const todayIso = today ?? toLocalIso(new Date());
+  // Rolling 5-year goal-projection cutoff, shared by every "goal ETA falls in a
+  // future fiscal year" code path below — computed from todayIso so it advances
+  // a day every real day with no stored state (see GOAL_PROJECTION_HORIZON_YEARS).
+  const goalHorizonBaseDate = new Date(`${todayIso}T00:00:00`);
+  const goalHorizonDate = getGoalProjectionHorizonDate(goalHorizonBaseDate);
   const nextPayWeek = getNextPayWeek(futureWeeks, todayIso, checksPerYear);
   const daysUntilPaycheck = nextPayWeek
     ? Math.round((nextPayWeek.payPeriodEndDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / DAY_MS)
@@ -359,13 +370,16 @@ export function HomePanel({
     let cumulativeWeeks = 0;
     for (const g of tl) {
       if (Number.isFinite(g.eW)) continue;
-      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses);
+      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, goalHorizonBaseDate);
       if (!est) continue;
       cumulativeWeeks += est.weeksFromFYStart;
       const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);
       const nextFYStart = new Date(fy + 1, fm - 1, fd);
       const estDate = new Date(nextFYStart.getTime() + cumulativeWeeks * 7 * DAY_MS);
-      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate) };
+      // Re-derive withinHorizon against the sequential (queued-behind-other-goals)
+      // estDate, not est's own standalone one — stacking cumulativeWeeks onto later
+      // goals can push a goal that was individually within horizon past it.
+      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate), withinHorizon: estDate <= goalHorizonDate, horizonDate: goalHorizonDate };
     }
     return estimates;
   })();
@@ -399,7 +413,6 @@ export function HomePanel({
     )));
   }, [tl, setGoals]);
 
-  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(TOTAL_FISCAL_WEEKS - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
@@ -432,27 +445,67 @@ export function HomePanel({
     const yearSuffix = parsed.getFullYear() !== FY_YEAR ? ` '${String(parsed.getFullYear()).slice(2)}` : "";
     return `${month} ${day}${ordinalSuffix(day)}${yearSuffix}`;
   };
-  const buildGoalFinishLabel = (offsetRaw) => {
+  // Badge text for a goal landing in a future fiscal year: a specific "N YR EST"
+  // (years measured from today, ceiling — a date 2.1-3.0 years out reads "3 YR
+  // EST") for anything within the rolling horizon, or one unified
+  // "BEYOND Nyr" once it crosses goalHorizonDate. Shared by every finish-date
+  // path below so the badge always agrees with whatever date (if any) is shown
+  // next to it.
+  const resolveGoalYearBadge = (finishDate) => {
+    if (!finishDate) return null;
+    if (finishDate > goalHorizonDate) return `BEYOND ${GOAL_PROJECTION_HORIZON_YEARS}YR`;
+    const yearsOut = Math.max(1, Math.ceil((finishDate.getTime() - goalHorizonBaseDate.getTime()) / (365.25 * DAY_MS)));
+    return `${yearsOut} YR EST`;
+  };
+  // Returns { text, finishDate, badge } for a goal's offset (weeks from now).
+  // text/badge are null once finishDate crosses the horizon — callers show the
+  // single BEYOND-horizon badge in place of both a date line and a badge, not
+  // one of each.
+  const buildGoalFinishInfo = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;
     const offset = Math.max(Math.ceil(offsetRaw), 0);
-    const weekNum = Math.min(nowIdx + offset, TOTAL_FISCAL_WEEKS);
-    const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
-    const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
-    const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
+    // Real calendar date for this offset, computed arithmetically from the current
+    // week's start — NOT by indexing into futureWeeks (which only covers the
+    // current fiscal year). Indexing used to silently clamp any offset beyond
+    // futureWeeks.length to the year's LAST week, so a goal that actually takes
+    // 128+ weeks to fund displayed a wrong "Jan 3rd '27, week 53" instead of its
+    // real (much later) date.
+    const finishDate = currentWeekStartMs != null ? new Date(currentWeekStartMs + offset * 7 * DAY_MS) : null;
+    if (finishDate && finishDate > goalHorizonDate) return { text: null, finishDate, badge: resolveGoalYearBadge(finishDate) };
     const dateLabel = formatGoalFinishDate(finishDate);
+    // No real paycheck-number sequence exists past the current single-fiscal-year
+    // grid (buildYear() only generates TOTAL_FISCAL_WEEKS weeks — docs/TODO.md §9),
+    // so once the offset crosses it, show the estimated date only, no "week N".
+    const beyondCurrentYear = nowIdx + offset > TOTAL_FISCAL_WEEKS;
+    if (beyondCurrentYear) return { text: dateLabel ? `~By ${dateLabel}` : null, finishDate, badge: resolveGoalYearBadge(finishDate) };
+    const weekNum = nowIdx + offset;
     const checkNum = weekNumToPaycheckNum(weekNum, checksPerYear);
     const pUnit = payPeriodUnit(checksPerYear, 'full').toLowerCase();
-    return dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`;
+    return {
+      text: dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`,
+      finishDate,
+      badge: null, // completes within the current fiscal year — no year badge needed
+    };
   };
-  const resolveGoalFinishLabel = (goal) => {
-    const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
-    if (primary) return primary;
+  // Single source of truth for a goal card's date line + badge, across the three
+  // paths a goal's ETA can come from: computeGoalTimeline's real per-week
+  // simulation (goal.eW finite), estimateGoalNextYear's flat-rate queued
+  // estimate (nextYearSequentialEstimates), or the wN/sW fallback (real average
+  // surplus, just an unclamped date instead of computeGoalTimeline's own).
+  const resolveGoalFinishInfo = (goal) => {
+    const primary = Number.isFinite(goal.eW) ? buildGoalFinishInfo(goal.eW) : null;
+    if (primary?.text) return primary;
     const nextYr = nextYearSequentialEstimates[goal.id];
-    if (nextYr) return `~${nextYr.label}`;
+    if (nextYr) {
+      return nextYr.withinHorizon
+        ? { text: `~${nextYr.label}`, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) }
+        : { text: null, finishDate: nextYr.estDate, badge: resolveGoalYearBadge(nextYr.estDate) };
+    }
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
-    if (!Number.isFinite(duration)) return "Timeline pending";
-    return buildGoalFinishLabel(startOffset + duration) ?? "Timeline pending";
+    if (!Number.isFinite(duration)) return { text: "Timeline pending", finishDate: null, badge: null };
+    const fallback = buildGoalFinishInfo(startOffset + duration);
+    return fallback ?? { text: "Timeline pending", finishDate: null, badge: null };
   };
 
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
@@ -610,10 +663,7 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
-      <div id="home-goals-section" style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
-        <div className="text-2xs" style={{ letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "14px" }}>
-          Authority Finance
-        </div>
+      <div style={{ marginBottom: "20px", textAlign: "center", padding: "6px 0" }}>
         <div style={{
           fontSize: "52px",
           fontWeight: 900,
@@ -621,51 +671,19 @@ export function HomePanel({
           color: "var(--color-accent-primary)",
           letterSpacing: "0.04em",
           lineHeight: 1.15,
-          marginBottom: "16px",
         }}>
           Goals
-        </div>
-        <div style={{ width: "40px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 16px", borderRadius: "1px", opacity: 0.55 }} />
-        <div className="text-sm" style={{ color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
-          {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
         </div>
       </div>
 
       <div>
-        {currentWeek && (
-          <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              {formatRotationDisplay(currentWeek, { isAdmin })}
-              {nextPayWeek
-                ? ` · pay period ends${daysUntilPaycheck === 0 ? " today" : ` in ${daysUntilPaycheck}d`} · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
-                : ` · ends ${fmtFullDate(safeDate(currentWeek.payPeriodEndDate))}`
-              }
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
-          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
-          <MetricCard
-            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
-            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
-            status={lastGoalEW <= weeksLeft ? "green" : "red"}
-          />
-          <MetricCard
-            label="Goals"
-            val={`${completedGoals.length}/${goals.length}`}
-            sub={completedGoals.length > 0
-              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
-              : `${fmt$(totalGoalTarget)} total target`}
-            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
-            insight={pulseGoals}
-          />
-        </div>
-
-        <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
+        {/* margin: "0 -16px" cancels out .main-content's own 16px horizontal padding
+            (App.jsx's inline `padding: "18px 16px"` on the .main-content div) so this
+            box runs edge-to-edge as a true full-bleed bar, not just visually wide within
+            its column. Coupled to that literal value — if App.jsx's main-content padding
+            ever changes, update this to match. */}
+        <div style={{ margin: "0 -16px 16px", padding: "16px 0", borderTop: "1px solid #222", borderBottom: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "14px" : "0", padding: "0 16px" }}>
             <div className="text-xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {tl.length > 0 && setConfigProp && !readOnly && (
@@ -689,7 +707,12 @@ export function HomePanel({
               <div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{tl.length}</div>
             </div>
           </div>
-          {!tl.length && <div className="text-xs" style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
+          {!tl.length && <div className="text-xs" style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 16px" }}>No active goals yet</div>}
+          {/* The box itself has no horizontal padding (its background needs to run
+              edge-to-edge — see the full-bleed comment above), so this 16px inset
+              reproduces the margin the cards used to get for free from .main-content's
+              own page padding before the box became full-bleed. */}
+          <div style={{ padding: "0 16px" }}>
           {isMobile ? (
             <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
@@ -749,10 +772,22 @@ export function HomePanel({
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                            {/* minHeight reserves the badge/PAST DUE row's space even when
+                                neither shows, so a goal completing within the current fiscal
+                                year (no badge) renders the same card height as one further out
+                                (badge present) — instead of the carousel's cards visibly
+                                varying in height card to card. */}
+                            <div style={{ minHeight: "38px" }}>
+                              {(() => {
+                                const info = resolveGoalFinishInfo(g);
+                                return <>
+                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                </>;
+                              })()}
+                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            </div>
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -880,10 +915,22 @@ export function HomePanel({
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
-                            {!Number.isFinite(g.eW) && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                            {/* minHeight reserves the badge/PAST DUE row's space even when
+                                neither shows, so a goal completing within the current fiscal
+                                year (no badge) renders the same card height as one further out
+                                (badge present) — instead of the carousel's cards visibly
+                                varying in height card to card. */}
+                            <div style={{ minHeight: "38px" }}>
+                              {(() => {
+                                const info = resolveGoalFinishInfo(g);
+                                return <>
+                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
+                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                </>;
+                              })()}
+                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                            </div>
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -951,7 +998,7 @@ export function HomePanel({
               })}
             </>
           )}
-        </div>
+          </div>
         {/* Portaled to document.body so position:fixed resolves against the viewport,
             not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
             element nested in an overflow:auto container at a scrollTop offset, which
@@ -1268,41 +1315,78 @@ export function HomePanel({
           document.body,
         )}
 
-        {!readOnly && (addingGoal ? (
-          <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-              <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-              <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
-              <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
-              <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
-            </div>
-          </div>
-        ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
-
-        {completedGoals.length > 0 && (
-          <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
-            <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
-              <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
-              <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
-            </Pressable>
-            {fundedFold.mounted && (
-              <div className="fold-scale" data-fold={fundedFold.fold}>
-                {completedGoals.map((g) => (
-                  <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
-                      <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
-                    </div>
-                  </div>
-                ))}
+        <div style={{ padding: "20px 16px 16px" }}>
+          {!readOnly && (addingGoal ? (
+            <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
+                <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
-            )}
-          </div>
-        )}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
+                <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
+              </div>
+            </div>
+          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "20px" }}>+ ADD GOAL</Pressable>)}
+
+          {completedGoals.length > 0 && (
+            <div style={{ border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "20px" }}>
+              <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
+                <span className="text-xs" style={{ letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded Personal Assets ({completedGoals.length})</span>
+                <span className="text-xs" style={{ color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
+              </Pressable>
+              {fundedFold.mounted && (
+                <div className="fold-scale" data-fold={fundedFold.fold}>
+                  {completedGoals.map((g) => (
+                    <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
+                        <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentWeek && (() => {
+            const checksLeft = weeksToChecksRemaining(weeksLeft, checksPerYear);
+            const unit = payPeriodUnit(checksPerYear, checksLeft === 1 ? 'lower' : 'lowerPlural');
+            const dayLabel = daysUntilPaycheck === 0 ? "today" : `in ${daysUntilPaycheck} day${daysUntilPaycheck === 1 ? "" : "s"}`;
+            return (
+              <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "16px" }}>
+                <div className="text-base" style={{ color: "var(--color-green)", fontWeight: 600 }}>
+                  {checksLeft} {unit} left this year. Your pay period ends {dayLabel}.
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        </div>
+      </div>
+
+      <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
+          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
+          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
+          <MetricCard
+            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
+            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
+            status={lastGoalEW <= weeksLeft ? "green" : "red"}
+          />
+          <MetricCard
+            label="Goals"
+            val={`${completedGoals.length}/${goals.length}`}
+            sub={completedGoals.length > 0
+              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
+              : `${fmt$(totalGoalTarget)} total target`}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
+            insight={pulseGoals}
+          />
+        </div>
 
       </div>
 

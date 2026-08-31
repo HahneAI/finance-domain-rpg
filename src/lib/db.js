@@ -39,6 +39,11 @@ const DEFAULT_SUBSCRIPTION = {
   dunningEmailCount: 0,
   currentPeriodEnd: null,
   plan: null,
+  // Migration 044 — set the instant a user asks to delete their account
+  // (api/delete-account.js), before the real archive-then-delete even runs.
+  // App.jsx gates on this to lock the account out of the dashboard for the
+  // (should-be-brief) window before the account is fully purged.
+  deletionRequestedAt: null,
 };
 
 const mapSubscription = (row) => row ? ({
@@ -53,6 +58,7 @@ const mapSubscription = (row) => row ? ({
   dunningEmailCount: row.dunning_email_count ?? 0,
   currentPeriodEnd: row.current_period_end ?? null,
   plan: row.plan ?? null,
+  deletionRequestedAt: row.deletion_requested_at ?? null,
 }) : DEFAULT_SUBSCRIPTION;
 
 const isFoodPrimaryExpense = (expense) => {
@@ -162,7 +168,8 @@ export async function loadUserData() {
     .from("user_data")
     .select(
       "stripe_customer_id, stripe_subscription_id, subscription_status, trial_started_at, trial_ends_at, " +
-      "access_ends_at, card_on_file, last_dunning_email_at, dunning_email_count, current_period_end, plan"
+      "access_ends_at, card_on_file, last_dunning_email_at, dunning_email_count, current_period_end, plan, " +
+      "deletion_requested_at"
     )
     .eq("user_id", userId)
     .single();

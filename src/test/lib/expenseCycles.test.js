@@ -202,8 +202,8 @@ describe('buildAdvancedEditPayload', () => {
   }
   const emptyArgs = { edits: {}, deletions: {}, additions: [], expenses: [baseExpense], monthIso: MONTH_ISO, phaseIdx: PHASE, cpm: 4 }
 
-  it('returns empty patches and additions for empty input', () => {
-    expect(buildAdvancedEditPayload(emptyArgs)).toEqual({ patches: [], additions: [] })
+  it('returns empty patches, additions, and overridesByExpId for empty input', () => {
+    expect(buildAdvancedEditPayload(emptyArgs)).toEqual({ patches: [], additions: [], overridesByExpId: {} })
   })
 
   it('cascading edit writes one patch with the new amount from the phase forward', () => {
@@ -219,6 +219,22 @@ describe('buildAdvancedEditPayload', () => {
     expect(patches[0].newByPhase[PHASE]).toEqual({ amount: 120, cycle: 'every30days', effectiveFrom: MONTH_ISO })
   })
 
+  // Regression: a Bulk Edit change used to only ever write `history`/`billingMeta`,
+  // never `monthlyOverrides` — the authoritative read layer getEffectiveAmountForMonth
+  // checks first (F37's Bug 1: "editing does nothing" when a stale override shadows
+  // the new history entry). Live-confirmed reopened for the Bulk Edit path 2026-08-26;
+  // fixed by reusing the exact same helpers the single-edit Save-scope buttons use.
+  it('cascading edit also writes overridesByExpId, matching Q+ Onward semantics', () => {
+    const { overridesByExpId } = buildAdvancedEditPayload({
+      ...emptyArgs,
+      edits: { 'exp-1': { amount: '120', cycle: 'every30days', scope: 'forward' } },
+    })
+    expect(overridesByExpId['exp-1']['2026-05']).toEqual({ perPaycheck: 30, amount: 120, cycle: 'every30days' })
+    expect(overridesByExpId['exp-1']['2026-12']).toEqual({ perPaycheck: 30, amount: 120, cycle: 'every30days' })
+    // Elapsed month before the edit's start is left untouched (no entry written)
+    expect(overridesByExpId['exp-1']['2026-01']).toBeUndefined()
+  })
+
   it('month-only edit writes a this-month patch plus a next-month revert patch', () => {
     const { patches } = buildAdvancedEditPayload({
       ...emptyArgs,
@@ -227,6 +243,27 @@ describe('buildAdvancedEditPayload', () => {
     expect(patches).toHaveLength(2)
     expect(patches[0]).toMatchObject({ effectiveFrom: MONTH_ISO, newWeekly: [20, 30, 20, 20] })
     expect(patches[1]).toMatchObject({ effectiveFrom: '2026-06-01', newWeekly: [20, 20, 20, 20] })
+  })
+
+  it('month-only edit writes overridesByExpId for only the target month', () => {
+    const { overridesByExpId } = buildAdvancedEditPayload({
+      ...emptyArgs,
+      edits: { 'exp-1': { amount: '120', cycle: 'every30days', scope: 'month-only' } },
+    })
+    expect(overridesByExpId['exp-1']['2026-05']).toEqual({ perPaycheck: 30, amount: 120, cycle: 'every30days' })
+    expect(overridesByExpId['exp-1']['2026-06']).toBeUndefined()
+  })
+
+  it('forward deletion writes a zeroed overridesByExpId from the target month onward', () => {
+    const { overridesByExpId } = buildAdvancedEditPayload({ ...emptyArgs, deletions: { 'exp-1': 'forward' } })
+    expect(overridesByExpId['exp-1']['2026-05'].perPaycheck).toBe(0)
+    expect(overridesByExpId['exp-1']['2026-12'].perPaycheck).toBe(0)
+  })
+
+  it('month-only deletion writes a zeroed overridesByExpId for only the target month', () => {
+    const { overridesByExpId } = buildAdvancedEditPayload({ ...emptyArgs, deletions: { 'exp-1': 'month-only' } })
+    expect(overridesByExpId['exp-1']['2026-05'].perPaycheck).toBe(0)
+    expect(overridesByExpId['exp-1']['2026-06']).toBeUndefined()
   })
 
   it('cascading edit respects existing byPhase overrides in later quarters', () => {

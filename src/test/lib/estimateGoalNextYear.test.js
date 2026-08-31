@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimateGoalNextYear, projectedGross, toLocalIso, buildYear, computeNet } from '../../lib/finance.js'
+import { estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, projectedGross, toLocalIso, buildYear, computeNet } from '../../lib/finance.js'
 import { DEFAULT_CONFIG, FISCAL_YEAR_START } from '../../constants/config.js'
 
 // Base-user config with round numbers so the expected net is hand-derivable:
@@ -98,6 +98,62 @@ describe('estimateGoalNextYear — expense proxy (Q4 vs December)', () => {
   it('treats missing expenses array as zero expenses', () => {
     const r = estimateGoalNextYear(1000, BASE_CFG, undefined)
     expect(r.weeklyExpenses).toBe(0)
+  })
+})
+
+describe('getGoalProjectionHorizonDate — rolling 5-year cutoff', () => {
+  it('is exactly today + GOAL_PROJECTION_HORIZON_YEARS years', () => {
+    const today = new Date(2026, 7, 28) // Aug 28, 2026
+    const horizon = getGoalProjectionHorizonDate(today)
+    expect(horizon.getFullYear()).toBe(2026 + GOAL_PROJECTION_HORIZON_YEARS)
+    expect(horizon.getMonth()).toBe(7)
+    expect(horizon.getDate()).toBe(28)
+  })
+
+  it('advances by exactly one day for every real day that passes (rolling window)', () => {
+    const today = new Date(2026, 7, 28)
+    const tomorrow = new Date(2026, 7, 29)
+    const horizonToday = getGoalProjectionHorizonDate(today)
+    const horizonTomorrow = getGoalProjectionHorizonDate(tomorrow)
+    const diffDays = (horizonTomorrow - horizonToday) / (24 * 60 * 60 * 1000)
+    expect(diffDays).toBe(1)
+  })
+
+  it('defaults to the real current date when no argument is passed', () => {
+    const before = new Date()
+    const horizon = getGoalProjectionHorizonDate()
+    const after = new Date()
+    expect(horizon.getTime()).toBeGreaterThanOrEqual(getGoalProjectionHorizonDate(before).getTime())
+    expect(horizon.getTime()).toBeLessThanOrEqual(getGoalProjectionHorizonDate(after).getTime())
+  })
+})
+
+describe('estimateGoalNextYear — 5-year projection horizon', () => {
+  it('flags a near-term estimate as within horizon', () => {
+    // $1,000 / $618.80 → completes ~2 weeks into the next fiscal year, always
+    // well within 5 years of any realistic "today".
+    const r = estimateGoalNextYear(1000, BASE_CFG, [], new Date(2026, 7, 28))
+    expect(r.withinHorizon).toBe(true)
+    expect(toLocalIso(r.horizonDate)).toBe(toLocalIso(new Date(2031, 7, 28)))
+  })
+
+  it('flags a goal whose ETA falls after today + 5 years as beyond horizon', () => {
+    // A tiny weekly surplus against a huge remaining amount pushes estDate
+    // far past a "today" set close to the estimate's own next-FY start.
+    const tinySurplusCfg = { ...BASE_CFG, customWeeklyHours: 1, baseRate: 1 }
+    const r = estimateGoalNextYear(1_000_000, tinySurplusCfg, [], new Date(2026, 7, 28))
+    expect(r).not.toBeNull()
+    expect(r.withinHorizon).toBe(false)
+  })
+
+  it('the horizon is anchored to the passed-in today, not a fixed date', () => {
+    const nearTermToday = new Date(2026, 7, 28)  // horizon: Aug 2031
+    const farFutureToday = new Date(2040, 7, 28) // horizon: Aug 2045 — comfortably covers the same estDate
+    const r1 = estimateGoalNextYear(1000, BASE_CFG, [], nearTermToday)
+    const r2 = estimateGoalNextYear(1000, BASE_CFG, [], farFutureToday)
+    expect(r1.withinHorizon).toBe(true)
+    expect(r2.withinHorizon).toBe(true)
+    expect(r1.horizonDate.getTime()).toBeLessThan(r2.horizonDate.getTime())
   })
 })
 

@@ -336,21 +336,38 @@ export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026, editedA
 // and reused without duplicating the patch-building logic.
 //
 // monthIso: full ISO-01 date string like "2026-05-01" (start-of-month)
-// Returns { patches: [...], additions: [...] } ready for saveAdvancedEdit()
+// Returns { patches: [...], additions: [...], overridesByExpId: {...} } ready
+// for saveAdvancedEdit(). `overridesByExpId[expId]` is the expense's full
+// replacement `monthlyOverrides` object — the same "new-value snapshot"
+// shape `applyQuarterForward`/`applyMonthEdit`/`clearMonth`/`clearMonthForward`
+// already produce for the single-expense Save-scope buttons (F37's Bug 1/2
+// fix: monthlyOverrides is the authoritative read layer, `history` is only
+// the baseline for untouched/future months — a patch that only ever touched
+// `history` was exactly Bug 1's "editing does nothing" defect). Bulk Edit's
+// edit/deletion patches used to only ever touch `history`/`billingMeta`,
+// reopening that same defect for any expense that already carries a
+// monthlyOverrides entry for the target month — reused the exact same
+// helpers here so this can't drift from the single-edit buttons' semantics.
 export function buildAdvancedEditPayload({ edits, deletions, additions, expenses, monthIso, phaseIdx, cpm }) {
+  const monthKey = monthIso.slice(0, 7);
+  const overridesByExpId = {};
+
   const editPatches = Object.entries(edits).flatMap(([expId, { amount, cycle, scope }]) => {
     const exp = expenses.find(e => e.id === expId);
     if (!exp) return [];
     const baseWeekly = getBaseEntryAt(exp, monthIso)?.weekly ?? [0, 0, 0, 0];
-    const perPaycheck = perPaycheckFromCycle(parseFloat(amount) || 0, cycle, cpm);
-    const newByPhase = { ...(exp.billingMeta?.byPhase ?? {}), [phaseIdx]: { amount: parseFloat(amount), cycle, effectiveFrom: monthIso } };
+    const parsedAmount = parseFloat(amount) || 0;
+    const perPaycheck = perPaycheckFromCycle(parsedAmount, cycle, cpm);
+    const newByPhase = { ...(exp.billingMeta?.byPhase ?? {}), [phaseIdx]: { amount: parsedAmount, cycle, effectiveFrom: monthIso } };
     if (scope === "month-only") {
+      overridesByExpId[expId] = applyMonthEdit(exp, monthKey, perPaycheck, parsedAmount, cycle).monthlyOverrides;
       const thisMonthWeekly = baseWeekly.map((w, q) => q === phaseIdx ? perPaycheck : w);
       return [
         { expId, effectiveFrom: monthIso, newWeekly: thisMonthWeekly, newByPhase },
         { expId, effectiveFrom: nextMonthIso(monthIso), newWeekly: [...baseWeekly] },
       ];
     }
+    overridesByExpId[expId] = applyQuarterForward(exp, monthKey, perPaycheck, parsedAmount, cycle).monthlyOverrides;
     const newWeekly = buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, exp.billingMeta?.byPhase);
     return [{ expId, effectiveFrom: monthIso, newWeekly, newByPhase }];
   });
@@ -360,10 +377,12 @@ export function buildAdvancedEditPayload({ edits, deletions, additions, expenses
     if (!exp) return [];
     const baseWeekly = getBaseEntryAt(exp, monthIso)?.weekly ?? [0, 0, 0, 0];
     if (type === "forward") {
+      overridesByExpId[expId] = clearMonthForward(exp, monthKey).monthlyOverrides;
       const newWeekly = buildCascadedWeekly(phaseIdx, 0, baseWeekly, exp.billingMeta?.byPhase);
       const newByPhase = { ...(exp.billingMeta?.byPhase ?? {}), [phaseIdx]: { amount: 0, cycle: "every30days", effectiveFrom: monthIso } };
       return [{ expId, effectiveFrom: monthIso, newWeekly, newByPhase }];
     }
+    overridesByExpId[expId] = clearMonth(exp, monthKey).monthlyOverrides;
     const zeroWeekly = baseWeekly.map((w, q) => q === phaseIdx ? 0 : w);
     return [
       { expId, effectiveFrom: monthIso, newWeekly: zeroWeekly },
@@ -385,5 +404,5 @@ export function buildAdvancedEditPayload({ edits, deletions, additions, expenses
     };
   });
 
-  return { patches: [...editPatches, ...deletionPatches], additions: additionObjects };
+  return { patches: [...editPatches, ...deletionPatches], additions: additionObjects, overridesByExpId };
 }

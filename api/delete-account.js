@@ -1,11 +1,32 @@
 import { createClient } from "@supabase/supabase-js";
-import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
+import { archiveAndDeleteAccount } from "./_accountArchive.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
+// A user who asks to delete their account must never be told "no" by an
+// infrastructure hiccup (migration 044 — see its header for the incident this
+// closes: a transient auth.admin.deleteUser failure used to surface a raw
+// "Failed to delete auth account" error while user_data had already been
+// wiped out from under them). So this route no longer risks a hard failure on
+// the step the user actually asked for:
+//   1. Stamp deletion_requested_at on the row FIRST — a plain single-column
+//      UPDATE that should essentially never fail. The instant this succeeds,
+//      the account is locked (src/lib/db.js / src/App.jsx block further app
+//      access on it) and the request is honored from the user's perspective,
+//      whatever happens next.
+//   2. Attempt the real archive-then-delete (api/_accountArchive.js — same
+//      tombstone-then-purge sequence the day-21+7 non-payment cron already
+//      uses) inline, best-effort. On success the account is fully gone
+//      immediately.
+//   3. If step 2 throws, don't fail the request — log it and leave the row
+//      locked. api/cron-subscription-lifecycle.js sweeps every locked row on
+//      its next daily run and retries the same archive until it succeeds.
+// Either way this route returns 200 once the account is locked — "we're sad
+// to see you go" is true the moment the user asked, not once every backend
+// system has caught up.
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -42,44 +63,21 @@ export default async function handler(req, res) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // §17.H — cancel any Stripe subscription before deleting the account so a
-  // deleted user isn't billed again. This stays a true hard delete (no
-  // archive — that's only the §I non-payment cron path); the cancel happens
-  // first so a failure leaves the account intact and the request retryable.
-  const { data: subRow, error: subRowError } = await adminClient
+  const now = new Date();
+  const { error: lockError } = await adminClient
     .from("user_data")
-    .select("stripe_subscription_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (subRowError) {
-    return res.status(500).json({ error: "Failed to load account" });
-  }
-
-  if (subRow?.stripe_subscription_id) {
-    if (STRIPE_CLIENTS.length === 0) {
-      console.error("delete-account: subscription on file but no Stripe key configured");
-      return res.status(500).json({ error: "Server configuration is missing" });
-    }
-    try {
-      await cancelStripeSubscription(subRow.stripe_subscription_id, STRIPE_CLIENTS);
-    } catch (err) {
-      console.error("delete-account failed to cancel Stripe subscription:", err.message);
-      return res.status(500).json({ error: "Failed to cancel subscription" });
-    }
-  }
-
-  const { error: userDataDeleteError } = await adminClient
-    .from("user_data")
-    .delete()
+    .update({ deletion_requested_at: now.toISOString() })
     .eq("user_id", userId);
-
-  if (userDataDeleteError) {
-    return res.status(500).json({ error: "Failed to delete account data" });
+  if (lockError) {
+    return res.status(500).json({ error: "Failed to process deletion request" });
   }
 
-  const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(userId);
-  if (authDeleteError) {
-    return res.status(500).json({ error: "Failed to delete auth account" });
+  try {
+    await archiveAndDeleteAccount(adminClient, userId, now, "user_requested");
+  } catch (err) {
+    // Locked but not yet purged — the daily cron sweep will finish this.
+    // Not an error the user needs to see: their request has already been honored.
+    console.error(`delete-account: inline archive failed for ${userId}, left for cron retry:`, err.message);
   }
 
   return res.status(200).json({ ok: true });

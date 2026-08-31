@@ -446,7 +446,59 @@ const GLASS_TIER = {
   overlay: { background: "rgba(0, 200, 150, 0.12)", border: "rgba(0, 200, 150, 0.28)", blur: "20px" },
 };
 
-export function MetricCard({ label, labelTooltip, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
+// ─────────────────────────────────────────────────────────────
+// EXACT MATH MARK
+// Small clickable asterisk for numbers computed with true 52-week-year
+// precision (F165) rather than the app's usual 48-week mental-math display
+// rounding. Deliberately unstyled as a button — no outline/background/border,
+// just a tiny colored glyph — so it reads as a footnote marker, not a CTA.
+// Tap toggles a small popover explaining the discrepancy; tap-outside closes it.
+// ─────────────────────────────────────────────────────────────
+export function ExactMathMark({ note = "Exact total — a true 52-week year, to the penny. Individual bill amounts above use simplified 48-week math for quick mental math, so they won't sum exactly to this number." }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} style={{ position: "relative", display: "inline-block" }}>
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label="Why this number is exact"
+        aria-expanded={open}
+        className="text-2xs"
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setOpen(o => !o); } }}
+        style={{
+          cursor: "pointer", background: "none", border: "none", outline: "none",
+          padding: "0 0 0 2px", margin: 0, color: "var(--color-teal)",
+          lineHeight: 1, verticalAlign: "super", userSelect: "none",
+        }}
+      >*</span>
+      {open && (
+        <span className="text-2xs" style={{
+          position: "absolute", zIndex: 60, bottom: "100%", left: "50%", transform: "translateX(-50%)",
+          marginBottom: "6px", width: "190px", background: "var(--color-bg-raised)",
+          border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px 10px",
+          lineHeight: 1.4, color: "var(--color-text-secondary)", textAlign: "left",
+          fontFamily: "var(--font-sans)", boxShadow: "0 4px 12px rgba(0,0,0,0.4)", whiteSpace: "normal",
+        }}>
+          {note}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function MetricCard({ label, labelTooltip, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered, exactMark = false }) {
   const { pressed, lit, handlers } = usePressFeedback();
   const btnRef = useRef(null);
   // Press fill derived from the card's own color (status green/teal/red, etc).
@@ -522,7 +574,7 @@ export function MetricCard({ label, labelTooltip, val, sub, color, size = "22px"
   const content = (
     <>
       <div className="text-xs" title={labelTooltip} style={{ letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: isButton ? "2px" : "8px", fontFamily: "var(--font-sans)", ...(labelTooltip && { cursor: "help" }) }}>
-        {label}
+        {label}{exactMark && <ExactMathMark />}
       </div>
       <div style={{ fontSize: size, fontWeight: "bold", color: valColor, fontFamily: "var(--font-display)", lineHeight: 1, fontVariantNumeric: "tabular-nums", transition: "color 0.6s ease" }}>
         {displayVal}

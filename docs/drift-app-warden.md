@@ -2494,6 +2494,31 @@ Income panel's monthly component cards (their real-calendar-week-count display, 
   and the Loans tab's `weeklyCommitted` (all via a new `exactEffective` helper alongside the
   untouched `displayEffective`); New Job Season's `weeklyAmountForBurn`
   (`newJobSeasonRunway.js`) for runway/burn calculations.
+- **Cognitive-dissonance follow-up (2026-08-31, same day) — `ExactMathMark` (`ui.jsx`).** Asked
+  directly, post-fix: which exact-math totals now sit close enough to a still-display-math number
+  that a user could notice the two don't reconcile and get confused? Answer, ranked by on-screen
+  adjacency: (1) highest — a category header total (`cTot`) or the Loans tab total
+  (`weeklyCommitted`) shown directly above/alongside the individual row cards it sums, and the
+  "[Check] Spend" summary card (`ts`) against the bill list below it; (2) moderate — the paycheck-
+  breakdown info modal's Needs/Lifestyle/Loans/Left rows, and the "First Check · [Month]"
+  future-quarter card; (3) lower — the Annual Projection/Breakdown tab (internally consistent,
+  entirely exact via `yearlyExpenseCost`/`expenseWeeklyAvg`, but a given bill's row there won't
+  match that same bill's row card back in the main Budget list) and the Cash Flow waterfall
+  (exact totals, but only lists bill *names*, no adjacent per-bill numbers to clash with). Fix:
+  a small clickable `*` (`ExactMathMark`, `ui.jsx`) next to every exact-math total identified
+  above — deliberately unstyled as a button (no outline/background/border, `.text-2xs`-sized,
+  teal) so it reads as a footnote marker, not a CTA; tap opens a short explanatory popover
+  ("Exact total — a true 52-week year, to the penny...") anchored via a local `useState` + a
+  document-click listener to close on tap-outside. Wired in three ways depending on the call
+  site's shape: an `exactMark` boolean prop on `MetricCard`/`Card` (renders after the label) for
+  the four Card-based totals (`ts`, `leftFirstCheck`, `leftThisWeek`, `weeklyCommitted`); the same
+  `exactMark` prop threaded onto `BudgetPanel.jsx`'s local `MathRow` for the paycheck-breakdown
+  modal's four rows; and a bare inline `<ExactMathMark />` for the plain-`<span>`/`<td>` totals
+  that aren't Card/MathRow-shaped (category header total, the Cash Flow waterfall's "Checking
+  Needs"/"Loans" labels, and the Breakdown tab's TRUE SPEND/REMAINING footer row labels — not the
+  per-row Weekly/Monthly/Annual cells above them, to avoid the marker itself becoming visual
+  noise on a 12-row table). Individual bill/loan row cards (display math, see below) intentionally
+  get no marker — they're the reference point, not the thing needing an asterisk.
 - **Consumers deliberately left on display math** (individual bill/loan row cards — the "mental
   math, not pennies" surface): every per-expense row amount in the Budget list, the Bulk Edit
   list, the expense detail sheet's "Per Check"/"Monthly" tiles, the Restore Deleted sheet, edit-

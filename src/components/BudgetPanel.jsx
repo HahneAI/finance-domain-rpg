@@ -7,7 +7,7 @@ import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
-import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS, ExactMathMark } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
 import { BulkEditPage } from "./BulkEditPage.jsx";
@@ -1297,7 +1297,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         status="green"
         rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
       />
-      <Card label={`${checkWord} Spend`} val={f2(ts * perCheckFactor)} rawVal={ts * perCheckFactor} color="var(--color-deduction)"
+      <Card label={`${checkWord} Spend`} exactMark val={f2(ts * perCheckFactor)} rawVal={ts * perCheckFactor} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -1309,6 +1309,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         {isViewingFuture && firstCheckWeek ? (
           <Card
             label={`First Check · ${firstCheckMonthShort}`}
+            exactMark
             val={f2(leftFirstCheck * perCheckFactor)}
             rawVal={leftFirstCheck * perCheckFactor}
             color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
@@ -1320,7 +1321,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             })() : undefined}
           />
         ) : (
-          <Card label={`Left ${thisCheckLabel}`} labelTooltip="A strategic average" val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+          <Card label={`Left ${thisCheckLabel}`} labelTooltip="A strategic average" exactMark val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
             insight={weeklyIncome > 0 ? (() => {
               const nextCheck = futureWeekNets?.[0] ?? null;
               const lastCheck = prevWeekNet ?? weeklyIncome;
@@ -1444,7 +1445,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             <div style={{ width: "100%" }}>
               <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
+                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}<ExactMathMark /></span>
                   {!readOnly && (
                   <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
                   )}
@@ -1793,10 +1794,10 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
               <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(payrollPerCheck)}%</div></div></div>
             </div>
             <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs<ExactMathMark /></div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
             </div>
             {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: "var(--color-teal)", marginBottom: "4px" }}>Loans</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-teal)" }}>{f2(loansPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: "var(--color-teal)", marginBottom: "4px" }}>Loans<ExactMathMark /></div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-teal)" }}>{f2(loansPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
             </div>}
             <div style={{ background: wrPerCheck >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div className="text-sm" style={{ fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly unallocated cashflow snapshot" : "Per-check unallocated snapshot"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wrPerCheck)}</div><div className="text-xs" style={{ color: "var(--color-text-primary)" }}>{f(wrPerCheck * checksPerYear / 12)}/mo</div></div></div>
@@ -1832,8 +1833,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             </tr>;
           })}</tbody>
           <tfoot>
-            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-teal)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
-            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
+            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-teal)" }}>TRUE SPEND<ExactMathMark /></td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
+            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING<ExactMathMark /></td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
           </tfoot>
         </table>
       </div>;
@@ -1872,7 +1873,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-teal)" />
-          <Card label={`${checkWord} Committed`} val={f2(weeklyCommitted * perCheckFactor)} rawVal={weeklyCommitted * perCheckFactor} color="var(--color-deduction)"
+          <Card label={`${checkWord} Committed`} exactMark val={f2(weeklyCommitted * perCheckFactor)} rawVal={weeklyCommitted * perCheckFactor} color="var(--color-deduction)"
             insight={weeklyIncome > 0 && weeklyCommitted > 0 ? (() => {
               const ratio = weeklyCommitted / weeklyIncome;
               const pct   = Math.round(ratio * 100);
@@ -2137,11 +2138,11 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
           {/* Expenses block */}
           <MathDivider />
-          {checkBreakdown.needsSpend > 0 && <MathRow op="−" label="Needs" val={f2(checkBreakdown.needsSpend)} />}
-          {checkBreakdown.lifestyleSpend > 0 && <MathRow op="−" label="Lifestyle" val={f2(checkBreakdown.lifestyleSpend)} />}
-          {checkBreakdown.loansSpend > 0 && <MathRow op="−" label="Loans" val={f2(checkBreakdown.loansSpend)} />}
+          {checkBreakdown.needsSpend > 0 && <MathRow op="−" label="Needs" val={f2(checkBreakdown.needsSpend)} exactMark />}
+          {checkBreakdown.lifestyleSpend > 0 && <MathRow op="−" label="Lifestyle" val={f2(checkBreakdown.lifestyleSpend)} exactMark />}
+          {checkBreakdown.loansSpend > 0 && <MathRow op="−" label="Loans" val={f2(checkBreakdown.loansSpend)} exactMark />}
           <MathDivider thick />
-          <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-deduction)"} large />
+          <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-deduction)"} large exactMark />
 
           <div style={{ marginTop: "20px", textAlign: "center" }}>
             <Pressable
@@ -2543,7 +2544,7 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
 
 // op: " " (no operator, indent), "−" (subtraction), "=" (result)
 // Deduction rows (op="−") use --color-deduction for the value; results use valColor.
-function MathRow({ op, label, val, valColor, note, large }) {
+function MathRow({ op, label, val, valColor, note, large, exactMark }) {
   const isDeduction = op === "−";
   const isResult    = op === "=";
   const computedValColor = valColor ?? (isDeduction ? "var(--color-deduction)" : "var(--color-text-primary)");
@@ -2555,7 +2556,7 @@ function MathRow({ op, label, val, valColor, note, large }) {
         fontFamily: "var(--font-mono)", width: "18px", flexShrink: 0, userSelect: "none",
       }}>{op}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
+        <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}{exactMark && <ExactMathMark />}</span>
         {note && <span className="text-2xs" style={{ color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
       </div>
       <span style={{ fontSize: large ? "19px" : "14px", fontWeight: large ? "700" : "500", color: computedValColor, fontFamily: "var(--font-mono)", letterSpacing: "-0.5px", paddingLeft: "8px" }}>{val}</span>

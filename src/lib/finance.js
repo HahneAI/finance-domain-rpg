@@ -1,5 +1,6 @@
 import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
+import { exactWeeklyCost } from "./expense.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
@@ -791,6 +792,36 @@ export function getEffectiveAmountForMonth(expense, monthKey, phaseIdx) {
   return getEffectiveAmount(expense, new Date(`${monthKey}-15`), phaseIdx);
 }
 
+// Exact ("penny-true") counterpart to getEffectiveAmountForMonth — used only
+// by backend totals (computeRemainingSpend, computeGoalTimeline, the budget
+// breakdown's Annual/Weekly/Monthly columns), never by front-facing bill
+// card/preview displays, which stay on the rounded 48-week-year math above
+// (product decision, 2026-08-31 — see expense.js's exactWeeklyCost comment).
+//
+// Every monthlyOverrides entry stores its own {amount, cycle} alongside the
+// rounded perPaycheck (every writer in expense.js does this — applyMonthEdit,
+// applyMonthEditForward, applyQuarterForward, applyAllQuarters, clearMonth*),
+// so this re-derives an exact weekly figure straight from that entry's own
+// amount/cycle instead of its rounded perPaycheck.
+//
+// Deliberately does NOT fall back to expense.billingMeta for a month with no
+// override — aiContext.js's resolveWeeklyCost carries a real incident scar
+// over exactly that shortcut (billingMeta.amount is "value entered on the
+// form," not necessarily the current figure — it went stale against
+// monthlyOverrides once already and reported numbers off by double digits).
+// Absent an override, this falls back to the same history-based resolver
+// getEffectiveAmountForMonth uses — still the rounded 48-week figure, since
+// history[] stores only the already-rounded weekly value with no amount/
+// cycle to re-derive from. Known scope limit: expenses added via "ALL QTR"
+// (BudgetPanel.jsx's addExpAllQuarters, history-only, no monthlyOverrides)
+// don't get the exact treatment until/unless they're edited through a scope
+// that does write monthlyOverrides.
+export function getExactEffectiveAmountForMonth(expense, monthKey, phaseIdx) {
+  const override = expense.monthlyOverrides?.[monthKey];
+  if (override != null) return exactWeeklyCost(override.amount, override.cycle);
+  return getEffectiveAmountForMonth(expense, monthKey, phaseIdx);
+}
+
 const MONTHLY_NORMALIZATION_FACTORS = {
   weekly: 4.33,
   biweekly: 2.166,
@@ -839,7 +870,10 @@ export function computeRemainingSpend(expenses, futureWeeks, options = {}) {
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     const monthKey = toLocalIso(week.weekEnd).slice(0, 7);
-    for (const exp of expenses) total += getEffectiveAmountForMonth(exp, monthKey, pi);
+    // Exact math (see getExactEffectiveAmountForMonth) — this total feeds Home's
+    // "Left This Week", Coach's grounding, and budget health, all real financial
+    // figures, not front-facing bill-card mental math.
+    for (const exp of expenses) total += getExactEffectiveAmountForMonth(exp, monthKey, pi);
   }
   const avgWeeklySpend = total / futureWeeks.length;
   const monthlyExpenses = normalizeToMonthlyAmount(avgWeeklySpend, "weekly");
@@ -1077,8 +1111,10 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
     const pi = getPhaseIndex(week.weekEnd);
     const monthKey = toLocalIso(week.weekEnd).slice(0, 7);
     let spend = 0;
+    // Exact math (see getExactEffectiveAmountForMonth) — goal ETAs are a
+    // longer-term projection, not front-facing bill-card mental math.
     for (const exp of expenses)
-      spend += getEffectiveAmountForMonth(exp, monthKey, pi);
+      spend += getExactEffectiveAmountForMonth(exp, monthKey, pi);
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;
     let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;

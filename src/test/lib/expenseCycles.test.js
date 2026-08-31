@@ -9,8 +9,11 @@ import {
   buildAdvancedEditPayload,
   resolveWeekOfMonthAnchor,
   resolveDueDateAnchor,
+  exactAnnualCost,
+  exactWeeklyCost,
+  EXACT_CYCLES_PER_YEAR,
 } from '../../lib/expense.js'
-import { toLocalIso } from '../../lib/finance.js'
+import { toLocalIso, getExactEffectiveAmountForMonth, getEffectiveAmountForMonth, computeRemainingSpend } from '../../lib/finance.js'
 
 // ─────────────────────────────────────────────────────────────
 // getNextDueDate — §1.C5 countdown tiles
@@ -326,5 +329,114 @@ describe('buildAdvancedEditPayload', () => {
     })
     expect(additions[0].amount).toBe(0)
     expect(additions[0].weekly).toEqual([0, 0, 0, 0])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// Exact ("penny-true") cycle math — backend totals only
+// Product decision, 2026-08-31: front-facing bill cards keep the
+// display-math 48-weeks/year approximation (perPaycheckFromCycle,
+// unchanged, verified below), while anything computing a real financial
+// total (budget breakdown Annual column, avgWeeklySpend/Left This Week,
+// goal timelines, New Job Season runway) must reconcile exactly against
+// what was actually entered, using a real 52-week year.
+// ─────────────────────────────────────────────────────────────
+
+describe('exactAnnualCost / exactWeeklyCost', () => {
+  it('uses exact cycles-per-year: weekly 52, biweekly 26, every30days 12, yearly 1', () => {
+    expect(EXACT_CYCLES_PER_YEAR).toEqual({ weekly: 52, biweekly: 26, every30days: 12, yearly: 1 })
+  })
+
+  it('a $150/yr bill has an exact annual cost of exactly $150 — no rounding drift', () => {
+    expect(exactAnnualCost(150, 'yearly')).toBe(150)
+    expect(exactWeeklyCost(150, 'yearly')).toBeCloseTo(150 / 52, 10)
+  })
+
+  it('reproduces the reported bug: display math (unchanged) rounds up from the exact figure', () => {
+    // Anthony's report: a $150/yr bill on a biweekly account showed $6.25-$6.50/check.
+    // perPaycheckFromCycle (display, untouched) rounds 150/12/4=3.125 up to $3.25/wk —
+    // ×2 for biweekly = $6.50/check. That's the correct, unchanged, intentional
+    // front-facing behavior (48-week-year mental math) — verified here so a future
+    // change can't silently "fix" it back toward exact math by mistake.
+    const displayWeekly = perPaycheckFromCycle(150, 'yearly')
+    expect(displayWeekly).toBe(3.25)
+    expect(displayWeekly * 2).toBe(6.5)
+    // The exact backend figure is genuinely different — by design, not a bug.
+    const exactWeekly = exactWeeklyCost(150, 'yearly')
+    expect(exactWeekly).toBeCloseTo(2.8846153846, 8)
+    expect(exactWeekly * 2).toBeCloseTo(5.7692307692, 8)
+  })
+
+  it('weekly/biweekly/every30days annualize exactly', () => {
+    expect(exactAnnualCost(50, 'weekly')).toBe(2600)      // 50 * 52
+    expect(exactAnnualCost(100, 'biweekly')).toBe(2600)   // 100 * 26
+    expect(exactAnnualCost(400, 'every30days')).toBe(4800) // 400 * 12
+  })
+
+  it('an unrecognized cycle falls back to every30days\' 12/year, matching normalizeCycle', () => {
+    expect(exactAnnualCost(100, 'bogus-cycle')).toBe(1200)
+  })
+
+  it('treats a missing/null amount as 0', () => {
+    expect(exactAnnualCost(null, 'yearly')).toBe(0)
+    expect(exactAnnualCost(undefined, 'weekly')).toBe(0)
+  })
+})
+
+describe('getExactEffectiveAmountForMonth', () => {
+  it('uses a monthlyOverrides entry\'s own {amount, cycle} — not its rounded perPaycheck', () => {
+    const exp = {
+      monthlyOverrides: {
+        '2026-10': { perPaycheck: 3.25, amount: 150, cycle: 'yearly' }, // rounded reserve, exact source data
+      },
+    }
+    const exact = getExactEffectiveAmountForMonth(exp, '2026-10', 3)
+    expect(exact).toBeCloseTo(150 / 52, 10)
+    expect(exact).not.toBe(3.25)
+  })
+
+  it('falls back to getEffectiveAmountForMonth (still rounded) when no override exists for that month', () => {
+    // No monthlyOverrides at all — history-only expense, e.g. addExpAllQuarters'
+    // creation path. There's no {amount, cycle} to re-derive an exact figure from,
+    // so this must match the existing (unchanged) resolver exactly, not silently
+    // return something new/wrong.
+    const exp = { history: [{ effectiveFrom: '2026-01-05', weekly: [3.25, 3.25, 3.25, 3.25] }] }
+    expect(getExactEffectiveAmountForMonth(exp, '2026-10', 3)).toBe(getEffectiveAmountForMonth(exp, '2026-10', 3))
+    expect(getExactEffectiveAmountForMonth(exp, '2026-10', 3)).toBe(3.25)
+  })
+
+  it('different months can carry genuinely different override amounts, each resolved exactly', () => {
+    const exp = {
+      monthlyOverrides: {
+        '2026-06': { perPaycheck: 10, amount: 40, cycle: 'every30days' },
+        '2026-07': { perPaycheck: 15, amount: 60, cycle: 'every30days' },
+      },
+    }
+    expect(getExactEffectiveAmountForMonth(exp, '2026-06', 1)).toBeCloseTo((40 * 12) / 52, 10)
+    expect(getExactEffectiveAmountForMonth(exp, '2026-07', 2)).toBeCloseTo((60 * 12) / 52, 10)
+  })
+})
+
+describe('computeRemainingSpend — exact yearly-bill reconciliation', () => {
+  it('a $150/yr bill (monthlyOverrides populated for every real week) contributes exactly $150 across a real 52-week year', () => {
+    // Mirrors addExpFromMonthForward: every month gets its own {perPaycheck, amount, cycle}
+    // override, all identical since the bill was never edited per-month.
+    const monthlyOverrides = {}
+    for (let m = 1; m <= 12; m++) {
+      monthlyOverrides[`2026-${String(m).padStart(2, '0')}`] = { perPaycheck: 3.25, amount: 150, cycle: 'yearly' }
+    }
+    const expense = { id: 'exp1', category: 'Needs', monthlyOverrides }
+
+    // 52 real weeks spanning the fiscal year, one per calendar week.
+    const futureWeeks = Array.from({ length: 52 }, (_, i) => ({
+      idx: i,
+      weekEnd: new Date(2026, 0, 5 + i * 7),
+    }))
+    const weeklyNets = futureWeeks.map(() => 0) // irrelevant to this assertion
+
+    const result = computeRemainingSpend([expense], futureWeeks, { weeklyIncome: 0, futureWeekNets: weeklyNets })
+    // Exactly the entered amount — not $156 (48-week display math) or $169
+    // (52 real weeks × the rounded $3.25/wk reserve).
+    expect(result.totalRemainingSpend).toBeCloseTo(150, 6)
   })
 })

@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
+import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
+import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
@@ -269,6 +269,11 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   // is built from this same displayMonthKey below).
   const displayMonthFull = MONTH_FULL[parseInt(displayMonthKey.slice(5, 7), 10) - 1];
   const displayEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, displayMonthKey, phaseIdx);
+  // Exact counterpart to displayEffective, for TOTALS (category headers, cash-flow
+  // waterfall, loans summary) — never for an individual bill/loan row's own displayed
+  // amount, which stays on the simple 48-week mental-math figure (product decision,
+  // 2026-08-31; see getExactEffectiveAmountForMonth's doc comment in finance.js).
+  const exactEffective = (exp, phaseIdx) => getExactEffectiveAmountForMonth(exp, displayMonthKey, phaseIdx);
   // Override-aware analogs of the old history-only readers (used by the debug traces below):
   // currentEffective resolves at the current month; quarterEffective at each quarter's
   // representative month. Both honor monthlyOverrides via getEffectiveAmountForMonth.
@@ -285,21 +290,29 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     }
     return null;
   };
-  // Annual cost for the breakdown tab. Roots each expense on its monthly cost the
-  // way bills are charged (monthly × 12), summing all 12 months so monthlyOverrides
-  // still flow through. See breakdownMonthlyEquiv for the per-type factor.
+  // Annual cost for the breakdown tab — a "total year summary" (product
+  // decision, 2026-08-31), so this must reconcile exactly against what was
+  // actually entered, not the front-facing bill cards' 48-week-year mental-
+  // math approximation. Sums each of the 12 real months' exact per-week rate
+  // (getExactEffectiveAmountForMonth — reads a monthlyOverrides entry's own
+  // {amount, cycle} when one exists for that month, so genuinely-varying
+  // per-month overrides still flow through correctly) × 52/12, the real
+  // weeks-per-month conversion — NOT the display math's flat ×4. For a bill
+  // that hasn't been edited per-month (the common case), this reduces to
+  // exactly the entered amount: 12 identical monthly contributions summing
+  // to exactAnnualCost. Loans get the same treatment now — no more special
+  // case needed once every row uses real-year math uniformly.
   const yearlyExpenseCost = (exp) =>
     [0,1,2,3,4,5,6,7,8,9,10,11].reduce((s, m) => {
       const key = `2026-${String(m + 1).padStart(2, "0")}`;
       const phaseIdx = Math.floor(m / 3);
-      const reserve = getEffectiveAmountForMonth(exp, key, phaseIdx);
-      return s + breakdownMonthlyEquiv(reserve, exp.type === "loan");
+      const exactWeekly = getExactEffectiveAmountForMonth(exp, key, phaseIdx);
+      return s + exactWeekly * (52 / 12);
     }, 0);
 
-  // Weekly figure for the breakdown = monthly cost ÷ 4 for bills (the simple
-  // set-aside), or a true 52-week average for loans. Ties out with each row's
-  // Monthly (× 4) and Annual (× 12) columns. 48 = 12 four-week months.
-  const expenseWeeklyAvg = (exp) => yearlyExpenseCost(exp) / (exp.type === "loan" ? 52 : 48);
+  // Exact weekly average for the breakdown — real 52-week year, uniformly for
+  // bills and loans alike (see yearlyExpenseCost above).
+  const expenseWeeklyAvg = (exp) => yearlyExpenseCost(exp) / 52;
 
   // Live expense snapshot for the detail sheet — stays in sync as edits land
   const sheetExpLive = sheetExp ? (expenses.find(e => e.id === sheetExp.id) ?? null) : null;
@@ -376,7 +389,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const regularExpenses = expenses.filter(e => e.type !== "loan");
 
   const ph = PHASES[ap];
-  const ts = expenses.reduce((s, e) => s + displayEffective(e, ap), 0);
+  const ts = expenses.reduce((s, e) => s + exactEffective(e, ap), 0);
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = weeklyIncome - ts;
@@ -407,9 +420,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const firstCheckNet = firstCheckIdx >= 0 ? (futureWeekNets?.[firstCheckIdx] ?? weeklyIncome) : weeklyIncome;
   const firstCheckMonthKey = firstCheckWeek ? toLocalIso(firstCheckWeek.weekEnd).slice(0, 7) : targetMonthForFirstCheck;
   const firstCheckPhase = firstCheckWeek ? getPhaseIndex(firstCheckWeek.weekEnd) : ap;
+  // Exact math — this feeds the real "Left [period]" dollar figure the user
+  // plans against for a specific future paycheck, not a bill-card mental-math
+  // display (product decision, 2026-08-31).
   const firstCheckExpenses = useMemo(() => {
     if (!firstCheckWeek) return avgWeeklySpend;
-    return expenses.reduce((s, e) => s + getEffectiveAmountForMonth(e, firstCheckMonthKey, firstCheckPhase), 0);
+    return expenses.reduce((s, e) => s + getExactEffectiveAmountForMonth(e, firstCheckMonthKey, firstCheckPhase), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstCheckWeek, expenses, firstCheckMonthKey, firstCheckPhase]);
   const leftFirstCheck = firstCheckNet - firstCheckExpenses;
@@ -446,12 +462,14 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     }, 0);
     const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
     const spendable = netPay - freedomAllowancePerWeek;
+    // Exact math — this is a real paycheck accounting breakdown, not a bill-card
+    // mental-math display (product decision, 2026-08-31).
     const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
-      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+      .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const lifestyleSpend = regularExpenses.filter(e => e.category === "Lifestyle")
-      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+      .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const loansSpend     = loans
-      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+      .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const left = spendable - needsSpend - lifestyleSpend - loansSpend;
     const pcf = perCheckFactor;
     return {
@@ -1358,8 +1376,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           : [];
         const displayCExp = [...draggableInCat, ...pinnedFoodInCat];
         const loanItems = cat === "Needs" ? loans : [];
-        const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
-                   + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
+        const cTot = cExp.reduce((s, e) => s + exactEffective(e, ap), 0)
+                   + loanItems.reduce((s, e) => s + exactEffective(e, ap), 0);
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
         // Paywall-expired read-only mode (§17.E "Locked expense categories"):
         // force every category collapsed and non-expandable, regardless of the
@@ -1752,9 +1770,9 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
       // weekly remainder to income (spend + remaining = weekly income) rather
       // than to wrAnnual/52, so the weekly column stays internally consistent.
       const wrWeeklyAvg = weeklyIncome - tsWeeklyAvg;
-      const checkingTot = regularExpenses.reduce((s, e) => s + displayEffective(e, ap), 0);
+      const checkingTot = regularExpenses.reduce((s, e) => s + exactEffective(e, ap), 0);
       const checkingDesc = regularExpenses.map(e => e.label).join(", ");
-      const loansTot = loans.reduce((s, e) => s + displayEffective(e, ap), 0);
+      const loansTot = loans.reduce((s, e) => s + exactEffective(e, ap), 0);
       const loansDesc = loans.map(e => e.label).join(", ");
       const payrollDeductionsTotal = currentWeek?.payrollDeductions?.total ?? 0;
       return <div>
@@ -1824,7 +1842,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     {/* LOANS TAB */}
     {view === "loans" && (() => {
       const totalOwed = loans.reduce((s, e) => s + (e.loanMeta?.totalAmount ?? 0), 0);
-      const weeklyCommitted = loans.reduce((s, e) => s + displayEffective(e, ap), 0);
+      const weeklyCommitted = loans.reduce((s, e) => s + exactEffective(e, ap), 0);
       const allPayoffDates = loans.map(e => e.loanMeta ? computeLoanPayoffDate(e.loanMeta) : null).filter(Boolean);
       const debtFreeDate = allPayoffDates.length ? allPayoffDates.reduce((a, b) => a > b ? a : b) : null;
       const weeksToDebtFree = debtFreeDate ? Math.max(Math.ceil((new Date(debtFreeDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0) : 0;

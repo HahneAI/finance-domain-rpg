@@ -143,6 +143,40 @@ export const fromMonthlyCost = (monthly, cycle) => {
 export const perPaycheckFromCycle = (amount, cycle) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / 4);
 
+// ─── Exact ("penny-true") cycle math — backend totals only ───────────────────
+// Deliberate second, un-rounded conversion path, added alongside (not
+// replacing) the display-facing 48-weeks/year math above. Product decision
+// (2026-08-31): front-facing bill cards/previews stay on the simple "4
+// weeks = 1 month" mental-math model (roundToQuarter, unchanged) — nobody
+// needs their weekly set-aside number to be an ugly fraction of a cent. But
+// anything computing a TOTAL that feeds real financial numbers (a budget
+// breakdown's Annual column, the weekly-spend figure behind Home's "Left
+// This Week"/goal timelines/Coach's grounding) must reconcile to the penny
+// against what was actually entered, using a real 52-week year — the
+// display math's 48-week approximation drifts a $150/yr bill's own "Annual"
+// total to $156 purely from rounding, which is wrong on its own terms, not
+// just imprecise.
+//
+// Cycles-per-year here are exact by definition, not derived from cycleDays:
+// "every30days" is the app's canonical monthly bucket (12/yr, matching
+// toMonthlyCost's own identity treatment of it), not a literal 30-day
+// cadence — deriving 364/30 would fight that existing convention instead of
+// completing it.
+export const EXACT_CYCLES_PER_YEAR = { weekly: 52, biweekly: 26, every30days: 12, yearly: 1 };
+
+// Same 52 both places on purpose: TOTAL_FISCAL_WEEKS can run 53 in a given
+// fiscal year (F148), but this constant is the app's other standing
+// nominal-year convention (matches fiscalWeek.js's FISCAL_WEEKS_PER_YEAR —
+// not imported here to avoid expense.js/finance.js/fiscalWeek.js forming an
+// import cycle, since fiscalWeek.js itself imports from finance.js).
+const EXACT_WEEKS_PER_YEAR = 52;
+
+export const exactAnnualCost = (amount, cycle) =>
+  (amount || 0) * (EXACT_CYCLES_PER_YEAR[normalizeCycle(cycle)] ?? 12);
+
+export const exactWeeklyCost = (amount, cycle) =>
+  exactAnnualCost(amount, cycle) / EXACT_WEEKS_PER_YEAR;
+
 export const cycleAmountFromPerPaycheck = (perWeek, cycle) =>
   fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 

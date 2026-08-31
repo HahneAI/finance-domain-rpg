@@ -1309,6 +1309,30 @@ describe('computeGoalTimeline', () => {
     expect(result[0].wN).toBeGreaterThan(0)
   })
 
+  it('uses exact (52-week) cycle math for expenses, not the display-facing 48-week approximation', () => {
+    // Product decision, 2026-08-31: goal timelines are a longer-term projection,
+    // so a monthlyOverrides-backed expense must be re-derived from its own
+    // {amount, cycle} via exact math, not summed from the rounded perPaycheck
+    // reserve. A $150/yr bill's exact weekly cost (150/52 ≈ $2.88) is
+    // meaningfully less than its rounded display reserve ($3.25/wk, from the
+    // 48-week approximation) — so goals fund measurably faster under exact
+    // math. Every month gets an override (mirrors addExpFromMonthForward).
+    const monthlyOverrides = {}
+    for (let m = 1; m <= 12; m++) {
+      monthlyOverrides[`2026-${String(m).padStart(2, '0')}`] = { perPaycheck: 3.25, amount: 150, cycle: 'yearly' }
+    }
+    const expenses = [{ id: 'yearlyBill', category: 'Needs', monthlyOverrides }]
+    const goals = [{ id: 'g1', target: 5000, label: 'Test' }]
+    const futureWeeks = Array.from({ length: 52 }, (_, i) => ({ idx: i, weekEnd: new Date(2026, 0, 5 + i * 7) }))
+    const weeklyNets = Array(52).fill(150)
+
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, expenses, 0, 0)
+    // Real per-week surplus should be 150 - (150/52), not 150 - 3.25.
+    const expectedWeeklySurplus = 150 - (150 / 52)
+    const expectedWeeks = 5000 / expectedWeeklySurplus
+    expect(result[0].wN).toBeCloseTo(expectedWeeks, 1)
+  })
+
   it('funds goals in priority order — second goal starts after first completes', () => {
     const goals = [
       { id: 'g1', target: 300, label: 'First' },

@@ -13,10 +13,84 @@ what's happening and says so, because straight talk is what respect looks like. 
 week is one round, not a referendum on the whole fight. Never violent, never opponent-framed, never
 "win/lose" — the fog (brand thesis) is fatigue to work through, not an enemy to knock out.
 
-Each axis below is a 1–5 scale. Each interaction mode gets a target score per axis. Only the first
-axis (Metaphor Intensity) is defined and anchored so far — the rest of this file is a skeleton to
-fill in a segment at a time in a future session, working through one mode at a time: write a score-1
-example, a score-5 example, then pick the target with a one-line rationale.
+Each axis below is a 1–5 scale. Only the first axis (Metaphor Intensity) is defined and anchored
+so far — the rest of this file is a skeleton to fill in a segment at a time in a future session.
+
+---
+
+## The End Goal — One Character, Context-Responsive Register (2026-08-12)
+
+**Same agent, same brand, same personality, same in-your-corner stance, every single time.**
+What's deliberately *not* constant is register — how that one character sounds moment to moment,
+tuned to what's actually happening for the user right then. A budget sitting at 99% used and a
+budget sitting at 10% used are not the same conversation, even if both are answered by the exact
+same Ask Coach chat, in the exact same voice, from the exact same character. One calls for a
+plainer, tighter, more urgent register; the other has room for the usual light seasoning. Coach
+never becomes a different character to do this — only the dial on how he says it moves, never who
+he is saying it.
+
+**This isn't a new idea for this rubric — it's already true in two shipped places, just not yet
+applied as a deliberate, general rule.** The Net Worth Trigger's three tiers (Amber/Red/Green,
+below) are exactly this: Red drops the metaphor almost entirely (~1, "urgency outranks flavor")
+while Amber and Green sit at the mode's normal 3 — the same character, reading the room, dialing
+the register to match real severity. Job Hunt Chat is scored down to 2 for the same reason, for a
+whole *mode* rather than a moment within one. **The gap this section names:** every other mode in
+the table below — Ask Coach's general chat included — is still one flat score regardless of what's
+actually being discussed inside it. The end goal is for register to flex *within* a single mode,
+by detected topic/severity, the same way the Net Worth Trigger already flexes across its three
+tiers — not a new mechanism, the existing one generalized and applied on purpose everywhere it's
+relevant, not left as something a few triggers happen to do.
+
+**What this changes about scoring, going forward:** a mode like Ask Coach doesn't get one target
+score per axis anymore once this is built out — it gets a target *per detected scenario within
+it* (see the Interaction Modes table's new sub-rows below for two seeded, still-unscored examples:
+a near-limit budget question vs. a healthy one). Filling those in is real future work, sequenced
+in `docs/TODO.md` §2 — this section exists to name the destination clearly so nobody scores a mode
+flat going forward assuming that's the finished shape.
+
+---
+
+## Calibration Methodology — Before Locking Any Target Score
+
+**A rubric score is meaningless until you know what that model actually does at each end of the
+scale — and that has to be checked per model, not assumed universal.** The axis definitions below
+(what a "1" looks like, what a "5" looks like) are hand-written descriptions of *intent* — they are
+not proof that any given Claude model can actually produce that exact register on request, or that
+two different models produce the same output for the same nominal score. DW-19 (below) is real,
+already-collected evidence this gap is not theoretical: `claude-haiku-4-5` was given a hard,
+explicit, self-checkable instruction ("no more than three, full stop — count the numbers you
+named") and still didn't hold it after two different phrasings of the same rule. If a plainly
+stated instruction can silently fail to land on one specific model, an axis *score* target — a much
+softer, stylistic instruction than a hard count — needs the same live verification before it's
+trusted, and that verification has to be re-run per model under consideration, not carried over
+from whichever model happened to be tested first.
+
+**The process, in order, before a target score for any mode/axis pair is considered locked:**
+
+1. **Elicit the natural extremes from the specific candidate model.** Prompt that model
+   deliberately toward score-1 (fully literal, no seasoning) and toward score-5 (immersive,
+   substituting boxing vocabulary for literal finance vocabulary) for the axis in question, using
+   the same underlying scenario/context each time so only the register instruction varies. This
+   produces real, model-specific example output — not the hand-written definition text above, the
+   model's *actual* attempt at each end.
+2. **Compare that output against this file's hand-written 1/5 definitions.** Where they diverge —
+   a model's "5" reads milder than the definition implies, or its "1" still leaks a stray
+   metaphor — note the divergence in this file rather than silently picking whichever felt closest;
+   a future model swap needs to know the last calibration's actual findings, not just the target
+   number that resulted from them.
+3. **Only then pick the target score, with the example pair and rationale this file already
+   requires** ("Process For Filling This In," below) — now grounded in what the model actually
+   does, not just what the rubric author intended.
+4. **Verify the target holds under live, repeated calls**, not a single sample — model output is
+   non-deterministic, and a single lucky (or unlucky) generation proves nothing. See `docs/TODO.md`
+   §2's eval-harness scoping for the mechanics (repeated trials per test case, a judge model
+   distinct from any candidate being compared, deterministic assertions in code wherever a rule is
+   literally countable — DW-19's number cap should never have been graded by another LLM call in
+   the first place).
+
+This sequencing is why the table below stays mostly `TODO`/`UNSCORED` rather than being filled in
+quickly by intuition alone — a target score written without steps 1–2 first is a guess wearing a
+number, not a calibrated one.
 
 ---
 
@@ -61,7 +135,9 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 | Net Worth Trigger — Amber (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.amber` |
 | Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
 | Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
-| Ask Coach — General Greeting (§2.B) | 3 (default) | TODO | TODO | |
+| Ask Coach — General Greeting (§2.B) | 3 (default) | TODO | TODO | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. |
+| ↳ Ask Coach — Budget near limit (e.g. ~99% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above — a real user scenario, not yet a built sub-trigger. Expected direction only, not a committed number: likely lower than the mode's flat 3, mirroring Net Worth Trigger Red's ~1 rationale (urgency outranks flavor) — needs the full calibration process above before any number is real. |
+| ↳ Ask Coach — Budget healthy (e.g. ~10% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above. Expected direction only: likely stays at the mode's default 3, mirroring Net Worth Trigger Green/Recovery — needs calibration before any number is real. |
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
 | Weekly Pre-Game Briefing (§8.C) | 3 (default) | TODO | TODO | |
 | Statement Summary (§2.D) | 3 (default) | TODO | TODO | Blocked on Statements tab existing at all |
@@ -122,12 +198,17 @@ reproduce this.
 
 ## Process For Filling This In
 
-Work through the Interaction Modes table one row at a time, per axis:
+Work through the Interaction Modes table one row at a time, per axis — each row now runs through
+"Calibration Methodology" above first, this is the same four steps restated as a per-row checklist:
 
-1. Write a score-1 example line for that mode (or the axis's floor).
-2. Write a score-5 example line for that mode (or the axis's ceiling).
-3. Pick the target score with a one-line rationale.
-4. Only then move to the next mode.
+1. **Elicit, don't assume** — pull real score-1 and score-5 output from the actual candidate
+   model for that row's scenario (not a hand-written guess at what the model would say).
+2. Write those as the score-1 and score-5 example lines, noting any divergence from this file's
+   axis definitions if the model's natural extremes don't match them cleanly.
+3. Pick the target score with a one-line rationale, grounded in the elicited examples.
+4. Verify the target holds under a live, repeated call before marking the row scored — a single
+   sample is not verification (see "Known Limitations" / DW-19 above for why this step exists).
+5. Only then move to the next mode.
 
 This file grows as a reference anchor set, not a one-shot fill — don't try to complete the whole
-table in one pass.
+table in one pass, and don't skip straight to step 3.

@@ -995,6 +995,62 @@ at elsewhere in the app.*
 
 ---
 
+### L. Personality Calibration & Model-Selection Eval Harness *(new — scoped 2026-08-12, not yet built)*
+
+*Origin: how do we actually know which Claude model represents Coach's desired brand/voice
+baseline, and what score-1/score-5 output really looks like per axis, per model, before locking
+any target in `docs/coach-personality-rubric.md`? Read that doc's "The End Goal" and "Calibration
+Methodology" sections first — this entry is the build-side scoping of the methodology named
+there. Scoping only, nothing below is implemented. Sequenced as small, deliberately narrow phases
+— each phase should be fully working before widening scope, not designed all at once.*
+
+- [ ] **Phase 1 — minimal harness, one axis, one mode.** Build the smallest possible working
+  slice: **promptfoo**, configured in `scripts/coach-eval/` inside this repo (not a new repo —
+  see the reasoning already captured in this session's own discussion, worth writing up here once
+  built), with a prompt loader that `import`s the real `ASK_COACH_SYSTEM_PROMPT` from
+  `coachPrompts.js` directly rather than a hand-copied string, so the eval can never silently test
+  a stale prompt. Scope to Metaphor Intensity only (the one fully-defined axis) against Ask
+  Coach's general mode only (the one already-scored default). Get this one slice running
+  end-to-end — including a live call against a real model, mirroring the
+  `authority-finance-coach-live-test` skill's workaround for this sandbox having no working
+  `/api/coach` route by default — before adding a second axis or mode.
+- [ ] **Phase 2 — extremes discovery (calibration steps 1–2).** Run the harness against each real
+  candidate model under consideration (at minimum Haiku, since it's the current production
+  default — `coachPrompts.js`/`api/coach.js` hardcode it today; Sonnet and/or Opus as the
+  comparison set) with prompts deliberately aimed at score-1 and score-5 for Metaphor Intensity.
+  Record the actual output per model in `coach-personality-rubric.md`'s table (replacing the
+  `TODO` cells for Ask Coach — General Greeting), and note any divergence from the axis's
+  hand-written definitions per the calibration methodology's step 2.
+- [ ] **Phase 3 — lock + verify one real target.** Pick the target score for that one row with a
+  rationale grounded in Phase 2's real output (not intuition), then verify it holds under
+  `repeat`-ed live calls (promptfoo's built-in repeat count) rather than a single sample — this is
+  the first row in the rubric that would be evidence-backed rather than reasoned-through-once.
+- [ ] **Phase 4 — apply the same harness to within-mode severity flexing.** Use the now-proven
+  harness/process on the two seeded sub-scenario rows already in the rubric table (Ask Coach —
+  Budget near limit / Budget healthy) — this is where "The End Goal" section's actual ask (register
+  flexing by detected topic/severity *within* one mode, generalizing the Net Worth Trigger's
+  Amber/Red/Green pattern) gets its first real test, not just a documented intention.
+- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
+  the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
+  Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,
+  Warmth/formality, Sentence economy, Urgency escalation) — Sentence economy first, since DW-19
+  already left real anchor data for it (`coach-personality-rubric.md`'s "Known Limitations"
+  section) rather than starting from nothing.
+- [ ] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
+  Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
+  weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
+  precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
+  needed to hit the target register, not by default.
+- [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
+  grade with a judge model that is never one of the candidates being compared (avoids a model
+  favoring its own output); use deterministic code assertions (not another LLM call) for any rule
+  that's literally countable — DW-19 is the standing example of why an LLM-graded self-check isn't
+  reliable enough for a hard numeric rule; keep call volume lean per pass the same way DW-19's own
+  live-testing did (~25K input/~1.2K output tokens, ≈$0.03 for a small round) rather than running
+  large trial counts before the harness itself is proven out.
+
+---
+
 ## 3. Master Timeline — Config History & Point-in-Time Computation Integrity
 
 **STATUS: FOUNDATION COMPLETE · PROOF-OF-CONCEPT SHIPPED · 70 FIELDS REMAIN**

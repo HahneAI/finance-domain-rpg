@@ -1,4 +1,4 @@
-import { getEffectiveAmount, getPhaseIndex, loanWeeklyAmount } from "./finance.js";
+import { getExactEffectiveAmountForMonth, getPhaseIndex, loanWeeklyAmount, toLocalIso } from "./finance.js";
 import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 
 // TODO §1 mode rebuild — New Job Season Home and Budget are now two separate
@@ -117,20 +117,22 @@ function isTrackedActiveLifestyle(exp) {
   return status === "active" && flexible && tracked;
 }
 
-// getEffectiveAmount reads expense.history — a shape loans don't natively
-// carry (they use loanMeta instead; db.js/BudgetPanel regenerate a synthetic
-// history for them via buildLoanHistory, but weeklyBurn shouldn't silently
-// depend on that having already happened elsewhere). Without this, a tracked
-// loan contributes $0 to weeklyBurn/lifestyleWeeklySpend below — real
-// payments the user is still on the hook for, missing from the Runway
-// headline with no error, the exact "silent wrong number" drift-app-warden
-// exists to catch. sumBillsDueSince/upcomingBills already dodge this via
-// getExpenseDisplayAmount (a cycle amount, not a weekly one — not reusable
-// here directly), so this is the one remaining getEffectiveAmount call site
-// that needed to be loan-aware.
+// getExactEffectiveAmountForMonth reads expense.history/monthlyOverrides — a
+// shape loans don't natively carry (they use loanMeta instead; db.js/
+// BudgetPanel regenerate a synthetic history for them via buildLoanHistory,
+// but weeklyBurn shouldn't silently depend on that having already happened
+// elsewhere). Without this, a tracked loan contributes $0 to weeklyBurn/
+// lifestyleWeeklySpend below — real payments the user is still on the hook
+// for, missing from the Runway headline with no error, the exact "silent
+// wrong number" drift-app-warden exists to catch. sumBillsDueSince/
+// upcomingBills already dodge this via getExpenseDisplayAmount (a cycle
+// amount, not a weekly one — not reusable here directly), so this is the one
+// remaining call site that needed to be loan-aware.
 function weeklyAmountForBurn(exp, todayDate, phaseIdx) {
   if (exp.type === "loan") return loanWeeklyAmount(exp.loanMeta ?? {});
-  return getEffectiveAmount(exp, todayDate, phaseIdx);
+  // Exact math — runway is a longer-term projection ("how long will my money
+  // last"), not a bill-card mental-math display (product decision, 2026-08-31).
+  return getExactEffectiveAmountForMonth(exp, toLocalIso(todayDate).slice(0, 7), phaseIdx);
 }
 
 // Sums every essential (Needs-like, active, tracked) bill's real payment

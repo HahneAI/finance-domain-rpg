@@ -368,9 +368,14 @@ export function HomePanel({
     if (!config) return {};
     const estimates = {};
     let cumulativeWeeks = 0;
+    // Same per-week rate computeGoalTimeline itself smears logged Bonus/Extra Pay,
+    // Tips/Commission, and loss events across (its perWeekGain - perWeekLost) —
+    // without this, a logged event never moves a goal that misses the current
+    // fiscal year, since estimateGoalNextYear's own formula only reads cfg/expenses.
+    const weeklyLogAdjustment = ((logNetGained ?? 0) - (logNetLost ?? 0)) / (futureWeeks?.length || 1);
     for (const g of tl) {
       if (Number.isFinite(g.eW)) continue;
-      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, goalHorizonBaseDate);
+      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses, goalHorizonBaseDate, weeklyLogAdjustment);
       if (!est) continue;
       cumulativeWeeks += est.weeksFromFYStart;
       const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);

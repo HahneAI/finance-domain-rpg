@@ -2369,6 +2369,10 @@ existing test asserted the exact figure closely enough to need updating.
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
 | `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
 | App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx now reads the same `avgWeeklySpend` value via prop (F150, fixed) — no separate copy left to drift | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match (structurally guaranteed now, not just by convention) | D1 (closed) |
+| Any new/edited summary `Card` in BudgetPanel's top row (F163) | `perCheckFactor` — EVERY dollar `val`/`rawVal` on this row must multiply by it, with zero exceptions; the "First Check" future-quarter branch shipped without it and was invisible on the weekly default (`perCheckFactor === 1` no-ops the bug) | Render as biweekly or monthly, browse to a future quarter/month via `MonthQuarterSelector`, compare the displayed card to `leftFirstCheck * perCheckFactor` computed by hand; `panels.test.jsx`'s biweekly Q4 case pins the future-quarter branch | D1 |
+| A new value added to `EXPENSE_CYCLE_OPTIONS` (F164, TODO §21 — quarterly not yet built) | `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS`, `toMonthlyCost`/`fromMonthlyCost` — `normalizeCycle()` silently falls back any cycle missing from `EXPENSE_CYCLE_OPTIONS` to `every30days` with no error, so a partial rollout mis-prices bills 3× with zero visible failure | Add the new cycle to all four together in one PR; `expenseCycles.test.js`'s round-trip case for the new cycle must exist before merge | D1 |
+| A new value added to `EXPENSE_CYCLE_OPTIONS` (F165) | `EXACT_CYCLES_PER_YEAR` (`expense.js`) — the exact-math backend-totals track needs its own cycles/year entry too, independent of F164's display-math checklist; missing it makes `exactAnnualCost` silently fall back to the every30days 12/yr bucket for the new cycle | Add the new cycle to `EXACT_CYCLES_PER_YEAR` in the same PR as F164's checklist; a round-trip test asserting `exactAnnualCost` for the new cycle | D1 |
+| Any new "total"-shaped consumer of expense amounts (a new breakdown column, a new summary card, a new Coach-grounding aggregate) (F165) | Must call `getExactEffectiveAmountForMonth`/`exactEffective`, never `getEffectiveAmountForMonth`/`displayEffective` — the latter is the rounded 48-week display figure, reserved for individual bill/loan row cards only | Ask: "is this a total, or one bill's own row?" A total that reads the rounded figure will drift from what was actually entered, the exact F165 bug | D1 |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -2416,6 +2420,191 @@ an owned roadmap entry, but queue-visible as watch item **DW-W1** in
    `expense.js` export inventory found this real behavioral split (Bulk Edit preserves an
    explicit future-quarter override; the single-expense Save buttons always overwrite it)
    completely unmapped. Added as F143 above, cross-referenced into §10.2's Block 2.
+
+**F163 — LEDGER, fixed 2026-08-31. "First Check" future-quarter card missing `perCheckFactor`
+scaling — biweekly/monthly users saw roughly half their real paycheck when browsing ahead.**
+Reported by Anthony: browsing forward through the Budget timeline's months/quarters made the
+"Left This Week" card area swing from ~$1,100 to ~$500-ish — right where the app switches from
+the current-week card to the future-quarter one.
+
+- **Root cause.** `BudgetPanel.jsx`'s summary row renders one of two cards depending on
+  `isViewingFuture` (`:400`, `ap > currentPhaseIdx || activeMonth > currentMonthKey`):
+  - Current period → `Card ... val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek *
+    perCheckFactor}` (`:1305`, correct).
+  - **Future period → `Card ... val={f2(leftFirstCheck)} rawVal={leftFirstCheck}` (`:1294–1295`,
+    no `* perCheckFactor` at all)**, where `leftFirstCheck = firstCheckNet - firstCheckExpenses`
+    (`:415`) is a raw **per-week** figure, same as `leftThisWeek`.
+  - Every other dollar `Card` on this same row (This Week's Check `:1277/1280`, Weekly Spend
+    `:1282`) already multiplies by `perCheckFactor`, and every other pay-schedule-aware display
+    in the file does too (confirmed via a full `perCheckFactor` usage audit of `BudgetPanel.jsx`
+    — this was the *only* omission found). The paycheck-breakdown info modal's own
+    `checkBreakdown` (`:456`, `pcf = perCheckFactor`) scales correctly, so the bug was confined to
+    these two Card props.
+  - `perCheckFactor = 52 / checksPerYear` is `1` on the app's weekly default, so the bug was a
+    silent no-op for the majority of accounts (matches Anthony's own read: "this app was built
+    around a base default of weekly checks and this may have just slipped through the cracks").
+    On biweekly (`perCheckFactor = 2`) it under-reported by exactly half; on monthly
+    (`perCheckFactor ≈ 4.33`) by roughly 4.33×.
+  - The two derived reads off `leftFirstCheck`/`firstCheckNet` that *aren't* display —
+    `color={leftFirstCheck >= 0 ...}` (sign-only) and `pct = leftFirstCheck / firstCheckNet`
+    (`:1298`, a same-scale ratio) — are scale-invariant and were never wrong.
+- **Fix.** `:1294–1295` now read `val={f2(leftFirstCheck * perCheckFactor)}` /
+  `rawVal={leftFirstCheck * perCheckFactor}`, matching the current-period branch exactly.
+- **Verified numbers** (biweekly, TODAY=2026-07-06 fixture, browsed to Q4 → week ending
+  2026-10-05): `firstCheckNet` $649.04, that month's `INITIAL_EXPENSES` $100/wk →
+  `leftFirstCheck` $549.04/wk. Pre-fix displayed **$549.04**; correct is **$549.04 × 2 =
+  $1,098.08** — the exact ~1,100-to-~500 swing Anthony reported.
+- **Regression coverage.** `src/test/components/panels.test.jsx`'s new BudgetPanel case renders
+  `userPaySchedule="biweekly"`, clicks the `Q4` quarter pill, and confirms the future-quarter
+  card renders; the exact `$1,098.08` figure was hand-verified against this same fixture rather
+  than asserted in the test itself — the card is a `MetricCard` with `rawVal`, which counts up
+  from 0 via `requestAnimationFrame` (Animation Rules, top of this codebase's `CLAUDE.md`)
+  instead of showing the final value on mount, and jsdom doesn't drive `rAF` forward (same
+  precedent already documented in `LogPanel.test.jsx`'s "Cash Left Behind" case). Trust the
+  hand-verified numbers in this entry over trying to assert the animated text directly in any
+  future test here.
+- **Drift trigger added:** §10.2 Block 2, "Any new/edited summary `Card` in BudgetPanel's top
+  row (F163)" — every dollar card on this row must scale by `perCheckFactor`, full stop.
+
+**F164 — GATEWAY, found (not fixed — documented only per Anthony's call) 2026-08-31. No
+"Quarterly" billing cycle exists in the expense editor.** Investigated at Anthony's request:
+"check the flow on creating an expense and using the other payment timelines, for example a
+yearly bill versus a quarterly bill."
+
+- `EXPENSE_CYCLE_OPTIONS` (`expense.js:6-11`) defines exactly four cycles — Weekly, Biweekly,
+  Every 30 days, Yearly. No quarterly/every-90-days entry. Both the Add Expense form and the Edit
+  form render their cycle `<select>` directly from this array (`BudgetPanel.jsx:1701`/
+  `:2453-2454`), so the gap is real and uniform, not a rendering slip in one surface. Loans have
+  the identical gap (`LOAN_FREQUENCY_DAYS`, `expense.js:38` — weekly/biweekly/monthly only).
+- **Not a computation bug** — everything that DOES exist checks out. Traced `toMonthlyCost`/
+  `perPaycheckFromCycle` (used at creation, `BudgetPanel.jsx`'s `addExp*` functions) against
+  `yearlyExpenseCost`/`expenseWeeklyAvg` (used in the breakdown tab display,
+  `BudgetPanel.jsx:288-302`) for the yearly cycle specifically — both consistently apply the
+  app's 4-weeks/month, 48-weeks/year approximation for non-loan bills, and `expenseCycles.test.js`
+  already covers the yearly round-trip. No drift found between what a yearly bill computes to at
+  creation and what it displays as later.
+- **Why this matters more than a cosmetic gap**: `normalizeCycle()` (`expense.js:15-16`) silently
+  maps any unrecognized cycle string to `"every30days"` instead of erroring. A future change that
+  ever starts writing a quarterly cycle value without also adding it to `EXPENSE_CYCLE_OPTIONS`
+  first would get silently treated as monthly — a 3× under-count with no visible failure. This is
+  the actual drift risk, not the missing UI option by itself.
+- **Also found in the same pass, not a live bug**: every `perPaycheckFromCycle(amount, cycle,
+  cpm)` call site (`BudgetPanel.jsx`, `BulkEditPage.jsx`, `expense.js:360/395`) passes a `cpm`
+  third argument the function's real signature (`(amount, cycle)`, `expense.js:143-144`) doesn't
+  use — dead parameter, zero effect on output, flagged so nobody assumes `cpm` changes the
+  reserve math while reading these call sites.
+- **Disposition**: Anthony's explicit call was document-only, not build-now — tracked as
+  `docs/TODO.md` §21 with the full "if/when built" checklist (every file this ripples through:
+  `EXPENSE_CYCLE_OPTIONS`, `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS`, `toMonthlyCost`/
+  `fromMonthlyCost`, both cycle test files). Filed here as a GATEWAY finding (routes/gates a
+  choice the UI never offers) rather than LEDGER, since no stored data is computed wrong today —
+  the risk is entirely in what a *future* change could silently mis-route through
+  `normalizeCycle`'s fallback.
+- **Drift trigger:** any change that adds a new value to `EXPENSE_CYCLE_OPTIONS` must, in the
+  same PR, update `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS` (if loans should support it too), and
+  `toMonthlyCost`/`fromMonthlyCost` together — `normalizeCycle`'s silent fallback means a partial
+  rollout fails silently, not loudly.
+
+**F165 — LEDGER, fixed 2026-08-31. Split cycle math into two deliberate tracks: display
+(48-weeks/year, unchanged) vs. backend totals (real 52-weeks/year, new).** Direct follow-on
+from F164 — Anthony asked what a $150/yr bill on a biweekly account actually computes to
+("$6.25 or $6.50 a check"), which traced to the display math ($3.25/wk × 2, correct as
+designed) but surfaced a second, real defect: the Budget breakdown's own "Annual" total for that
+same $150/yr bill came out to **$156** — the display math's rounding compounding through
+`yearlyExpenseCost`'s ×4×12 round-trip. Product decision (Anthony, 2026-08-31): front-facing
+bill cards keep the simple 48-week mental-math model on purpose ("we don't promise exact
+pennies... we're not worried about the penny, we're worried about the dollar") — but **any
+total** (a breakdown Annual column, avgWeeklySpend/Left This Week, goal timelines, New Job
+Season runway, any income/checks-coming-in summary) must reconcile to the penny against what
+was actually entered, using a real 52-week year. Explicit exception, honored untouched: the
+Income panel's monthly component cards (their real-calendar-week-count display, including
+5-week months) — that's a different, already-correct system, out of scope.
+
+- **New exact-math primitives** (`expense.js`) — additive, doesn't touch the existing display
+  math at all: `EXACT_CYCLES_PER_YEAR = { weekly: 52, biweekly: 26, every30days: 12, yearly: 1 }`
+  (cycles/year by definition, not derived from `cycleDays` — `every30days` stays the app's
+  canonical 12/yr monthly bucket, matching `toMonthlyCost`'s existing identity treatment of it),
+  `exactAnnualCost(amount, cycle)`, `exactWeeklyCost(amount, cycle) = exactAnnualCost/52`.
+- **New resolver** (`finance.js`) — `getExactEffectiveAmountForMonth(expense, monthKey,
+  phaseIdx)`: when a `monthlyOverrides[monthKey]` entry exists, re-derives an exact weekly
+  figure from **that entry's own `{amount, cycle}`** (every `monthlyOverrides` writer in
+  `expense.js` — `applyMonthEdit`, `applyMonthEditForward`, `applyQuarterForward`,
+  `applyAllQuarters`, `clearMonth`, `clearMonthForward` — always writes `amount`/`cycle`
+  alongside the rounded `perPaycheck`, confirmed by inventory before relying on it). Absent an
+  override, falls back unchanged to the existing (rounded) `getEffectiveAmountForMonth` —
+  `history[]` stores only the already-rounded weekly figure with no `amount`/`cycle` to
+  re-derive from, so there is genuinely nothing more exact available for that case.
+- **Deliberately does NOT fall back to `billingMeta`** for a month with no override. This
+  mirrors a real prior incident already on record: `aiContext.js`'s `resolveWeeklyCost` carries
+  a comment scar from exactly that shortcut — "billingMeta.amount is only the value entered on
+  the form; it's never the authoritative current figure... it previously was, and disagreed with
+  the real number by double digits on a live test." Confirmed the same trap still applies:
+  `applyMonthEdit` ("This Month Only" edits) never touches `billingMeta`, so it can go stale the
+  moment any per-month edit lands. `getExactEffectiveAmountForMonth` never reads it.
+- **Known scope limit, not silently swept under the rug**: an expense created via
+  `addExpAllQuarters` ("ALL QTR" button) writes only `history`, no `monthlyOverrides` at all — no
+  exact treatment is possible for it until/unless it's later edited through a scope that does
+  write overrides (any of the other three save-scope buttons, or Bulk Edit). Flagged in the
+  function's own doc comment so this isn't rediscovered as a surprise.
+- **Consumers switched to exact math** (all real totals/projections): `computeRemainingSpend`
+  and `computeGoalTimeline` (`finance.js` — both already single-sourced per F150, so every
+  downstream reader — Home's Left This Week, Coach's grounding, goal ETAs — inherited the fix
+  with no additional call sites to touch); `BudgetPanel.jsx`'s `yearlyExpenseCost`/
+  `expenseWeeklyAvg` (breakdown tab's Weekly/Monthly/Annual columns and TRUE SPEND/REMAINING
+  footer — loans no longer need their own `/52` special case, every row is uniformly exact now);
+  the "First Check · [Month]" future-quarter card's `firstCheckExpenses`; the paycheck-breakdown
+  info modal's `needsSpend`/`lifestyleSpend`/`loansSpend`; the "[Check] Spend" summary card
+  (`ts`), category header totals (`cTot`), the Cash Flow waterfall's `checkingTot`/`loansTot`,
+  and the Loans tab's `weeklyCommitted` (all via a new `exactEffective` helper alongside the
+  untouched `displayEffective`); New Job Season's `weeklyAmountForBurn`
+  (`newJobSeasonRunway.js`) for runway/burn calculations.
+- **Cognitive-dissonance follow-up (2026-08-31, same day) — `ExactMathMark` (`ui.jsx`).** Asked
+  directly, post-fix: which exact-math totals now sit close enough to a still-display-math number
+  that a user could notice the two don't reconcile and get confused? Answer, ranked by on-screen
+  adjacency: (1) highest — a category header total (`cTot`) or the Loans tab total
+  (`weeklyCommitted`) shown directly above/alongside the individual row cards it sums, and the
+  "[Check] Spend" summary card (`ts`) against the bill list below it; (2) moderate — the paycheck-
+  breakdown info modal's Needs/Lifestyle/Loans/Left rows, and the "First Check · [Month]"
+  future-quarter card; (3) lower — the Annual Projection/Breakdown tab (internally consistent,
+  entirely exact via `yearlyExpenseCost`/`expenseWeeklyAvg`, but a given bill's row there won't
+  match that same bill's row card back in the main Budget list) and the Cash Flow waterfall
+  (exact totals, but only lists bill *names*, no adjacent per-bill numbers to clash with). Fix:
+  a small clickable `*` (`ExactMathMark`, `ui.jsx`) next to every exact-math total identified
+  above — deliberately unstyled as a button (no outline/background/border, `.text-2xs`-sized,
+  teal) so it reads as a footnote marker, not a CTA; tap opens a short explanatory popover
+  ("Exact total — a true 52-week year, to the penny...") anchored via a local `useState` + a
+  document-click listener to close on tap-outside. Wired in three ways depending on the call
+  site's shape: an `exactMark` boolean prop on `MetricCard`/`Card` (renders after the label) for
+  the four Card-based totals (`ts`, `leftFirstCheck`, `leftThisWeek`, `weeklyCommitted`); the same
+  `exactMark` prop threaded onto `BudgetPanel.jsx`'s local `MathRow` for the paycheck-breakdown
+  modal's four rows; and a bare inline `<ExactMathMark />` for the plain-`<span>`/`<td>` totals
+  that aren't Card/MathRow-shaped (category header total, the Cash Flow waterfall's "Checking
+  Needs"/"Loans" labels, and the Breakdown tab's TRUE SPEND/REMAINING footer row labels — not the
+  per-row Weekly/Monthly/Annual cells above them, to avoid the marker itself becoming visual
+  noise on a 12-row table). Individual bill/loan row cards (display math, see below) intentionally
+  get no marker — they're the reference point, not the thing needing an asterisk.
+- **Consumers deliberately left on display math** (individual bill/loan row cards — the "mental
+  math, not pennies" surface): every per-expense row amount in the Budget list, the Bulk Edit
+  list, the expense detail sheet's "Per Check"/"Monthly" tiles, the Restore Deleted sheet, edit-
+  form pre-fill (`startEdit` — must show the currently-*stored* value, not a recomputed one, or
+  editing would silently change the number), and Coach's per-expense "~$X/wk" mentions
+  (`aiContext.js`'s `resolveWeeklyCost` — already `~`-prefixed as approximate, and the one place
+  that already carries the billingMeta-staleness scar tissue above; left untouched on purpose).
+  Coach's *aggregate* "Weekly spend: $X" line already reads the `avgWeeklySpend` prop, so it
+  inherited the exact fix for free without being touched directly.
+- **Verified numbers**: `expenseCycles.test.js`'s new `computeRemainingSpend` case reproduces
+  the exact scenario — a $150/yr bill, monthlyOverrides populated for all 12 months (mirrors
+  `addExpFromMonthForward`), summed across a real 52-week year — and asserts the total lands on
+  exactly $150.00, not the old $156 (48-week breakdown math) or $169 (rounded $3.25/wk reserve ×
+  the real, sometimes-53-week fiscal year).
+- **Not changed**: `TOTAL_FISCAL_WEEKS` (F148) can still run 53 in a given fiscal year;
+  `exactWeeklyCost` deliberately divides by a flat 52 (matching `fiscalWeek.js`'s own
+  `FISCAL_WEEKS_PER_YEAR` nominal-year convention — not imported directly into `expense.js` to
+  avoid an `expense.js`/`finance.js`/`fiscalWeek.js` import cycle, since `fiscalWeek.js` itself
+  imports from `finance.js`), not the real week count for a given year. This is a deliberately
+  bounded improvement (~15% error down to ~2% in the 53-week-year edge case), not a claim of
+  perfect calendar-day precision — consistent with Anthony's own framing ("essentially display
+  everything like it is a 48/52 week year for simplicity... we're not worried about the penny").
 
 ---
 

@@ -5106,3 +5106,60 @@ alongside it once the data exists to compute one, not replacing what's there.
   brainstorm-and-scope pass, not something to design in this section — flagged here so the due-date
   field (§A) is built with an eye toward "this needs to export cleanly later" rather than a shape
   that would need reworking to support it.
+
+---
+
+## 21. Missing "Quarterly" Billing Cycle — Expense Editor Gap
+
+*Found 2026-08-31 investigating the expense create/edit flow across billing cycles at Anthony's
+request ("check the flow on creating an expense and using the other payment timelines, for
+example a yearly bill versus a quarterly bill"). Not a computation bug — the cycle math that does
+exist (weekly/biweekly/every30days/yearly) is correct and consistent between creation and
+display. The gap is that a fifth, common real-world cadence was never added as an option at all.
+Anthony's call: document only, don't build yet (2026-08-31).*
+
+- **`EXPENSE_CYCLE_OPTIONS`** (`lib/expense.js:6-11`) defines exactly four cycles — Weekly (7d),
+  Biweekly (14d), Every 30 days (30d), Yearly (365d). No quarterly/every-90-days entry exists.
+  Both the Add Expense form and the Edit form (`BudgetPanel.jsx:1701`/`:2453-2454`) render their
+  `<select>` options directly from this array, so the gap is uniform across both surfaces —
+  there's no hidden third place a quarterly option could have been added and missed.
+- **Loans have the identical gap** — `LOAN_FREQUENCY_DAYS` (`lib/expense.js:38`) only maps
+  `weekly`/`biweekly`/`monthly`, no quarterly.
+- **A real user impact, not just a missing label**: someone with a genuinely quarterly bill
+  (many insurance premiums, some subscriptions, estimated tax payments) has no accurate way to
+  enter it today. Picking "Every 30 days" undercounts a ~91-day cycle's due-date cadence by a few
+  days each cycle; back-calculating a per-quarter amount into "Yearly" (amount × 4) gets the
+  weekly-reserve math right but produces a wrong due-date countdown (the real next due date is
+  ~13 weeks out, not up to a year).
+- **Latent trap for future work**: `normalizeCycle()` (`lib/expense.js:15-16`) silently maps any
+  cycle string not in `EXPENSE_CYCLE_OPTIONS` to `"every30days"` rather than erroring. If a
+  quarterly cycle value is ever introduced by a future change (a new writer, imported/legacy
+  data, a typo'd constant) without also adding it to `EXPENSE_CYCLE_OPTIONS`, it would be
+  **silently treated as a monthly bill** — a 3× under-count with no visible warning anywhere.
+  Anyone implementing this section must add the cycle to `EXPENSE_CYCLE_OPTIONS` (and
+  `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS` for loans) in the same change that starts writing it
+  anywhere, never after.
+- **Minor cleanup found in the same pass, not a functional bug**: every call site of
+  `perPaycheckFromCycle(amount, cycle, cpm)` (`BudgetPanel.jsx`, `BulkEditPage.jsx`,
+  `expense.js:360/395`) passes a third `cpm` argument that the function's actual signature
+  (`(amount, cycle) => ...`, `expense.js:143-144`) doesn't use — a harmless dead parameter (JS
+  silently drops the extra arg), but worth trimming from every call site if this area gets
+  touched for the quarterly work, so a future reader doesn't assume `cpm` affects the reserve
+  math.
+
+**If/when this gets built:**
+- [ ] Add `{ value: "quarterly", label: "Quarterly", days: 91 }` (or `every90days` to match the
+  existing `every30days` naming convention — pick one and use it consistently) to
+  `EXPENSE_CYCLE_OPTIONS`.
+- [ ] Add the matching entry to `CYCLE_SUFFIXES` (`expense.js:81`, e.g. `quarterly: "qtr"`).
+- [ ] Add the matching entry to `LOAN_FREQUENCY_DAYS` (`expense.js:38`) so loans get the same
+  option.
+- [ ] Extend `toMonthlyCost`/`fromMonthlyCost` (`expense.js:120-136`) with the quarterly branch
+  (`amount / 3` monthly-equivalent, matching the existing 4-weeks-per-month/48-weeks-per-year
+  approximation the other non-loan cycles use — don't introduce a real calendar-day-weighted figure
+  that would disagree with how weekly/yearly are already approximated).
+- [ ] Extend `expenseCycles.test.js`/`expense.test.js` with a quarterly case mirroring the
+  existing yearly one (`toMonthlyCost`, `getNextDueDate`, `cycleAmountFromPerPaycheck` round-trip).
+- [ ] Cross-check `docs/drift-app-warden.md` §10 (Budget Panel) — this doc's own §10.2 Block 2
+  trigger map should get a row for "adding a new `EXPENSE_CYCLE_OPTIONS` entry" once this ships,
+  since every consumer listed above needs to move together.

@@ -2305,6 +2305,7 @@ existing test asserted the exact figure closely enough to need updating.
 | `latestPastEntry`/`getBaseEntryAt`'s cascade-preserve rule (F143, Bulk Edit only) vs. F37's always-overwrite rule | Any future "unify the edit surfaces" refactor — the two rules are deliberately different, not drift to converge | Edit forward past an explicit override via a single-expense button vs. Bulk Edit — outcomes must stay different | D1 (guarded, not open) |
 | `FISCAL_YEAR_END_MONTH_KEY`/`TOTAL_FISCAL_WEEKS` (F148, Spine A) | Every "forward through fiscal year end" expense writer (F149) — `monthKeysThroughFiscalYearEnd`'s only input | If F148's constants ever move, re-run F149's regression suite; a stale `<= 12` loop anywhere is D1 | D1 |
 | App.jsx's New Job Season `projectableExpenses` filter (feeds F16 Home tile) | BudgetPanel.jsx now reads the same `avgWeeklySpend` value via prop (F150, fixed) — no separate copy left to drift | Toggle New Job Season / pause an expense; Home and Budget's left-this-week figures must still match (structurally guaranteed now, not just by convention) | D1 (closed) |
+| Any new/edited summary `Card` in BudgetPanel's top row (F163) | `perCheckFactor` — EVERY dollar `val`/`rawVal` on this row must multiply by it, with zero exceptions; the "First Check" future-quarter branch shipped without it and was invisible on the weekly default (`perCheckFactor === 1` no-ops the bug) | Render as biweekly or monthly, browse to a future quarter/month via `MonthQuarterSelector`, compare the displayed card to `leftFirstCheck * perCheckFactor` computed by hand; `panels.test.jsx`'s biweekly Q4 case pins the future-quarter branch | D1 |
 
 ### 10.3 Block 3 — Gate matrix
 
@@ -2352,6 +2353,51 @@ an owned roadmap entry, but queue-visible as watch item **DW-W1** in
    `expense.js` export inventory found this real behavioral split (Bulk Edit preserves an
    explicit future-quarter override; the single-expense Save buttons always overwrite it)
    completely unmapped. Added as F143 above, cross-referenced into §10.2's Block 2.
+
+**F163 — LEDGER, fixed 2026-08-31. "First Check" future-quarter card missing `perCheckFactor`
+scaling — biweekly/monthly users saw roughly half their real paycheck when browsing ahead.**
+Reported by Anthony: browsing forward through the Budget timeline's months/quarters made the
+"Left This Week" card area swing from ~$1,100 to ~$500-ish — right where the app switches from
+the current-week card to the future-quarter one.
+
+- **Root cause.** `BudgetPanel.jsx`'s summary row renders one of two cards depending on
+  `isViewingFuture` (`:400`, `ap > currentPhaseIdx || activeMonth > currentMonthKey`):
+  - Current period → `Card ... val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek *
+    perCheckFactor}` (`:1305`, correct).
+  - **Future period → `Card ... val={f2(leftFirstCheck)} rawVal={leftFirstCheck}` (`:1294–1295`,
+    no `* perCheckFactor` at all)**, where `leftFirstCheck = firstCheckNet - firstCheckExpenses`
+    (`:415`) is a raw **per-week** figure, same as `leftThisWeek`.
+  - Every other dollar `Card` on this same row (This Week's Check `:1277/1280`, Weekly Spend
+    `:1282`) already multiplies by `perCheckFactor`, and every other pay-schedule-aware display
+    in the file does too (confirmed via a full `perCheckFactor` usage audit of `BudgetPanel.jsx`
+    — this was the *only* omission found). The paycheck-breakdown info modal's own
+    `checkBreakdown` (`:456`, `pcf = perCheckFactor`) scales correctly, so the bug was confined to
+    these two Card props.
+  - `perCheckFactor = 52 / checksPerYear` is `1` on the app's weekly default, so the bug was a
+    silent no-op for the majority of accounts (matches Anthony's own read: "this app was built
+    around a base default of weekly checks and this may have just slipped through the cracks").
+    On biweekly (`perCheckFactor = 2`) it under-reported by exactly half; on monthly
+    (`perCheckFactor ≈ 4.33`) by roughly 4.33×.
+  - The two derived reads off `leftFirstCheck`/`firstCheckNet` that *aren't* display —
+    `color={leftFirstCheck >= 0 ...}` (sign-only) and `pct = leftFirstCheck / firstCheckNet`
+    (`:1298`, a same-scale ratio) — are scale-invariant and were never wrong.
+- **Fix.** `:1294–1295` now read `val={f2(leftFirstCheck * perCheckFactor)}` /
+  `rawVal={leftFirstCheck * perCheckFactor}`, matching the current-period branch exactly.
+- **Verified numbers** (biweekly, TODAY=2026-07-06 fixture, browsed to Q4 → week ending
+  2026-10-05): `firstCheckNet` $649.04, that month's `INITIAL_EXPENSES` $100/wk →
+  `leftFirstCheck` $549.04/wk. Pre-fix displayed **$549.04**; correct is **$549.04 × 2 =
+  $1,098.08** — the exact ~1,100-to-~500 swing Anthony reported.
+- **Regression coverage.** `src/test/components/panels.test.jsx`'s new BudgetPanel case renders
+  `userPaySchedule="biweekly"`, clicks the `Q4` quarter pill, and confirms the future-quarter
+  card renders; the exact `$1,098.08` figure was hand-verified against this same fixture rather
+  than asserted in the test itself — the card is a `MetricCard` with `rawVal`, which counts up
+  from 0 via `requestAnimationFrame` (Animation Rules, top of this codebase's `CLAUDE.md`)
+  instead of showing the final value on mount, and jsdom doesn't drive `rAF` forward (same
+  precedent already documented in `LogPanel.test.jsx`'s "Cash Left Behind" case). Trust the
+  hand-verified numbers in this entry over trying to assert the animated text directly in any
+  future test here.
+- **Drift trigger added:** §10.2 Block 2, "Any new/edited summary `Card` in BudgetPanel's top
+  row (F163)" — every dollar card on this row must scale by `perCheckFactor`, full stop.
 
 ---
 

@@ -1291,8 +1291,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         {isViewingFuture && firstCheckWeek ? (
           <Card
             label={`First Check · ${firstCheckMonthShort}`}
-            val={f2(leftFirstCheck)}
-            rawVal={leftFirstCheck}
+            val={f2(leftFirstCheck * perCheckFactor)}
+            rawVal={leftFirstCheck * perCheckFactor}
             color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
             insight={weeklyIncome > 0 ? (() => {
               const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);

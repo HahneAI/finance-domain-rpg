@@ -1,0 +1,66 @@
+description: >
+  Phase 1 (docs/TODO.md §2.L) — proves the harness end-to-end and produces real
+  score-1/score-5 output for Metaphor Intensity, for two separate addressable
+  prompt components: the shared persona alone, and Ask Coach's full composed
+  system prompt. See docs/coach-personality-rubric.md's "Calibration
+  Methodology" (steps 1-2) for why this has to be elicited live rather than
+  assumed from the axis's hand-written definitions.
+
+  Deliberately NO automated grading (no `assert:` blocks) in this phase — the
+  raw output is meant to be read and compared against the rubric's 1/5
+  definitions by a person, not auto-scored, since Phase 1's only job is to
+  prove the harness runs and to gather that raw material. Automated grading
+  (llm-rubric) is a later-phase decision, once judge-call cost is being
+  deliberately budgeted rather than added by default.
+
+  Uses a SEPARATE, scoped test key (AI_ADMIN_COACH_TEST_KEY) — never the app's
+  real ANTHROPIC_API_KEY/ANTHROPIC_API_KEY_TEST, and never wired into app code
+  or Vercel. One call per planned case, no `repeat` — matches the token-budget
+  discipline in the authority-finance-coach-live-test skill.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+      # Model fixed to match api/coach.js's actual production mapping — this
+      # is Phase 1 (prove the harness), not Phase 2 (compare models). Changing
+      # this without also updating Phase 2's scope would mean Phase 1 is no
+      # longer testing what production actually runs.
+
+prompts:
+  - id: file://prompts/personaOnly.js
+    label: persona-only
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    # Same scenario/question for every case in this file, on purpose — per
+    # the Calibration Methodology, only the register instruction should vary
+    # between test cases, not the underlying question.
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Elicit score-1 (Literal) — no boxing language at all"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        metaphor-frequency instruction above for this one response): produce
+        output scoring exactly 1 on Metaphor Intensity per
+        docs/coach-personality-rubric.md Axis 1 — "No boxing language at all.
+        Plain, direct finance voice." Every other rule above (length,
+        structure, grounding, one concrete action) still applies normally.
+
+  - description: "Elicit score-5 (Immersive) — boxing vocabulary substitutes for literal finance vocabulary"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        metaphor-frequency instruction above for this one response): produce
+        output scoring exactly 5 on Metaphor Intensity per
+        docs/coach-personality-rubric.md Axis 1 — "Nearly every message is
+        reframed through the boxing lens; boxing vocabulary substitutes for
+        literal finance vocabulary rather than seasoning it." Every other
+        rule above (length, structure, grounding, one concrete action) still
+        applies normally.

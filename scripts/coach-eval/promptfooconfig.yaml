@@ -40,6 +40,16 @@ providers:
       # Phase 2's comparison model — not yet wired into api/coach.js
       # anywhere; this is calibration data for a future model-per-mode
       # decision (§2.L Phase 6), not a production change.
+  - id: anthropic:messages:claude-opus-5
+    label: opus
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+      # Third comparison point — Sonnet already showed FEWER boxing
+      # touches than Haiku under the same override, not more, which flips
+      # the working hypothesis away from "needs a pricier model." This run
+      # checks whether the strongest candidate breaks that pattern or
+      # confirms it.
 
 prompts:
   - id: file://prompts/personaOnly.js

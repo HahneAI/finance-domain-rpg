@@ -216,16 +216,33 @@ correctly used, just not remotely "nearly every message" or "substitutes for lit
 against Haiku's two. A materially more capable model did not get closer to the definition; if
 anything it complied less with the explicit push toward the extreme.
 
-**Revised open question — now aimed at the rubric's own scale, not at model selection.** Two
-different models, independently, converge on roughly the same practical ceiling well below the
-written "5" definition, and the better model didn't move the needle. That's a different shape of
-problem than "which model to route this to" (§2.L Phase 6 no longer looks like the right lever
-here) — it now looks more like Axis 1's own "5" anchor may describe a register no
-instruction-following-tuned assistant model actually produces for this persona, not a gap any
-current candidate model closes. Worth deliberately testing whether `claude-opus-5` breaks this
-pattern before concluding that (Phase 2 is not fully closed on that account), but the working
-hypothesis going in should now be "probably not model-specific," not "probably needs a pricier
-model" — don't let Phase 6 quietly assume the latter.
+**Update (2026-09-01, same day, third comparison point) — `claude-opus-5` breaks the pattern the
+other two shared.** Same override, same test account, same two components. Score-1 held cleanly
+on both, same as Haiku and Sonnet — all three models agree on the floor. Score-5 did **not**
+converge with Haiku/Sonnet this time: Opus produced genuinely dense, extended boxing imagery
+running through nearly every clause of both responses — "eleven rounds in," "corner," "at the
+bell," "purse," "62 percent work rate," "swinging wide," "carrying 62% of the weight," "a solid
+working stance," "nothing in the ring... to train toward" — while still stating every dollar
+figure plainly alongside it. This reads as genuine Signature (4), arguably brushing Immersive (5)
+in places ("Next round's purse is $900" frames the whole clause through the metaphor, not just
+seasoning it) — nowhere close to Haiku's/Sonnet's 1-2 mild touches on the same instruction.
+
+**So the prior "probably not model-specific" conclusion above was premature — walked back, not
+deleted, since the reasoning that led to it was sound given what was known at the time.** The real
+shape of the finding across all three models: score-1 is reliable on any of them; score-5
+compliance is **not** a smooth function of model capability (Sonnet, the middle tier, complied
+*less* than Haiku) — it's specifically Opus that unlocks real range on this axis. Don't
+over-generalize "stronger model helps" from one model beating the other two; this is one data
+point on one axis, not a trend line.
+
+**This is the kind of finding worth flagging before it becomes assumed direction, not folding
+in silently:** if Opus can reliably reach a register Haiku/Sonnet structurally can't on this axis,
+that's a real, concrete product lever — not "which model does Ask Coach run on" broadly, but
+"does a specific, rare, high-significance moment (a Burnout Sentinel check-in, a Heirloom Letter
+delivery, a major goal completion) justify a one-off Opus call for a genuinely richer personality
+moment, the way the app doesn't need every moment to be that rich." That's a real product decision
+with real cost tradeoffs, not something to default into via this eval harness — surfacing it here,
+not deciding it here.
 
 ---
 

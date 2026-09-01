@@ -66,16 +66,18 @@ retry-on-a-hunch.** Concretely for this file:
   `coach-personality-rubric.md`: both components hold score-1 cleanly;
   neither reaches score-5 even under an explicit override — see "Known
   Limitations" there for what that means for Phase 2.
-- [~] Phase 2 — in progress. Added `claude-sonnet-5` (4 more live calls,
-  `--filter-providers sonnet` to avoid re-spending on Haiku's already-valid
-  results): score-1 held cleanly, score-5 did not — Sonnet used *fewer*
-  boxing touches than Haiku, not more. Reframes the open question from
-  "which model" to "is the rubric's own '5' anchor achievable by any
-  current assistant model for this persona" — see `coach-personality-
-  rubric.md`'s "Known Limitations" for the full writeup. `claude-opus-5`
-  not yet tested; worth one more comparison point before treating this as
-  settled, but the working hypothesis has flipped away from "needs a
-  pricier model."
+- [x] Phase 2 — done, 3 models compared (Haiku, Sonnet, Opus — 8 more live
+  calls total, `--filter-providers` scoped so each model's run only spent
+  on its own 4 new combinations). All three hold score-1 cleanly.
+  Score-5 does NOT converge across models the way score-1 does: Haiku ~2
+  mild touches, Sonnet ~1 (less than Haiku, not more), Opus genuinely
+  dense/extended boxing imagery through nearly every clause — real
+  Signature (4), arguably brushing Immersive (5). Score-5 compliance is
+  not a smooth function of model tier (the middle model did worst); it's
+  specifically Opus that unlocks real range on this axis. Full writeup
+  and the resulting product-lever question (worth a one-off Opus call for
+  a rare, high-significance moment?) in `coach-personality-rubric.md`'s
+  "Known Limitations" — flagged there for discussion, not decided.
 - [ ] Phase 3 — lock + verify one real target under repeated calls.
 - [ ] Phase 4 — the within-mode severity-flexing rows (budget near-limit /
   healthy, seeded in the rubric table).

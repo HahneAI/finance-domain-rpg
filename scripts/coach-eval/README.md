@@ -74,11 +74,24 @@ retry-on-a-hunch.** Concretely for this file:
   dense/extended boxing imagery through nearly every clause — real
   Signature (4), arguably brushing Immersive (5). Score-5 compliance is
   not a smooth function of model tier (the middle model did worst); it's
-  specifically Opus that unlocks real range on this axis. Full writeup
-  and the resulting product-lever question (worth a one-off Opus call for
-  a rare, high-significance moment?) in `coach-personality-rubric.md`'s
-  "Known Limitations" — flagged there for discussion, not decided.
-- [ ] Phase 3 — lock + verify one real target under repeated calls.
+  specifically Opus that unlocks real range on this axis. Full writeup in
+  `coach-personality-rubric.md`'s "Known Limitations".
+- [x] Phase 6 (pulled forward) — two model locks made (2026-09-01),
+  ahead of the rest of Phase 6's scope: Ask Coach (§2.B) → `claude-haiku-
+  4-5` (confirms the existing default with real evidence); "special
+  handling" high-significance moments (Burnout Sentinel, Heirloom Letter
+  Delivery, major goal completion — none built yet) → `claude-opus-5`,
+  a policy for when they ship, not a code change today. Full scope note
+  (what's still undecided): `docs/TODO.md` §2.L Phase 6.
+- [x] Phase 3 — lock + verify, done for both locked targets (2026-09-01).
+  `--repeat 3` on each: Haiku's score-1 came back 3/3 near-identical.
+  Opus's score-5 first attempt exposed a real harness bug (extended
+  thinking eating the `max_tokens` budget, truncating a response — fixed
+  by raising `max_tokens` to 3072 for that provider, not a personality
+  finding), then 3/3 consistently dense once fixed. What's NOT verified
+  yet: the mode's actual natural-default (no-override) output at score-3
+  — this phase only confirmed the floor/ceiling extremes reliably reach
+  their target on their locked models.
 - [ ] Phase 4 — the within-mode severity-flexing rows (budget near-limit /
   healthy, seeded in the rubric table).
 - [ ] Phase 5 — widen to remaining modes/axes.

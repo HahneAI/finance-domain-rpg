@@ -135,7 +135,7 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 | Net Worth Trigger — Amber (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.amber` |
 | Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
 | Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
-| Ask Coach — General Greeting (§2.B) | 3 (default) — **not re-verified live at 3 yet, see note** | "You're tracking solid — $330 left to spend this week and you're running a 38% savings rate, which puts you well ahead of most people. Next week's paycheck is coming in $55 above your average, so you're building momentum." (`claude-haiku-4-5`, elicited toward 1, `scripts/coach-eval` Phase 1) | "You're sitting at 330 dollars left in this round and you're tracking a 38 percent savings rate for the year, which puts you well ahead of most people's corner. Your rent is locked in at 400 a week and your total spend is holding steady at 520, leaving you with a clean 325 dollar surplus each week on average." (elicited toward 5 — landed closer to 3-4, see note) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Score-1/5 examples are real, live-elicited output (2026-09-01, Phase 1) — not yet the mode's own natural default output**, since these came from an explicit calibration override, not a plain question against the shipped prompt as-is; a fresh "what does this mode actually do with no override" sample is still owed before this row's "3 (default)" claim itself counts as calibrated per the methodology above. See "Known Limitations" below for what the score-5 miss means. |
+| Ask Coach — General Greeting (§2.B) | 3 (default) — **floor (1) repeat-verified reliable on the locked model, natural default (3) still not directly sampled, see note** | "You've got 330 dollars free this week after your regular spend, and next week's check is coming in at 900 — that's 55 dollars above your average, so you're tracking steady. The real question is what you want that surplus to do..." (`claude-haiku-4-5`, elicited toward 1, **repeat-verified 3/3 near-identical, 2026-09-01, Phase 3**) | "You're eleven rounds in and moving well: $330 sitting free in your corner this round, and next round's purse comes in at $900... Your Budget Health is 62%, which is a fighting weight you can hold..." (`claude-opus-5`, elicited toward 5, **repeat-verified 3/3 consistently dense/Signature-to-Immersive, 2026-09-01, Phase 3** — this is the "special handling" moment's model, not this mode's; kept here since Ask Coach is the only composed prompt built to test against) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Model locked 2026-09-01 (`docs/TODO.md` §2.L Phase 6): this mode ships on `claude-haiku-4-5`.** Its score-1 floor is now repeat-verified reliable on that model. **Still genuinely open:** what Haiku produces for this mode with *no* calibration override at all — a plain question against the shipped prompt as-is, sampled multiple times — hasn't been run; the "3 (default)" target itself isn't calibrated yet, only its floor is. See "Known Limitations" below for the full score-5/model-lock writeup and a harness bug found and fixed during this pass. |
 | ↳ Ask Coach — Budget near limit (e.g. ~99% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above — a real user scenario, not yet a built sub-trigger. Expected direction only, not a committed number: likely lower than the mode's flat 3, mirroring Net Worth Trigger Red's ~1 rationale (urgency outranks flavor) — needs the full calibration process above before any number is real. |
 | ↳ Ask Coach — Budget healthy (e.g. ~10% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above. Expected direction only: likely stays at the mode's default 3, mirroring Net Worth Trigger Green/Recovery — needs calibration before any number is real. |
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
@@ -235,14 +235,35 @@ compliance is **not** a smooth function of model capability (Sonnet, the middle 
 over-generalize "stronger model helps" from one model beating the other two; this is one data
 point on one axis, not a trend line.
 
-**This is the kind of finding worth flagging before it becomes assumed direction, not folding
-in silently:** if Opus can reliably reach a register Haiku/Sonnet structurally can't on this axis,
-that's a real, concrete product lever — not "which model does Ask Coach run on" broadly, but
-"does a specific, rare, high-significance moment (a Burnout Sentinel check-in, a Heirloom Letter
-delivery, a major goal completion) justify a one-off Opus call for a genuinely richer personality
-moment, the way the app doesn't need every moment to be that rich." That's a real product decision
-with real cost tradeoffs, not something to default into via this eval harness — surfacing it here,
-not deciding it here.
+**Decided (2026-09-01, `docs/TODO.md` §2.L Phase 6) — not just flagged anymore.** Ask Coach's
+general chat stays on `claude-haiku-4-5` (confirms the existing default, now with real calibration
+evidence behind it rather than being an unverified historical choice). "Special handling"
+high-significance moments — Burnout Sentinel, the Heirloom Letter Delivery Ceremony, a major goal
+completion — are locked to `claude-opus-5` for when each one gets built; none of them exist in
+code yet (§8 is still a brainstorming pool, not committed work), so this is a policy for a future
+build, not a change shipped today. Everything else in the Interaction Modes table (Job Hunt
+Assistant, Résumé Review, Statement Summary, the Net Worth Trigger's three tiers, and the rest)
+is still undecided — see §2.L Phase 6's own entry for the exact scope of what this lock does and
+doesn't cover.
+
+**Phase 3 (repeat-verify) — same day, both locked targets confirmed reliable, one harness bug
+found and fixed along the way.** Ran each locked target 3x (`--repeat 3`) instead of trusting the
+single Phase 2 sample:
+
+- **Haiku, score-1:** 3/3 runs near-identical, effectively deterministic, zero boxing language in
+  any of them. This floor is as reliable as a live model call gets.
+- **Opus, score-5 — first attempt exposed a real harness bug, not a personality finding.** One of
+  the first 3 repeated calls came back visibly truncated mid-sentence. Cause: Opus defaults to
+  extended thinking, and that run spent 940 of the config's 1024 `max_tokens` on reasoning tokens,
+  leaving almost nothing for the actual visible response. That's a broken test, not evidence of
+  inconsistent compliance — raised `max_tokens` to 3072 for the Opus provider
+  (`promptfooconfig.yaml`) and re-ran. **After the fix, 3/3 runs were consistently dense** —
+  "eleven rounds in," "in your corner," "fighting weight," "shadowboxing," "next round's purse,"
+  extended and woven through nearly every clause each time, not a one-off — confirming (and
+  strengthening) the Phase 2 finding rather than walking it back this time. **Lesson for any
+  future Opus test in this harness:** budget real room for reasoning tokens on top of the visible
+  response length you actually want, or a truncated response can look like a compliance failure
+  when it's actually a token-budget bug.
 
 ---
 

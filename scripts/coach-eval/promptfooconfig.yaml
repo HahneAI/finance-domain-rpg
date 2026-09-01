@@ -44,12 +44,19 @@ providers:
     label: opus
     config:
       apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
-      max_tokens: 1024
+      max_tokens: 3072
       # Third comparison point — Sonnet already showed FEWER boxing
       # touches than Haiku under the same override, not more, which flips
       # the working hypothesis away from "needs a pricier model." This run
       # checks whether the strongest candidate breaks that pattern or
       # confirms it.
+      #
+      # max_tokens raised from 1024 (2026-09-01, Phase 3 repeat-verify
+      # pass): Opus defaults to extended thinking, and one of 3 repeated
+      # score-5 calls hit the 1024 cap with 940 of those tokens spent on
+      # reasoning, truncating the actual visible response mid-sentence.
+      # That's a broken test, not a real compliance finding — don't read
+      # any Opus result recorded before this fix as reliable.
 
 prompts:
   - id: file://prompts/personaOnly.js

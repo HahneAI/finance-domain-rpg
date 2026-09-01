@@ -2583,6 +2583,17 @@ Income panel's monthly component cards (their real-calendar-week-count display, 
   per-row Weekly/Monthly/Annual cells above them, to avoid the marker itself becoming visual
   noise on a 12-row table). Individual bill/loan row cards (display math, see below) intentionally
   get no marker — they're the reference point, not the thing needing an asterisk.
+- **Category dropdown title threshold (2026-09-01, same-day follow-up).** Anthony didn't want the
+  marker on every category dropdown title regardless of size — a 1-2-bill category can't
+  accumulate enough 48-week-vs-52-week rounding drift to be worth flagging. `catShowsExactMark =
+  catBillCount >= 3 || (cTot * perCheckFactor) > 200` gates the category header's `ExactMathMark`
+  only (line ~1447) — `catBillCount` is `cExp.length + loanItems.length` (regular expenses +
+  loans, since loans render inside the Needs category), and the $200 check is against the same
+  displayed total the title shows (`cTot * perCheckFactor`, i.e. the per-check/per-week figure as
+  rendered — not the raw weekly `cTot` before the display-unit conversion, and not the annual
+  figure). This threshold is local to the category dropdown title only — every other
+  `ExactMathMark` placement from the entry above (summary cards, Loans tab total, waterfall,
+  paycheck-breakdown modal, Breakdown tab footer) is unconditional, unaffected by this gate.
 - **Consumers deliberately left on display math** (individual bill/loan row cards — the "mental
   math, not pennies" surface): every per-expense row amount in the Budget list, the Bulk Edit
   list, the expense detail sheet's "Per Check"/"Monthly" tiles, the Restore Deleted sheet, edit-

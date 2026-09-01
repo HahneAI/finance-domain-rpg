@@ -1379,6 +1379,14 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + exactEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + exactEffective(e, ap), 0);
+        // Category dropdown title only earns the exact-math asterisk once the
+        // rounding drift it's flagging is actually big enough to matter — a
+        // 1-2-bill category can't accumulate meaningful 48-week-vs-52-week
+        // drift, so the marker stays hidden below this bar to avoid noise on
+        // every dropdown. Threshold checked against the same displayed total
+        // shown on the title (cTot * perCheckFactor), not the raw weekly cTot.
+        const catBillCount = cExp.length + loanItems.length;
+        const catShowsExactMark = catBillCount >= 3 || (cTot * perCheckFactor) > 200;
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
         // Paywall-expired read-only mode (§17.E "Locked expense categories"):
         // force every category collapsed and non-expandable, regardless of the
@@ -1445,7 +1453,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             <div style={{ width: "100%" }}>
               <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}<ExactMathMark /></span>
+                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}{catShowsExactMark && <ExactMathMark />}</span>
                   {!readOnly && (
                   <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
                   )}

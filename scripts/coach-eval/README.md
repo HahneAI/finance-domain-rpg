@@ -66,10 +66,16 @@ retry-on-a-hunch.** Concretely for this file:
   `coach-personality-rubric.md`: both components hold score-1 cleanly;
   neither reaches score-5 even under an explicit override — see "Known
   Limitations" there for what that means for Phase 2.
-- [ ] Phase 2 — extremes discovery across multiple candidate models. Now has
-  a concrete question to answer, not just phasing: is the score-5 ceiling
-  found in Phase 1 specific to `claude-haiku-4-5`, or does no candidate
-  model reach it?
+- [~] Phase 2 — in progress. Added `claude-sonnet-5` (4 more live calls,
+  `--filter-providers sonnet` to avoid re-spending on Haiku's already-valid
+  results): score-1 held cleanly, score-5 did not — Sonnet used *fewer*
+  boxing touches than Haiku, not more. Reframes the open question from
+  "which model" to "is the rubric's own '5' anchor achievable by any
+  current assistant model for this persona" — see `coach-personality-
+  rubric.md`'s "Known Limitations" for the full writeup. `claude-opus-5`
+  not yet tested; worth one more comparison point before treating this as
+  settled, but the working hypothesis has flipped away from "needs a
+  pricier model."
 - [ ] Phase 3 — lock + verify one real target under repeated calls.
 - [ ] Phase 4 — the within-mode severity-flexing rows (budget near-limit /
   healthy, seeded in the rubric table).

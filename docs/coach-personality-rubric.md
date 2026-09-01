@@ -208,12 +208,24 @@ following failure, it's specific to the high end of this one axis. This is a sec
 data point alongside the broad-question-number-cap finding above (same underlying pattern: an
 explicit, self-checkable instruction not landing on this model), not the same finding restated.
 
-**Open question this raises, not yet answered:** is this a Haiku-specific ceiling, or does no
-Claude model actually produce genuinely "immersive" boxing-metaphor output for a finance-coaching
-persona when asked directly? Phase 2 of §2.L (extremes discovery across Sonnet/Opus) is the way to
-find out — this finding is the concrete reason that phase exists, not just a phasing formality.
-Until then, treat any mode's "5" target as unverified on whichever model actually serves it,
-even if "3" and "1" both check out.
+**Update (2026-09-01, same day, Phase 2 of §2.L) — not Haiku-specific.** Ran the identical
+override, same test account, same two components, against `claude-sonnet-5`. Score-1 held cleanly
+on both, same as Haiku. Score-5 did not — and Sonnet used **fewer** boxing touches than Haiku did,
+not more: exactly one per message ("round," "roll with it" — both genuine vocabulary-bank terms,
+correctly used, just not remotely "nearly every message" or "substitutes for literal vocabulary")
+against Haiku's two. A materially more capable model did not get closer to the definition; if
+anything it complied less with the explicit push toward the extreme.
+
+**Revised open question — now aimed at the rubric's own scale, not at model selection.** Two
+different models, independently, converge on roughly the same practical ceiling well below the
+written "5" definition, and the better model didn't move the needle. That's a different shape of
+problem than "which model to route this to" (§2.L Phase 6 no longer looks like the right lever
+here) — it now looks more like Axis 1's own "5" anchor may describe a register no
+instruction-following-tuned assistant model actually produces for this persona, not a gap any
+current candidate model closes. Worth deliberately testing whether `claude-opus-5` breaks this
+pattern before concluding that (Phase 2 is not fully closed on that account), but the working
+hypothesis going in should now be "probably not model-specific," not "probably needs a pricier
+model" — don't let Phase 6 quietly assume the latter.
 
 ---
 

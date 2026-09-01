@@ -59,10 +59,17 @@ retry-on-a-hunch.** Concretely for this file:
 
 ## Phase status (docs/TODO.md §2.L)
 
-- [x] Phase 1 — this file, one axis (Metaphor Intensity), one mode's two
-  components (persona-only, Ask Coach composed), 4 live calls total, no
-  grading. Findings go into `coach-personality-rubric.md`'s `TODO` cells.
-- [ ] Phase 2 — extremes discovery across multiple candidate models.
+- [x] Phase 1 — one axis (Metaphor Intensity), one mode's two components
+  (persona-only, Ask Coach composed), 6 live calls total (4 initial + 2
+  after fixing `personaOnly.js`'s missing-data deflection with
+  `fixtures/testAccount.js`), no grading. Findings written into
+  `coach-personality-rubric.md`: both components hold score-1 cleanly;
+  neither reaches score-5 even under an explicit override — see "Known
+  Limitations" there for what that means for Phase 2.
+- [ ] Phase 2 — extremes discovery across multiple candidate models. Now has
+  a concrete question to answer, not just phasing: is the score-5 ceiling
+  found in Phase 1 specific to `claude-haiku-4-5`, or does no candidate
+  model reach it?
 - [ ] Phase 3 — lock + verify one real target under repeated calls.
 - [ ] Phase 4 — the within-mode severity-flexing rows (budget near-limit /
   healthy, seeded in the rubric table).

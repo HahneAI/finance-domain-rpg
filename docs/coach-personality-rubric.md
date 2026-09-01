@@ -135,7 +135,7 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 | Net Worth Trigger — Amber (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.amber` |
 | Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
 | Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
-| Ask Coach — General Greeting (§2.B) | 3 (default) | TODO | TODO | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. |
+| Ask Coach — General Greeting (§2.B) | 3 (default) — **not re-verified live at 3 yet, see note** | "You're tracking solid — $330 left to spend this week and you're running a 38% savings rate, which puts you well ahead of most people. Next week's paycheck is coming in $55 above your average, so you're building momentum." (`claude-haiku-4-5`, elicited toward 1, `scripts/coach-eval` Phase 1) | "You're sitting at 330 dollars left in this round and you're tracking a 38 percent savings rate for the year, which puts you well ahead of most people's corner. Your rent is locked in at 400 a week and your total spend is holding steady at 520, leaving you with a clean 325 dollar surplus each week on average." (elicited toward 5 — landed closer to 3-4, see note) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Score-1/5 examples are real, live-elicited output (2026-09-01, Phase 1) — not yet the mode's own natural default output**, since these came from an explicit calibration override, not a plain question against the shipped prompt as-is; a fresh "what does this mode actually do with no override" sample is still owed before this row's "3 (default)" claim itself counts as calibrated per the methodology above. See "Known Limitations" below for what the score-5 miss means. |
 | ↳ Ask Coach — Budget near limit (e.g. ~99% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above — a real user scenario, not yet a built sub-trigger. Expected direction only, not a committed number: likely lower than the mode's flat 3, mirroring Net Worth Trigger Red's ~1 rationale (urgency outranks flavor) — needs the full calibration process above before any number is real. |
 | ↳ Ask Coach — Budget healthy (e.g. ~10% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above. Expected direction only: likely stays at the mode's default 3, mirroring Net Worth Trigger Green/Recovery — needs calibration before any number is real. |
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
@@ -193,6 +193,27 @@ prompt (a full model-answer example showing exactly 3 numbers picked from a long
 not a third rewrite of the same prose instruction — re-test with the same canonical "give me
 everything" phrasing before calling it resolved, since an easier-to-compress paraphrase won't
 reproduce this.
+
+**`claude-haiku-4-5` may have a real ceiling below Metaphor Intensity score-5, replicated across
+two independent prompt components (2026-09-01, Phase 1 of `docs/TODO.md` §2.L,
+`scripts/coach-eval`).** Both the bare `COACH_PERSONA_PROMPT` and the fully composed
+`ASK_COACH_SYSTEM_PROMPT` were given an explicit calibration override — "produce output scoring
+exactly 5... nearly every message reframed through the boxing lens... boxing vocabulary
+substitutes for literal finance vocabulary" — against the same test account/question. Neither
+component complied: each response used at most two boxing-adjacent touches ("this round,"
+"most people's corner") against a message still dominated by plain literal figures ("$330 left,"
+"38 percent savings rate," "325 dollar surplus"), landing closer to score 3-4 than 5. Score-1
+compliance was clean on both components in the same run — this isn't a general instruction-
+following failure, it's specific to the high end of this one axis. This is a second, independent
+data point alongside the broad-question-number-cap finding above (same underlying pattern: an
+explicit, self-checkable instruction not landing on this model), not the same finding restated.
+
+**Open question this raises, not yet answered:** is this a Haiku-specific ceiling, or does no
+Claude model actually produce genuinely "immersive" boxing-metaphor output for a finance-coaching
+persona when asked directly? Phase 2 of §2.L (extremes discovery across Sonnet/Opus) is the way to
+find out — this finding is the concrete reason that phase exists, not just a phasing formality.
+Until then, treat any mode's "5" target as unverified on whichever model actually serves it,
+even if "3" and "1" both check out.
 
 ---
 

@@ -7,9 +7,13 @@ doesn't repeat their reasoning.
 
 ## What's here
 
-- `promptfooconfig.yaml` — the test definition. Read its own `description`
-  field first; it states this phase's scope and what's deliberately NOT
-  included (no automated grading yet, no `repeat`, one model only).
+- `promptfooconfig.yaml` — Phases 1-3 (extremes discovery + repeat-verify
+  of the two locked models). Read its own `description` field first.
+- `promptfooconfig.phase4.yaml` — Phase 4 (within-mode severity flexing).
+  Separate file from the one above on purpose — keeps each phase's scope
+  and call-count independently auditable rather than growing one
+  monolithic config; a later phase's config should follow the same
+  `promptfooconfig.phaseN.yaml` naming pattern, `-c <file>` to run one.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
   this harness can never silently test a stale prompt. One file per
@@ -17,6 +21,14 @@ doesn't repeat their reasoning.
   mode's full composition), not one file per mode — this mirrors how
   `coachPrompts.js` itself is actually built (persona + swappable addendum),
   so a regression in the shared base shows up once instead of once per mode.
+  `askCoachComposed.js` also takes an optional `vars.severity` to pick a
+  real account-data variant (see `fixtures/`) — used by Phase 4, ignored
+  (defaults to the original Phase 1-3 account) by anything that doesn't set it.
+- `fixtures/testAccount.js` — a fabricated-but-structurally-real test
+  account run through the real `buildCoachContext()`, not hand-typed text.
+  `buildTestContext({ weeklyIncome, avgWeeklySpend })` — vary those two to
+  get a different real spend-ratio scenario; reused by Phase 4's severity
+  variants, reusable the same way for any future severity/scenario test.
 - `results/` — gitignored. Raw run output is an ephemeral working file;
   once you've read a run's output and decided what it means, write the
   *finding* into `coach-personality-rubric.md` (filling in a `TODO` cell,
@@ -92,7 +104,20 @@ retry-on-a-hunch.** Concretely for this file:
   yet: the mode's actual natural-default (no-override) output at score-3
   — this phase only confirmed the floor/ceiling extremes reliably reach
   their target on their locked models.
-- [ ] Phase 4 — the within-mode severity-flexing rows (budget near-limit /
-  healthy, seeded in the rubric table).
-- [ ] Phase 5 — widen to remaining modes/axes.
-- [ ] Phase 6 — model-per-mode decision.
+- [x] Phase 4 — done, found a different axis than planned (2026-09-01).
+  `promptfooconfig.phase4.yaml`, real account-data variants via
+  `askCoachComposed.js`'s new `vars.severity` (no calibration override),
+  `--repeat 3`, both variants word-for-word identical across all repeats.
+  Metaphor Intensity barely moved between near-limit and healthy — but
+  length/directness did, reliably, even though `ASK_COACH_SYSTEM_PROMPT`
+  doesn't authorize that for a non-mechanics question. Real finding, not
+  yet a scored rubric row — see `coach-personality-rubric.md`'s Known
+  Limitations for the open "formalize or suppress" decision this raises.
+- [ ] Phase 5 — widen to remaining modes/axes. Per the user's own
+  sequencing (2026-09-01): find real 1s/5s for the other Interaction
+  Modes table rows first, batch-decide every mode's default "3" together
+  at the end, rather than resolving each mode's default one at a time.
+- [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
+  handling moments → Opus, both locked and Phase-3-verified. Everything
+  else in the table (Job Hunt Assistant, Résumé Review, Statement
+  Summary, Net Worth Trigger's tiers, the rest) is still undecided.

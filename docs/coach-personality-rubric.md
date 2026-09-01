@@ -136,8 +136,8 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 | Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
 | Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
 | Ask Coach — General Greeting (§2.B) | 3 (default) — **floor (1) repeat-verified reliable on the locked model, natural default (3) still not directly sampled, see note** | "You've got 330 dollars free this week after your regular spend, and next week's check is coming in at 900 — that's 55 dollars above your average, so you're tracking steady. The real question is what you want that surplus to do..." (`claude-haiku-4-5`, elicited toward 1, **repeat-verified 3/3 near-identical, 2026-09-01, Phase 3**) | "You're eleven rounds in and moving well: $330 sitting free in your corner this round, and next round's purse comes in at $900... Your Budget Health is 62%, which is a fighting weight you can hold..." (`claude-opus-5`, elicited toward 5, **repeat-verified 3/3 consistently dense/Signature-to-Immersive, 2026-09-01, Phase 3** — this is the "special handling" moment's model, not this mode's; kept here since Ask Coach is the only composed prompt built to test against) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Model locked 2026-09-01 (`docs/TODO.md` §2.L Phase 6): this mode ships on `claude-haiku-4-5`.** Its score-1 floor is now repeat-verified reliable on that model. **Still genuinely open:** what Haiku produces for this mode with *no* calibration override at all — a plain question against the shipped prompt as-is, sampled multiple times — hasn't been run; the "3 (default)" target itself isn't calibrated yet, only its floor is. See "Known Limitations" below for the full score-5/model-lock writeup and a harness bug found and fixed during this pass. |
-| ↳ Ask Coach — Budget near limit (e.g. ~99% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above — a real user scenario, not yet a built sub-trigger. Expected direction only, not a committed number: likely lower than the mode's flat 3, mirroring Net Worth Trigger Red's ~1 rationale (urgency outranks flavor) — needs the full calibration process above before any number is real. |
-| ↳ Ask Coach — Budget healthy (e.g. ~10% used), within §2.B | UNSCORED, seeded 2026-08-12 | TODO | TODO | Seeded example from "The End Goal" section above. Expected direction only: likely stays at the mode's default 3, mirroring Net Worth Trigger Green/Recovery — needs calibration before any number is real. |
+| ↳ Ask Coach — Budget near limit (98% spend ratio, "watch spend"), within §2.B | **UNSCORED still — Metaphor Intensity itself did NOT flex, see note; scoring deferred to the batch pass at the end** | "Your week of March 9th (week 11) is tight... Next week of March 16th (week 12) is looking a bit better at $900 coming in... you'll have some breathing room there if you can hold spend steady." (`claude-haiku-4-5`, no override, real data via `fixtures/testAccount.js`, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a — this axis's score-5 doesn't apply here; direction was expected-lower, not tested this way | **Not what Phase 4 set out to measure, but a real finding anyway.** Only one figurative touch ("breathing room," the prompt's own example of a non-boxing flourish that still counts) — roughly the same light density as the healthy variant below, not a clear Metaphor Intensity difference. What DID differ, reliably, across all 3 repeats: **length and directness.** This response ran 3 full paragraphs (~6 sentences) and named the problem outright ("The real issue isn't this week or next — it's the pattern") even though this is a personal-data status check, not a mechanics question — the only case `ASK_COACH_SYSTEM_PROMPT` currently authorizes running past 2-3 sentences. See "Known Limitations" below. |
+| ↳ Ask Coach — Budget healthy (10% spend ratio, "well-managed"), within §2.B | **UNSCORED still — same note as above** | "You're sitting on 765 dollars free this week after your regular spend... You've got the runway to move on something if you want to, but right now you don't have any goals set..." (`claude-haiku-4-5`, no override, same real fixture, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a | Also one loose touch ("runway") — but this is a *different* concern than Metaphor Intensity: `runway` is this app's specific term for New Job Season survival time, not a corner-man phrase, so reusing it here for ordinary budget slack risks confusing a user who knows the real meaning. Worth a small copy fix independent of anything scored on this rubric. Response held to 2 tight paragraphs across all 3 repeats — noticeably shorter than the near-limit variant despite an identical question and prompt, which is the actual severity-flexing evidence, just not on the axis this row was built to test. |
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
 | Weekly Pre-Game Briefing (§8.C) | 3 (default) | TODO | TODO | |
 | Statement Summary (§2.D) | 3 (default) | TODO | TODO | Blocked on Statements tab existing at all |
@@ -264,6 +264,35 @@ single Phase 2 sample:
   future Opus test in this harness:** budget real room for reasoning tokens on top of the visible
   response length you actually want, or a truncated response can look like a compliance failure
   when it's actually a token-budget bug.
+
+**Ask Coach silently breaks its own 2-3 sentence rule under budget severity — a real, reliable
+finding from Phase 4 (2026-09-01, `docs/TODO.md` §2.L), on a different axis than the one Phase 4
+was built to test.** The same real question ("How's my week looking?") against the same locked
+production model (`claude-haiku-4-5`), no calibration override, differing only in the account's
+real spend ratio (98% "watch spend" vs. 10% "well-managed," both via `fixtures/testAccount.js`'s
+real `buildCoachContext()`). Metaphor Intensity itself barely moved — one light touch each,
+roughly the same density in both. **Length and directness moved a lot, and reliably (3/3
+word-for-word identical repeats on each variant):** the near-limit account got 3 full paragraphs
+naming the problem outright ("The real issue isn't this week or next — it's the pattern"); the
+healthy account got 2 tight paragraphs in a noticeably more permissive tone. `ASK_COACH_SYSTEM_
+PROMPT` only authorizes running past 2-3 sentences for a genuine mechanics question — a personal
+status check like this one isn't supposed to get that exception in either direction, yet it
+reliably did under real severity.
+
+**This is good news and an open decision at the same time, not a bug to just fix.** Good news: the
+model is *already* doing something like what "The End Goal" section asks for — reading real
+severity and responding differently — without anyone building a mechanism for it. Open decision:
+that behavior is currently incidental, not authorized by the prompt text, which means it's
+unverified whether it holds for account states this fixture hasn't tried, and there's no rule
+anyone could point to and say "this is why." Before this becomes a scored rubric row, decide
+whether to formalize it (write an explicit severity-aware length rule matching what's already
+happening) or suppress it (hold the strict 2-3 sentence default even under urgency) — don't let
+the two seeded sub-scenario rows above get a target score while this is still undecided.
+
+**Minor, separate finding, not a rubric issue:** the healthy-budget response used "runway" to mean
+ordinary weekly slack — this app's own term for New Job Season survival time specifically. Worth a
+small copy fix in `coachPrompts.js` independent of anything scored here, so Coach doesn't overload
+a term a user might already know a different, specific meaning for.
 
 ---
 

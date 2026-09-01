@@ -1031,11 +1031,19 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   **Not yet done:** the mode's actual natural-default (no-override) behavior at score-3 — this
   phase only verified the floor/ceiling extremes are reachable on their locked models, not what
   Ask Coach naturally produces day-to-day without a calibration override pushing it.
-- [ ] **Phase 4 — apply the same harness to within-mode severity flexing.** Use the now-proven
-  harness/process on the two seeded sub-scenario rows already in the rubric table (Ask Coach —
-  Budget near limit / Budget healthy) — this is where "The End Goal" section's actual ask (register
-  flexing by detected topic/severity *within* one mode, generalizing the Net Worth Trigger's
-  Amber/Red/Green pattern) gets its first real test, not just a documented intention.
+- [x] **Phase 4 — done, but the finding landed on a different axis than planned (2026-09-01).**
+  Ran the two seeded sub-scenario rows (`promptfooconfig.phase4.yaml`, `askCoachComposed.js`'s new
+  `vars.severity` — real `buildCoachContext()` output via `fixtures/testAccount.js`, no calibration
+  override, `--repeat 3`, all repeats word-for-word identical on both variants). Metaphor Intensity
+  itself barely moved between the near-limit and healthy accounts — this row's own axis didn't show
+  the flexing "The End Goal" section describes. **What did flex, reliably: length and directness.**
+  The near-limit account got 3 full paragraphs naming the problem outright; the healthy account got
+  2 tight, more permissive paragraphs — for the identical question against the identical prompt,
+  differing only in real account data. `ASK_COACH_SYSTEM_PROMPT` doesn't actually authorize this
+  (its length exception is scoped to mechanics questions only), so this is a real, unplanned prompt-
+  compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
+  it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
+  Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
 - [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
   the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
   Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,

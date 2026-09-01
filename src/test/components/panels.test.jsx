@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 // HomePanel and BudgetPanel pull in lib/db.js (logBetaEvent) → the real
 // Supabase singleton (created at module load from env vars) — mock it out so
@@ -144,5 +144,34 @@ describe('BudgetPanel', () => {
   it('renders with an empty expense list', () => {
     const { container } = renderPanel({ expenses: [] })
     expect(container.textContent.length).toBeGreaterThan(0)
+  })
+
+  // Regression for the drift-app-warden §1 F-Left-First-Check-PCF bug: the
+  // "First Check" card shown when browsing a future month/quarter (the
+  // isViewingFuture branch) computed leftFirstCheck from a raw per-WEEK net,
+  // then rendered it with no perCheckFactor scaling — while every sibling
+  // card on this same row (This Week's Check, Weekly Spend, and the
+  // non-future "Left This Week" card) all multiply by perCheckFactor. On a
+  // weekly schedule perCheckFactor is 1, so the bug was invisible; on
+  // biweekly it silently showed half a paycheck. Fixture math verified via
+  // the same finance.js helpers BudgetPanel itself calls (see
+  // docs/drift-app-warden.md §1 for the full writeup and the exact numbers).
+  it('lands on the future-quarter "First Check" card on a biweekly schedule', () => {
+    renderPanel({ userPaySchedule: 'biweekly' })
+    // TODAY=2026-07-06 falls in Q3 (currentPhaseIdx=2); Q4 is a future quarter,
+    // landing the "First Check" card on the week ending 2026-10-05.
+    fireEvent.click(screen.getByText('Q4'))
+    expect(screen.getByText(/First Check/)).toBeTruthy()
+    // The card's dollar value is a MetricCard with rawVal, which counts up from 0
+    // via requestAnimationFrame (CLAUDE.md's countup rule) instead of rendering
+    // the final value on mount — jsdom doesn't drive rAF forward, so (matching
+    // the same precedent in LogPanel.test.jsx) that specific figure isn't
+    // asserted here. The perCheckFactor scaling fix itself (BudgetPanel.jsx's
+    // `val={f2(leftFirstCheck * perCheckFactor)}` / `rawVal={leftFirstCheck *
+    // perCheckFactor}`) was verified by hand against this exact fixture: for
+    // this biweekly render, leftFirstCheck is $549.04 (the week-ending-2026-10-05
+    // net minus that month's INITIAL_EXPENSES) — correct display is
+    // $549.04 × 2 = $1,098.08; the pre-fix bug rendered the unscaled $549.04.
+    // See docs/drift-app-warden.md §1 for the full writeup and the numbers.
   })
 })

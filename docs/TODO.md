@@ -995,6 +995,62 @@ at elsewhere in the app.*
 
 ---
 
+### L. Personality Calibration & Model-Selection Eval Harness *(new — scoped 2026-08-12, not yet built)*
+
+*Origin: how do we actually know which Claude model represents Coach's desired brand/voice
+baseline, and what score-1/score-5 output really looks like per axis, per model, before locking
+any target in `docs/coach-personality-rubric.md`? Read that doc's "The End Goal" and "Calibration
+Methodology" sections first — this entry is the build-side scoping of the methodology named
+there. Scoping only, nothing below is implemented. Sequenced as small, deliberately narrow phases
+— each phase should be fully working before widening scope, not designed all at once.*
+
+- [ ] **Phase 1 — minimal harness, one axis, one mode.** Build the smallest possible working
+  slice: **promptfoo**, configured in `scripts/coach-eval/` inside this repo (not a new repo —
+  see the reasoning already captured in this session's own discussion, worth writing up here once
+  built), with a prompt loader that `import`s the real `ASK_COACH_SYSTEM_PROMPT` from
+  `coachPrompts.js` directly rather than a hand-copied string, so the eval can never silently test
+  a stale prompt. Scope to Metaphor Intensity only (the one fully-defined axis) against Ask
+  Coach's general mode only (the one already-scored default). Get this one slice running
+  end-to-end — including a live call against a real model, mirroring the
+  `authority-finance-coach-live-test` skill's workaround for this sandbox having no working
+  `/api/coach` route by default — before adding a second axis or mode.
+- [ ] **Phase 2 — extremes discovery (calibration steps 1–2).** Run the harness against each real
+  candidate model under consideration (at minimum Haiku, since it's the current production
+  default — `coachPrompts.js`/`api/coach.js` hardcode it today; Sonnet and/or Opus as the
+  comparison set) with prompts deliberately aimed at score-1 and score-5 for Metaphor Intensity.
+  Record the actual output per model in `coach-personality-rubric.md`'s table (replacing the
+  `TODO` cells for Ask Coach — General Greeting), and note any divergence from the axis's
+  hand-written definitions per the calibration methodology's step 2.
+- [ ] **Phase 3 — lock + verify one real target.** Pick the target score for that one row with a
+  rationale grounded in Phase 2's real output (not intuition), then verify it holds under
+  `repeat`-ed live calls (promptfoo's built-in repeat count) rather than a single sample — this is
+  the first row in the rubric that would be evidence-backed rather than reasoned-through-once.
+- [ ] **Phase 4 — apply the same harness to within-mode severity flexing.** Use the now-proven
+  harness/process on the two seeded sub-scenario rows already in the rubric table (Ask Coach —
+  Budget near limit / Budget healthy) — this is where "The End Goal" section's actual ask (register
+  flexing by detected topic/severity *within* one mode, generalizing the Net Worth Trigger's
+  Amber/Red/Green pattern) gets its first real test, not just a documented intention.
+- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
+  the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
+  Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,
+  Warmth/formality, Sentence economy, Urgency escalation) — Sentence economy first, since DW-19
+  already left real anchor data for it (`coach-personality-rubric.md`'s "Known Limitations"
+  section) rather than starting from nothing.
+- [ ] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
+  Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
+  weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
+  precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
+  needed to hit the target register, not by default.
+- [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
+  grade with a judge model that is never one of the candidates being compared (avoids a model
+  favoring its own output); use deterministic code assertions (not another LLM call) for any rule
+  that's literally countable — DW-19 is the standing example of why an LLM-graded self-check isn't
+  reliable enough for a hard numeric rule; keep call volume lean per pass the same way DW-19's own
+  live-testing did (~25K input/~1.2K output tokens, ≈$0.03 for a small round) rather than running
+  large trial counts before the harness itself is proven out.
+
+---
+
 ## 3. Master Timeline — Config History & Point-in-Time Computation Integrity
 
 **STATUS: FOUNDATION COMPLETE · PROOF-OF-CONCEPT SHIPPED · 70 FIELDS REMAIN**
@@ -4904,6 +4960,43 @@ for the Unemployment Benefits/New Job Season Details/Jobless Wrap Up steps — i
       `SetupWizardAdlib.jsx` is now the whole first-run and life-event-re-entry onboarding
       experience; `SetupWizard.jsx` is retained only as unmounted source/shared-export material.
 
+### 19.5 `InlineNumber`-Gated Reveals Blur-Gated, Not Mid-Keystroke — CLOSED
+
+*Opened and closed 2026-08-27, drift-app-warden §7 F162, two commits. Reported UX complaint: a
+cascading clause gated on a number field's value (e.g. `maxWeeklyHours > 0`) revealed itself the
+instant a partial value happened to satisfy the check — typing the "4" of "40" already revealed
+the next question mid-keystroke, before the user felt done. `InlineSelect`/`InlineDate` were
+unaffected — native `onChange` only fires on a genuine commit for either.*
+
+- [x] Round 1 (`400a005`): `InlineNumber` gained an `onCommit` prop (fires on blur) +
+      `useCommitTracking(seedFn)` hook, seeded from already-valid pre-filled/resumed values so
+      re-entry accounts never hit an artificial blur-wait. Applied to `SchedulePage`'s
+      `maxWeeklyHours` as the reference implementation.
+- [x] Round 2: audited all ~23 remaining `InlineNumber` usages. Found one more genuine
+      cascading-reveal case — `IntakePage`'s base-user `annualSalary`/`baseRate`/`shiftHours`,
+      feeding the shared `payStructureComplete` boolean that gates OT Threshold/Commission/Tips
+      clauses and `AdvancedPayRulesCard`'s mount — fixed by folding commit-tracking into
+      `payStructureComplete`'s own derivation once, rather than duplicating the check at each of
+      its four call sites. DHL exempt (baseRate/shiftHours come from `DHL_PRESET` defaults there).
+- [x] Every other `InlineNumber` field audited and confirmed to have no downstream reveal gated on
+      its own value (DHL weekend differential, custom OT threshold, commission amount,
+      `AdvancedPayRulesCard`'s night-diff/weekend-diff, `DhlRotationCard`'s custom hours,
+      Deductions' benefit/401k fields, Attendance/PTO card fields, Tax Rates' paystub calculator —
+      a plain `<input>`, not `InlineNumber` — Wrap Up's buffer amount, both jobless-page numeric
+      fields) — left untouched, no unnecessary state added.
+- [x] Fixed 4 pre-existing tests that filled baseRate/shiftHours without blurring; added 2 new
+      tests (annual-salary partial-keystroke/blur, resumed baseRate+shiftHours re-entry). 1683
+      tests passing, `vite build --mode production` clean.
+- [x] Live-verified the one DHL-reachable field (weekend differential) via Playwright — confirmed
+      identical content before/after blur, consistent with "no fix needed." `DhlRotationCard`
+      (Plant-only) and `AdvancedPayRulesCard` (base-user-only) are both unreachable on the shared
+      test account (DHL Warehouse) regardless of this fix — relied on Vitest + code reading there,
+      not a live check.
+- [x] `.claude/CLAUDE.md`'s `SetupWizardAdlib.jsx` section and `docs/drift-app-warden.md` §7 (new
+      F162 entry) updated in the same round.
+
+---
+
 ### 19.4 Schedule + Tax Rates Pages Merged — Empty-Viewport Fix — CLOSED
 
 *Opened and closed 2026-08-27, drift-app-warden §7 F161. Live Playwright screenshots against the
@@ -5013,3 +5106,60 @@ alongside it once the data exists to compute one, not replacing what's there.
   brainstorm-and-scope pass, not something to design in this section — flagged here so the due-date
   field (§A) is built with an eye toward "this needs to export cleanly later" rather than a shape
   that would need reworking to support it.
+
+---
+
+## 21. Missing "Quarterly" Billing Cycle — Expense Editor Gap
+
+*Found 2026-08-31 investigating the expense create/edit flow across billing cycles at Anthony's
+request ("check the flow on creating an expense and using the other payment timelines, for
+example a yearly bill versus a quarterly bill"). Not a computation bug — the cycle math that does
+exist (weekly/biweekly/every30days/yearly) is correct and consistent between creation and
+display. The gap is that a fifth, common real-world cadence was never added as an option at all.
+Anthony's call: document only, don't build yet (2026-08-31).*
+
+- **`EXPENSE_CYCLE_OPTIONS`** (`lib/expense.js:6-11`) defines exactly four cycles — Weekly (7d),
+  Biweekly (14d), Every 30 days (30d), Yearly (365d). No quarterly/every-90-days entry exists.
+  Both the Add Expense form and the Edit form (`BudgetPanel.jsx:1701`/`:2453-2454`) render their
+  `<select>` options directly from this array, so the gap is uniform across both surfaces —
+  there's no hidden third place a quarterly option could have been added and missed.
+- **Loans have the identical gap** — `LOAN_FREQUENCY_DAYS` (`lib/expense.js:38`) only maps
+  `weekly`/`biweekly`/`monthly`, no quarterly.
+- **A real user impact, not just a missing label**: someone with a genuinely quarterly bill
+  (many insurance premiums, some subscriptions, estimated tax payments) has no accurate way to
+  enter it today. Picking "Every 30 days" undercounts a ~91-day cycle's due-date cadence by a few
+  days each cycle; back-calculating a per-quarter amount into "Yearly" (amount × 4) gets the
+  weekly-reserve math right but produces a wrong due-date countdown (the real next due date is
+  ~13 weeks out, not up to a year).
+- **Latent trap for future work**: `normalizeCycle()` (`lib/expense.js:15-16`) silently maps any
+  cycle string not in `EXPENSE_CYCLE_OPTIONS` to `"every30days"` rather than erroring. If a
+  quarterly cycle value is ever introduced by a future change (a new writer, imported/legacy
+  data, a typo'd constant) without also adding it to `EXPENSE_CYCLE_OPTIONS`, it would be
+  **silently treated as a monthly bill** — a 3× under-count with no visible warning anywhere.
+  Anyone implementing this section must add the cycle to `EXPENSE_CYCLE_OPTIONS` (and
+  `CYCLE_SUFFIXES`, `LOAN_FREQUENCY_DAYS` for loans) in the same change that starts writing it
+  anywhere, never after.
+- **Minor cleanup found in the same pass, not a functional bug**: every call site of
+  `perPaycheckFromCycle(amount, cycle, cpm)` (`BudgetPanel.jsx`, `BulkEditPage.jsx`,
+  `expense.js:360/395`) passes a third `cpm` argument that the function's actual signature
+  (`(amount, cycle) => ...`, `expense.js:143-144`) doesn't use — a harmless dead parameter (JS
+  silently drops the extra arg), but worth trimming from every call site if this area gets
+  touched for the quarterly work, so a future reader doesn't assume `cpm` affects the reserve
+  math.
+
+**If/when this gets built:**
+- [ ] Add `{ value: "quarterly", label: "Quarterly", days: 91 }` (or `every90days` to match the
+  existing `every30days` naming convention — pick one and use it consistently) to
+  `EXPENSE_CYCLE_OPTIONS`.
+- [ ] Add the matching entry to `CYCLE_SUFFIXES` (`expense.js:81`, e.g. `quarterly: "qtr"`).
+- [ ] Add the matching entry to `LOAN_FREQUENCY_DAYS` (`expense.js:38`) so loans get the same
+  option.
+- [ ] Extend `toMonthlyCost`/`fromMonthlyCost` (`expense.js:120-136`) with the quarterly branch
+  (`amount / 3` monthly-equivalent, matching the existing 4-weeks-per-month/48-weeks-per-year
+  approximation the other non-loan cycles use — don't introduce a real calendar-day-weighted figure
+  that would disagree with how weekly/yearly are already approximated).
+- [ ] Extend `expenseCycles.test.js`/`expense.test.js` with a quarterly case mirroring the
+  existing yearly one (`toMonthlyCost`, `getNextDueDate`, `cycleAmountFromPerPaycheck` round-trip).
+- [ ] Cross-check `docs/drift-app-warden.md` §10 (Budget Panel) — this doc's own §10.2 Block 2
+  trigger map should get a row for "adding a new `EXPENSE_CYCLE_OPTIONS` entry" once this ships,
+  since every consumer listed above needs to move together.

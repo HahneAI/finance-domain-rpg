@@ -5,6 +5,42 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §19.5 — Ad-Lib Wizard `InlineNumber` reveals gated on blur, not mid-keystroke (2026-08-27)
+
+*Reported UX complaint: a cascading clause gated on a number field's value (e.g.
+`maxWeeklyHours > 0`) revealed itself the instant a partial value happened to satisfy the check —
+typing the "4" of "40" already revealed the next question mid-keystroke. `InlineSelect`/
+`InlineDate` were unaffected (native `onChange` only fires on a genuine commit). Two rounds, both
+same day. Drift-app-warden §7 F162.*
+
+- [x] Round 1 (commit `400a005`): `InlineNumber` gained an `onCommit` prop (fires on blur) and a
+  `useCommitTracking(seedFn)` hook, seeded from already-valid pre-filled/resumed values so re-entry
+  accounts never hit an artificial blur-wait. Applied to `SchedulePage`'s `maxWeeklyHours` as the
+  reference implementation, with tests for partial-keystroke/blur/resumed-value.
+- [x] Round 2: audited all ~23 remaining `InlineNumber` usages in the file. Found exactly one more
+  genuine cascading-reveal case — `IntakePage`'s base-user `annualSalary`/`baseRate`/`shiftHours`,
+  which feed the shared `payStructureComplete` boolean gating OT Threshold/Commission/Tips clauses
+  and `AdvancedPayRulesCard`'s mount — fixed by folding commit-tracking into `payStructureComplete`
+  itself (one hook call, one seed, all four downstream gates covered) rather than duplicating the
+  check at each site. DHL exempt (its baseRate/shiftHours come from `DHL_PRESET` defaults, never
+  typed here).
+- [x] Every other `InlineNumber` field (DHL weekend differential, custom OT threshold, commission
+  amount, `AdvancedPayRulesCard`'s night-diff/weekend-diff, `DhlRotationCard`'s custom hours,
+  Deductions' benefit/401k fields, Attendance/PTO card fields, Tax Rates' paystub calculator —
+  plain `<input>`, not `InlineNumber`, confirmed by reading the code — Wrap Up's buffer amount,
+  both jobless-page numeric fields) audited and confirmed to have no downstream reveal gated on its
+  own value; left untouched.
+- [x] Fixed 4 pre-existing tests that filled baseRate/shiftHours without blurring (now required
+  before the new gate opens); added 2 new tests (annual-salary partial-keystroke/blur round-trip,
+  resumed baseRate+shiftHours re-entry). 1683 tests passing, `vite build --mode production` clean.
+- [x] Live-verified the one DHL-reachable field (weekend differential) via Playwright against the
+  shared test account — confirmed no downstream reveal changes before/after blur, consistent with
+  "left alone." `DhlRotationCard` (Plant-only) and `AdvancedPayRulesCard` (base-user-only) turned
+  out to be unreachable on this account (DHL Warehouse) regardless of this fix — not live-tested,
+  relied on Vitest coverage + code reading instead.
+- [x] `.claude/CLAUDE.md` and `docs/drift-app-warden.md` §7 (new F162 entry) updated in the same
+  round.
+
 ## §17.J — User-initiated account deletion never hard-fails to the user (2026-08-30, migration 044)
 
 *Live screenshot: a transient `auth.admin.deleteUser` failure surfaced a raw "Failed to delete

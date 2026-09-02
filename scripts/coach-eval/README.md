@@ -32,7 +32,21 @@ doesn't repeat their reasoning.
   runwayDays })` — vary these to get a different real scenario (spend
   ratio for Phase 4's severity rows, New Job Season/runway for Red's real
   trigger condition in Phase 5) — reusable the same way for any future
-  scenario test.
+  scenario test. `buildWeeklyBriefingContext({ weeklyIncome, avgWeeklySpend,
+  goalTarget })` — a second fixture built ahead of the feature it's for
+  (Weekly Pre-Game Briefing, `docs/TODO.md` §8.A — not built yet). Unlike
+  `buildTestContext()`, this one funds a real goal against a real 8-week
+  `futureWeeks`/`timelineWeekNets` series (real `Date` objects, not date
+  strings — `computeGoalTimeline()` calls `getPhaseIndex(week.weekEnd)`,
+  which needs `.getFullYear()`), so `computeGoalTimeline()` has something
+  genuine to project instead of the goal-free shortcut the other fixture
+  takes. Ready to plug into a real prompt loader the moment that feature
+  exists; no fixture was built for Burnout Sentinel's "work-pattern half"
+  in the same pass — `buildCoachContext()` has no `weekConfirmations` param,
+  `logs` only ever surfaces the single most-recent entry (never a streak),
+  and `EVENT_TYPES` has no overtime/extra-shift category — faking that
+  signal would mean dressing up fabricated data to look real, not building
+  a fixture from a real code path.
 - `results/` — gitignored. Raw run output is an ephemeral working file;
   once you've read a run's output and decided what it means, write the
   *finding* into `coach-personality-rubric.md` (filling in a `TODO` cell,
@@ -137,6 +151,17 @@ retry-on-a-hunch.** Concretely for this file:
     but not fully the spirit, and runs longest of the three despite being
     the one tier told to stay calm. Full writeup in
     `coach-personality-rubric.md`'s Known Limitations.
+  - [x] Fixture prep for unbuilt modes (2026-09-02) — per the user's
+    "build the data frames now so we can plug and play later" request.
+    `fixtures/testAccount.js` gained `buildWeeklyBriefingContext()` for
+    Weekly Pre-Game Briefing (§8.A) — real funded-goal timeline, ready
+    for a real prompt loader whenever that feature ships. Burnout
+    Sentinel's work-pattern half was assessed and explicitly NOT built —
+    the engine has no data path for it today (no `weekConfirmations` in
+    `buildCoachContext()`, `logs` never carries a streak, no overtime
+    event type) — building it would fake a signal the app can't actually
+    see, not prepare a fixture. Building Burnout Sentinel for real needs
+    engine work first (a streak/OT-tracking data source), not a fixture.
   - [ ] Not yet run: Job Hunt Chat, Résumé Review, the still-unbuilt flat
     rows, and the remaining undefined axes.
 - [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-

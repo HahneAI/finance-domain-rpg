@@ -69,3 +69,58 @@ export function buildTestContext({
     allWeeks,
   });
 }
+
+// Weekly Pre-Game Briefing (docs/TODO.md §8.A, "3 sentences max: this week's
+// projected check, bills due, goal contributions, one heads-up") — not built
+// yet, but buildCoachContext() already carries every field its spec asks
+// for, so this fixture is ready to plug into a real prompt loader the
+// moment one exists. Unlike buildTestContext() above, this one DOES fund a
+// real goal with a genuine trend line, because "goal contributions" is
+// explicitly part of the spec — that needs computeGoalTimeline() to have
+// something real to project, not the goal-free shortcut buildTestContext()
+// takes for tests that don't care about goal data.
+//
+// The earlier "~0 weeks to fund $3,000 at $0/wk" bug (see the note above)
+// turned out to be one thing, not two: computeGoalTimeline() calls
+// getPhaseIndex(week.weekEnd), which calls week.weekEnd.getFullYear() —
+// it needs a real Date object per future week, not a date STRING the way
+// buildTestContext()'s allWeeks (only ever used for label formatting, a
+// different code path) gets away with. Empty futureWeeks/timelineWeekNets
+// wasn't really the fix, just the thing that avoided ever hitting this.
+export function buildWeeklyBriefingContext({
+  weeklyIncome = 845, avgWeeklySpend = 520, goalTarget = 2000,
+} = {}) {
+  const config = { firstActiveIdx: 0, userPaySchedule: "weekly", goalTimelineEpochIdx: null, newJobSeasonMode: false };
+  const currentWeek = { idx: 10 };
+  // Real Date objects, 8 weeks out — enough for a short-horizon goal to
+  // show a genuine funding date, not an instant/degenerate one.
+  const futureWeeks = Array.from({ length: 8 }, (_, i) => ({
+    idx: 11 + i,
+    weekEnd: new Date(`2026-${String(3 + Math.floor((11 + i) / 4)).padStart(2, "0")}-${String(1 + ((11 + i) % 4) * 7).padStart(2, "0")}T12:00:00`),
+  }));
+  const timelineWeekNets = futureWeeks.map(() => weeklyIncome + 55);
+
+  return buildCoachContext({
+    config,
+    weeklyIncome,
+    avgWeeklySpend,
+    goals: [{ id: "g1", target: goalTarget, completed: false }],
+    expenses: [{
+      id: "e1", label: "Rent", category: "Needs",
+      history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }],
+    }],
+    fundedGoalSpend: 0,
+    currentWeek,
+    today: "2026-03-09",
+    runwayDays: null,
+    logs: [],
+    futureWeeks,
+    timelineWeekNets,
+    futureWeekNets: [weeklyIncome + 55],
+    logNetLost: 0,
+    logNetGained: 0,
+    futureEventDeductions: {},
+    prevWeekNet: weeklyIncome + 5,
+    allWeeks: futureWeeks,
+  });
+}

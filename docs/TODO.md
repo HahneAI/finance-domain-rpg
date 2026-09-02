@@ -1062,6 +1062,20 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     anti-escalation instruction not fully holding, the opposite framing from Ask Coach's
     accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
     Limitations.
+  - [x] **Fixture prep for unbuilt modes (2026-09-02)**, ahead of the prompts themselves —
+    `scripts/coach-eval/fixtures/testAccount.js` gained `buildWeeklyBriefingContext()` for Weekly
+    Pre-Game Briefing (§8.A): a real funded goal against a real 8-week `futureWeeks`/
+    `timelineWeekNets` series (real `Date` objects — `computeGoalTimeline()` needs
+    `week.weekEnd.getFullYear()`, a date string silently crashes inside `getPhaseIndex()`), so
+    `computeGoalTimeline()` has genuine data to project instead of the goal-free shortcut the
+    original fixture takes. Ready to plug into a real prompt loader the moment this mode is built.
+    **Burnout Sentinel's work-pattern half was assessed and explicitly not built** — initial
+    read was that it was buildable via `logs`, corrected on closer inspection:
+    `buildCoachContext()` has no `weekConfirmations` param, `logs` only ever surfaces the single
+    most-recent entry (never a streak/trend), and `EVENT_TYPES` has no overtime/extra-shift
+    category — faking a streak signal from what's actually available would be dressing up
+    fabricated data to look real, the exact thing this harness exists to avoid. Building it for
+    real needs engine work first (a streak/OT-tracking data source), not a fixture.
   - [ ] Remaining slices not yet run: Job Hunt Chat (§2.E) and Résumé Review (§2.E1) — both
     shipped, both have existing never-live-verified targets (2 and 3); the still-unbuilt flat
     rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing); the remaining undefined axes

@@ -1,0 +1,28 @@
+description: >
+  Repeat-verify pass for the "firm" candidate addendum from
+  promptfooconfig.phase5c-tuning.yaml (Résumé Review prompt-tuning,
+  docs/TODO.md §2.L). "firm" beat "soft" on its first sample: a single,
+  clean, vocabulary-bank-matching touch ("get it in your corner") placed
+  naturally at the closing line, vs. "soft"'s single but off-vocabulary,
+  slightly muddled touch. One sample each isn't enough to call it — this
+  confirms "firm" reliably produces ONE clean touch (not zero, not
+  stacked, not off-register) rather than having gotten lucky once.
+
+  claude-sonnet-5, same fixture, --repeat 2 (2 more calls, for 3 total on
+  this variant counting the original tuning-pass sample).
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/resumeReviewTuning.js
+    label: resume-review-tuning
+
+tests:
+  - description: "Firm — repeat-verify"
+    vars:
+      variant: "firm"

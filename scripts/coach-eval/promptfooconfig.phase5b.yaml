@@ -1,0 +1,44 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L), second slice — Job Hunt Assistant
+  (JOB_HUNT_SYSTEM_PROMPT in coachPrompts.js). This mode's own rubric anchor
+  (scored 2026-07-25, never live-verified) calls for Metaphor Intensity 2
+  ("trace") — LESS than the shipped default of 3 — on the reasoning that an
+  active job search under real runway pressure shouldn't read as commentary.
+  First live check of whether that holds, and per the standing instruction
+  from Phase 4, whether Axis 2 (Urgency Escalation) moves between a healthy
+  and a tight runway the way it moved for Ask Coach's budget severity.
+
+  Deliberately NO calibration override — sampling the real, shipped prompt on
+  claude-sonnet-5 (JobHuntChatPanel.jsx's own model choice, §18.E — unrelated
+  to Ask Coach's Haiku lock, not being relitigated here). Same question both
+  times (defaultTest.vars.userMessage), only the account's runway pressure
+  differs (fixtures/testAccount.js's buildJobHuntTestContext(), "healthy"
+  ~70 days vs. "tight" ~9 days, same applications logged in both) — isolates
+  whether any register shift comes from the data, not the wording.
+
+  First pass: 2 calls, no repeat. Repeat-verify only if the result looks
+  worth confirming.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/jobHuntChat.js
+    label: job-hunt-chat
+
+defaultTest:
+  vars:
+    userMessage: "Which of these two applications should I follow up on first, and how?"
+
+tests:
+  - description: "Healthy runway (~70 days) — natural behavior, no override"
+    vars:
+      variant: "healthy"
+
+  - description: "Tight runway (~9 days) — natural behavior, no override"
+    vars:
+      variant: "tight"

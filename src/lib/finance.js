@@ -708,18 +708,67 @@ export function buildYear(cfg, baseRateHistory = null) {
   return weeks;
 }
 
-export function computeNet(w, cfg, extraPerCheck, showExtra) {
+/**
+ * Itemized counterpart to computeNet() — same inputs, same arithmetic, but
+ * returns every component instead of only the final scalar. computeNet()
+ * below is a thin `.net` accessor over this function, which is the whole
+ * point: an itemized week breakdown and the app's authoritative net figure
+ * are computed once, here, and cannot drift apart the way a hand-copied
+ * second derivation would (docs/drift-app-warden.md's parallel-formula case
+ * law; §6's grounding rule).
+ *
+ * Added for the Coach `get_week_breakdown` tool (docs/coach-entry-points.md
+ * §1), which needs the fed/state/FICA/benefits/401k split that computeNet()
+ * deliberately collapses. Note that BudgetPanel.jsx's `checkBreakdown` memo
+ * still carries its own inline copy of this split and is NOT converted here
+ * — it diverges from computeNet() on otherDeductions specifically (it reads
+ * only `row.weeklyAmount` and skips the checksPerYear/52 scaling that
+ * otherPostTaxDeductions() applies), so folding it in would change numbers
+ * a user already sees in that modal. Tracked as a separate follow-up, not
+ * silently corrected inside a Coach change.
+ *
+ * All figures are PER WEEK, matching computeNet()'s own basis — callers that
+ * display per-paycheck amounts scale by 52/checksPerYear themselves, exactly
+ * as IncomePanel does.
+ */
+export function computeNetBreakdown(w, cfg, extraPerCheck, showExtra) {
   // Unemployment benefits (§1.C2) are non-taxed at the engine layer — withholding
   // is optional and out of scope for v1. Surfaces on every week regardless of
   // active state so the user sees benefit income even though the job-loss week
   // isn't "active" in the employment sense.
   const unemployment = w.unemploymentIncome ?? 0;
-  if (!w.active) return unemployment;
+  const base = {
+    active: !!w.active,
+    taxedBySchedule: !!w.taxedBySchedule,
+    isHighWeek: !!w.isHighWeek,
+    grossPay: 0,
+    taxableGross: 0,
+    federalTax: 0,
+    stateTax: 0,
+    fica: 0,
+    benefits: 0,
+    k401Employee: 0,
+    otherPostTax: 0,
+    unemploymentIncome: unemployment,
+  };
+  if (!w.active) return { ...base, net: unemployment };
+
   const fica = w.grossPay * cfg.ficaRate;
   const payrollDeductions = deriveWeeklyPayrollDeductions(w, cfg);
   const ded = payrollDeductions.total;
   const otherPostTax = otherPostTaxDeductions(cfg);
-  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax + unemployment;
+  const common = {
+    ...base,
+    grossPay: w.grossPay,
+    taxableGross: w.taxableGross ?? 0,
+    fica,
+    benefits: payrollDeductions.benefits,
+    k401Employee: payrollDeductions.k401Employee,
+    otherPostTax,
+  };
+  if (!w.taxedBySchedule) {
+    return { ...common, net: (w.grossPay - fica - ded) - otherPostTax + unemployment };
+  }
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
   const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
@@ -727,7 +776,16 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
   const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
-  return (w.grossPay - fed - st - fica - ded) - otherPostTax + unemployment;
+  return {
+    ...common,
+    federalTax: fed,
+    stateTax: st,
+    net: (w.grossPay - fed - st - fica - ded) - otherPostTax + unemployment,
+  };
+}
+
+export function computeNet(w, cfg, extraPerCheck, showExtra) {
+  return computeNetBreakdown(w, cfg, extraPerCheck, showExtra).net;
 }
 
 export function projectedGross(isWeek2, cfg) {

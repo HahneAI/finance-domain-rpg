@@ -480,7 +480,15 @@ describe("coach — Anthropic proxy", () => {
     });
   });
 
-  it("leaves non-string content on the last message untouched instead of double-wrapping it", async () => {
+  // Was previously asserted as a byte-identical passthrough. That assertion
+  // predated Coach's drill-down tools: a tool round appends an assistant
+  // tool_use turn and a user tool_result turn, both with ARRAY content, and
+  // passing those through untouched dropped the multi-turn cache breakpoint on
+  // exactly the turns a tool loop makes most expensive. The rule the original
+  // test was really protecting — never wrap an array inside another block —
+  // still holds and is asserted below; the breakpoint is now attached
+  // block-wise instead.
+  it("attaches the cache breakpoint to the last block of array content without re-wrapping it", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
     vi.stubGlobal("fetch", fetchMock);
     const structuredContent = [{ type: "text", text: "already a block" }];
@@ -489,7 +497,65 @@ describe("coach — Anthropic proxy", () => {
     await handler(mkReq({ body: { messages: [{ role: "user", content: structuredContent }] } }), res);
 
     const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sentBody.messages[0].content).toEqual(structuredContent);
+    expect(sentBody.messages[0].content).toEqual([
+      { type: "text", text: "already a block", cache_control: { type: "ephemeral" } },
+    ]);
+  });
+
+  it("marks only the final block when the last message carries several", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq({
+      body: {
+        messages: [{
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "tu_1", content: "{\"a\":1}" },
+            { type: "tool_result", tool_use_id: "tu_2", content: "{\"b\":2}" },
+          ],
+        }],
+      },
+    }), res);
+
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content;
+    expect(sent[0].cache_control).toBeUndefined();
+    expect(sent[1].cache_control).toEqual({ type: "ephemeral" });
+    expect(sent[0].tool_use_id).toBe("tu_1");
+    expect(sent[1].tool_use_id).toBe("tu_2");
+  });
+
+  it("forwards a client-supplied tools array to Anthropic", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const tools = [{ name: "get_goal_detail", description: "d", input_schema: { type: "object", properties: {} } }];
+
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "hi" }], tools } }), res);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).tools).toEqual(tools);
+  });
+
+  it("omits tools entirely when the caller sends none", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "hi" }] } }), res);
+
+    expect("tools" in JSON.parse(fetchMock.mock.calls[0][1].body)).toBe(false);
+  });
+
+  it("rejects a non-array tools field with a 400", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "hi" }], tools: "nope" } }), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

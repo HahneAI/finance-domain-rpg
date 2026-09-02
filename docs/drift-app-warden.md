@@ -5264,6 +5264,55 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > `dbResumeProfile.test.js`'s partial-upsert block, `resumeFile.test.js`'s extraction-dispatch
 > cases, `ResumeReviewCard.test.jsx`'s v2 file-upload block.
 
+**F163 · Coach drill-down tools — client-side execution + grounding contract** — `coachTools.js`, `claude.js`, `api/coach.js` — **[L]**
+2026-09-02. Coach gained four read-only drill-down tools (`get_goal_detail`,
+`get_expense_detail`, `get_week_breakdown`, `list_log_entries`) so it can fetch depth on demand
+instead of having every figure pre-stuffed into F113's fixed context block. **Three structural
+properties define this entry.** (1) **Tools execute in the BROWSER, never on the server** —
+`api/coach.js` forwards the declarations and streams `tool_use` blocks back; `chatWithCoach`
+(`claude.js`) runs them against the caller's live prop bag and posts a `tool_result` turn. No new
+Vercel function (the deployment is at 12/12 on the Hobby cap), and no additional user data crosses
+the network. (2) **Every tool arm resolves through the same authoritative Spine-A function its UI
+twin uses** — `computeGoalTimeline` (with the F18 epoch arg), `getExactEffectiveAmountForMonth`
+(F38/F102 — never `billingMeta.amount`), `computeNetBreakdown`, `calcEventImpact`,
+`resolveEventWeekMeta`. Not one figure is re-derived locally; that is the same D1 contract F113
+holds, extended to the tool layer. (3) **F114's privacy split carries over unchanged** —
+`get_goal_detail` is rank-addressed and returns no `goal.label`, while `get_expense_detail` is
+label-addressed, matching the existing asymmetry exactly.
+> **IF** a tool is added to `COACH_TOOLS`, **THEN** it MUST (a) resolve every returned figure
+> through the Spine-A function its UI twin calls, (b) inherit F114's withholding for any goal or
+> aspirational entity, and (c) be added only to a per-surface set whose panel actually holds that
+> tool's data — `JOB_HUNT_TOOLS` is deliberately just `get_expense_detail` because
+> NewJobSeasonHomePanel receives only `{config, expenses, effectiveToday, currentWeek}`; widening
+> it means threading the missing props first, not appending a name. **IF** a tool arm is changed,
+> **THEN** it is a named consumer in the blast radius of F18/F38/F102 and of `computeNetBreakdown`
+> (F164). **IF** a Coach surface starts passing `tools`, **THEN** its `toolData` bag must be the
+> same object graph it feeds `buildCoachContext()`, or a tool and the context line summarizing it
+> can disagree. Check: `coachTools.test.js` (per-tool grounding + privacy + failure cases),
+> `claudeToolLoop.test.js` (SSE `tool_use` parsing, fragmented `input_json_delta` reassembly,
+> round cap, error passthrough), `coach.test.js`'s tools-forwarding block.
+> **Termination invariant:** the loop is bounded twice — `maxToolRounds` (default 4) AND a hard
+> "a round not offered tools is the last one" return, so an unexpected `tool_use` stop_reason can
+> never spin the client. Keep both; the cap alone rests on an assumption about a remote service.
+
+**F164 · `computeNetBreakdown` ↔ `computeNet` — one derivation, two shapes** — `finance.js:711–…` — **[L]**
+2026-09-02. `computeNet()` no longer contains the paycheck arithmetic; it is now
+`computeNetBreakdown(...).net`. The itemizer exists because `get_week_breakdown` (F163) needs the
+fed/state/FICA/benefits/401k split that `computeNet` collapses to a scalar, and hand-copying that
+split into the tool layer would have been a textbook D1 parallel formula.
+> **IF** paycheck arithmetic changes (rates, deduction order, unemployment handling, the
+> `taxedBySchedule` branch), **THEN** change it in `computeNetBreakdown` ONLY — `computeNet` must
+> stay a one-line accessor, which is what makes their agreement structural rather than a
+> coincidence re-verified by eye. **KNOWN, NOT FIXED HERE:** `BudgetPanel.jsx`'s `checkBreakdown`
+> memo still carries its own inline copy of this split and diverges from `computeNet` on
+> `otherDeductions` specifically — it reads only `row.weeklyAmount` and skips the
+> `checksPerYear/52` scaling `otherPostTaxDeductions()` applies. Folding it in would change
+> numbers a user already sees in that modal, so it was deliberately left alone rather than
+> silently corrected inside a Coach change; it is the obvious next convergence target for this
+> function. Check: `coachTools.test.js`'s `computeNetBreakdown` block asserts `.net ===
+> computeNet()` across active/high/exempt/inactive/zero-gross weeks and that the components
+> recompose to the same total.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

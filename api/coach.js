@@ -162,11 +162,29 @@ export default async function handler(req, res) {
     }
   }
 
-  const { messages, systemPrompt, contextBlock, model } = req.body ?? {};
+  const { messages, systemPrompt, contextBlock, model, tools } = req.body ?? {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "messages must be a non-empty array" });
   }
   const modelId = MODEL_IDS[model] ?? MODEL_IDS.haiku;
+  // Coach's drill-down tools (src/lib/coachTools.js) EXECUTE IN THE BROWSER,
+  // not here — this route only forwards the declarations and streams the
+  // model's tool_use blocks back for the client to run. That's deliberate:
+  // the client already holds every figure the tools read, so nothing extra
+  // crosses the network, and no second serverless function is needed (the
+  // deployment sits at 12/12 on Vercel's Hobby cap — see CLAUDE.md).
+  //
+  // Forwarding a client-supplied tool list adds no new server-side trust
+  // problem: this route has never validated systemPrompt/contextBlock content
+  // either (see the known-gap note above), and a tool declaration is inert
+  // here — it can only ever cause the model to ask the CALLER to run
+  // something, against data that caller already has. Shape-checked only, so a
+  // malformed body fails here with a clear 400 instead of an opaque 400 from
+  // Anthropic.
+  const hasTools = Array.isArray(tools) && tools.length > 0;
+  if (tools !== undefined && !Array.isArray(tools)) {
+    return res.status(400).json({ error: "tools must be an array when provided" });
+  }
 
   const system = [];
   if (systemPrompt) system.push({ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } });
@@ -181,13 +199,28 @@ export default async function handler(req, res) {
   // content block of the most-recently-appended turn — that's always
   // `messages[messages.length - 1]` here, since the client only ever calls
   // this route with the latest user turn appended.
-  const cachedMessages = messages.map((m, i) => {
-    if (i !== messages.length - 1) return m;
-    const content = typeof m.content === "string"
-      ? [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }]
-      : m.content;
+  //
+  // 2026-09-02: this used to assume "the client only ever calls this route
+  // with the latest user turn appended," which stopped being true when the
+  // drill-down tools landed — a tool round re-calls this route with an
+  // assistant tool_use turn and a user tool_result turn appended, both
+  // carrying ARRAY content rather than a string. The old string-only branch
+  // silently passed those through with no cache_control at all, dropping the
+  // multi-turn breakpoint on exactly the turns a tool loop makes most
+  // expensive. The breakpoint still belongs on the last content block of the
+  // most-recently-appended turn either way; it just has to be attached
+  // block-wise now, not only in the string case.
+  const withCacheBreakpoint = (m) => {
+    if (typeof m.content === "string") {
+      return { ...m, content: [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }] };
+    }
+    if (!Array.isArray(m.content) || m.content.length === 0) return m;
+    const content = m.content.map((block, i) =>
+      i === m.content.length - 1 ? { ...block, cache_control: { type: "ephemeral" } } : block
+    );
     return { ...m, content };
-  });
+  };
+  const cachedMessages = messages.map((m, i) => (i === messages.length - 1 ? withCacheBreakpoint(m) : m));
 
   const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -201,6 +234,7 @@ export default async function handler(req, res) {
       max_tokens: 1024,
       system,
       messages: cachedMessages,
+      ...(hasTools ? { tools } : {}),
       stream: true,
     }),
   });

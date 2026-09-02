@@ -318,7 +318,10 @@ describe("buildCoachContext", () => {
     const logLine = block.split("\n").find((l) => l.startsWith("Log entries:"));
     const periodLine = block.split("\n").find((l) => l.startsWith("Current period:"));
     // The log's own week, stated as a start date plus its own period number...
-    expect(logLine).toContain(`the week of ${fmtFullDate(allWeeks[9].weekStart)} (week 10)`);
+    expect(logLine).toContain(`Missed Shift (Unpaid/Approved), the week of ${fmtFullDate(allWeeks[9].weekStart)} (week 10)`);
+    // formatPeriodWithDate brings its own parens; don't nest another pair.
+    expect(logLine).not.toContain("((");
+    expect(logLine).not.toContain("(the week of");
     // ...and distinct from the period Coach is currently in.
     expect(periodLine).toContain("(week 11)");
     expect(logLine).not.toContain("week 11");

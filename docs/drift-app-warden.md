@@ -5294,6 +5294,14 @@ label-addressed, matching the existing asymmetry exactly.
 > **Termination invariant:** the loop is bounded twice — `maxToolRounds` (default 4) AND a hard
 > "a round not offered tools is the last one" return, so an unexpected `tool_use` stop_reason can
 > never spin the client. Keep both; the cap alone rests on an assumption about a remote service.
+> **Counterfactual gap (adversarial live test, 2026-09-02):** every tool here is READ-ONLY and
+> reports current state. `computeGoalTimeline()` already folds `logNetLost` in, so a goal's date
+> is always the *with-events* projection and no without-events figure exists in any payload. Asked
+> "did that missed shift push my goal back," live output asserted "week 18 instead of earlier,"
+> implying a comparison it never computed. **IF** a tool is added that reports the dollar impact of
+> a past event, **THEN** note that it invites exactly this counterfactual question, and that the
+> answer requires a `simulate_*` tool (docs/TODO.md §2.G) — not a prompt instruction telling Coach
+> to compute something it has no input for.
 
 **F164 · `computeNetBreakdown` ↔ `computeNet` — one derivation, two shapes** — `finance.js:711–…` — **[L]**
 2026-09-02. `computeNet()` no longer contains the paycheck arithmetic; it is now

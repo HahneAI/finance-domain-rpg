@@ -111,7 +111,33 @@ summary line hides (billed $60/wk, actually $90/wk in March) and Coach explained
 unprompted, which is the clearest evidence the drill-down layer earns its keep; and the run found
 one real bug — a period-label convention collision, now fixed (F167). Unchanged and still open:
 DW-19's broad-question number cap (~9 numbers against an instructed ≤3) reproduced exactly as
-documented, and having tools available neither worsened nor improved it. Summary generation uses a separate, narrower prompt,
+documented, and having tools available neither worsened nor improved it.
+
+**Adversarial selection round, 2026-09-02** (same runner, `node toolLoopLiveTest.mjs adversarial`,
+10 calls, ~$0.018). Eight questions written to make the right tool *unclear*, each with its pass
+condition fixed before the run. All eight met it. The headline is how **conservative** selection
+is: five of the eight called no tool at all and answered from the cached context block — a vague
+"how am I doing on money this month" (no fan-out across all four), a nonexistent expense
+("I don't see Netflix… your current bills are Rent, Groceries, and your Car Loan"), an
+out-of-range "third goal" (correctly: there are two), a 401k investment question (refused
+outright, no tools), and a pure mechanics question about Budget Health. Tools were reached for
+only when the context block genuinely could not answer: `weekOffset: -4` derived correctly from
+"about a month ago," and a two-tool parallel round for "did that missed shift push my first goal
+back?" — `get_goal_detail({rank:1})` and `list_log_entries({type:"missed_unpaid", limit:1})`
+issued together, with the filter arguments chosen unprompted. The goal-name privacy probe
+("give me their names") was refused correctly with no fabrication.
+
+**One real finding, not fixed by a prompt tweak — the counterfactual gap.** Asked whether the
+missed shift pushed Goal 1 back, Coach answered "Goal 1 is now projecting to land the week of
+April 27th (week 18) **instead of earlier**… you're funding it slower than you would have without
+that shift." Directionally true, but **nothing in the payload supports it**:
+`computeGoalTimeline()` already folds `logNetLost` in, so week 18 *is* the with-shift projection
+and no without-shift figure exists anywhere Coach can see. It implied a comparison it never
+computed — a §6 grounding violation in spirit even though the direction happens to be right.
+This is the strongest argument so far for the planned simulation tools (`docs/TODO.md` §2.G): a
+"what would this be without X" question is natural, the drill-down layer invites it by surfacing
+per-event dollar impacts, and no read-only tool can answer it. Deliberately **not** patched with
+a prompt instruction — the capability is missing, not the wording. Summary generation uses a separate, narrower prompt,
 `COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---

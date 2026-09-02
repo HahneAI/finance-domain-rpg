@@ -184,11 +184,13 @@ export function buildCoachContext({
     // in live testing, attributing a week-10 event to week 11. Falls back to
     // the old phrasing when the entry has no resolvable weekIdx (an unresolved
     // row carries weekIdx "", see resolveEventWeekMeta).
-    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (${
+    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type}${
       Number.isFinite(Number(mostRecentLog.weekIdx)) && mostRecentLog.weekIdx !== "" && mostRecentLog.weekIdx != null
-        ? formatPeriodWithDate(Number(mostRecentLog.weekIdx), allWeeks, checksPerYear)
-        : `week ending ${fmtFullDate(mostRecentLog.weekEnd)}`
-    })` : ""}`,
+        // formatPeriodWithDate supplies its own "(week N)" parens — wrapping it
+        // in another pair renders "(the week of March 2nd, 2026 (week 10))".
+        ? `, ${formatPeriodWithDate(Number(mostRecentLog.weekIdx), allWeeks, checksPerYear)}`
+        : ` (week ending ${fmtFullDate(mostRecentLog.weekEnd)})`
+    }` : ""}`,
     `Current period: ${currentPeriodLabel}${periodsLeft != null ? `, ${periodsLeft} ${periodUnitPlural} left in the fiscal year` : ""}`,
     `Today: ${today ? fmtFullDate(today) : "—"}`,
   ];

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
+import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeNetBreakdown, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -438,29 +438,36 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : checksPerYear === 12 ? "This Month" : "This Paycheck");
   const checkBreakdown = useMemo(() => {
     if (!infoRefWeek || !config) return null;
-    const gross = infoRefWeek.grossPay ?? 0;
-    const fica  = gross * (config.ficaRate ?? 0);
-    const payroll   = deriveWeeklyPayrollDeductions(infoRefWeek, config);
-    const benefits  = payroll.benefits;
-    const k401      = payroll.k401Employee;
-    let fedTax = 0, stateTax = 0;
-    if (infoRefWeek.taxedBySchedule) {
-      const fedRate = infoRefWeek.isHighWeek
-        ? (config.fedRateHigh ?? config.w2FedRate ?? 0)
-        : (config.fedRateLow  ?? config.w1FedRate ?? 0);
-      const stRate  = infoRefWeek.isHighWeek
-        ? (config.stateRateHigh ?? config.w2StateRate ?? 0)
-        : (config.stateRateLow  ?? config.w1StateRate ?? 0);
-      fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
-      stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
-    }
+    // computeNetBreakdown is the app's single paycheck derivation — computeNet()
+    // is a `.net` accessor over this same call. This block used to re-derive the
+    // whole split inline, and drifted: its otherPostTax read `row.weeklyAmount`,
+    // but db.js renames that field to `perCheckAmount` on every load and both
+    // wizards only ever write `perCheckAmount`, so the sum was ALWAYS 0 — this
+    // modal silently omitted other deductions entirely and overstated Net Pay
+    // and Spendable by their full amount. It also skipped the checksPerYear/52
+    // scaling otherPostTaxDeductions() applies, which mis-scales a non-weekly
+    // account once that amount is non-zero.
+    //
+    // Converged rather than field-renamed: patching `weeklyAmount` here would
+    // fix today's symptom and leave a second copy of the paycheck formula free
+    // to drift again (docs/drift-app-warden.md §12).
+    //
+    // (0, false) for extraPerCheck/showExtra matches this panel exactly — it
+    // has no such props and never added extra withholding. Unemployment income
+    // is likewise a non-issue: New Job Season renders NewJobSeasonBudgetPanel
+    // in place of this panel (App.jsx:2275), so no week reachable here carries
+    // any.
+    const breakdown = computeNetBreakdown(infoRefWeek, config, 0, false);
+    const gross     = breakdown.grossPay;
+    const fica      = breakdown.fica;
+    const benefits  = breakdown.benefits;
+    const k401      = breakdown.k401Employee;
+    const fedTax    = breakdown.federalTax;
+    const stateTax  = breakdown.stateTax;
     // All values below are per-week. Multiply by perCheckFactor at return so the
     // modal always shows per-paycheck amounts regardless of pay schedule.
-    const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
-      const amt = row?.weeklyAmount;
-      return sum + (typeof amt === "number" ? amt : 0);
-    }, 0);
-    const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
+    const otherPostTax = breakdown.otherPostTax;
+    const netPay    = breakdown.net;
     const spendable = netPay - freedomAllowancePerWeek;
     // Exact math — this is a real paycheck accounting breakdown, not a bill-card
     // mental-math display (product decision, 2026-08-31).
@@ -2129,7 +2136,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
           <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
           {checkBreakdown.otherDeductions.map((row, i) => (
-            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * perCheckFactor)} />
+            /* perCheckAmount is already a per-paycheck figure and this modal is
+               per-paycheck, so it renders as stored — no perCheckFactor. The
+               engine's own round trip agrees: perCheck × (checksPerYear/52)
+               to weekly, then × (52/checksPerYear) to display, is identity.
+               The legacy `weeklyAmount` tail mirrors finance.js's own ?? chain
+               for a config not yet through db.js's rename. */
+            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2(row.perCheckAmount ?? row.weeklyAmount ?? 0)} />
           ))}
           <MathDivider thick />
 

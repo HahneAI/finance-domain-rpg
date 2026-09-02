@@ -210,13 +210,12 @@ const TOOL_ACCOUNT_CONFIG = {
   // (DEFAULT_CONFIG, constants/config.js:192, still defines all four, and
   // db.js:296 back-fills fedRateLow FROM w1FedRate on load).
   //
-  // Not redundant: calcEventImpact (finance.js:1505) reads ONLY the legacy
-  // names, with no `?? cfg.fedRateLow` fallback — the one rate consumer in the
-  // app missing the fallback its four siblings all have (finance.js:114/773,
-  // App.jsx:1800, BudgetPanel.jsx:450). Omitting these makes every log
-  // entry's netLost/netGained NaN, which then propagates into
-  // computeGoalTimeline's per-week surplus and silently reports every goal as
-  // "not on track" — found exactly that way while building this fixture.
+  // Kept after the fix, not removed: building this fixture is what exposed
+  // calcEventImpact reading ONLY the legacy names (NaN log impacts → every goal
+  // reported "not on track"). That is now fixed — both families resolve through
+  // resolveWithholdingRates (drift-app-warden §21 F165) — so these are no longer
+  // load-bearing. They stay because a real account genuinely carries both, and
+  // a fixture that dropped one would stop matching the shape the app sees.
   w1FedRate: 0.10, w2FedRate: 0.10,
   w1StateRate: 0.04, w2StateRate: 0.04,
   k401Rate: 0.05, k401MatchRate: 0.03,

@@ -709,6 +709,36 @@ export function buildYear(cfg, baseRateHistory = null) {
 }
 
 /**
+ * The one place "which withholding rates apply to this week" is answered.
+ *
+ * Two field families exist: the generalized fedRateLow/fedRateHigh/
+ * stateRateLow/stateRateHigh, and the legacy w1/w2 pair they replaced
+ * (constants/config.js still defines both; db.js back-fills fedRateLow FROM
+ * w1FedRate on load, so a loaded account always carries both and they agree).
+ * Every consumer is therefore obliged to read new-first with a legacy
+ * fallback — and calcEventImpact was the one that didn't, reading only the
+ * legacy names. A config carrying just the generalized family made its
+ * withholdingRate NaN, which silently propagated through netLost/netGained
+ * into computeGoalTimeline's per-week surplus and reported every goal as
+ * "not on track" — a plausible-looking wrong answer, not a crash.
+ *
+ * Extracted rather than fixed inline: two hand-maintained copies of this
+ * resolution IS the parallel-formula pattern (docs/drift-app-warden.md §12),
+ * and fixing one copy while leaving the other free to drift again would only
+ * reset the clock. Callers pass the week's own isHighWeek (computeNetBreakdown)
+ * or the event's derived isWeek2 (calcEventImpact) — the same boolean.
+ *
+ * Deliberately no `?? 0` tail: an account missing BOTH families is a broken
+ * config, and a loud NaN is safer there than a silent 0% withholding that
+ * overstates take-home. This matches what computeNet has always done.
+ */
+export function resolveWithholdingRates(cfg, isHighWeek) {
+  return isHighWeek
+    ? { fed: cfg.fedRateHigh ?? cfg.w2FedRate, state: cfg.stateRateHigh ?? cfg.w2StateRate }
+    : { fed: cfg.fedRateLow ?? cfg.w1FedRate, state: cfg.stateRateLow ?? cfg.w1StateRate };
+}
+
+/**
  * Itemized counterpart to computeNet() — same inputs, same arithmetic, but
  * returns every component instead of only the final scalar. computeNet()
  * below is a thin `.net` accessor over this function, which is the whole
@@ -719,13 +749,12 @@ export function buildYear(cfg, baseRateHistory = null) {
  *
  * Added for the Coach `get_week_breakdown` tool (docs/coach-entry-points.md
  * §1), which needs the fed/state/FICA/benefits/401k split that computeNet()
- * deliberately collapses. Note that BudgetPanel.jsx's `checkBreakdown` memo
- * still carries its own inline copy of this split and is NOT converted here
- * — it diverges from computeNet() on otherDeductions specifically (it reads
- * only `row.weeklyAmount` and skips the checksPerYear/52 scaling that
- * otherPostTaxDeductions() applies), so folding it in would change numbers
- * a user already sees in that modal. Tracked as a separate follow-up, not
- * silently corrected inside a Coach change.
+ * deliberately collapses. BudgetPanel.jsx's `checkBreakdown` memo is the app's
+ * other itemized consumer and now calls this too (converged 2026-09-02) — its
+ * old inline copy had drifted to reading `row.weeklyAmount`, a field db.js
+ * renames away on load, so the modal silently omitted other deductions for
+ * every account. See docs/drift-app-warden.md §21 F166. There is exactly one
+ * paycheck derivation in the app; keep it that way.
  *
  * All figures are PER WEEK, matching computeNet()'s own basis — callers that
  * display per-paycheck amounts scale by 52/checksPerYear themselves, exactly
@@ -769,13 +798,9 @@ export function computeNetBreakdown(w, cfg, extraPerCheck, showExtra) {
   if (!w.taxedBySchedule) {
     return { ...common, net: (w.grossPay - fica - ded) - otherPostTax + unemployment };
   }
-  // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
-  const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
-  const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
-  const stLow   = cfg.stateRateLow  ?? cfg.w1StateRate;
-  const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
-  const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
-  const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
+  const rates = resolveWithholdingRates(cfg, w.isHighWeek);
+  const fed = w.taxableGross * rates.fed + (showExtra ? extraPerCheck : 0);
+  const st = w.taxableGross * rates.state;
   return {
     ...common,
     federalTax: fed,
@@ -1501,9 +1526,11 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
       ? Boolean(_overrides[_wIdx])
       : (Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(_wIdx))
   );
-  const withholdingRate = isTaxedWeek
-    ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
-    : 0;
+  // resolveWithholdingRates, not the legacy w1/w2 fields directly: reading
+  // those alone made this NaN for any config carrying only the generalized
+  // rate names (see that function's comment for the full failure path).
+  const eventRates = resolveWithholdingRates(cfg, isWeek2);
+  const withholdingRate = isTaxedWeek ? eventRates.fed + eventRates.state : 0;
   const effectiveTaxRate = cfg.ficaRate + withholdingRate;
   const netLost = grossLost * (1 - effectiveTaxRate), netGained = grossGained * (1 - effectiveTaxRate);
   const weekDate = event.weekEnd ? new Date(event.weekEnd) : null;

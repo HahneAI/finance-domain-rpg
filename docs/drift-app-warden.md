@@ -5365,6 +5365,29 @@ is non-zero at all.
 > modal, and asserts a real amount on the row, Net Pay reduced by it, no `perCheckFactor` scaling
 > on a biweekly account, and the legacy `weeklyAmount` tail still read.
 
+**F167 · One period-label convention across every Coach surface** — `aiContext.js`, `coachTools.js` — **[L]**
+2026-09-02, found by the first live tool-selection test (`scripts/coach-eval/toolLoopLiveTest.mjs`).
+A fiscal week ENDS on the same calendar day the next one BEGINS. `buildCoachContext`'s
+`formatPeriodWithDate` labels a period by its START ("the week of March 9th, 2026 (week 11)"),
+but the log line labelled the most recent entry by its END ("week ending March 9th, 2026"), and
+`list_log_entries` returned the same end-date field. So the identical string "March 9th, 2026"
+named **two different fiscal weeks two lines apart** — week 10 (Mar 2→Mar 9) and week 11
+(Mar 9→Mar 16). Live output conflated them and attributed a week-10 missed shift to week 11,
+in the tool path (where the payload already carried the correct `periodNumber: 10`) and in the
+no-tool path from the context block alone. Fixed by routing both through the same start-date +
+period-number form; `list_log_entries` keeps the raw end date as `weekEndingDate`, which is what
+the Log panel itself shows, but it is no longer the only date field.
+> **IF** any Coach-facing surface names a fiscal week, pay period, or dated event, **THEN** it uses
+> `formatPeriodWithDate`/`periodLabels` — start date plus period number, in the unit this account's
+> pay schedule uses — never a bare end date and never a date without its period number. A date
+> alone is ambiguous by one week at every boundary in the app. **IF** a new tool returns a dated
+> row, **THEN** it inherits this shape (F163's contract). Check: `aiContext.test.js`'s
+> "same convention as Current period" case and `coachTools.test.js`'s "labels an entry's week the
+> same way" case — both assert the log's period is distinct from the current one, which is the
+> exact confusion that occurred. Note the fallback branch: an entry with no resolvable `weekIdx`
+> (`""`, per `resolveEventWeekMeta`) keeps the old "week ending" phrasing, since there is no
+> period to name.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

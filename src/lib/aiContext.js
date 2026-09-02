@@ -176,7 +176,19 @@ export function buildCoachContext({
       `Active goals total (Home tile — unfunded target sum): ${fmt$(totalActiveGoalsTarget)}`,
       `Weeks to complete all active goals (Home tile): ~${Math.ceil(lastGoalPeriods)} ${periodUnitPlural}`,
     ] : []),
-    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${fmtFullDate(mostRecentLog.weekEnd)})` : ""}`,
+    // The most-recent log entry is stated in the same "the week of <START>
+    // (week N)" form as the Current period line directly below it. It used to
+    // read "(week ending <END date>)", and because a fiscal week ends on the
+    // same calendar day the next one begins, that put two different weeks
+    // behind one identical date string two lines apart — Coach conflated them
+    // in live testing, attributing a week-10 event to week 11. Falls back to
+    // the old phrasing when the entry has no resolvable weekIdx (an unresolved
+    // row carries weekIdx "", see resolveEventWeekMeta).
+    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (${
+      Number.isFinite(Number(mostRecentLog.weekIdx)) && mostRecentLog.weekIdx !== "" && mostRecentLog.weekIdx != null
+        ? formatPeriodWithDate(Number(mostRecentLog.weekIdx), allWeeks, checksPerYear)
+        : `week ending ${fmtFullDate(mostRecentLog.weekEnd)}`
+    })` : ""}`,
     `Current period: ${currentPeriodLabel}${periodsLeft != null ? `, ${periodsLeft} ${periodUnitPlural} left in the fiscal year` : ""}`,
     `Today: ${today ? fmtFullDate(today) : "—"}`,
   ];

@@ -297,7 +297,32 @@ describe("buildCoachContext", () => {
         { type: "missed_unpaid", weekEnd: "2026-06-01" },
       ],
     });
+    // These rows carry no weekIdx, so this covers the fallback phrasing.
     expect(block).toContain(`Log entries: 2 logged, most recent: Missed Shift (Unpaid/Approved) (week ending ${fmtFullDate("2026-06-01")})`);
+  });
+
+  it("states the most recent log entry's week in the same convention as Current period", () => {
+    // Regression (live-tested 2026-09-02): a fiscal week ENDS on the same
+    // calendar day the next one BEGINS, so labelling a log entry by its end
+    // date while labelling the current period by its start date put two
+    // different weeks behind one identical date string, two lines apart.
+    // Coach conflated them and attributed a week-10 event to week 11.
+    const allWeeks = buildAllWeeks(52);
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      logs: [{ type: "missed_unpaid", weekIdx: 9, weekEnd: "2026-03-09" }],
+      currentWeek: { idx: 10 },
+      allWeeks,
+    });
+    const logLine = block.split("\n").find((l) => l.startsWith("Log entries:"));
+    const periodLine = block.split("\n").find((l) => l.startsWith("Current period:"));
+    // The log's own week, stated as a start date plus its own period number...
+    expect(logLine).toContain(`the week of ${fmtFullDate(allWeeks[9].weekStart)} (week 10)`);
+    // ...and distinct from the period Coach is currently in.
+    expect(periodLine).toContain("(week 11)");
+    expect(logLine).not.toContain("week 11");
+    expect(logLine).not.toContain("week ending");
   });
 
   it("falls back to the raw type string for an unrecognized log type", () => {

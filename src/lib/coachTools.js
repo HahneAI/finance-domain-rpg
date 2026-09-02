@@ -388,8 +388,19 @@ function toolListLogEntries({ type = null, limit = 10 }, data) {
     const labels = week ? periodLabels(week.idx, allWeeks, checksPerYear) : null;
     return {
       type: EVENT_TYPES[e.type]?.label ?? e.type,
-      weekEnding: e.weekEnd ? fmtFullDate(e.weekEnd) : null,
+      // "the week of <START>" + period number — the same convention
+      // get_week_breakdown, get_goal_detail and the context block's "Current
+      // period" all use. This previously returned `weekEnding`, an END date,
+      // and the two conventions collide: week 10 ENDS on the same calendar day
+      // week 11 BEGINS, so the identical string "March 9th, 2026" named two
+      // different fiscal weeks depending on which field you were reading. Live
+      // testing caught Coach attributing a logged event to week 11 when this
+      // tool had already told it periodNumber 10.
+      date: labels?.date ?? null,
       periodNumber: labels?.period ?? null,
+      // Retained: the raw week-end date is still the log row's own identity in
+      // the Log panel, and is what a user scanning that list actually sees.
+      weekEndingDate: e.weekEnd ? fmtFullDate(e.weekEnd) : null,
       netImpact: round2(impact.netGained - impact.netLost),
       note: e.note || null,
     };

@@ -99,7 +99,19 @@ summarizing it to resolve a figure differently. Only the visible text is persist
 `coach_chats` — `tool_use`/`tool_result` blocks never leave the request loop. The goal-name
 privacy rule holds through the tools too: `get_goal_detail` is addressed by funding rank and
 returns no label. Loop is bounded at 4 tool rounds per user turn. See
-`docs/drift-app-warden.md` §21 F163/F164. Summary generation uses a separate, narrower prompt,
+`docs/drift-app-warden.md` §21 F163/F164.
+
+**Live-tested 2026-09-02** (`scripts/coach-eval/toolLoopLiveTest.mjs`, `claude-haiku-4-5`, 11 real
+calls, one conversation per planned prompt, no retries). Tool *selection* was correct 4/4 — one
+targeted question per tool, each picking the right tool on the first round with sensible arguments
+— and the broad "give me everything" question correctly called **no** tools, answering from the
+cached context block instead. Every figure Coach quoted cross-checked against the authoritative
+function. Two things worth carrying forward: `get_expense_detail` surfaced a month-override the
+summary line hides (billed $60/wk, actually $90/wk in March) and Coach explained the difference
+unprompted, which is the clearest evidence the drill-down layer earns its keep; and the run found
+one real bug — a period-label convention collision, now fixed (F167). Unchanged and still open:
+DW-19's broad-question number cap (~9 numbers against an instructed ≤3) reproduced exactly as
+documented, and having tools available neither worsened nor improved it. Summary generation uses a separate, narrower prompt,
 `COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---

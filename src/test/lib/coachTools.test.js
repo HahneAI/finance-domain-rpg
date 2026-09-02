@@ -290,6 +290,25 @@ describe("executeCoachTool — list_log_entries", () => {
     expect(r.entries[1].netImpact).toBeGreaterThan(0);
     expect(r.entries[0].netImpact).toBeLessThan(0);
     expect(r.entries[1].note).toBe("Q2 bonus");
+    expect(r.entries[0].date).toMatch(/^the week of /);
+  });
+
+  it("labels an entry's week the same way every other period reference does", () => {
+    // Same regression as aiContext's: this returned `weekEnding`, an END date,
+    // while get_week_breakdown/get_goal_detail label a period by its START.
+    // Week 10 ends on the day week 11 begins, so both rendered "March 9th" and
+    // Coach attributed the week-10 event to week 11 despite having the right
+    // periodNumber in the payload.
+    const data = baseData();
+    const entry = executeCoachTool("list_log_entries", { type: "missed_unpaid" }, data).entries[0];
+    const week = executeCoachTool("get_week_breakdown", { weekOffset: 0 }, data);
+    expect(entry.periodNumber).toBe(27);
+    expect(entry.date).toBe(`the week of ${fmtFullDate(allWeeks[26].weekStart)}`);
+    // The raw end date stays available, but is no longer the only date field.
+    expect(entry.weekEndingDate).toBe(fmtFullDate("2026-07-04"));
+    // The entry's period is genuinely distinct from the current one.
+    expect(week.periodNumber).toBe(28);
+    expect(entry.date).not.toBe(week.date);
   });
 
   it("filters by event type", () => {

@@ -22,6 +22,12 @@ doesn't repeat their reasoning.
   purpose — keeps scope and call-count independently auditable rather than
   growing one monolithic config; follow the same `promptfooconfig.phaseNx.yaml`
   naming pattern for the next slice/phase, `-c <file>` to run one.
+  `promptfooconfig.phase5c-tuning.yaml`/`.phase5c-verify.yaml` — not a phase
+  slice, a prompt-TUNING pass once Phase 5c found Résumé Review's shipped
+  target didn't hold: tests candidate addendum wordings
+  (`prompts/resumeReviewTuning.js`) against the same fixture to find what
+  actually reaches the target, before touching `coachPrompts.js`. Same
+  separate-file-per-pass reasoning as above.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
   this harness can never silently test a stale prompt. One file per
@@ -39,6 +45,11 @@ doesn't repeat their reasoning.
   `resumeReview.js` takes no vars — matches `ResumeReviewCard.jsx`'s real
   call shape exactly: a plain `Résumé text:\n...\n\nTarget role: ...` string,
   not `buildCoachContext()` output at all, and a fixed trigger message.
+  `resumeReviewTuning.js` is the tuning-only sibling of `resumeReview.js` —
+  same fixture/call shape, but `vars.variant` (`current`/`soft`/`firm`)
+  swaps in a candidate addendum sentence instead of always importing the
+  shipped `RESUME_REVIEW_ADDENDUM`, so alternate wordings can be tested
+  without editing `coachPrompts.js`.
 - `fixtures/testAccount.js` — a fabricated-but-structurally-real test
   account run through the real `buildCoachContext()`, not hand-typed text.
   `buildTestContext({ weeklyIncome, avgWeeklySpend, newJobSeasonMode,
@@ -230,9 +241,23 @@ retry-on-a-hunch.** Concretely for this file:
     runway it quotes (drift-app-warden.md F167). Full writeup in
     `coach-personality-rubric.md`'s Known Limitations and the Job
     Hunt/Résumé Review table rows.
+  - [x] **Résumé Review prompt-tuning pass (2026-09-02)** —
+    `promptfooconfig.phase5c-tuning.yaml` + `.phase5c-verify.yaml`,
+    `prompts/resumeReviewTuning.js`, 4 calls total (soft + firm, then
+    `--repeat 2` on firm). Found the root cause: `COACH_PERSONA_PROMPT`'s
+    corner-man clause is a CAP, never a floor, so a technical/evaluative
+    mode with no addendum nudge just defaults to fully literal. "soft"
+    (names the gap, caps at one touch, no placement) got one touch but an
+    off-vocabulary, self-invented one. "firm" (also names the closing-line
+    placement + one worked example) got exactly one clean,
+    vocabulary-bank-matching touch **3/3 times**, always "corner," always
+    at the close, never explained, never stacked. **Not applied to
+    `coachPrompts.js` yet** — a real, reliable candidate fix, held for a
+    deliberate apply-now-vs-batch decision. Full writeup in
+    `coach-personality-rubric.md`'s Known Limitations.
   - [ ] Not yet run: the still-unbuilt flat rows, the remaining undefined
-    axes, and a repeat-verify pass on this slice if either result is worth
-    locking in before the batch decision.
+    axes, and a repeat-verify pass on Job Hunt Chat if it's worth locking
+    in before the batch decision.
 - [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
   handling moments → Opus, both locked and Phase-3-verified. Everything
   else in the table (Job Hunt Assistant, Résumé Review, Statement

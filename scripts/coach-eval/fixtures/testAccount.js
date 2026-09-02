@@ -28,7 +28,7 @@
 // buildCoachContext() only emits its "New Job Season: active" line when
 // config.newJobSeasonMode is true, so a realistic Red-tier test needs both
 // set, not just the addendum text alone.
-import { buildCoachContext } from "../../../src/lib/aiContext.js";
+import { buildCoachContext, buildJobHuntContext } from "../../../src/lib/aiContext.js";
 
 // Returns the raw ARGUMENT BAG buildTestContext() feeds buildCoachContext(),
 // rather than the rendered string. Split out 2026-09-02 so a second consumer
@@ -333,3 +333,71 @@ export function buildToolTestAccount({
 export function buildToolTestContext(opts = {}) {
   return buildCoachContext(buildToolTestAccount(opts));
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Job Hunt Assistant — for Phase 5's second slice (docs/TODO.md §2.L)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// buildJobHuntContext() (aiContext.js) takes a DIFFERENT bag than
+// buildCoachContext() — { config, expenses, effectiveToday, includeBenefits },
+// not the goals/logs/futureWeeks shape above — so this is its own fixture,
+// not a variant of buildTestAccountArgs(). Two variants sharing the same
+// applications list, differing only in newJobSeasonCashOnHand, so a finding
+// is attributable to runway pressure alone: "healthy" (~70 days) and "tight"
+// (~9 days) — a strong enough contrast to actually test whether Axis 2
+// (Urgency Escalation) moves the way it did for Ask Coach in Phase 4, on a
+// mode whose own rubric anchor (coachPrompts.js's JOB_HUNT_ADDENDUM,
+// 2026-07-25) already calls for LESS metaphor than the default, not more.
+const JOB_HUNT_APPLICATIONS = [
+  { company: "Riverbend Logistics", role: "Warehouse Supervisor", status: "Interview scheduled", dateApplied: "2026-03-01" },
+  { company: "Cascade Freight", role: "Operations Lead", status: "Applied", dateApplied: "2026-02-20" },
+];
+const JOB_HUNT_EXPENSES = [
+  { id: "e1", label: "Rent", category: "Needs", newJobSeasonStatus: "active", history: [{ effectiveFrom: "2026-01-01", weekly: [325, 325, 325, 325] }] },
+  { id: "e2", label: "Utilities", category: "Needs", newJobSeasonStatus: "active", history: [{ effectiveFrom: "2026-01-01", weekly: [75, 75, 75, 75] }] },
+];
+
+export function buildJobHuntTestAccount({ variant = "healthy" } = {}) {
+  const cashOnHand = variant === "tight" ? 500 : 4000;
+  return {
+    config: {
+      newJobSeasonMode: true,
+      newJobSeasonDate: "2026-02-01",
+      newJobSeasonCashOnHand: cashOnHand,
+      jobApplications: JOB_HUNT_APPLICATIONS,
+    },
+    expenses: JOB_HUNT_EXPENSES,
+    effectiveToday: "2026-03-09",
+  };
+}
+
+export function buildJobHuntTestContext(opts = {}) {
+  return buildJobHuntContext(buildJobHuntTestAccount(opts));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Résumé Review — for Phase 5's second slice (docs/TODO.md §2.L)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// ResumeReviewCard.jsx's real contextBlock isn't buildCoachContext() output
+// at all — just `Résumé text:\n${resumeText}\n\nTarget role: ${roleForPrompt}`,
+// so there's no engine function to route this through; the fixture IS the
+// literal string, same as the app builds. Deliberately not a spotless
+// résumé — a vague/generic line and a real gap against the target role
+// (five years of warehouse experience, no supervisory line, aimed at a
+// supervisor posting) give the review something concrete to engage with,
+// the same way a real pasted résumé would.
+export const RESUME_REVIEW_TEXT = `Marcus Reyes
+Warehouse Associate
+
+Experience:
+DHL Supply Chain — Warehouse Associate (2021-2026)
+- Worked in the warehouse loading and unloading trucks
+- Responsible for meeting quotas
+- Team player, hard worker
+
+Skills: Forklift certified, Microsoft Excel, good communication
+
+Education: Lincoln High School diploma`;
+
+export const RESUME_REVIEW_TARGET_ROLE = "Warehouse Shift Supervisor";

@@ -11,9 +11,16 @@ doesn't repeat their reasoning.
   of the two locked models). Read its own `description` field first.
 - `promptfooconfig.phase4.yaml` — Phase 4 (within-mode severity flexing).
 - `promptfooconfig.phase5.yaml` — Phase 5, first slice (Net Worth Trigger's
-  three tiers). Each phase's config stays a separate file on purpose —
-  keeps scope and call-count independently auditable rather than growing
-  one monolithic config; follow the same `promptfooconfig.phaseN.yaml`
+  three tiers). `promptfooconfig.phase5b.yaml` — Phase 5, second slice (Job
+  Hunt Chat). `promptfooconfig.phase5c.yaml` — Phase 5, third slice (Résumé
+  Review), kept separate from Job Hunt rather than one shared file: with two
+  prompts and no per-test prompt scoping, promptfoo runs every `tests:`
+  entry against every `prompts:` entry, so one file would silently multiply
+  call count (2 Job Hunt tests × 2 prompts = 4 calls instead of 2, plus the
+  Résumé Review test running against Job Hunt's prompt too) instead of the 2
+  + 1 = 3 actually spent. Each phase/slice's config stays a separate file on
+  purpose — keeps scope and call-count independently auditable rather than
+  growing one monolithic config; follow the same `promptfooconfig.phaseNx.yaml`
   naming pattern for the next slice/phase, `-c <file>` to run one.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
@@ -26,6 +33,12 @@ doesn't repeat their reasoning.
   account-data variant (Phase 4); `netWorthTrigger.js` takes `vars.tier`
   (`amber`/`red`/`green`) and matches `CoachNetWorthCard.jsx`'s real call
   shape (fixed trigger message, narrower `buildCoachContext()` params).
+  `jobHuntChat.js` takes `vars.variant` (`healthy`/`tight`) and matches
+  `JobHuntChatPanel.jsx`'s real call shape (a real free-form user message,
+  `claude-sonnet-5`, `buildJobHuntContext()`'s own narrower bag).
+  `resumeReview.js` takes no vars — matches `ResumeReviewCard.jsx`'s real
+  call shape exactly: a plain `Résumé text:\n...\n\nTarget role: ...` string,
+  not `buildCoachContext()` output at all, and a fixed trigger message.
 - `fixtures/testAccount.js` — a fabricated-but-structurally-real test
   account run through the real `buildCoachContext()`, not hand-typed text.
   `buildTestContext({ weeklyIncome, avgWeeklySpend, newJobSeasonMode,
@@ -72,6 +85,19 @@ doesn't repeat their reasoning.
   and `EVENT_TYPES` has no overtime/extra-shift category — faking that
   signal would mean dressing up fabricated data to look real, not building
   a fixture from a real code path.
+  `buildJobHuntTestAccount()`/`buildJobHuntTestContext({ variant })`
+  (2026-09-02) — a fifth fixture, for Phase 5's Job Hunt Chat slice.
+  `buildJobHuntContext()` (`aiContext.js`) takes a different bag entirely
+  (`{ config, expenses, effectiveToday, includeBenefits }`, not the
+  goals/logs/futureWeeks shape above), so this isn't a variant of the
+  existing fixtures. Two variants — `"healthy"` (~70-day runway) and
+  `"tight"` (~9-day runway) — sharing the same applications list, differing
+  only in `newJobSeasonCashOnHand`, so a finding is attributable to runway
+  pressure alone. `RESUME_REVIEW_TEXT`/`RESUME_REVIEW_TARGET_ROLE` — for
+  Résumé Review, whose real `contextBlock` isn't `buildCoachContext()`
+  output at all, just a plain string (`ResumeReviewCard.jsx`), so the
+  fixture IS the literal résumé text — deliberately not spotless, so a real
+  review has something concrete to engage with.
 - `results/` — gitignored. Raw run output is an ephemeral working file;
   once you've read a run's output and decided what it means, write the
   *finding* into `coach-personality-rubric.md` (filling in a `TODO` cell,
@@ -187,8 +213,26 @@ retry-on-a-hunch.** Concretely for this file:
     event type) — building it would fake a signal the app can't actually
     see, not prepare a fixture. Building Burnout Sentinel for real needs
     engine work first (a streak/OT-tracking data source), not a fixture.
-  - [ ] Not yet run: Job Hunt Chat, Résumé Review, the still-unbuilt flat
-    rows, and the remaining undefined axes.
+  - [x] Second slice (2026-09-02) — `promptfooconfig.phase5b.yaml` (Job
+    Hunt Chat) + `promptfooconfig.phase5c.yaml` (Résumé Review),
+    `prompts/jobHuntChat.js`/`prompts/resumeReview.js`, `claude-sonnet-5`
+    (both modes' own shipped model), no calibration override. 3 calls, no
+    repeat yet. Job Hunt Chat's existing target (2, "trace") held cleanly
+    at both a healthy and a tight runway — no boxing vocabulary either
+    time, urgency showed up as content (which application, how bluntly)
+    rather than length, a third shape distinct from Ask Coach's and Net
+    Worth Trigger's Axis 2 findings. Résumé Review's existing target (3,
+    matches default) did NOT hold — natural output used zero figurative
+    language, a fully literal review; structurally compliant with
+    everything else in its addendum. Neither target changed — both held
+    for the batch decision. Found and fixed a real bug along the way:
+    `buildJobHuntContext()` silently dropped logged gig income from the
+    runway it quotes (drift-app-warden.md F167). Full writeup in
+    `coach-personality-rubric.md`'s Known Limitations and the Job
+    Hunt/Résumé Review table rows.
+  - [ ] Not yet run: the still-unbuilt flat rows, the remaining undefined
+    axes, and a repeat-verify pass on this slice if either result is worth
+    locking in before the batch decision.
 - [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
   handling moments → Opus, both locked and Phase-3-verified. Everything
   else in the table (Job Hunt Assistant, Résumé Review, Statement

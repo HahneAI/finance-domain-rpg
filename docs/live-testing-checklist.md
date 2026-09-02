@@ -215,3 +215,38 @@ error page) rendered correctly with zero network access, confirming workbox's `n
 + precache setup works as configured. Full test suite (1687 tests) green throughout — no test
 exercises the manifest file directly. Documented in `drift-app-warden.md` F162 /
 `BUG_FIX_TODO.md` DW-21.
+
+### 9. Coach chat UI — navigate_to chip + tool-activity indicator ✅
+First browser pass over the Coach chat's new interactive UI (F174). `/api/coach` is a Vercel
+function with no local dev proxy, so it was stubbed via `page.route()` with a canned SSE stream
+containing a `navigate_to` tool_use — the right call rather than a limitation, since the model's
+tool *selection* was already verified live (3/3) and what was untested was purely the UI; a stub
+also makes the run deterministic, spends no Anthropic budget, and lets a round be held open long
+enough for the activity indicator to be observable at all.
+
+**Found three real defects, all of which passed their unit tests.** (1) The activity line never
+painted — it was cleared when the tool returned, but the tools are pure functions finishing in
+microseconds, so it was set and unset inside one tick; it now spans the model round-trip that
+follows, which is the dead air users actually sit through. (2) The chip rendered *inline beside*
+the bubble and truncated to "Bud…" — the message row is a flex row for the avatar, so the chip
+became a third item in it; both attachments now sit in a column wrapper below the bubble. (3) The
+deep link highlighted a row nobody could see, for two compounding reasons: `navigateDirect`'s
+`jumpToPanelTop()` fires in a rAF *after* `focusCoachTarget`, scrolling the panel back to top
+(the row sat at 877px in an 844px viewport with the flash expiring off-screen), and Budget's
+categories are collapsed by default, which clips rows to `height:0` while they still report a real
+bounding box — so a viewport check reported success while the user saw nothing.
+
+Post-fix, verified end to end in the browser: `data-coach-ref` present on all six Budget expense
+rows, chip renders below the bubble reading "Budget · Rent", activity line reads "Finding the
+right panel…" during the tool round, and tapping the chip closes Coach, opens Budget, expands the
+collapsed NEEDS category, scrolls the Rent row to `top: 223` in an 844px viewport
+(`trulyVisible: true`) and flashes it, with the flash clearing afterwards. Also confirmed the
+request carries all 9 tools and the second round carries 3 messages (user + tool_use +
+tool_result). Full suite green (1842). Documented in `drift-app-warden.md` F175 /
+`BUG_FIX_TODO.md` DW-23.
+
+**Testing note for whoever picks this up:** the shared test account has a QUEUE of unconfirmed
+weeks, and `WeekConfirmModal` (`.wc-modal-in`) blocks the whole shell — skipping one reveals the
+next, so a dismiss helper must loop. Never click "Confirm Week" there; it writes a real
+confirmation to the shared account. Coach is also reachable only from the mobile bottom nav, so a
+mobile viewport is required before it exists at all.

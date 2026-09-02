@@ -127,6 +127,82 @@ describe("focusCoachTarget", () => {
     }
   });
 
+  it("opens a collapsed category before highlighting a row inside it", () => {
+    // Live regression: Budget's categories are collapsed by DEFAULT, and a
+    // collapsed one clips its rows to height 0 while they still report a real
+    // bounding box. The highlight fired every time on a row the user could not
+    // see, which made the deep link's whole point moot.
+    vi.useFakeTimers();
+    try {
+      const wrap = document.createElement("div");
+      // Structure mirrors BudgetPanel: the expander is NOT the clipper's
+      // parent — it sits two levels above it.
+      wrap.innerHTML = `
+        <div role="button" data-coach-expand="Needs" aria-expanded="false"></div>
+        <div id="mid"><div id="clip"><div data-coach-ref="expense:Rent"></div></div></div>`;
+      document.body.appendChild(wrap);
+      const clip = wrap.querySelector("#clip");
+      // jsdom has no layout engine, so the clip is simulated explicitly.
+      clip.style.overflow = "hidden";
+      clip.getBoundingClientRect = () => ({ height: 0, top: 0, bottom: 0 });
+      const row = wrap.querySelector("[data-coach-ref]");
+      row.scrollIntoView = vi.fn();
+      row.getBoundingClientRect = () => ({ height: 66, top: 100, bottom: 166 });
+      const toggle = wrap.querySelector("[data-coach-expand]");
+      const clicked = vi.fn(() => toggle.setAttribute("aria-expanded", "true"));
+      toggle.click = clicked;
+
+      focusCoachTarget("expense:Rent");
+      expect(clicked).toHaveBeenCalledTimes(1);
+      // Scroll and highlight are deferred until after the expand relayouts.
+      expect(row.classList.contains("coach-focus")).toBe(false);
+      vi.advanceTimersByTime(300);
+      expect(row.scrollIntoView).toHaveBeenCalled();
+      expect(row.classList.contains("coach-focus")).toBe(true);
+      wrap.remove();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("re-asserts the scroll when something else scrolls the panel away", () => {
+    // App.jsx's navigateDirect ends in jumpToPanelTop() inside a rAF, i.e.
+    // AFTER this runs — live testing showed the row landing 877px down an
+    // 844px viewport with the highlight expiring off-screen.
+    vi.useFakeTimers();
+    try {
+      const row = document.createElement("div");
+      row.setAttribute("data-coach-ref", "goal:1");
+      row.scrollIntoView = vi.fn();
+      let rect = { height: 66, top: 100, bottom: 166 };
+      row.getBoundingClientRect = () => rect;
+      document.body.appendChild(row);
+
+      focusCoachTarget("goal:1");
+      expect(row.scrollIntoView).toHaveBeenCalledTimes(1);
+      // Something scrolls it out of view again.
+      rect = { height: 66, top: 900, bottom: 966 };
+      vi.advanceTimersByTime(200);
+      expect(row.scrollIntoView).toHaveBeenCalledTimes(2);
+      row.remove();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("leaves a row alone once it is settled in view", () => {
+    vi.useFakeTimers();
+    try {
+      const row = document.createElement("div");
+      row.setAttribute("data-coach-ref", "goal:4");
+      row.scrollIntoView = vi.fn();
+      row.getBoundingClientRect = () => ({ height: 66, top: 200, bottom: 266 });
+      document.body.appendChild(row);
+      focusCoachTarget("goal:4");
+      vi.advanceTimersByTime(800);
+      // One initial scroll, no corrective ones — a user who scrolled away
+      // deliberately must not be yanked back repeatedly.
+      expect(row.scrollIntoView).toHaveBeenCalledTimes(1);
+      row.remove();
+    } finally { vi.useRealTimers(); }
+  });
+
   it("is a no-op without a ref", () => {
     expect(() => focusCoachTarget(null)()).not.toThrow();
   });

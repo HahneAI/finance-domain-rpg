@@ -311,12 +311,20 @@ export function AskCoachPanel({
       let accumulated = "";
       // The assistant bubble this turn is writing into — chips attach to it.
       const assistantIdx = nextMessages.length;
+      // Cleared when the NEXT round starts producing text, not when the tool
+      // returns. The tools are pure client-side functions that finish in
+      // microseconds, so clearing on "result" set and unset this within a
+      // single tick and the indicator never painted at all — live testing
+      // caught it showing nothing. The dead air a user actually sits through
+      // is the model round-trip that follows the tool, which is what this now
+      // spans.
+      let toolRoundOpen = false;
       const onToolEvent = (event) => {
         if (event.phase === "start") {
           setActiveTool(event.name);
+          toolRoundOpen = true;
           return;
         }
-        setActiveTool(null);
         // A navigate_to that failed validation returns an `error` and no
         // viewKey; rendering nothing is right — Coach still has the error in
         // its tool_result and can say so in words.
@@ -325,6 +333,10 @@ export function AskCoachPanel({
         }
       };
       for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData, onToolEvent })) {
+        if (toolRoundOpen) {
+          toolRoundOpen = false;
+          setActiveTool(null);
+        }
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }
@@ -514,25 +526,32 @@ export function AskCoachPanel({
                     </div>
                   </div>
                 )}
-                <div
-                  className="text-md" style={{
-                    background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
-                    border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
-                    borderRadius: "14px",
-                    padding: "10px 14px",
-                    lineHeight: 1.5,
-                    color: "var(--color-text-primary)",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                {/* Column wrapper so the activity line and nav chip stack BELOW
+                    the bubble. The row above is `display:flex; alignItems:
+                    flex-end` for the avatar, so without this they become
+                    additional flex items beside the bubble — live testing
+                    showed the chip rendered inline and squashed to "Bud…". */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
+                  <div
+                    className="text-md" style={{
+                      background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
+                      border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
+                      borderRadius: "14px",
+                      padding: "10px 14px",
+                      lineHeight: 1.5,
+                      color: "var(--color-text-primary)",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                  </div>
+                  {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
+                    <CoachToolActivity toolName={activeTool} />
+                  )}
+                  {m.role === "assistant" && navChips[i] && (
+                    <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
+                  )}
                 </div>
-                {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
-                  <CoachToolActivity toolName={activeTool} />
-                )}
-                {m.role === "assistant" && navChips[i] && (
-                  <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
-                )}
               </div>
             ))}
             {errored && (

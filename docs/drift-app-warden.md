@@ -5557,6 +5557,40 @@ prior tools still selected correctly alongside it.
 > (including that a paused expense is not focusable), `claudeToolLoop.test.js`'s onToolEvent cases.
 
 
+**F175 · Coach chat UI — three defects only a live render could show** — `AskCoachPanel.jsx`, `coachFocus.js`, `BudgetPanel.jsx` — **[G]**
+2026-09-02, first browser pass over F174's chip and activity line (Playwright, real app, `/api/coach`
+stubbed with a canned SSE stream — the model's tool selection was already verified live, so what
+was untested was purely the UI). All three passed their unit tests and all three were broken on
+screen, which is the exact blind spot CLAUDE.md's testing section warns about.
+> **1 · The activity line never painted.** `AskCoachPanel` set `activeTool` on the tool event's
+> `start` phase and cleared it on `result`. The tools are pure client-side functions that finish in
+> microseconds, so it was set and unset inside a single tick and React never rendered it. The dead
+> air a user actually sits through is the model ROUND-TRIP that follows the tool, so it now clears
+> on the first text chunk of the next round instead. **IF** a tool becomes async, this still holds;
+> **IF** the clearing point is moved back to `result`, the indicator silently disappears again and
+> no unit test will notice — the component test only proves it renders when given a `toolName`.
+> **2 · The chip rendered inline beside the bubble, truncated to "Bud…".** The message row is
+> `display:flex; alignItems:flex-end` for the avatar, so the chip and activity line became
+> additional flex items in that ROW. Both now live in a column wrapper under the bubble. **IF**
+> anything else is attached to a message, it goes inside that wrapper — jsdom computes no layout,
+> so a flex regression here is invisible to the suite.
+> **3 · The deep link highlighted a row nobody could see.** Two compounding causes. `navigateDirect`
+> ends in `jumpToPanelTop()` inside a `requestAnimationFrame` — i.e. AFTER `focusCoachTarget` runs —
+> so the panel scrolled back to top and the flash expired off-screen (row at 877px in an 844px
+> viewport). And Budget's categories are collapsed BY DEFAULT: a collapsed category clips its rows
+> to `height:0; overflow:hidden` while they still report a real bounding box, so viewport maths
+> alone reported success. Fixed by re-asserting the scroll on a short schedule (only when the row
+> has actually drifted out of view, so a user who scrolled away deliberately isn't yanked back),
+> and by clicking the nearest collapsed `[data-coach-expand]` ancestor before scrolling.
+> **IF** a panel adds a collapsible section containing `data-coach-ref` rows, **THEN** its toggle
+> needs `data-coach-expand` + a truthful `aria-expanded`, or the deep link degrades to
+> panel-only. Note the expander is NOT the clipper's parent (in BudgetPanel it is two levels
+> above), so resolution walks up for the nearest collapsed one.
+> Check: `coachToolUI.test.jsx`'s `focusCoachTarget` block — collapsed-ancestor expansion and
+> scroll re-assertion both verified to fail against the pre-fix code. Defects 1 and 2 are timing
+> and layout properties jsdom cannot express; the browser pass is their only proof, and re-running
+> `scripts/coach-eval`-adjacent UI driving is the way to re-verify them.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

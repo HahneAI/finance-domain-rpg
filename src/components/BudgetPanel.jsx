@@ -1438,6 +1438,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         >
           <div
             data-cat-header={cat}
+            /* Lets Coach's navigate_to deep link open a collapsed category
+               before highlighting a row inside it (src/lib/coachFocus.js).
+               Categories are collapsed by default, and a collapsed one clips
+               its rows to height 0 — so without this the highlight fired on a
+               row the user could not see. */
+            data-coach-expand={cat}
             onClick={readOnly ? undefined : () => toggleCat(cat)}
             role="button"
             aria-expanded={isCatExpanded}

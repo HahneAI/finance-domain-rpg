@@ -21,14 +21,23 @@
 // for Phase 4's severity-flexing rows (budget near-limit vs. healthy) —
 // that's real engine math doing the work, not two hand-typed guesses at
 // what "99% used" looks like.
+//
+// newJobSeasonMode/runwayDays added for Phase 5's Net Worth Trigger Red-tier
+// test (docs/TODO.md §2.L) — Red's own trigger condition per coachTriggers.js
+// is specifically "New Job Season, runway under 30 days," and
+// buildCoachContext() only emits its "New Job Season: active" line when
+// config.newJobSeasonMode is true, so a realistic Red-tier test needs both
+// set, not just the addendum text alone.
 import { buildCoachContext } from "../../../src/lib/aiContext.js";
 
-export function buildTestContext({ weeklyIncome = 845, avgWeeklySpend = 520 } = {}) {
+export function buildTestContext({
+  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null,
+} = {}) {
   const config = {
     firstActiveIdx: 0,
     userPaySchedule: "weekly",
     goalTimelineEpochIdx: null,
-    newJobSeasonMode: false,
+    newJobSeasonMode,
   };
   const currentWeek = { idx: 10 };
   const allWeeks = Array.from({ length: 52 }, (_, i) => ({
@@ -48,7 +57,7 @@ export function buildTestContext({ weeklyIncome = 845, avgWeeklySpend = 520 } = 
     fundedGoalSpend: 0,
     currentWeek,
     today: "2026-03-09",
-    runwayDays: null,
+    runwayDays,
     logs: [],
     futureWeeks: [],
     timelineWeekNets: [],

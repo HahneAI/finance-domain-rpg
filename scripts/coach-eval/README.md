@@ -10,10 +10,11 @@ doesn't repeat their reasoning.
 - `promptfooconfig.yaml` — Phases 1-3 (extremes discovery + repeat-verify
   of the two locked models). Read its own `description` field first.
 - `promptfooconfig.phase4.yaml` — Phase 4 (within-mode severity flexing).
-  Separate file from the one above on purpose — keeps each phase's scope
-  and call-count independently auditable rather than growing one
-  monolithic config; a later phase's config should follow the same
-  `promptfooconfig.phaseN.yaml` naming pattern, `-c <file>` to run one.
+- `promptfooconfig.phase5.yaml` — Phase 5, first slice (Net Worth Trigger's
+  three tiers). Each phase's config stays a separate file on purpose —
+  keeps scope and call-count independently auditable rather than growing
+  one monolithic config; follow the same `promptfooconfig.phaseN.yaml`
+  naming pattern for the next slice/phase, `-c <file>` to run one.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
   this harness can never silently test a stale prompt. One file per
@@ -21,14 +22,17 @@ doesn't repeat their reasoning.
   mode's full composition), not one file per mode — this mirrors how
   `coachPrompts.js` itself is actually built (persona + swappable addendum),
   so a regression in the shared base shows up once instead of once per mode.
-  `askCoachComposed.js` also takes an optional `vars.severity` to pick a
-  real account-data variant (see `fixtures/`) — used by Phase 4, ignored
-  (defaults to the original Phase 1-3 account) by anything that doesn't set it.
+  `askCoachComposed.js` takes an optional `vars.severity` to pick a real
+  account-data variant (Phase 4); `netWorthTrigger.js` takes `vars.tier`
+  (`amber`/`red`/`green`) and matches `CoachNetWorthCard.jsx`'s real call
+  shape (fixed trigger message, narrower `buildCoachContext()` params).
 - `fixtures/testAccount.js` — a fabricated-but-structurally-real test
   account run through the real `buildCoachContext()`, not hand-typed text.
-  `buildTestContext({ weeklyIncome, avgWeeklySpend })` — vary those two to
-  get a different real spend-ratio scenario; reused by Phase 4's severity
-  variants, reusable the same way for any future severity/scenario test.
+  `buildTestContext({ weeklyIncome, avgWeeklySpend, newJobSeasonMode,
+  runwayDays })` — vary these to get a different real scenario (spend
+  ratio for Phase 4's severity rows, New Job Season/runway for Red's real
+  trigger condition in Phase 5) — reusable the same way for any future
+  scenario test.
 - `results/` — gitignored. Raw run output is an ephemeral working file;
   once you've read a run's output and decided what it means, write the
   *finding* into `coach-personality-rubric.md` (filling in a `TODO` cell,
@@ -116,14 +120,25 @@ retry-on-a-hunch.** Concretely for this file:
   **Promoted to Axis 2 (Urgency Escalation)** in the rubric (2026-09-01)
   rather than left as a side note — real anchor data (score 3) from this
   exact pair, own 1-5 table, own still-open calibration TODO.
-- [ ] Phase 5 — widen to remaining modes/axes. Per the user's own
-  sequencing (2026-09-01): find real 1s/5s for the other Interaction
-  Modes table rows first, batch-decide every mode's default "3" together
-  at the end, rather than resolving each mode's default one at a time.
-  **Standing instruction from here on: sample both Axis 1 (Metaphor
-  Intensity) and Axis 2 (Urgency Escalation) for every mode/scenario**,
-  not Axis 1 alone — Phase 4 found a mode that looked flat on one axis
-  while moving a lot on the other.
+- [~] Phase 5 — widen to remaining modes/axes, in progress. Per the
+  user's own sequencing (2026-09-01): find real 1s/5s for the other
+  Interaction Modes table rows first, batch-decide every mode's default
+  "3" together at the end. **Standing instruction from here on: sample
+  both Axis 1 (Metaphor Intensity) and Axis 2 (Urgency Escalation) for
+  every mode/scenario**, not Axis 1 alone.
+  - [x] First slice — `promptfooconfig.phase5.yaml`, Net Worth Trigger's
+    three shipped tiers (Amber/Red/Green), `prompts/netWorthTrigger.js`
+    (real `buildNetWorthSystemPrompt`, matches `CoachNetWorthCard.jsx`'s
+    actual call shape — fixed trigger message, narrower context params).
+    `fixtures/testAccount.js` gained `newJobSeasonMode`/`runwayDays` for
+    Red's real trigger condition. `--repeat 3`, all 9 runs identical.
+    Green clean; Amber stacks multiple figurative touches (real rule
+    violation, not just a judgment call); Red complies with the letter
+    but not fully the spirit, and runs longest of the three despite being
+    the one tier told to stay calm. Full writeup in
+    `coach-personality-rubric.md`'s Known Limitations.
+  - [ ] Not yet run: Job Hunt Chat, Résumé Review, the still-unbuilt flat
+    rows, and the remaining undefined axes.
 - [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
   handling moments → Opus, both locked and Phase-3-verified. Everything
   else in the table (Job Hunt Assistant, Résumé Review, Statement

@@ -1044,18 +1044,29 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
   it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
   Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
-- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Sequenced per the
-  user's own instruction (2026-09-01): find real 1s/5s for the other Interaction Modes table rows
-  first; batch-decide every mode's default "3" together at the end, not mode by mode. Extend to
-  the other still-flat rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing) and the remaining
-  undefined axes (Directness/bluntness, Warmth/formality, Sentence economy) — Sentence economy
-  next after that, since DW-19 already left real anchor data for it. **Urgency Escalation is no
-  longer a "future axis" to start from scratch** — promoted to a defined Axis 2 in
-  `coach-personality-rubric.md` (2026-09-01), seeded by Phase 4's real finding. **Standing
-  instruction for every mode/scenario sampled from here on: check Axis 2 alongside Metaphor
-  Intensity, not Metaphor Intensity alone** — Phase 4 found a mode that looked consistent on one
-  axis while varying a lot on the other, and a single-axis sampling pass would have missed it
-  entirely.
+- [~] **Phase 5 — widen to remaining flat-default modes and undefined axes. In progress, first
+  slice done (2026-09-01).** Sequenced per the user's own instruction: find real 1s/5s for the
+  other Interaction Modes table rows first; batch-decide every mode's default "3" together at the
+  end, not mode by mode. **Urgency Escalation is no longer a "future axis" to start from
+  scratch** — promoted to a defined Axis 2 in `coach-personality-rubric.md` (2026-09-01), seeded
+  by Phase 4's real finding. **Standing instruction for every mode/scenario sampled from here on:
+  check Axis 2 alongside Metaphor Intensity, not Metaphor Intensity alone.**
+  - [x] **First slice — Net Worth Trigger's three shipped tiers (Amber/Red/Green, §2.C).** Live-
+    verified for the first time (`claude-haiku-4-5`, real per-tier account data via
+    `promptfooconfig.phase5.yaml`, `--repeat 3`, all 9 runs identical). Green clean. **Amber
+    stacks multiple figurative touches in one message — a real, unambiguous violation of
+    `COACH_PERSONA_PROMPT`'s own "never stacked" rule, worth fixing, not just discussing.** Red
+    complies with the letter ("drop the corner-man phrasing") but reaches for a different
+    flourish ("flying blind") the addendum's intent rules out too, and runs the longest of the
+    three tiers despite being the one instructed to stay most direct/calm — an explicit
+    anti-escalation instruction not fully holding, the opposite framing from Ask Coach's
+    accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
+    Limitations.
+  - [ ] Remaining slices not yet run: Job Hunt Chat (§2.E) and Résumé Review (§2.E1) — both
+    shipped, both have existing never-live-verified targets (2 and 3); the still-unbuilt flat
+    rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing); the remaining undefined axes
+    (Directness/bluntness, Warmth/formality, Sentence economy — Sentence economy next after those,
+    since DW-19 already left real anchor data for it).
 - [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split

@@ -175,9 +175,9 @@ accident that a Metaphor-Intensity-only pass would have missed entirely.
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
 |---|---|---|---|---|
-| Net Worth Trigger — Amber (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.amber` |
-| Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
-| Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
+| Net Worth Trigger — Amber (§2.C) | 3 (shipped) — **live-verified 2026-09-01, real gap found, see note** | n/a, single-point target | "...break out what's eating the other 370 dollars each week, because that's where your next round of breathing room lives." (`claude-haiku-4-5`, real thin-cushion account, **repeat-verified 3/3 identical, Phase 5**) | **Stacks at least two figurative touches in one message** ("eating," "next round," "breathing room") — violates `COACH_PERSONA_PROMPT`'s own "at most one such phrase per message... never stacked" rule. Also names multiple issues (spend ratio, paycheck timing, missing expense detail) where the addendum instructs "point to **one** specific lever." Real prompt-tuning candidate, not yet fixed. |
+| Net Worth Trigger — Red (§2.C) | ~1 (shipped) — **live-verified 2026-09-01, partial compliance, see note** | n/a, single-point target | "...you're flying blind into the tightest part of your season." (`claude-haiku-4-5`, real New Job Season/22-day-runway account, **repeat-verified 3/3 identical, Phase 5**) | **Complies with the letter, not fully the spirit.** No corner-man/boxing vocabulary at all — the explicit instruction ("drop the corner-man phrasing entirely") holds. But it substitutes a different flourish ("flying blind," not boxing-coded) the addendum's own intent ("this moment needs plain urgency, not color") reads as ruling out too. Also the **longest** of the three tiers (2 paragraphs, ~6 sentences) despite being the one tier instructed to stay direct and calm — inverted from what "never catastrophize" suggests. Does correctly end with the one required deep-link action (Triage Expenses). |
+| Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) — **live-verified 2026-09-01, clean** | n/a, single-point target | "...You're tracking 40,280 in projected annual savings, which means the corner work is paying off." (`claude-haiku-4-5`, real recovered/healthy account, **repeat-verified 3/3 identical, Phase 5**) | Clean — one genuine "light seasoning" touch ("the corner work"), tightest response of the three (1 paragraph, 3 sentences), matches its addendum well. No gap found here. |
 | Ask Coach — General Greeting (§2.B) | 3 (default) — **floor (1) repeat-verified reliable on the locked model, natural default (3) still not directly sampled, see note** | "You've got 330 dollars free this week after your regular spend, and next week's check is coming in at 900 — that's 55 dollars above your average, so you're tracking steady. The real question is what you want that surplus to do..." (`claude-haiku-4-5`, elicited toward 1, **repeat-verified 3/3 near-identical, 2026-09-01, Phase 3**) | "You're eleven rounds in and moving well: $330 sitting free in your corner this round, and next round's purse comes in at $900... Your Budget Health is 62%, which is a fighting weight you can hold..." (`claude-opus-5`, elicited toward 5, **repeat-verified 3/3 consistently dense/Signature-to-Immersive, 2026-09-01, Phase 3** — this is the "special handling" moment's model, not this mode's; kept here since Ask Coach is the only composed prompt built to test against) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Model locked 2026-09-01 (`docs/TODO.md` §2.L Phase 6): this mode ships on `claude-haiku-4-5`.** Its score-1 floor is now repeat-verified reliable on that model. **Still genuinely open:** what Haiku produces for this mode with *no* calibration override at all — a plain question against the shipped prompt as-is, sampled multiple times — hasn't been run; the "3 (default)" target itself isn't calibrated yet, only its floor is. See "Known Limitations" below for the full score-5/model-lock writeup and a harness bug found and fixed during this pass. |
 | ↳ Ask Coach — Budget near limit (98% spend ratio, "watch spend"), within §2.B | **UNSCORED still — Metaphor Intensity itself did NOT flex, see note; scoring deferred to the batch pass at the end** | "Your week of March 9th (week 11) is tight... Next week of March 16th (week 12) is looking a bit better at $900 coming in... you'll have some breathing room there if you can hold spend steady." (`claude-haiku-4-5`, no override, real data via `fixtures/testAccount.js`, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a — this axis's score-5 doesn't apply here; direction was expected-lower, not tested this way | **Not what Phase 4 set out to measure, but a real finding anyway.** Only one figurative touch ("breathing room," the prompt's own example of a non-boxing flourish that still counts) — roughly the same light density as the healthy variant below, not a clear Metaphor Intensity difference. What DID differ, reliably, across all 3 repeats: **length and directness — this pair is now Axis 2's (Urgency Escalation) real anchor at score 3, above.** This response ran 3 full paragraphs (~6 sentences) and named the problem outright ("The real issue isn't this week or next — it's the pattern") even though this is a personal-data status check, not a mechanics question — the only case `ASK_COACH_SYSTEM_PROMPT` currently authorizes running past 2-3 sentences. See "Known Limitations" below. |
 | ↳ Ask Coach — Budget healthy (10% spend ratio, "well-managed"), within §2.B | **UNSCORED still — same note as above** | "You're sitting on 765 dollars free this week after your regular spend... You've got the runway to move on something if you want to, but right now you don't have any goals set..." (`claude-haiku-4-5`, no override, same real fixture, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a | Also one loose touch ("runway") — but this is a *different* concern than Metaphor Intensity: `runway` is this app's specific term for New Job Season survival time, not a corner-man phrase, so reusing it here for ordinary budget slack risks confusing a user who knows the real meaning. Worth a small copy fix independent of anything scored on this rubric. Response held to 2 tight paragraphs across all 3 repeats — noticeably shorter than the near-limit variant despite an identical question and prompt, which is the actual severity-flexing evidence, just not on the axis this row was built to test. |
@@ -343,6 +343,39 @@ the two seeded sub-scenario rows above get a target score while this is still un
 ordinary weekly slack — this app's own term for New Job Season survival time specifically. Worth a
 small copy fix in `coachPrompts.js` independent of anything scored here, so Coach doesn't overload
 a term a user might already know a different, specific meaning for.
+
+**Net Worth Trigger's three tiers, live-verified for the first time (2026-09-01, Phase 5 of
+`docs/TODO.md` §2.L) — the DESIGNED counterpart to the Ask Coach finding above, and it did better,
+but not perfectly.** Unlike Ask Coach's accidental severity flexing, the Net Worth Trigger tiers
+were built with explicit per-tier instructions (`TIER_ADDENDA` in `coachPrompts.js`) — so this
+tests whether an intentional design actually holds under a real model, not whether flexing happens
+at all. All results below repeat-verified 3/3 identical (`claude-haiku-4-5`, real per-tier account
+data, no calibration override — see the Interaction Modes rows above for the full text).
+
+- **Green: clean.** Matches its target register and its addendum's instruction well.
+- **Amber: a real rule violation, not a judgment call — worth fixing, not just discussing.**
+  Stacks at least two figurative touches in one message ("eating," "next round," "breathing
+  room"), directly against `COACH_PERSONA_PROMPT`'s own "at most one... never stacked" rule, and
+  names multiple issues where the addendum says to point to *one* specific lever. Unlike the
+  Ask Coach length finding above, this one isn't ambiguous about what "correct" looks like — the
+  rule already exists and this output breaks it.
+- **Red: complies with the letter, not fully the spirit — a real, more nuanced gap.** No literal
+  corner-man/boxing vocabulary at all, so "drop the corner-man phrasing entirely" technically
+  holds. But it reaches for a different flourish ("flying blind") the addendum's stated intent
+  ("this moment needs plain urgency, not color") reads as ruling out too — the rule as written
+  named the wrong target (boxing phrasing specifically) for what it actually wants (no color at
+  all). Also the longest response of the three tiers, despite being the one tier instructed to
+  stay direct — inverted from what "never catastrophize" would predict. Does correctly close with
+  the one required deep-link action, so this isn't a wholesale compliance failure, just a partial
+  one on two specific points.
+
+**Contrast with the Ask Coach finding above, worth keeping distinct:** Ask Coach's length
+escalation was a mode with *no* severity instruction at all naturally producing more under
+pressure — arguably a capability to lean into. Net Worth Trigger Red's extra length is a mode with
+an *explicit anti-escalation instruction* ("never catastrophize," "be direct and calm") not fully
+holding — a compliance gap to close, not a capability to formalize. Same axis (Urgency Escalation),
+opposite framing; don't conflate "the model does this on its own" with "the model isn't doing what
+it was told."
 
 ---
 

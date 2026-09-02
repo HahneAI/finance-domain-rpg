@@ -244,6 +244,38 @@ not a third rewrite of the same prose instruction — re-test with the same cano
 everything" phrasing before calling it resolved, since an easier-to-compress paraphrase won't
 reproduce this.
 
+**UPDATE (2026-09-02) — it is not a data-volume problem, and tools don't touch it.** Coach gained
+eight drill-down/simulation tools and a trimmed context block this session
+(`docs/coach-entry-points.md` §1, `drift-app-warden.md` §21 F163/F168/F171). The same canonical
+phrasing — *"Give me a full breakdown of my whole dashboard — everything."* — was run four more
+times across those changes. The count never moved: **~9-11 numbers every time, against the
+instructed ≤3.** Three separate levers were pulled, and none of them mattered:
+
+1. **Tool availability made no difference.** With four tools, then eight, the broad question spent
+   **zero** tool calls and answered from the context block, citing the same ~10 numbers. Neither
+   the presence of tools nor their descriptions changed the shape of a broad answer.
+2. **Reducing the numbers available did not reduce the numbers cited.** The context trim halved
+   the block's number count (82→59 at 8 expenses + 5 goals; the goal line specifically went from
+   ~8 numbers to ~2). The answer still cited ~10. Supply and citation are decoupled.
+3. **The decisive one: when data was taken away, Coach went and got it.** An intermediate version
+   of the trim dropped goal finish dates from the block. The broad question — which had been
+   answering with **0** tool calls — immediately issued **3** (`get_week_breakdown`,
+   `get_goal_detail` ×2), and still landed on the same ~10 numbers. It did not compress to fit
+   what it had; it spent extra round-trips to reconstruct what it wanted to say.
+
+That third result is the useful one, because it distinguishes two hypotheses that the earlier
+before/after transcripts could not. This is **not** a passive read-off of whatever is in front of
+the model — Coach is working toward an internal target for "a complete broad answer," and will
+fetch data to reach it. Any fix that works by limiting what Coach can see is therefore dead on
+arrival: it will either be ignored (levers 1-2) or actively worked around (lever 3), at the cost
+of extra latency. **Do not re-attempt this as a context or tool-surface change.** The few-shot
+recommendation above stands as the only untried approach, and it is now better motivated: a worked
+example demonstrates what a *complete* answer looks like at three numbers, which is a different
+kind of instruction from a rule that merely forbids a fourth.
+
+Recorded in `drift-app-warden.md` §21 F171 as well, since the trim is where a future session is
+most likely to reach for this.
+
 **`claude-haiku-4-5` may have a real ceiling below Metaphor Intensity score-5, replicated across
 two independent prompt components (2026-09-01, Phase 1 of `docs/TODO.md` §2.L,
 `scripts/coach-eval`).** Both the bare `COACH_PERSONA_PROMPT` and the fully composed

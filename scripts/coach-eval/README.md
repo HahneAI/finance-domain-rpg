@@ -113,10 +113,17 @@ retry-on-a-hunch.** Concretely for this file:
   doesn't authorize that for a non-mechanics question. Real finding, not
   yet a scored rubric row — see `coach-personality-rubric.md`'s Known
   Limitations for the open "formalize or suppress" decision this raises.
+  **Promoted to Axis 2 (Urgency Escalation)** in the rubric (2026-09-01)
+  rather than left as a side note — real anchor data (score 3) from this
+  exact pair, own 1-5 table, own still-open calibration TODO.
 - [ ] Phase 5 — widen to remaining modes/axes. Per the user's own
   sequencing (2026-09-01): find real 1s/5s for the other Interaction
   Modes table rows first, batch-decide every mode's default "3" together
   at the end, rather than resolving each mode's default one at a time.
+  **Standing instruction from here on: sample both Axis 1 (Metaphor
+  Intensity) and Axis 2 (Urgency Escalation) for every mode/scenario**,
+  not Axis 1 alone — Phase 4 found a mode that looked flat on one axis
+  while moving a lot on the other.
 - [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
   handling moments → Opus, both locked and Phase-3-verified. Everything
   else in the table (Job Hunt Assistant, Résumé Review, Statement

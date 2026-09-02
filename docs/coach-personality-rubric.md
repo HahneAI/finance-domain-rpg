@@ -128,6 +128,49 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 
 ---
 
+## Axis 2 — Urgency Escalation *(new — promoted from "Future Axes" 2026-09-01, seeded by a real
+Phase 4 finding, `docs/TODO.md` §2.L)*
+
+*How much a response's length, directness, and problem-naming escalates when the real situation
+is more severe — independent of Metaphor Intensity, which Phase 4 showed does NOT reliably track
+severity the way this does.*
+
+| Score | Label | Definition |
+|---|---|---|
+| 1 | Flat | Identical length and directness regardless of severity — no escalation at all, healthy and critical accounts get the same shape of answer. |
+| 2 | Slight | A sentence or so longer under severity; same overall tone, no explicit problem-naming. |
+| **3** | **Moderate** | **← current anchor, seeded from real data below.** A full extra paragraph under severity that explicitly names the underlying issue (not just restates the number), plus a more targeted, specific action — while the low-severity case stays short and permissive. Still bounded: not a wall of text. |
+| 4 | Strong | A structurally different response under severity — dedicated diagnostic framing, a named root cause distinct from the surface number, multiple concrete steps — vs. a close-to-minimal low-severity answer. |
+| 5 | Maximal | Full analytical breakdown under severity (multiple paragraphs, explicit causal chain, several ranked actions); near-terse, almost clinical brevity under health — the two ends read like different response *shapes*, not just different lengths. |
+
+**Anchor examples (real, not hand-written) — Ask Coach, "How's my week looking?", same account
+family, differing only in real spend ratio (`fixtures/testAccount.js`, `claude-haiku-4-5`,
+repeat-verified 3/3 identical each, 2026-09-01, Phase 4):**
+
+- **Near-limit (98% spend ratio) — the higher-severity side of this pair:** "Your week of March
+  9th (week 11) is tight... The real issue isn't this week or next — it's the pattern: you're
+  saving at 2% when your target is 10%... Open your Budget panel and walk through your Lifestyle
+  expenses line by line — that's where the slack usually hides..." — 3 paragraphs, names the
+  underlying pattern explicitly, ends with a targeted diagnostic action.
+- **Healthy (10% spend ratio) — the lower-severity side:** "You're sitting on 765 dollars free
+  this week... You've got the runway to move on something if you want to, but right now you don't
+  have any goals set..." — 2 paragraphs, permissive tone, one simple action.
+
+**Only one pair sampled so far — this is a 3 (Moderate) by inspection, not a full calibration.**
+True score-1 and score-5 examples haven't been deliberately elicited yet the way Metaphor
+Intensity's were; this axis needs its own Calibration Methodology pass (elicit toward 1, elicit
+toward 5, compare) before its anchor counts as locked. Filed as a real axis with real data behind
+it rather than a placeholder, not as finished work.
+
+**Not the same as Metaphor Intensity, and don't conflate them going forward:** Phase 4 found this
+axis moving reliably while Metaphor Intensity barely moved on the identical pair — a mode can
+score consistently on one axis and still vary wildly on the other. **Standing instruction for
+Phase 5 (§2.L) and any future mode sampling:** check both axes for every mode/scenario sampled
+from here on, not Metaphor Intensity alone — this is exactly the kind of drift Phase 4 caught by
+accident that a Metaphor-Intensity-only pass would have missed entirely.
+
+---
+
 ## Interaction Modes — Target Scores
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
@@ -136,7 +179,7 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 | Net Worth Trigger — Red (§2.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
 | Net Worth Trigger — Green/Recovery (§2.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
 | Ask Coach — General Greeting (§2.B) | 3 (default) — **floor (1) repeat-verified reliable on the locked model, natural default (3) still not directly sampled, see note** | "You've got 330 dollars free this week after your regular spend, and next week's check is coming in at 900 — that's 55 dollars above your average, so you're tracking steady. The real question is what you want that surplus to do..." (`claude-haiku-4-5`, elicited toward 1, **repeat-verified 3/3 near-identical, 2026-09-01, Phase 3**) | "You're eleven rounds in and moving well: $330 sitting free in your corner this round, and next round's purse comes in at $900... Your Budget Health is 62%, which is a fighting weight you can hold..." (`claude-opus-5`, elicited toward 5, **repeat-verified 3/3 consistently dense/Signature-to-Immersive, 2026-09-01, Phase 3** — this is the "special handling" moment's model, not this mode's; kept here since Ask Coach is the only composed prompt built to test against) | Flat mode-wide default today — see the two sub-scenario rows directly below for where within-mode severity flexing (per "The End Goal" above) is seeded but not yet built or scored. **Model locked 2026-09-01 (`docs/TODO.md` §2.L Phase 6): this mode ships on `claude-haiku-4-5`.** Its score-1 floor is now repeat-verified reliable on that model. **Still genuinely open:** what Haiku produces for this mode with *no* calibration override at all — a plain question against the shipped prompt as-is, sampled multiple times — hasn't been run; the "3 (default)" target itself isn't calibrated yet, only its floor is. See "Known Limitations" below for the full score-5/model-lock writeup and a harness bug found and fixed during this pass. |
-| ↳ Ask Coach — Budget near limit (98% spend ratio, "watch spend"), within §2.B | **UNSCORED still — Metaphor Intensity itself did NOT flex, see note; scoring deferred to the batch pass at the end** | "Your week of March 9th (week 11) is tight... Next week of March 16th (week 12) is looking a bit better at $900 coming in... you'll have some breathing room there if you can hold spend steady." (`claude-haiku-4-5`, no override, real data via `fixtures/testAccount.js`, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a — this axis's score-5 doesn't apply here; direction was expected-lower, not tested this way | **Not what Phase 4 set out to measure, but a real finding anyway.** Only one figurative touch ("breathing room," the prompt's own example of a non-boxing flourish that still counts) — roughly the same light density as the healthy variant below, not a clear Metaphor Intensity difference. What DID differ, reliably, across all 3 repeats: **length and directness.** This response ran 3 full paragraphs (~6 sentences) and named the problem outright ("The real issue isn't this week or next — it's the pattern") even though this is a personal-data status check, not a mechanics question — the only case `ASK_COACH_SYSTEM_PROMPT` currently authorizes running past 2-3 sentences. See "Known Limitations" below. |
+| ↳ Ask Coach — Budget near limit (98% spend ratio, "watch spend"), within §2.B | **UNSCORED still — Metaphor Intensity itself did NOT flex, see note; scoring deferred to the batch pass at the end** | "Your week of March 9th (week 11) is tight... Next week of March 16th (week 12) is looking a bit better at $900 coming in... you'll have some breathing room there if you can hold spend steady." (`claude-haiku-4-5`, no override, real data via `fixtures/testAccount.js`, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a — this axis's score-5 doesn't apply here; direction was expected-lower, not tested this way | **Not what Phase 4 set out to measure, but a real finding anyway.** Only one figurative touch ("breathing room," the prompt's own example of a non-boxing flourish that still counts) — roughly the same light density as the healthy variant below, not a clear Metaphor Intensity difference. What DID differ, reliably, across all 3 repeats: **length and directness — this pair is now Axis 2's (Urgency Escalation) real anchor at score 3, above.** This response ran 3 full paragraphs (~6 sentences) and named the problem outright ("The real issue isn't this week or next — it's the pattern") even though this is a personal-data status check, not a mechanics question — the only case `ASK_COACH_SYSTEM_PROMPT` currently authorizes running past 2-3 sentences. See "Known Limitations" below. |
 | ↳ Ask Coach — Budget healthy (10% spend ratio, "well-managed"), within §2.B | **UNSCORED still — same note as above** | "You're sitting on 765 dollars free this week after your regular spend... You've got the runway to move on something if you want to, but right now you don't have any goals set..." (`claude-haiku-4-5`, no override, same real fixture, **repeat-verified 3/3 word-for-word identical, 2026-09-01, Phase 4**) | n/a | Also one loose touch ("runway") — but this is a *different* concern than Metaphor Intensity: `runway` is this app's specific term for New Job Season survival time, not a corner-man phrase, so reusing it here for ordinary budget slack risks confusing a user who knows the real meaning. Worth a small copy fix independent of anything scored on this rubric. Response held to 2 tight paragraphs across all 3 repeats — noticeably shorter than the near-limit variant despite an identical question and prompt, which is the actual severity-flexing evidence, just not on the axis this row was built to test. |
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
 | Weekly Pre-Game Briefing (§8.C) | 3 (default) | TODO | TODO | |
@@ -152,10 +195,17 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 
 ## Future Axes (not yet defined)
 
-- **Directness / bluntness** — how plainly bad news is stated vs. softened
+- **Directness / bluntness** — how plainly bad news is stated vs. softened. Related to Axis 2
+  (Urgency Escalation) but not the same thing — Axis 2 is escalation *across* severity levels;
+  this would be the absolute register at a single severity level. The near-limit example under
+  Axis 2 above is already real anchor data for this axis too, whenever it gets defined.
 - **Warmth / formality** — how personal vs. professional the register is
-- **Sentence economy** — target message length by mode
-- **Urgency escalation** — how the voice shifts under Red-tier / runway-critical signals
+- **Sentence economy** — target message length by mode. Also related to Axis 2, same distinction:
+  this is a per-mode static target, Axis 2 is how much that target moves within a mode by
+  situation. DW-19's before/after transcripts (Known Limitations, above) are real anchor data
+  for this one, independent of the Axis 2 data.
+- ~~**Urgency escalation** — how the voice shifts under Red-tier / runway-critical signals~~ —
+  **promoted to Axis 2 above (2026-09-01).**
 
 ---
 

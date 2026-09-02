@@ -1044,12 +1044,18 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
   it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
   Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
-- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
-  the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
-  Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,
-  Warmth/formality, Sentence economy, Urgency escalation) — Sentence economy first, since DW-19
-  already left real anchor data for it (`coach-personality-rubric.md`'s "Known Limitations"
-  section) rather than starting from nothing.
+- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Sequenced per the
+  user's own instruction (2026-09-01): find real 1s/5s for the other Interaction Modes table rows
+  first; batch-decide every mode's default "3" together at the end, not mode by mode. Extend to
+  the other still-flat rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing) and the remaining
+  undefined axes (Directness/bluntness, Warmth/formality, Sentence economy) — Sentence economy
+  next after that, since DW-19 already left real anchor data for it. **Urgency Escalation is no
+  longer a "future axis" to start from scratch** — promoted to a defined Axis 2 in
+  `coach-personality-rubric.md` (2026-09-01), seeded by Phase 4's real finding. **Standing
+  instruction for every mode/scenario sampled from here on: check Axis 2 alongside Metaphor
+  Intensity, not Metaphor Intensity alone** — Phase 4 found a mode that looked consistent on one
+  axis while varying a lot on the other, and a single-axis sampling pass would have missed it
+  entirely.
 - [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split

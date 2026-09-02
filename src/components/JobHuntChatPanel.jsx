@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildJobHuntContext } from "../lib/aiContext.js";
+import { JOB_HUNT_TOOLS } from "../lib/coachTools.js";
 import { JOB_HUNT_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
 
 /**
@@ -59,7 +60,10 @@ export function JobHuntChatPanel({
     try {
       const contextBlock = buildJobHuntContext({ config, expenses, effectiveToday, includeBenefits });
       let accumulated = "";
-      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet")) {
+      // This mode offers only get_expense_detail — see JOB_HUNT_TOOLS in
+      // lib/coachTools.js for why the other three are withheld here.
+      const toolData = { config, expenses, today: effectiveToday };
+      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet", { tools: JOB_HUNT_TOOLS, toolData })) {
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }

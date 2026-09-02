@@ -88,7 +88,18 @@ isAiAdmin, entitlement})` in `src/lib/entitlements.js` — true for admin/tester
 independently re-verified server-side in `api/coach.js` from the DB row, never trusted from the
 client. Persistence: `coach_chats` (migration 023) via `loadCoachChats`/`saveCoachChat`/
 `deleteCoachChat` in `src/lib/db.js`, called from `AskCoachPanel.jsx` — every completed turn is
-an eager save, not debounced. Summary generation uses a separate, narrower prompt,
+an eager save, not debounced. **Tools (2026-09-02):** four read-only drill-down tools —
+`get_goal_detail`, `get_expense_detail`, `get_week_breakdown`, `list_log_entries` — declared in
+`src/lib/coachTools.js` and executed **in the browser**, not on the server: `api/coach.js` only
+forwards the declarations and streams `tool_use` blocks back, and `chatWithCoach` runs each one
+against the same prop bag it already builds the context block from, then posts a `tool_result`
+turn. That keeps the deployment at 12/12 Vercel functions (no new route), sends no extra user
+data over the wire, and makes it structurally impossible for a tool and the context line
+summarizing it to resolve a figure differently. Only the visible text is persisted to
+`coach_chats` — `tool_use`/`tool_result` blocks never leave the request loop. The goal-name
+privacy rule holds through the tools too: `get_goal_detail` is addressed by funding rank and
+returns no label. Loop is bounded at 4 tool rounds per user turn. See
+`docs/drift-app-warden.md` §21 F163/F164. Summary generation uses a separate, narrower prompt,
 `COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---

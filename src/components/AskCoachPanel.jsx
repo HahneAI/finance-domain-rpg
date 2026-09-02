@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
+import { ASK_COACH_TOOLS } from "../lib/coachTools.js";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
@@ -272,8 +273,18 @@ export function AskCoachPanel({
         futureWeeks, timelineWeekNets, futureWeekNets, logNetLost, logNetGained, futureEventDeductions, prevWeekNet, allWeeks,
       });
       const apiMessages = nextMessages.map(({ role, content }) => ({ role, content }));
+      // Drill-down tools (lib/coachTools.js) run in the browser against this
+      // exact prop bag — the same one buildCoachContext() reads above, so a
+      // tool can never resolve a figure differently than the context block
+      // that summarizes it. Only the visible text is accumulated into the
+      // message; tool_use/tool_result blocks stay inside chatWithCoach and are
+      // never persisted to coach_chats.
+      const toolData = {
+        config, goals, expenses, logs, currentWeek, today, allWeeks, futureWeeks,
+        timelineWeekNets, logNetLost, logNetGained, futureEventDeductions,
+      };
       let accumulated = "";
-      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku")) {
+      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData })) {
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }

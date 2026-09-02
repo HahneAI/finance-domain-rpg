@@ -55,6 +55,22 @@ describe("eval fixture — the harness's own contract", () => {
     // calls getPhaseIndex(week.weekEnd), which needs .getFullYear().
     expect(buildWeeklyBriefingContext()).toMatch(/Goal 1 of 1: \$2,000 target, ~\$\d+\/wk projected/);
   });
+
+  // Regression (2026-09-02, found reviewing the sister branch's F167/F168
+  // period-label fix): allWeeks used to be label-shaped ({ idx, weekEnd:
+  // "2026-03-01" }, a date STRING with no weekStart/isPayWeek/
+  // payPeriodEndDate) — insufficient for getPayPeriodBounds(), so
+  // formatPeriodWithDate() silently fell back from "the week of March 9th,
+  // 2026 (week 11)" to a bare "week 11" on every single call. Every fixture
+  // in this file now shares REAL_ALL_WEEKS (a real buildYear() calendar,
+  // same one buildToolTestAccount() already used), so this can't regress
+  // back to the degraded fallback without failing here first.
+  it("gives Ask Coach and Weekly Briefing the full date-paired period label, not the bare fallback", () => {
+    expect(buildTestContext()).toContain("Current period: the week of March 9th, 2026 (week 11)");
+    expect(buildTestContext()).not.toMatch(/Current period: week \d+,/);
+    expect(buildWeeklyBriefingContext()).toContain("Current period: the week of March 9th, 2026 (week 11)");
+    expect(buildWeeklyBriefingContext()).toMatch(/on track for the week of \w+ \d+\w{2}, 2026 \(week \d+\)/);
+  });
 });
 
 describe("eval fixture — tool-ready sibling account", () => {

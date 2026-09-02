@@ -28,164 +28,45 @@
 // buildCoachContext() only emits its "New Job Season: active" line when
 // config.newJobSeasonMode is true, so a realistic Red-tier test needs both
 // set, not just the addendum text alone.
+//
+// REAL_ALL_WEEKS (2026-09-02): every fixture's `allWeeks`/`currentWeek` now
+// shares one real buildYear() calendar instead of each hand-rolling its own
+// approximation. Found while reviewing the sister branch's tool-loop work
+// (drift-app-warden §21 F167/F168's period-label fix): formatPeriodWithDate()
+// silently falls back from "the week of March 9th, 2026 (week 11)" to a bare
+// "week 11" whenever getPayPeriodBounds() can't resolve real weekStart/
+// weekEnd/isPayWeek/payPeriodEndDate fields from allWeeks — which a
+// label-shaped `{ idx, weekEnd: "2026-03-01" }` entry never carries. Every
+// fixture below except buildToolTestAccount() (already buildYear()-backed)
+// was silently exercising that degraded fallback the entire time, on every
+// single call — meaning every Phase 1-5 finding that quoted Coach citing a
+// date was elicited from a model working with LESS date information than a
+// real account ever gives it (ASK_COACH_SYSTEM_PROMPT explicitly tells Coach
+// the context "already does this and already uses the right unit... mirror
+// it exactly" — there was nothing to mirror). The Ask Coach near-limit
+// Phase 4 example ("Your week of March 9th (week 11) is tight... Next week
+// of March 16th (week 12)...") shows the model doing that date arithmetic
+// itself rather than reading it — consistent, not necessarily correct, and
+// exactly the failure shape the sister branch's own regression test
+// ("mid-November," a vague guessed date) was built to catch. None of the
+// Known Limitations findings turned out to hinge on this (they're about
+// metaphor/length, not dates), and the byte-identical baseline test in
+// coachEvalFixture.test.js asserts dollar/ratio lines only, never this one —
+// so nothing already recorded needed to be walked back, but every fixture
+// now gets the real, fuller date-paired text going forward.
 import { buildCoachContext, buildJobHuntContext } from "../../../src/lib/aiContext.js";
-
-// Returns the raw ARGUMENT BAG buildTestContext() feeds buildCoachContext(),
-// rather than the rendered string. Split out 2026-09-02 so a second consumer
-// — Coach's drill-down tools (src/lib/coachTools.js), which take the same
-// prop bag AskCoachPanel assembles, not a context string — can be exercised
-// against this exact account instead of a parallel hand-rolled one.
-//
-// buildTestContext() below is now a one-line wrapper over this, which is what
-// makes its output byte-identical to before by CONSTRUCTION rather than by
-// inspection: there is only one bag, and the string is derived from it. Do not
-// add fields here to serve a tool — every field is an input to
-// buildCoachContext(), so anything added changes the eval harness's prompt text
-// and invalidates Phase 4/5's word-for-word repeat comparisons. Tool-shaped
-// data belongs in buildToolTestAccount() at the bottom of this file.
-export function buildTestAccountArgs({
-  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null,
-} = {}) {
-  const config = {
-    firstActiveIdx: 0,
-    userPaySchedule: "weekly",
-    goalTimelineEpochIdx: null,
-    newJobSeasonMode,
-  };
-  const currentWeek = { idx: 10 };
-  const allWeeks = Array.from({ length: 52 }, (_, i) => ({
-    idx: i,
-    weekEnd: `2026-${String(1 + Math.floor(i / 4)).padStart(2, "0")}-${String(1 + (i % 4) * 7).padStart(2, "0")}`,
-  }));
-
-  return {
-    config,
-    weeklyIncome,
-    avgWeeklySpend,
-    goals: [],
-    expenses: [{
-      id: "e1", label: "Rent", category: "Needs",
-      history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }],
-    }],
-    fundedGoalSpend: 0,
-    currentWeek,
-    today: "2026-03-09",
-    runwayDays,
-    logs: [],
-    futureWeeks: [],
-    timelineWeekNets: [],
-    futureWeekNets: [weeklyIncome + 55],
-    logNetLost: 0,
-    logNetGained: 0,
-    futureEventDeductions: {},
-    prevWeekNet: weeklyIncome + 5,
-    allWeeks,
-  };
-}
-
-export function buildTestContext(opts = {}) {
-  return buildCoachContext(buildTestAccountArgs(opts));
-}
-
-// Weekly Pre-Game Briefing (docs/TODO.md §8.A, "3 sentences max: this week's
-// projected check, bills due, goal contributions, one heads-up") — not built
-// yet, but buildCoachContext() already carries every field its spec asks
-// for, so this fixture is ready to plug into a real prompt loader the
-// moment one exists. Unlike buildTestContext() above, this one DOES fund a
-// real goal with a genuine trend line, because "goal contributions" is
-// explicitly part of the spec — that needs computeGoalTimeline() to have
-// something real to project, not the goal-free shortcut buildTestContext()
-// takes for tests that don't care about goal data.
-//
-// The earlier "~0 weeks to fund $3,000 at $0/wk" bug (see the note above)
-// turned out to be one thing, not two: computeGoalTimeline() calls
-// getPhaseIndex(week.weekEnd), which calls week.weekEnd.getFullYear() —
-// it needs a real Date object per future week, not a date STRING the way
-// buildTestContext()'s allWeeks (only ever used for label formatting, a
-// different code path) gets away with. Empty futureWeeks/timelineWeekNets
-// wasn't really the fix, just the thing that avoided ever hitting this.
-export function buildWeeklyBriefingAccountArgs({
-  weeklyIncome = 845, avgWeeklySpend = 520, goalTarget = 2000,
-} = {}) {
-  const config = { firstActiveIdx: 0, userPaySchedule: "weekly", goalTimelineEpochIdx: null, newJobSeasonMode: false };
-  const currentWeek = { idx: 10 };
-  // Real Date objects, 8 weeks out — enough for a short-horizon goal to
-  // show a genuine funding date, not an instant/degenerate one.
-  const futureWeeks = Array.from({ length: 8 }, (_, i) => ({
-    idx: 11 + i,
-    weekEnd: new Date(`2026-${String(3 + Math.floor((11 + i) / 4)).padStart(2, "0")}-${String(1 + ((11 + i) % 4) * 7).padStart(2, "0")}T12:00:00`),
-  }));
-  const timelineWeekNets = futureWeeks.map(() => weeklyIncome + 55);
-
-  return {
-    config,
-    weeklyIncome,
-    avgWeeklySpend,
-    goals: [{ id: "g1", target: goalTarget, completed: false }],
-    expenses: [{
-      id: "e1", label: "Rent", category: "Needs",
-      history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }],
-    }],
-    fundedGoalSpend: 0,
-    currentWeek,
-    today: "2026-03-09",
-    runwayDays: null,
-    logs: [],
-    futureWeeks,
-    timelineWeekNets,
-    futureWeekNets: [weeklyIncome + 55],
-    logNetLost: 0,
-    logNetGained: 0,
-    futureEventDeductions: {},
-    prevWeekNet: weeklyIncome + 5,
-    allWeeks: futureWeeks,
-  };
-}
-
-export function buildWeeklyBriefingContext(opts = {}) {
-  return buildCoachContext(buildWeeklyBriefingAccountArgs(opts));
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Tool-ready account — for Coach's drill-down tools (src/lib/coachTools.js)
-// ─────────────────────────────────────────────────────────────────────────
-//
-// WHY A THIRD FIXTURE RATHER THAN ENRICHING buildTestAccountArgs(): the two
-// fixtures above cannot carry this data without changing the prompt text the
-// eval harness measures. Adding goals adds a "Goal breakdown" line, adding
-// logs rewrites the "Log entries" line, adding expenses rewrites "Expense
-// breakdown" — and Phase 4/5's findings rest on runs being word-for-word
-// identical across repeats. So this is a SIBLING account, deliberately tuned
-// to the same identity (~$845/wk net, $520/wk baseline spend, $400/wk rent,
-// today 2026-03-09, fiscal week 10, weekly pay) so a finding here is
-// comparable to a finding there — not a second unrelated persona.
-//
-// WHAT MAKES IT TOOL-READY: buildTestAccountArgs()'s `allWeeks` are
-// label-shaped — `{ idx, weekEnd: "2026-03-01" }`, a date STRING with no
-// weekStart, grossPay, taxableGross, active or payrollDeductions. That is
-// entirely sufficient for the period-label formatting buildCoachContext()
-// does, and entirely insufficient for get_week_breakdown, which reads the
-// real pay fields. Rather than hand-type richer week objects (a parallel
-// formula, and the exact D1 risk drift-app-warden.md §12 catalogues), this
-// fixture runs the REAL buildYear() over a real config — the same function
-// that builds every week in production — and derives income, spend and log
-// impacts through the real computeNet()/computeRemainingSpend()/
-// calcEventImpact(). Same principle as the two fixtures above, applied one
-// layer deeper: fake INPUT numbers, real functions turning them into data.
-//
-// The bag it returns is a superset of buildCoachContext()'s parameters, so it
-// can ALSO be passed straight to buildCoachContext() to get a context string
-// for this same account — meaning a prompt test and a tool test can be run
-// against one account, which is the whole point of putting it here rather
-// than in the app's own test tree.
 import { buildYear, computeNet, computeRemainingSpend, calcEventImpact, toLocalIso } from "../../../src/lib/finance.js";
 import { TOTAL_FISCAL_WEEKS } from "../../../src/constants/config.js";
 
+// Moved above its original site (near buildToolTestAccount() below) so
+// REAL_ALL_WEEKS can build from it too — same config for every fixture in
+// this file, since they're all meant to describe one identity (~$845/wk net,
+// $520/wk baseline spend, $400/wk rent, today 2026-03-09, fiscal week 10).
 // baseRate 29.20 is reverse-solved, not arbitrary: at 40h with this config's
 // 5% 401k, $22.50/wk benefits and 10%/4%/7.65% fed/state/FICA rates, real
-// computeNet() lands at ~$845/wk — matching buildTestAccountArgs()'s
-// hand-set weeklyIncome. If any rate below changes, re-derive this or the two
-// fixtures stop describing the same person.
+// computeNet() lands at ~$845/wk — matching the hand-set weeklyIncome below.
+// If any rate here changes, re-derive this or the fixtures stop describing
+// the same person.
 const TOOL_ACCOUNT_CONFIG = {
   employerPreset: null,
   userPaySchedule: "weekly",
@@ -231,6 +112,165 @@ const TOOL_ACCOUNT_CONFIG = {
   // here left the final week untaxed.
   taxedWeeks: Array.from({ length: TOTAL_FISCAL_WEEKS }, (_, i) => i),
 };
+
+// The one real calendar every fixture below shares — computed once, not
+// per-call, since none of these fixtures need it to vary. buildToolTestAccount()
+// below still calls buildYear() itself (not this constant) because it accepts
+// configOverrides that can genuinely change the calendar shape (e.g. a
+// different userPaySchedule); this shared constant is for the fixtures that
+// never vary their calendar, only their dollar figures.
+const REAL_ALL_WEEKS = buildYear(TOOL_ACCOUNT_CONFIG);
+
+// Returns the raw ARGUMENT BAG buildTestContext() feeds buildCoachContext(),
+// rather than the rendered string. Split out 2026-09-02 so a second consumer
+// — Coach's drill-down tools (src/lib/coachTools.js), which take the same
+// prop bag AskCoachPanel assembles, not a context string — can be exercised
+// against this exact account instead of a parallel hand-rolled one.
+//
+// buildTestContext() below is now a one-line wrapper over this, which is what
+// makes its output byte-identical to before by CONSTRUCTION rather than by
+// inspection: there is only one bag, and the string is derived from it. Do not
+// add fields here to serve a tool — every field is an input to
+// buildCoachContext(), so anything added changes the eval harness's prompt text
+// and invalidates Phase 4/5's word-for-word repeat comparisons. Tool-shaped
+// data belongs in buildToolTestAccount() at the bottom of this file.
+export function buildTestAccountArgs({
+  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null,
+} = {}) {
+  const config = {
+    firstActiveIdx: 0,
+    userPaySchedule: "weekly",
+    goalTimelineEpochIdx: null,
+    newJobSeasonMode,
+  };
+  const currentWeek = { idx: 10 };
+  const allWeeks = REAL_ALL_WEEKS;
+
+  return {
+    config,
+    weeklyIncome,
+    avgWeeklySpend,
+    goals: [],
+    expenses: [{
+      id: "e1", label: "Rent", category: "Needs",
+      history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }],
+    }],
+    fundedGoalSpend: 0,
+    currentWeek,
+    today: "2026-03-09",
+    runwayDays,
+    logs: [],
+    futureWeeks: [],
+    timelineWeekNets: [],
+    futureWeekNets: [weeklyIncome + 55],
+    logNetLost: 0,
+    logNetGained: 0,
+    futureEventDeductions: {},
+    prevWeekNet: weeklyIncome + 5,
+    allWeeks,
+  };
+}
+
+export function buildTestContext(opts = {}) {
+  return buildCoachContext(buildTestAccountArgs(opts));
+}
+
+// Weekly Pre-Game Briefing (docs/TODO.md §8.A, "3 sentences max: this week's
+// projected check, bills due, goal contributions, one heads-up") — not built
+// yet, but buildCoachContext() already carries every field its spec asks
+// for, so this fixture is ready to plug into a real prompt loader the
+// moment one exists. Unlike buildTestContext() above, this one DOES fund a
+// real goal with a genuine trend line, because "goal contributions" is
+// explicitly part of the spec — that needs computeGoalTimeline() to have
+// something real to project, not the goal-free shortcut buildTestContext()
+// takes for tests that don't care about goal data.
+//
+// The earlier "~0 weeks to fund $3,000 at $0/wk" bug (see the note above)
+// turned out to be one thing, not two: computeGoalTimeline() calls
+// getPhaseIndex(week.weekEnd), which calls week.weekEnd.getFullYear() —
+// it needs a real Date object per future week, not a date STRING. Solved
+// for free now (2026-09-02) by switching to REAL_ALL_WEEKS — a real
+// buildYear() calendar's weekEnd is always a genuine Date already.
+export function buildWeeklyBriefingAccountArgs({
+  weeklyIncome = 845, avgWeeklySpend = 520, goalTarget = 2000,
+} = {}) {
+  const config = { firstActiveIdx: 0, userPaySchedule: "weekly", goalTimelineEpochIdx: null, newJobSeasonMode: false };
+  const currentWeek = { idx: 10 };
+  // 8 real weeks out — enough for a short-horizon goal to show a genuine
+  // funding date, not an instant/degenerate one.
+  const futureWeeks = REAL_ALL_WEEKS.filter((w) => w.idx >= 11 && w.idx <= 18);
+  const timelineWeekNets = futureWeeks.map(() => weeklyIncome + 55);
+
+  return {
+    config,
+    weeklyIncome,
+    avgWeeklySpend,
+    goals: [{ id: "g1", target: goalTarget, completed: false }],
+    expenses: [{
+      id: "e1", label: "Rent", category: "Needs",
+      history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }],
+    }],
+    fundedGoalSpend: 0,
+    currentWeek,
+    today: "2026-03-09",
+    runwayDays: null,
+    logs: [],
+    futureWeeks,
+    timelineWeekNets,
+    futureWeekNets: [weeklyIncome + 55],
+    logNetLost: 0,
+    logNetGained: 0,
+    futureEventDeductions: {},
+    prevWeekNet: weeklyIncome + 5,
+    // The FULL calendar, not just futureWeeks — the "Current period" line
+    // resolves currentWeek.idx (10) against allWeeks, which a future-only
+    // slice starting at 11 could never contain.
+    allWeeks: REAL_ALL_WEEKS,
+  };
+}
+
+export function buildWeeklyBriefingContext(opts = {}) {
+  return buildCoachContext(buildWeeklyBriefingAccountArgs(opts));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Tool-ready account — for Coach's drill-down tools (src/lib/coachTools.js)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// WHY A THIRD FIXTURE RATHER THAN ENRICHING buildTestAccountArgs(): the two
+// fixtures above cannot carry this data without changing the prompt text the
+// eval harness measures. Adding goals adds a "Goal breakdown" line, adding
+// logs rewrites the "Log entries" line, adding expenses rewrites "Expense
+// breakdown" — and Phase 4/5's findings rest on runs being word-for-word
+// identical across repeats. So this is a SIBLING account, deliberately tuned
+// to the same identity (~$845/wk net, $520/wk baseline spend, $400/wk rent,
+// today 2026-03-09, fiscal week 10, weekly pay) so a finding here is
+// comparable to a finding there — not a second unrelated persona.
+//
+// WHAT MAKES IT TOOL-READY: buildTestAccountArgs()'s `allWeeks` used to be
+// label-shaped — `{ idx, weekEnd: "2026-03-01" }`, a date STRING with no
+// weekStart, grossPay, taxableGross, active or payrollDeductions. That was
+// entirely insufficient for get_week_breakdown, which reads the real pay
+// fields (still true — TOOL_ACCOUNT_EXPENSES/goals/logs below exist for
+// exactly this reason). Rather than hand-type richer week objects (a
+// parallel formula, and the exact D1 risk drift-app-warden.md §12
+// catalogues), this fixture runs the REAL buildYear() over a real config —
+// the same function that builds every week in production — and derives
+// income, spend and log impacts through the real computeNet()/
+// computeRemainingSpend()/calcEventImpact(). Same principle as the fixtures
+// above, applied one layer deeper: fake INPUT numbers, real functions
+// turning them into data. TOOL_ACCOUNT_CONFIG lives near the top of this
+// file now (as REAL_ALL_WEEKS's base) since every fixture shares it; this
+// function still calls buildYear() itself rather than reusing
+// REAL_ALL_WEEKS directly, because configOverrides can genuinely change the
+// calendar shape (e.g. a different userPaySchedule) and REAL_ALL_WEEKS is
+// computed once for the fixtures that never vary theirs.
+//
+// The bag it returns is a superset of buildCoachContext()'s parameters, so it
+// can ALSO be passed straight to buildCoachContext() to get a context string
+// for this same account — meaning a prompt test and a tool test can be run
+// against one account, which is the whole point of putting it here rather
+// than in the app's own test tree.
 
 // Baseline weekly spend is 400 + 60 + 60 = $520, deliberately equal to
 // buildTestAccountArgs()'s hand-set avgWeeklySpend — but here it is composed

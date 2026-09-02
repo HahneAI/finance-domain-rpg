@@ -1112,6 +1112,42 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     the remaining undefined axes (Directness/bluntness, Warmth/formality, Sentence economy —
     Sentence economy next after those, since DW-19 already left real anchor data for it); a
     repeat-verify pass on Job Hunt Chat if worth locking in before the batch decision.
+  - [x] **Fixture fidelity fix, found reviewing the sister branch's tool-loop work
+    (2026-09-02).** The sister branch's F167/F168 period-label fix (drift-app-warden §21)
+    exposed that `formatPeriodWithDate()` silently falls back from "the week of March 9th,
+    2026 (week 11)" to a bare "week 11" whenever `getPayPeriodBounds()` can't resolve real
+    `weekStart`/`isPayWeek`/`payPeriodEndDate` fields — which our own `buildTestContext()`/
+    `buildWeeklyBriefingContext()` fixtures never carried (label-shaped `allWeeks`, unlike
+    `buildToolTestAccount()`, which was already `buildYear()`-backed). Every Phase 1-5 date
+    reference was therefore elicited against a model working with LESS date information than
+    a real account ever gives it — Ask Coach's Phase 4 near-limit example doing its own
+    "next week = +7 days" arithmetic instead of reading a provided fact is a live instance of
+    exactly the failure shape the sister branch's own regression test was built to catch.
+    **Fixed:** every fixture in `testAccount.js` now shares one real `buildYear()` calendar
+    (`REAL_ALL_WEEKS`). Verified none of the recorded Known Limitations findings hinge on this
+    (they're about metaphor/length, not date formatting) and the byte-identical baseline test
+    only asserts dollar/ratio lines — nothing recorded needed to be walked back, but every
+    fixture now produces the real, fuller date-paired text going forward. Regression test added
+    in `coachEvalFixture.test.js`. 1839 pass; vite build clean.
+  - [x] **DW-19 update inherited from the sister branch, directly relevant to "Sentence economy
+    next" above.** Their live-testing (`coach-personality-rubric.md`'s DW-19 entry, updated
+    2026-09-02) ran the rubric's own canonical broad-question phrasing four more times across
+    their tool/context-trim work and found the number-count cap is not a data-volume problem:
+    tool availability didn't change it, halving the context block's numbers didn't change it,
+    and when data WAS removed from the block Coach spent extra tool round-trips to reconstruct
+    the same ~10-number answer rather than compress to fit. **This means the few-shot-example
+    recommendation this file already flagged for Sentence Economy is now doubly motivated, not
+    just a hunch** — a worked model-answer example demonstrating a complete 3-number answer is
+    the only untried lever left; do not re-attempt this via context/tool-surface changes, that
+    path is now closed with real evidence, not just untested.
+  - [ ] **Open, not decided: `AskCoachPanel.jsx` now sends a TRIMMED context block
+    (`detailAvailableViaTools: true`, sister branch's F171→F172 work) plus 9 tools — a real,
+    growing divergence from what `askCoachComposed.js` tests** (full untrimmed context, zero
+    tools, single-turn). `CoachNetWorthCard.jsx` has no tools and is unaffected — that fixture
+    stays accurate. Job Hunt Chat has had tools since the first coach-mcp-tools merge (already a
+    known, deferred gap). Per the user's own sequencing ("tools come later, after the base
+    feature prompts are scored and nailed"), not fixed here — flagged so the gap is sized
+    accurately whenever tool-augmented testing starts, rather than discovered by surprise.
 - [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split

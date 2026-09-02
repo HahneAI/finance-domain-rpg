@@ -69,22 +69,34 @@ doesn't repeat their reasoning.
   `buildToolTestAccount()` / `buildToolTestContext()` (2026-09-02) — a third
   fixture, for Coach's drill-down tools (`src/lib/coachTools.js`), which take
   the prop bag `AskCoachPanel` assembles rather than a rendered context
-  string. The two fixtures above can't serve them: their `allWeeks` are
-  label-shaped (`{ idx, weekEnd: "2026-03-01" }` — a date string, no
-  `weekStart`/`grossPay`/`taxableGross`/`payrollDeductions`), which is all
-  `buildCoachContext()`'s period labels need and nowhere near what
-  `get_week_breakdown` reads. This one runs the real `buildYear()` over a real
-  config and derives income, spend and log impacts through real
-  `computeNet()`/`computeRemainingSpend()`/`calcEventImpact()` — the same
-  "fake inputs, real functions" principle, one layer deeper. It is a SIBLING
-  account, deliberately tuned to the same identity (~$845/wk net, $520/wk
-  baseline spend, $400/wk rent, 2026-03-09, fiscal week 10) rather than the
-  same object: adding goals/logs/expenses to `buildTestContext()` would change
-  its prompt text and invalidate Phase 4/5's word-for-word repeat comparisons.
-  Its bag is a superset of `buildCoachContext()`'s params, so
-  `buildToolTestContext()` renders a context string for that same account — a
-  prompt test and a tool test can run against one account. Locked by
-  `src/test/lib/coachEvalFixture.test.js`.
+  string. It needs richer weeks than a label alone (`grossPay`/`taxableGross`/
+  `payrollDeductions`, which `get_week_breakdown` reads), so it runs the real
+  `buildYear()` over a real config and derives income, spend and log impacts
+  through real `computeNet()`/`computeRemainingSpend()`/`calcEventImpact()` —
+  the same "fake inputs, real functions" principle, one layer deeper. It is a
+  SIBLING account, deliberately tuned to the same identity (~$845/wk net,
+  $520/wk baseline spend, $400/wk rent, 2026-03-09, fiscal week 10) rather
+  than the same object: adding goals/logs/expenses to `buildTestContext()`
+  would change its prompt text and invalidate Phase 4/5's word-for-word
+  repeat comparisons. Its bag is a superset of `buildCoachContext()`'s
+  params, so `buildToolTestContext()` renders a context string for that same
+  account — a prompt test and a tool test can run against one account.
+  Locked by `src/test/lib/coachEvalFixture.test.js`.
+  **`REAL_ALL_WEEKS` (2026-09-02, found reviewing the sister branch's F167/
+  F168 period-label fix)** — every fixture in this file, not just this one,
+  now shares one real `buildYear()` calendar. `allWeeks` used to be
+  label-shaped (`{ idx, weekEnd: "2026-03-01" }` — a date string) for
+  `buildTestContext()`/`buildWeeklyBriefingContext()`, which was sufficient
+  for `buildCoachContext()` to run without erroring but NOT sufficient for
+  `formatPeriodWithDate()` to produce its real "the week of March 9th, 2026
+  (week 11)" text — `getPayPeriodBounds()` needs real `weekStart`/
+  `isPayWeek`/`payPeriodEndDate` fields it never had, so it silently fell
+  back to a bare "week 11" on every call. Every Phase 1-5 finding that
+  quoted Coach citing a date was elicited against that degraded fallback;
+  none of the recorded findings turned out to hinge on it, but every fixture
+  produces the real, fuller text now. See `docs/TODO.md` §2.L for the full
+  writeup of why this matters (a live example of exactly the "vague guessed
+  date" failure shape the sister branch's own regression test targets).
   `buildTestAccountArgs()` / `buildWeeklyBriefingAccountArgs()` — the raw
   argument bags the two original fixtures feed `buildCoachContext()`. Both
   `build*Context()` functions are now one-line wrappers over them, so their
@@ -114,6 +126,24 @@ doesn't repeat their reasoning.
   *finding* into `coach-personality-rubric.md` (filling in a `TODO` cell,
   adding a "Known Limitations" entry, etc.) — that's the durable artifact,
   not the JSON dump.
+- `toolLoopLiveTest.mjs` — NOT part of this promptfoo harness; a separate,
+  standalone script from the sister `coach-mcp-tools` branch (merged into
+  Version-control 2026-09-02) testing a different axis: does Coach select
+  the right drill-down/simulation tool with sensible arguments, not
+  personality/register. promptfoo has no hook for running a tool loop (emit
+  tool_use → execute → feed result back → real answer), so this drives it
+  directly against the real live exports (`ASK_COACH_SYSTEM_PROMPT`,
+  `COACH_TOOLS`, `buildCoachContext()`, `executeCoachTool()`), sharing this
+  same `fixtures/testAccount.js` (specifically `buildToolTestAccount()`) and
+  the same `AI_ADMIN_COACH_TEST_KEY`/no-retry budget discipline this README
+  documents below. Findings so far: tool selection correct 4/4 then 5/5 as
+  the tool count grew; a real period-label bug found and fixed (see
+  `REAL_ALL_WEEKS` above); a "fabricated counterfactual" pattern found three
+  times (Coach inventing a plausible-sounding hypothetical impact instead of
+  calling the simulation tool that would answer it for real) — tool
+  *availability* doesn't prevent this, only tool *use* does, still open.
+  Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
+  F168-F174.
 
 ## Running it
 

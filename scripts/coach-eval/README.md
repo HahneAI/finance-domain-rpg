@@ -251,9 +251,13 @@ retry-on-a-hunch.** Concretely for this file:
     off-vocabulary, self-invented one. "firm" (also names the closing-line
     placement + one worked example) got exactly one clean,
     vocabulary-bank-matching touch **3/3 times**, always "corner," always
-    at the close, never explained, never stacked. **Not applied to
-    `coachPrompts.js` yet** — a real, reliable candidate fix, held for a
-    deliberate apply-now-vs-batch decision. Full writeup in
+    at the close, never explained, never stacked. **Applied to
+    `coachPrompts.js` 2026-09-02, on explicit instruction** — "firm"'s
+    closing sentence is now the live `RESUME_REVIEW_ADDENDUM`'s last
+    paragraph; `resumeReviewTuning.js`'s `firm` variant now imports the
+    real `RESUME_REVIEW_SYSTEM_PROMPT` export instead of duplicating the
+    string, so it can't silently drift from what's shipped.
+    `coachPrompts.test.js` gained regression coverage. Full writeup in
     `coach-personality-rubric.md`'s Known Limitations.
   - [ ] Not yet run: the still-unbuilt flat rows, the remaining undefined
     axes, and a repeat-verify pass on Job Hunt Chat if it's worth locking

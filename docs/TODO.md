@@ -1087,8 +1087,9 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     shape distinct from both Ask Coach's and Net Worth Trigger's Axis 2 findings. **Résumé
     Review's existing target (3, matches default) did NOT hold** — natural output used zero
     figurative language, a fully literal analytical review; structurally compliant with
-    everything else in its addendum, gap is narrowly on this one axis. Neither target changed
-    here — both held for the batch decision below. Full writeup:
+    everything else in its addendum, gap is narrowly on this one axis. Job Hunt Chat's target
+    left as-is (held for the batch decision); Résumé Review's gap FIXED, see below — not
+    identical treatment, on explicit instruction. Full writeup:
     `coach-personality-rubric.md`'s Known Limitations and the Job Hunt/Résumé Review table rows.
 
     Found and fixed a real bug along the way: `buildJobHuntContext()` (`aiContext.js`) passed
@@ -1096,11 +1097,21 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     dropped, so Job Hunt Assistant's own "Cash Runway" line never moved no matter how much gig
     income a user logged, right next to its own line saying how much had been logged. Fixed to
     match every other call site's `extraCash: sumJobHuntIncome(config)`; drift-app-warden.md F167.
+  - [x] **Résumé Review prompt-tuning + ship (2026-09-02).** Root cause:
+    `COACH_PERSONA_PROMPT`'s corner-man clause is a cap, never a floor — a technical/evaluative
+    mode with no addendum nudge just defaults to fully literal. Tested two candidate closing
+    sentences (`scripts/coach-eval/prompts/resumeReviewTuning.js`): "soft" (names the gap, caps
+    at one touch, no placement) got one touch but an off-vocabulary, self-invented one; "firm"
+    (also names the closing-line placement + one worked example) got exactly one clean,
+    vocabulary-bank-matching touch 3/3 times. **Applied to `coachPrompts.js` on explicit
+    instruction** — "firm"'s sentence is now `RESUME_REVIEW_ADDENDUM`'s closing paragraph.
+    Regression coverage: `coachPrompts.test.js`. Not yet repeat-verified against the final
+    composed `RESUME_REVIEW_SYSTEM_PROMPT` string end-to-end (the 3/3 verification ran on the
+    candidate wording pre-application) — worth a confirmation pass if this mode comes up again.
   - [ ] Remaining: the still-unbuilt flat rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing);
     the remaining undefined axes (Directness/bluntness, Warmth/formality, Sentence economy —
     Sentence economy next after those, since DW-19 already left real anchor data for it); a
-    repeat-verify pass on Job Hunt Chat/Résumé Review if either result is worth locking in before
-    the batch decision.
+    repeat-verify pass on Job Hunt Chat if worth locking in before the batch decision.
 - [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split

@@ -109,7 +109,10 @@ const PLANNED = only.length
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }
 
 const bag = buildToolTestAccount();
-const contextBlock = buildCoachContext(bag);
+// detailAvailableViaTools mirrors AskCoachPanel: this runner always sends
+// tools, so the block must be the trimmed one the panel actually ships, not the
+// fuller version CoachNetWorthCard gets.
+const contextBlock = buildCoachContext({ ...bag, detailAvailableViaTools: true });
 
 let calls = 0;
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };

@@ -5453,6 +5453,47 @@ via `dhlNightShift === false` (on by default), a base user opts IN via `nightDif
 > (`k401StartDate`/`benefitsStartDate`, `firstActiveIdx`, New Job Season bounds) only the caller
 > knows, and a simulated week inherits them from its real basis.
 
+**F171 · `detailAvailableViaTools` — the context block's per-item lines are opt-in trimmed** — `aiContext.js` — **[L/G]**
+2026-09-02. `buildCoachContext`'s two per-item lines (Expense breakdown, Goal breakdown) are the
+only ones that grow with the account — together 38% of the block on a 3-expense/2-goal fixture and
+the densest cluster of numbers in it. With Coach's tools able to serve that depth on demand
+(F163/F168), the flag shrinks both to an INDEX: expense LABELS (cost/cycle/due date/overrides move
+to `get_expense_detail`) and goal rank + target + finish date (funding rate and periods-to-fund
+move to `get_goal_detail`). Measured: −17% block / 82→59 numbers at 8 expenses + 5 goals, −25% /
+110→75 at 15 + 8. Only `AskCoachPanel` sets it.
+> **IF** a caller sets this flag, **THEN** it MUST also be sending the tools — the flag's whole
+> premise is that the omitted detail is fetchable. `CoachNetWorthCard` is a single-shot generator
+> with NO tools and deliberately leaves it false; making the trim unconditional would strip detail
+> from a surface with no way to get it back. **IF** a new per-item line is added to the block,
+> **THEN** decide explicitly which side of this flag it sits on.
+> **Two things live testing established that must not be re-litigated by inspection:**
+> (1) **Expense NAMES stay in the index.** The adversarial round answered "what's going on with my
+> Netflix bill?" correctly straight off that line; dropping the names forces a wrong-label tool
+> call just to discover what exists. Re-verified after the trim — still correct, still 0 tools.
+> (2) **Goal FINISH DATES stay in the index.** A first cut dropped them and "give me a full
+> breakdown" went from 0 tool calls to 3 — "when do my goals land" is the one goal fact a broad
+> answer always needs. Two extra round-trips on the most common question is a bad trade for ~250
+> characters of a prefix that is cache-read at a tenth of input rate. Restoring the date returned
+> it to 1 round / 0 tools.
+> **What this did NOT fix:** DW-19's broad-question number cap. Halving the numbers available in
+> the block did not reduce how many Coach cites (~10 against an instructed ≤3, unchanged before
+> and after). That limitation is about the instruction's shape, not the data volume behind it —
+> see `coach-personality-rubric.md`'s Known Limitations, which still calls for a worked few-shot
+> example rather than another prose rewrite. Do not re-attempt the trim as a fix for it.
+> Check: `aiContext.test.js`'s `detailAvailableViaTools` block — default keeps the full
+> breakdowns, the flag swaps in the index, names/dates survive, goal names stay withheld, no other
+> line changes, and the saving grows super-linearly with account size.
+
+**F172 · Tool-loop text seam** — `claude.js` `chatWithCoach` — **[G]**
+2026-09-02. A model that says "let me pull that up" before calling a tool and then answers in the
+next round produces two separate runs of text. The loop yielded them back to back, so live output
+read `"...for you.You're on track"`. One space is now inserted at the seam, only when the previous
+round ended on a non-whitespace character and the next chunk doesn't start with one.
+> **IF** the loop's text handling changes, **THEN** preserve the seam — this is invisible to every
+> unit test that asserts on a single round's output, and only shows up in a real multi-round
+> answer. Check: `claudeToolLoop.test.js`'s "separates a pre-tool preamble" and "does not double a
+> space the model already supplied".
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

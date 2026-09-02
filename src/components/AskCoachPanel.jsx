@@ -271,6 +271,11 @@ export function AskCoachPanel({
       const contextBlock = buildCoachContext({
         config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays, logs,
         futureWeeks, timelineWeekNets, futureWeekNets, logNetLost, logNetGained, futureEventDeductions, prevWeekNet, allWeeks,
+        // This panel sends ASK_COACH_TOOLS below, so the per-expense and
+        // per-goal detail lines shrink to an index — the tools serve that depth
+        // on demand instead of every call carrying it. CoachNetWorthCard has no
+        // tools and deliberately leaves this false.
+        detailAvailableViaTools: true,
       });
       const apiMessages = nextMessages.map(({ role, content }) => ({ role, content }));
       // Drill-down tools (lib/coachTools.js) run in the browser against this

@@ -144,6 +144,48 @@ describe("chatWithCoach — tool loop", () => {
     expect(out).toBe("Let me pull that. Two entries.");
   });
 
+  it("separates a pre-tool preamble from the answer that follows it", () => {
+    // Regression: live output read "...for you.You're on track" — two rounds of
+    // text yielded back to back with nothing between them.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sse([
+        { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+        { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "I'll pull that up for you." } },
+        { type: "content_block_stop", index: 0 },
+        { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "t", name: "list_log_entries" } },
+        { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{}" } },
+        { type: "content_block_stop", index: 1 },
+        { type: "message_delta", delta: { stop_reason: "tool_use" } },
+      ]))
+      .mockResolvedValueOnce(textTurn("You're on track."));
+    vi.stubGlobal("fetch", fetchMock);
+
+    return drain(chatWithCoach([{ role: "user", content: "q" }], "sys", "ctx", "haiku", {
+      tools: TOOLS, toolData: { logs: [], config: {} },
+    })).then((out) => {
+      expect(out).toBe("I'll pull that up for you. You're on track.");
+    });
+  });
+
+  it("does not double a space the model already supplied", () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sse([
+        { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+        { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Checking. " } },
+        { type: "content_block_stop", index: 0 },
+        { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "t", name: "list_log_entries" } },
+        { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: "{}" } },
+        { type: "content_block_stop", index: 1 },
+        { type: "message_delta", delta: { stop_reason: "tool_use" } },
+      ]))
+      .mockResolvedValueOnce(textTurn("Done."));
+    vi.stubGlobal("fetch", fetchMock);
+
+    return drain(chatWithCoach([{ role: "user", content: "q" }], "sys", "ctx", "haiku", {
+      tools: TOOLS, toolData: { logs: [], config: {} },
+    })).then((out) => expect(out).toBe("Checking. Done."));
+  });
+
   it("stops looping at the round cap and withholds tools on the final call", async () => {
     const fetchMock = vi.fn().mockImplementation(async () => toolTurn("list_log_entries", ["{}"]));
     vi.stubGlobal("fetch", fetchMock);

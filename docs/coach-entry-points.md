@@ -163,6 +163,26 @@ on retest it reports "Goal 1 lands the week of April 20th (week 17) instead of A
 is the tool's own number. **The pattern worth remembering: when Coach invents a figure, check
 first whether the tool should have supplied it.** Twice now the answer was yes.
 
+**Context block trimmed 2026-09-02** (drift-app-warden §21 F171). With eight tools able to serve
+depth on demand, `buildCoachContext`'s two per-item lines — the only ones that grow with the
+account — shrink to an index when the caller passes `detailAvailableViaTools: true`. Expense
+labels stay, per-expense cost moves to `get_expense_detail`; goal rank/target/finish date stay,
+funding rate and pace move to `get_goal_detail`. Opt-in, not default: `CoachNetWorthCard` sends no
+tools and would lose detail it cannot fetch back. Measured −17% block and 82→59 numbers at 8
+expenses + 5 goals; −25% and 110→75 at 15 + 8.
+
+Live testing decided two boundaries that look arbitrary but are not. **Expense names stay** — the
+"Netflix" question is answered straight off that line, and without it Coach must make a wrong-label
+tool call to discover what exists. **Goal finish dates stay** — a first cut dropped them and the
+broad question went from 0 tool calls to 3, since "when do my goals land" is the one goal fact such
+an answer always needs; restoring the date returned it to 1 round. Two extra round-trips on the
+most common question is a bad trade for a prefix that is cache-read at a tenth of input rate.
+
+**It did not fix DW-19.** Halving the numbers in the block did not change how many Coach cites in a
+broad answer (~10, before and after). That is a property of the instruction's shape, not of the
+data volume behind it — the rubric's own note calling for a worked few-shot example still stands,
+and the trim should not be re-attempted as a fix for it.
+
 Minor and unfixed: in one answer Coach described a $90/wk bill as "nearly 17% of your current
 surplus" — 17% is its share of *spend* ($522); of surplus ($323) it is 28%. A self-derived ratio
 mislabelled, not a tool figure; same family as DW-19's number-handling limits. Summary generation uses a separate, narrower prompt,

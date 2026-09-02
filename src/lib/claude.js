@@ -125,6 +125,7 @@ async function* streamTurn(res, collected) {
 export async function* chatWithCoach(messages, systemPrompt, contextBlock, model = "haiku", options = {}) {
   const { tools = null, toolData = {}, maxToolRounds = MAX_TOOL_ROUNDS } = options;
   const convo = messages.map((m) => ({ role: m.role, content: m.content }));
+  let lastChar = "";
 
   for (let round = 0; ; round++) {
     // Withhold the tool list on the final permitted round so the model can't
@@ -139,7 +140,21 @@ export async function* chatWithCoach(messages, systemPrompt, contextBlock, model
     });
 
     const collected = { blocks: [], stopReason: null };
-    yield* streamTurn(res, collected);
+    // A model that says "let me pull that up" before calling a tool, then
+    // answers in the next round, produces two separate runs of text. Yielding
+    // them back to back ran the sentences together — live output read
+    // "...for you.You're on track". Insert one space at the seam, only when the
+    // previous round actually ended mid-sentence.
+    let seamPending = round > 0 && lastChar !== "" && !/\s/.test(lastChar);
+    for await (const chunk of streamTurn(res, collected)) {
+      if (!chunk) continue;
+      if (seamPending) {
+        seamPending = false;
+        if (!/^\s/.test(chunk)) yield " ";
+      }
+      lastChar = chunk.slice(-1);
+      yield chunk;
+    }
 
     // Hard termination bound: a round that was not offered tools is always the
     // last one. Without this the cap would rest on the assumption that the API

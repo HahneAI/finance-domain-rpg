@@ -5365,6 +5365,27 @@ is non-zero at all.
 > modal, and asserts a real amount on the row, Net Pay reduced by it, no `perCheckFactor` scaling
 > on a biweekly account, and the legacy `weeklyAmount` tail still read.
 
+**F167 · `buildJobHuntContext` silently dropped logged gig income from the runway it quotes** — `aiContext.js:223` — **[L]**
+2026-09-02. Found while building the coach-eval harness's Job Hunt Assistant fixture (scripts/
+coach-eval/) — every other `computeNewJobSeasonRunway` call site (`NewJobSeasonHomePanel.jsx`,
+`NewJobSeasonBudgetPanel.jsx`, `CoachNetWorthCard.jsx`, `App.jsx`) passes `extraCash:
+sumJobHuntIncome(config)`; `buildJobHuntContext` alone passed `savings: manualSavings +
+huntIncome` — a param name the function's `{ config, expenses, effectiveToday, extraCash = 0 }`
+signature doesn't destructure, so the whole figure was silently discarded and `extraCash`
+defaulted to 0. Live and total, not an edge case: a user could log any amount of gig/odd-job
+income on New Job Season Home and Job Hunt Assistant's own "Cash Runway" line — right next to its
+own "Extra job-hunt income logged so far: $X" line — would never move. A plausible-looking wrong
+answer, not a crash; no existing test caught it because `aiContext.test.js`'s income coverage only
+asserted the display line's text, never that the runway number itself changed.
+> **IF** `buildJobHuntContext` needs cash beyond the persisted `config.newJobSeasonCashOnHand`
+> (which `computeNewJobSeasonRunway` already reads internally as `rawCashOnHand`), **THEN** pass
+> only `extraCash: sumJobHuntIncome(config)` — the exact shape every other call site uses. The
+> removed `manualSavings` local was `config?.newJobSeasonCashOnHand` re-read a second time; adding
+> it into `extraCash` (rather than just dropping the bad param name) would have "fixed" the crash
+> by double-counting cash-on-hand instead. Check: `aiContext.test.js`'s new "folds logged job-hunt
+> income into the runway itself" case — asserts the runway day count itself increases, not just
+> that the income line renders.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

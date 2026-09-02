@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt } from "../../lib/coachPrompts.js";
+import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt, RESUME_REVIEW_SYSTEM_PROMPT } from "../../lib/coachPrompts.js";
 
 describe("COACH_PERSONA_PROMPT", () => {
   it("explicitly instructs against combative language, per docs/coach-personality-rubric.md", () => {
@@ -124,5 +124,31 @@ describe("buildNetWorthSystemPrompt", () => {
 
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
+  });
+});
+
+describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {
+  it("includes the shared persona", () => {
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toContain(COACH_PERSONA_PROMPT);
+  });
+
+  // Live-verified 2026-09-02 (docs/TODO.md §2.L Phase 5) that the shipped
+  // Metaphor Intensity 3 target didn't hold on its own — COACH_PERSONA_PROMPT's
+  // corner-man clause is a cap, not a floor, and this mode's technical/
+  // evaluative task gave the model nothing else to reach for one. This
+  // instruction is a prompt-tuning finding (scripts/coach-eval/prompts/
+  // resumeReviewTuning.js's "firm" variant, 3/3 repeat-verified), not a guess
+  // — it names both the placement (the closing line) and gives one worked
+  // example, which is what made the touch land on real vocabulary-bank
+  // language instead of the model inventing its own.
+  it("names the closing line as where its one allowed corner-man touch belongs, with a worked example", () => {
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/keep exactly one light corner-man touch/i);
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/most naturally in the closing line/i);
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/never explained, and never more than the one touch/i);
+  });
+
+  it("still keeps the exception to the two-to-three-sentence rule and the no-Markdown rule", () => {
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/exception to the two-to-three-sentence rule/i);
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/never asterisks or dash-bullets/i);
   });
 });

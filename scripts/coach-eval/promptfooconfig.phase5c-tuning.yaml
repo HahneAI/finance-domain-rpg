@@ -1,0 +1,41 @@
+description: >
+  Prompt-tuning pass for the Phase 5 Résumé Review finding (docs/TODO.md
+  §2.L, coach-personality-rubric.md's Known Limitations): the shipped
+  addendum's Metaphor Intensity target (3, "light seasoning") did not hold
+  live — natural output used zero figurative language, because
+  COACH_PERSONA_PROMPT's corner-man clause is only ever a CAP ("no more than
+  one per message"), never a floor, and nothing in the shipped addendum
+  pulls toward including one on a task this technical.
+
+  Tests two candidate addendum wordings (prompts/resumeReviewTuning.js) side
+  by side with the current shipped text, same fixture résumé/target role as
+  the original Phase 5 slice, same claude-sonnet-5: "soft" names the gap and
+  caps it at one touch without saying where; "firm" additionally names the
+  natural placement (the closing line) and gives one worked example to
+  anchor the register. Goal is to find wording that reaches score 3 without
+  overshooting into "explained" or "belabored" or violating the "never more
+  than one" cap everywhere else in the app enforces.
+
+  First pass: 2 calls (soft, firm) — "current" was already sampled in
+  promptfooconfig.phase5c.yaml, not re-spent here. Repeat-verify only
+  whichever wins.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/resumeReviewTuning.js
+    label: resume-review-tuning
+
+tests:
+  - description: "Soft nudge — names the gap and caps at one touch, no placement guidance"
+    vars:
+      variant: "soft"
+
+  - description: "Firm — names placement (closing line) + one worked example"
+    vars:
+      variant: "firm"

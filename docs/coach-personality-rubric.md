@@ -184,8 +184,10 @@ accident that a Metaphor-Intensity-only pass would have missed entirely.
 | Goal ETA Drift Alert (§8.A) | 3 (default) | TODO | TODO | |
 | Weekly Pre-Game Briefing (§8.C) | 3 (default) | TODO | TODO | |
 | Statement Summary (§2.D) | 3 (default) | TODO | TODO | Blocked on Statements tab existing at all |
-| Job Hunt Chat (§2.E) | **2 (scored 2026-07-25)** | "Your runway is 41 days. At your target income of $58,000, three applications a week keeps your pipeline full enough to land something before that date." | "You're deep in the championship rounds now — every application's a jab testing the field, every interview a chance to work the body until an opening appears. Stay light on your feet and keep your guard up until the bell rings on an offer." | Scored down from the 3 default — a job search under real runway pressure doesn't need a fight metaphor draped over every message; Coach should read as backup, not commentary. Kept above 1 (not fully literal) so he still sounds like the same character as everywhere else in the app, just quieter here. Implemented: `JOB_HUNT_ADDENDUM` in `coachPrompts.js`. |
-| Résumé Review (§2.E1) | **3 (scored 2026-07-25, matches default)** | "Your resume leans on responsibilities, not results. Rewrite the warehouse-lead line to include a number — 'reduced pick errors 18%' reads stronger than 'oversaw daily operations.'" | "This resume's still working the jab — plenty of duties listed, not enough combinations landed. Trade a few of those responsibility lines for a real one-two: what you did, and the number that proves it connected." | A resume review sits closer to Ask Coach's own "how do I use this" register — tactical, document-level feedback, not a raw-nerve moment like an active job search under runway pressure. No signal here strong enough to warrant dropping below the default the way Job Hunt Chat does. Implemented: `RESUME_REVIEW_SYSTEM_PROMPT` in `coachPrompts.js` (no addendum override needed — inherits `COACH_PERSONA_PROMPT`'s own cap as-is). |
+| Job Hunt Chat (§2.E) | 2 (scored 2026-07-25) — **live-verified 2026-09-02, holds cleanly** | "Your runway is 41 days. At your target income of $58,000, three applications a week keeps your pipeline full enough to land something before that date." | "You're deep in the championship rounds now — every application's a jab testing the field, every interview a chance to work the body until an opening appears. Stay light on your feet and keep your guard up until the bell rings on an offer." | Scored down from the 3 default — a job search under real runway pressure doesn't need a fight metaphor draped over every message; Coach should read as backup, not commentary. Kept above 1 (not fully literal) so he still sounds like the same character as everywhere else in the app, just quieter here. Implemented: `JOB_HUNT_ADDENDUM` in `coachPrompts.js`. **Live check (Phase 5, see sub-rows below and Known Limitations): target confirmed at both a healthy and a tight runway — real elicited text has at most one trace-level touch, never boxing-coded, and correctly translates the runway day count into search-time.** |
+| ↳ Job Hunt — Healthy runway (~70 days), within §2.E | Natural output: ~1-2, no override | "Cascade Freight is the one to nudge — applied 2026-02-20 with no movement since, that's long enough to send a short check-in email restating your interest and asking about timeline. Riverbend already has you in the interview stage, so your energy there goes into prep, not follow-up. Your 70 days of runway is about 10 weeks at your $400 burn rate, so log the Cascade follow-up today..." (`claude-sonnet-5`, real account via `buildJobHuntTestContext({variant:"healthy"})`, Phase 5, not yet repeat-verified) | n/a | One loose touch ("keep that clock working for you," trimmed from table), no corner-man vocabulary. Uses real company names (correct — this mode's own exception to goal-name privacy). Translates runway into weeks of searching, per the addendum's explicit instruction. |
+| ↳ Job Hunt — Tight runway (~9 days), within §2.E | Natural output: ~1, no override | "Riverbend's already moving, so your energy there goes into interview prep, not a follow-up. Cascade Freight has been quiet since February 20 — that's the one worth a short check-in email today... With about nine days of runway, roughly one more week of searching, open the Applications panel now and log a follow-up task against Cascade Freight." (`claude-sonnet-5`, same fixture, `variant:"tight"`, Phase 5, not yet repeat-verified) | n/a | Zero figurative touches — fully literal. Same length as the healthy variant (not a length escalation, unlike Ask Coach's Phase 4 finding) — urgency shows up as content (naming the runway pressure directly, "roughly one more week of searching") not extra words. See Known Limitations for the contrast writeup. |
+| Résumé Review (§2.E1) | 3 (scored 2026-07-25, matches default) — **live-verified 2026-09-02, real gap found and FIXED, see note** | "Your resume leans on responsibilities, not results. Rewrite the warehouse-lead line to include a number — 'reduced pick errors 18%' reads stronger than 'oversaw daily operations.'" | "This resume's still working the jab — plenty of duties listed, not enough combinations landed. Trade a few of those responsibility lines for a real one-two: what you did, and the number that proves it connected." | A resume review sits closer to Ask Coach's own "how do I use this" register — tactical, document-level feedback, not a raw-nerve moment like an active job search under runway pressure. No signal here strong enough to warrant dropping below the default the way Job Hunt Chat does. Implemented: `RESUME_REVIEW_SYSTEM_PROMPT` in `coachPrompts.js`. **Live check (Phase 5, `claude-sonnet-5`, real fixture résumé via `RESUME_REVIEW_TEXT`) originally found natural output used ZERO figurative language — fully literal, analytical review, not the "light seasoning" the 3 default implies. Fixed 2026-09-02: `RESUME_REVIEW_ADDENDUM` gained a closing sentence naming the touch's placement (the closing "fix this first" line) + one worked example — found via prompt-tuning (`resumeReviewTuning.js`'s "firm" variant), 3/3 repeat-verified clean before shipping. Regression coverage: `coachPrompts.test.js`.** |
 | Raise-Negotiation Prep (§8.C) | UNSCORED | TODO | TODO | |
 | Burnout Sentinel (§8.F2) | UNSCORED | TODO | TODO | Corner-man checking on you mid-fight for your own good — could be the mode where the metaphor works hardest |
 | Heirloom Letter Delivery Ceremony (§8.F3) | UNSCORED | TODO | TODO | Flagged as likely its own low score — this is a solemn, ceremonial moment (the user's own words, sealed at goal creation), not a coaching beat; Coach should get out of the way of it, not season it |
@@ -376,6 +378,96 @@ an *explicit anti-escalation instruction* ("never catastrophize," "be direct and
 holding — a compliance gap to close, not a capability to formalize. Same axis (Urgency Escalation),
 opposite framing; don't conflate "the model does this on its own" with "the model isn't doing what
 it was told."
+
+**Job Hunt Assistant and Résumé Review, live-verified for the first time (2026-09-02, Phase 5 of
+`docs/TODO.md` §2.L) — one target held cleanly, the other didn't.** `claude-sonnet-5` (both modes'
+own shipped model choice, unrelated to Ask Coach's Haiku lock), no calibration override, real
+fixture data via `scripts/coach-eval/fixtures/testAccount.js`'s new `buildJobHuntTestContext()`/
+`RESUME_REVIEW_TEXT`. First pass only — none of the three calls below are repeat-verified yet.
+
+- **Job Hunt Chat's Metaphor Intensity target (2, "trace") holds at both a healthy (~70 days) and
+  a tight (~9 days) runway** — same question both times, only the account's cash-on-hand differs.
+  Neither response reached for corner-man/boxing vocabulary; the healthy response had one loose
+  touch, the tight one had none. Both correctly translated the runway day count into usable
+  search-time ("about 10 weeks," "roughly one more week of searching"), exactly as
+  `JOB_HUNT_ADDENDUM` instructs, and both used the real company names, which is this mode's
+  explicit exception to the goal-name privacy rule.
+- **Job Hunt's Axis 2 (Urgency Escalation) shows up as content, not length — a third shape,
+  distinct from both Ask Coach's and Net Worth Trigger's.** The tight-runway response was not
+  longer or more paragraph-heavy than the healthy one (both landed at 3 sentences) — the
+  difference was entirely in what got said: naming which application "has been quiet" and
+  converting the day count into a blunter "roughly one more week of searching" framing. Contrast
+  with Ask Coach (severity added length/paragraphs with no instruction to) and Net Worth Trigger
+  Red (severity added length *against* an explicit instruction not to) — here, under an addendum
+  that already asks for less flourish under pressure, the model found a third way to signal
+  urgency that doesn't cost length at all. Worth deciding whether this is the model itself doing
+  something well, or luck from only sampling one question pair — a repeat-verify pass would tell.
+- **Résumé Review's Metaphor Intensity target (3, "light seasoning") does NOT hold — real,
+  unambiguous gap.** The natural, no-override output used zero figurative language: a fully
+  literal, line-by-line analytical review. Structurally it complies well with everything else in
+  `RESUME_REVIEW_ADDENDUM` — several short paragraphs (the mode's explicit exception to the 2-3
+  sentence rule), each grounded in one specific résumé line, ends on the single most important fix
+  rather than a summary, never drafts from scratch. The gap is narrowly on this one axis: either
+  the 3 target was wrong for this mode from the start (a résumé review may just naturally pull the
+  model toward a plainer, more clinical register regardless of persona instruction — plausible,
+  since the content itself is inherently evaluative/technical), or the shared `COACH_PERSONA_PROMPT`
+  base needs a mode-specific nudge here the way `JOB_HUNT_ADDENDUM` provides one for its own
+  direction. **Not resolved here** — recorded for the batch target-decision Phase 5's own
+  sequencing defers to the end, same as the two Ask Coach sub-scenario rows above.
+
+**Root cause found, and a candidate fix reaches score 3 reliably (2026-09-02, prompt-tuning pass,
+not yet applied to `coachPrompts.js`).** `COACH_PERSONA_PROMPT`'s own corner-man clause ("no more
+than one such phrase per message") is a CAP, never a floor — nothing anywhere instructs the model
+to actually include a touch, only limits it if one appears on its own. Ask Coach/Net Worth
+Trigger's natural score-3 touches happen because those are personal, conversational messages where
+a color word fits without being asked for; a résumé review is a technical, evaluative task with
+nothing pulling toward one, so it defaults to fully literal.
+
+Tested two candidate sentences appended to the shipped addendum (`claude-sonnet-5`, same fixture
+résumé, `scripts/coach-eval/prompts/resumeReviewTuning.js`):
+
+- **"soft"** — names the gap, caps it at one touch, doesn't say where: *"Even on a technical
+  review like this one, don't let your usual voice disappear entirely — work in one light
+  corner-man touch somewhere across the review... One touch is plenty on a document this
+  technical; more would read as forced."* One sample: got exactly one touch, but an
+  **off-vocabulary, self-invented one** — *"that's the sentence that gets you in the corner of a
+  hiring manager's yes pile"* — which doesn't map to the vocabulary bank's actual "corner" meaning
+  and reads as somewhat muddled/belabored for a single touch. Not repeat-verified — the firm
+  variant made that unnecessary.
+- **"firm"** — same cap, but additionally names the natural placement (the closing "fix this
+  first" line every sample so far has ended on regardless) and gives one worked example to anchor
+  the register: *"...most naturally in the closing line where you name the one thing to fix first
+  ('get this into your corner before anything else,' for instance). A single word or short phrase
+  only, worked in naturally, never explained, and never more than the one touch."* **3/3 samples
+  (1 initial + `--repeat 2`) produced exactly one clean, vocabulary-bank-matching touch, every
+  time landing in the closing line, every time using "corner"** — "get it in your corner," "get it
+  into your corner before anything else," "get one supervisory-shaped detail into your corner
+  before anything else." Never explained, never a whole sentence, never stacked with a second
+  touch, never drifted onto an off-vocabulary phrase the way "soft" did once. This is a clean match
+  to score 3's definition ("single-word or short-phrase touches only... never explained, never
+  belabored"), reliably, not a fluke.
+
+**Why "firm" worked and "soft" didn't, worth generalizing to any future mode that needs a metaphor
+floor rather than just a cap:** telling the model only *that* a touch should appear left it to
+invent one, and an invented touch isn't guaranteed to come from the actual vocabulary bank or land
+somewhere natural. Telling it *where* (the closing line, which every sample already gravitates
+toward for its "fix first" instruction) and giving *one concrete worked example* removed both
+failure modes at once — the model didn't parrot the example verbatim, but consistently produced
+something in its family ("corner," closing position), which is exactly the intended calibration
+outcome, not overfitting to the example.
+
+**Applied to `coachPrompts.js` 2026-09-02, on explicit instruction — not held for the batch pass.**
+The "firm" sentence is now the closing paragraph of the live `RESUME_REVIEW_ADDENDUM`, appended
+verbatim, no changes to the rest of the addendum (already verified compliant across every other
+axis). `coachPrompts.test.js` gained a regression block (`RESUME_REVIEW_SYSTEM_PROMPT`) asserting
+the closing-line placement instruction and the worked example survive future edits.
+`resumeReviewTuning.js`'s `firm` variant now imports the real `RESUME_REVIEW_SYSTEM_PROMPT` export
+directly instead of duplicating the string, so the tuning harness can never silently drift from
+what's actually shipped; `pre-fix`/`soft` stay hardcoded as a record of what was tried before
+landing on this wording. **Not yet repeat-verified against the live shipped prompt end-to-end**
+(the 3/3 verification ran against the candidate wording pre-application, not the final composed
+`RESUME_REVIEW_SYSTEM_PROMPT` string) — worth a confirmation pass whenever this mode comes up
+again, though the composition is mechanically identical (same persona + same addendum text).
 
 ---
 

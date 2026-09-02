@@ -222,9 +222,8 @@ export function buildCoachContext({
  */
 export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
   const lines = [];
-  const manualSavings = Math.max(0, config?.newJobSeasonCashOnHand ?? 0);
   const huntIncome = sumJobHuntIncome(config);
-  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
+  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, extraCash: huntIncome });
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);

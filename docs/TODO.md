@@ -1021,26 +1021,93 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   Record the actual output per model in `coach-personality-rubric.md`'s table (replacing the
   `TODO` cells for Ask Coach — General Greeting), and note any divergence from the axis's
   hand-written definitions per the calibration methodology's step 2.
-- [ ] **Phase 3 — lock + verify one real target.** Pick the target score for that one row with a
-  rationale grounded in Phase 2's real output (not intuition), then verify it holds under
-  `repeat`-ed live calls (promptfoo's built-in repeat count) rather than a single sample — this is
-  the first row in the rubric that would be evidence-backed rather than reasoned-through-once.
-- [ ] **Phase 4 — apply the same harness to within-mode severity flexing.** Use the now-proven
-  harness/process on the two seeded sub-scenario rows already in the rubric table (Ask Coach —
-  Budget near limit / Budget healthy) — this is where "The End Goal" section's actual ask (register
-  flexing by detected topic/severity *within* one mode, generalizing the Net Worth Trigger's
-  Amber/Red/Green pattern) gets its first real test, not just a documented intention.
-- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
-  the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
-  Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,
-  Warmth/formality, Sentence economy, Urgency escalation) — Sentence economy first, since DW-19
-  already left real anchor data for it (`coach-personality-rubric.md`'s "Known Limitations"
-  section) rather than starting from nothing.
-- [ ] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
+- [x] **Phase 3 — lock + verify, done for both locked models (2026-09-01).** With Phase 6's two
+  model locks made first (Haiku for Ask Coach, Opus for special-handling moments), verified each
+  one's extreme under `--repeat 3` rather than trusting a single sample: Haiku's score-1 came back
+  3/3 near-identical (effectively deterministic); Opus's score-5 first attempt exposed a real
+  harness bug (extended-thinking reasoning tokens consuming the `max_tokens` budget and truncating
+  a response mid-sentence — fixed by raising it, not a personality finding), then came back 3/3
+  consistently dense once fixed. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
+  **Not yet done:** the mode's actual natural-default (no-override) behavior at score-3 — this
+  phase only verified the floor/ceiling extremes are reachable on their locked models, not what
+  Ask Coach naturally produces day-to-day without a calibration override pushing it.
+- [x] **Phase 4 — done, but the finding landed on a different axis than planned (2026-09-01).**
+  Ran the two seeded sub-scenario rows (`promptfooconfig.phase4.yaml`, `askCoachComposed.js`'s new
+  `vars.severity` — real `buildCoachContext()` output via `fixtures/testAccount.js`, no calibration
+  override, `--repeat 3`, all repeats word-for-word identical on both variants). Metaphor Intensity
+  itself barely moved between the near-limit and healthy accounts — this row's own axis didn't show
+  the flexing "The End Goal" section describes. **What did flex, reliably: length and directness.**
+  The near-limit account got 3 full paragraphs naming the problem outright; the healthy account got
+  2 tight, more permissive paragraphs — for the identical question against the identical prompt,
+  differing only in real account data. `ASK_COACH_SYSTEM_PROMPT` doesn't actually authorize this
+  (its length exception is scoped to mechanics questions only), so this is a real, unplanned prompt-
+  compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
+  it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
+  Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
+- [~] **Phase 5 — widen to remaining flat-default modes and undefined axes. In progress, first
+  slice done (2026-09-01).** Sequenced per the user's own instruction: find real 1s/5s for the
+  other Interaction Modes table rows first; batch-decide every mode's default "3" together at the
+  end, not mode by mode. **Urgency Escalation is no longer a "future axis" to start from
+  scratch** — promoted to a defined Axis 2 in `coach-personality-rubric.md` (2026-09-01), seeded
+  by Phase 4's real finding. **Standing instruction for every mode/scenario sampled from here on:
+  check Axis 2 alongside Metaphor Intensity, not Metaphor Intensity alone.**
+  - [x] **First slice — Net Worth Trigger's three shipped tiers (Amber/Red/Green, §2.C).** Live-
+    verified for the first time (`claude-haiku-4-5`, real per-tier account data via
+    `promptfooconfig.phase5.yaml`, `--repeat 3`, all 9 runs identical). Green clean. **Amber
+    stacks multiple figurative touches in one message — a real, unambiguous violation of
+    `COACH_PERSONA_PROMPT`'s own "never stacked" rule, worth fixing, not just discussing.** Red
+    complies with the letter ("drop the corner-man phrasing") but reaches for a different
+    flourish ("flying blind") the addendum's intent rules out too, and runs the longest of the
+    three tiers despite being the one instructed to stay most direct/calm — an explicit
+    anti-escalation instruction not fully holding, the opposite framing from Ask Coach's
+    accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
+    Limitations.
+  - [x] **Fixture prep for unbuilt modes (2026-09-02)**, ahead of the prompts themselves —
+    `scripts/coach-eval/fixtures/testAccount.js` gained `buildWeeklyBriefingContext()` for Weekly
+    Pre-Game Briefing (§8.A): a real funded goal against a real 8-week `futureWeeks`/
+    `timelineWeekNets` series (real `Date` objects — `computeGoalTimeline()` needs
+    `week.weekEnd.getFullYear()`, a date string silently crashes inside `getPhaseIndex()`), so
+    `computeGoalTimeline()` has genuine data to project instead of the goal-free shortcut the
+    original fixture takes. Ready to plug into a real prompt loader the moment this mode is built.
+    **Burnout Sentinel's work-pattern half was assessed and explicitly not built** — initial
+    read was that it was buildable via `logs`, corrected on closer inspection:
+    `buildCoachContext()` has no `weekConfirmations` param, `logs` only ever surfaces the single
+    most-recent entry (never a streak/trend), and `EVENT_TYPES` has no overtime/extra-shift
+    category — faking a streak signal from what's actually available would be dressing up
+    fabricated data to look real, the exact thing this harness exists to avoid. Building it for
+    real needs engine work first (a streak/OT-tracking data source), not a fixture.
+  - [ ] Remaining slices not yet run: Job Hunt Chat (§2.E) and Résumé Review (§2.E1) — both
+    shipped, both have existing never-live-verified targets (2 and 3); the still-unbuilt flat
+    rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing); the remaining undefined axes
+    (Directness/bluntness, Warmth/formality, Sentence economy — Sentence economy next after those,
+    since DW-19 already left real anchor data for it).
+- [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
   precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
-  needed to hit the target register, not by default.
+  needed to hit the target register, not by default. **Two modes locked (2026-09-01), the rest of
+  the landscape still open:**
+  - **Ask Coach (general chat, §2.B) → `claude-haiku-4-5`.** Not a change — this confirms the
+    existing hardcoded default (`coachPrompts.js`/`api/coach.js`) with real calibration evidence
+    behind it now, rather than leaving it as an unverified historical choice. Grounds: score-1
+    held cleanly on Haiku in Phase 1/2; score-1 is this mode's only calibrated target so far
+    (score-5 was never this mode's target — see the rubric's own `3 (default)` row).
+  - **"Special handling" high-significance moments → `claude-opus-5`.** Concretely: Burnout
+    Sentinel (§8.F2), the Heirloom Letter Delivery Ceremony (§8.F3), and a major goal completion
+    moment — all still `UNSCORED`/brainstorming-only in `coach-personality-rubric.md`'s
+    Interaction Modes table, none built yet (§8 is explicitly a loose idea pool per
+    `docs/coach-session-handoff.md`, not committed work). This is a **policy lock for when one of
+    these gets built**, not a code change today — nothing routes to Opus in `api/coach.js` yet.
+    Ground: Phase 2's finding that Opus, not Haiku or Sonnet, reliably reaches genuine
+    Signature/Immersive (4-5) Metaphor Intensity output under an explicit push, while the other
+    two capped around 2-3 regardless of tier — see `coach-personality-rubric.md`'s Known
+    Limitations for the full before/after.
+  - **Everything else in this table (Job Hunt Assistant, Résumé Review, Statement Summary, the
+    Net Worth Trigger's three tiers, Goal ETA Drift Alert, Weekly Pre-Game Briefing, Raise-
+    Negotiation Prep, Council of Future Selves) is still undecided** — Job Hunt Assistant/Résumé
+    Review already have their own model choices from earlier work (§2.E/§2.E1, Sonnet — unrelated
+    to this calibration effort, don't relitigate without new evidence), the rest have no
+    calibration data yet. Don't read "two modes locked" as "the model question is closed."
 - [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
   grade with a judge model that is never one of the candidates being compared (avoids a model
   favoring its own output); use deterministic code assertions (not another LLM call) for any rule

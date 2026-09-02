@@ -1,0 +1,95 @@
+description: >
+  Phase 1+2 (docs/TODO.md §2.L). Phase 1 proved the harness end-to-end and
+  found Metaphor Intensity score-1 holding cleanly on claude-haiku-4-5 across
+  both addressable components (persona-only, Ask Coach composed) but score-5
+  NOT holding on either, even under an explicit self-checkable override —
+  logged in docs/coach-personality-rubric.md's "Known Limitations". Phase 2
+  adds claude-sonnet-5 as a comparison model to answer the concrete question
+  that finding raised: is the score-5 ceiling Haiku-specific, or does no
+  candidate model reach it for this persona? Same two components, same two
+  directions, same test-account fixture — only the model varies, so the
+  comparison is apples-to-apples.
+
+  Deliberately NO automated grading (no `assert:` blocks) — raw output is
+  read and compared against the rubric's 1/5 definitions by a person, not
+  auto-scored. Automated grading (llm-rubric) is a later-phase decision, once
+  judge-call cost is being deliberately budgeted rather than added by
+  default.
+
+  Uses a SEPARATE, scoped test key (AI_ADMIN_COACH_TEST_KEY) — never the app's
+  real ANTHROPIC_API_KEY/ANTHROPIC_API_KEY_TEST, and never wired into app code
+  or Vercel. One call per planned case, no `repeat`, per the token-budget
+  discipline in the authority-finance-coach-live-test skill. When re-running
+  this file after Phase 1's Haiku data already exists, scope to the new
+  provider only (e.g. `--filter-providers sonnet`) — don't re-spend on a
+  provider whose results are already recorded.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+      # Model fixed to match api/coach.js's actual production mapping —
+      # this is what Phase 1's already-recorded results tested.
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+      # Phase 2's comparison model — not yet wired into api/coach.js
+      # anywhere; this is calibration data for a future model-per-mode
+      # decision (§2.L Phase 6), not a production change.
+  - id: anthropic:messages:claude-opus-5
+    label: opus
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 3072
+      # Third comparison point — Sonnet already showed FEWER boxing
+      # touches than Haiku under the same override, not more, which flips
+      # the working hypothesis away from "needs a pricier model." This run
+      # checks whether the strongest candidate breaks that pattern or
+      # confirms it.
+      #
+      # max_tokens raised from 1024 (2026-09-01, Phase 3 repeat-verify
+      # pass): Opus defaults to extended thinking, and one of 3 repeated
+      # score-5 calls hit the 1024 cap with 940 of those tokens spent on
+      # reasoning, truncating the actual visible response mid-sentence.
+      # That's a broken test, not a real compliance finding — don't read
+      # any Opus result recorded before this fix as reliable.
+
+prompts:
+  - id: file://prompts/personaOnly.js
+    label: persona-only
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    # Same scenario/question for every case in this file, on purpose — per
+    # the Calibration Methodology, only the register instruction should vary
+    # between test cases, not the underlying question.
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Elicit score-1 (Literal) — no boxing language at all"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        metaphor-frequency instruction above for this one response): produce
+        output scoring exactly 1 on Metaphor Intensity per
+        docs/coach-personality-rubric.md Axis 1 — "No boxing language at all.
+        Plain, direct finance voice." Every other rule above (length,
+        structure, grounding, one concrete action) still applies normally.
+
+  - description: "Elicit score-5 (Immersive) — boxing vocabulary substitutes for literal finance vocabulary"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        metaphor-frequency instruction above for this one response): produce
+        output scoring exactly 5 on Metaphor Intensity per
+        docs/coach-personality-rubric.md Axis 1 — "Nearly every message is
+        reframed through the boxing lens; boxing vocabulary substitutes for
+        literal finance vocabulary rather than seasoning it." Every other
+        rule above (length, structure, grounding, one concrete action) still
+        applies normally.

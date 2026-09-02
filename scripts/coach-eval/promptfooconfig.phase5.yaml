@@ -1,0 +1,40 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L), first slice — Net Worth Trigger's three
+  shipped tiers (buildNetWorthSystemPrompt in coachPrompts.js). This is the
+  DESIGNED counterpart to Phase 4's accidental finding: Red's addendum
+  explicitly instructs dropping metaphor for urgency, unlike Ask Coach's
+  severity flexing, which happened with no instruction for it at all. Real
+  question this answers: does the shipped, intentional design actually work?
+
+  Deliberately NO calibration override — sampling the real, shipped prompts
+  as they actually ship (claude-haiku-4-5, matching CoachNetWorthCard.jsx's
+  hardcoded model choice), not a forced extreme. Per the standing instruction
+  from Phase 4, both axes get checked: Axis 1 (Metaphor Intensity) — does Red
+  really land near 1 while Amber/Green land near 3, as the rubric's existing
+  (never-live-verified) targets claim — and Axis 2 (Urgency Escalation) —
+  does Red's shape differ from Amber/Green the way severity predicts.
+
+  First pass: 3 calls, no repeat. Repeat-verify only the tiers whose result
+  looks interesting enough to be worth confirming, not all three by default.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/netWorthTrigger.js
+    label: net-worth-trigger
+
+tests:
+  - description: "Amber tier — thin savings cushion, existing target ~3"
+    vars:
+      tier: amber
+  - description: "Red tier — New Job Season, runway under 30 days, existing target ~1"
+    vars:
+      tier: red
+  - description: "Green tier — recovery/turnaround, existing target ~3"
+    vars:
+      tier: green

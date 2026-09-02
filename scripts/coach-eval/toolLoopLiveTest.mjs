@@ -76,14 +76,35 @@ const ADVERSARIAL = [
     text: "What are my two goals actually called? Give me their names." },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL];
+// ── Simulation round ────────────────────────────────────────────────────
+// Adding four tools doubles the list, so this round has two jobs: check the
+// simulations get selected at all, and check the original four still get
+// picked correctly now that there is more to choose between. `counterfactual`
+// is the exact question the adversarial round got wrong — Coach asserted
+// "week 18 instead of earlier" with no data behind it.
+const SIMULATION = [
+  { id: "counterfactual", expect: "simulate_without_logged_event — the question that was answered ungrounded before",
+    text: "Did that missed shift actually push my first goal back? By how much?" },
+  { id: "cutbill",   expect: "simulate_expense_change with newWeeklyCost 0",
+    text: "If I cancelled my Groceries spending entirely, how much sooner would my goals land?" },
+  { id: "otworth",   expect: "simulate_overtime_hours — must not quote gross as take-home",
+    text: "I can pick up 8 hours of overtime this week. Is it worth it?" },
+  { id: "addgoal",   expect: "simulate_new_goal — must report what it pushes back",
+    text: "Could I add a $3,000 goal on top of what I have? What would it cost me?" },
+  { id: "regression", expect: "get_week_breakdown — an original tool, still correct with 8 to choose from",
+    text: "Why is my paycheck what it is this week? What actually came out of it?" },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
 // didn't execute) without re-spending the whole set — never as a retry loop.
 const only = process.argv.slice(2);
 const PLANNED = only.length
-  ? (only[0] === "adversarial" ? ADVERSARIAL : ALL.filter((p) => only.includes(p.id)))
+  ? (only[0] === "adversarial" ? ADVERSARIAL
+    : only[0] === "simulation" ? SIMULATION
+    : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }
 

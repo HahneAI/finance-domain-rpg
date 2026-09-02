@@ -137,7 +137,35 @@ computed — a §6 grounding violation in spirit even though the direction happe
 This is the strongest argument so far for the planned simulation tools (`docs/TODO.md` §2.G): a
 "what would this be without X" question is natural, the drill-down layer invites it by surfacing
 per-event dollar impacts, and no read-only tool can answer it. Deliberately **not** patched with
-a prompt instruction — the capability is missing, not the wording. Summary generation uses a separate, narrower prompt,
+a prompt instruction — the capability is missing, not the wording. **Resolved 2026-09-02** by
+building those tools, below.
+
+**Simulation tools, built and live-tested 2026-09-02** (drift-app-warden §21 F168–F170). Four
+`simulate_*` tools bring the total to eight: `simulate_expense_change`, `simulate_new_goal`,
+`simulate_overtime_hours`, `simulate_without_logged_event`. Each re-runs the REAL
+`computeGoalTimeline`/`computeNetBreakdown` with exactly one input changed and diffs it against
+the unchanged run — never a closed-form estimate of the effect.
+
+Live result (`node toolLoopLiveTest.mjs simulation`, 10 calls, ~$0.021): **5/5 correct selection
+with eight tools available**, including a deliberate regression check that `get_week_breakdown` is
+still picked correctly now the list has doubled — no degradation observed. The counterfactual that
+failed the adversarial round now answers correctly and grounded: *"that missed shift cost you
+about 0.08 weeks on Goal 1 … still lands the week of April 27th (week 18) … Goal 2 took a slightly
+bigger hit — 0.27 weeks,"* every figure from the tool, against the earlier fabricated "week 18
+instead of earlier."
+
+**The same failure recurred once more and was fixed the same way, not with a prompt.** Asked "is 8
+hours of overtime worth it?", the first version answered with a goal acceleration ("Goal 1 by
+roughly two days and Goal 2 by roughly a week") off a payload carrying **no goal data at all** —
+`simulate_overtime_hours` returned pay figures only. Rather than instruct Coach not to guess, the
+tool now returns the real goal diff (extra pay lands in one week, so only that week's net moves);
+on retest it reports "Goal 1 lands the week of April 20th (week 17) instead of April 27th," which
+is the tool's own number. **The pattern worth remembering: when Coach invents a figure, check
+first whether the tool should have supplied it.** Twice now the answer was yes.
+
+Minor and unfixed: in one answer Coach described a $90/wk bill as "nearly 17% of your current
+surplus" — 17% is its share of *spend* ($522); of surplus ($323) it is 28%. A self-derived ratio
+mislabelled, not a tool figure; same family as DW-19's number-handling limits. Summary generation uses a separate, narrower prompt,
 `COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---

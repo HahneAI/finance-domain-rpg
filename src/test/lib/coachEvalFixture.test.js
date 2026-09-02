@@ -82,12 +82,16 @@ describe("eval fixture — tool-ready sibling account", () => {
     expect(bag.allWeeks.every((w) => w.taxedBySchedule)).toBe(true);
   });
 
-  it("gives all four tools real data — no empty or error results", () => {
+  it("gives every tool real data — no empty or error results", () => {
     const calls = {
       get_goal_detail: { rank: 1 },
       get_expense_detail: { label: "Groceries" },
       get_week_breakdown: { weekOffset: 0 },
       list_log_entries: {},
+      simulate_expense_change: { label: "Groceries", newWeeklyCost: 0 },
+      simulate_new_goal: { target: 3000, insertAtRank: 1 },
+      simulate_overtime_hours: { hours: 8 },
+      simulate_without_logged_event: { type: "missed_unpaid" },
     };
     // Guards against a tool being added without fixture data behind it.
     expect(Object.keys(calls).sort()).toEqual([...COACH_TOOL_NAMES].sort());

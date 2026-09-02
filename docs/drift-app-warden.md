@@ -5396,6 +5396,63 @@ the Log panel itself shows, but it is no longer the only date field.
 > (`""`, per `resolveEventWeekMeta`) keeps the old "week ending" phrasing, since there is no
 > period to name.
 
+**F168 · Coach simulation tools — one changed input, one real re-run** — `coachTools.js` — **[L]**
+2026-09-02. Four `simulate_*` tools (`simulate_expense_change`, `simulate_new_goal`,
+`simulate_overtime_hours`, `simulate_without_logged_event`) extend F163's read-only layer with
+"what if" answers. Built after an adversarial live test showed the read-only tools *invite* a
+counterfactual ("did that missed shift push my goal back?") and Haiku fabricates one rather than
+declining — `computeGoalTimeline` already folds `logNetLost` in, so every goal date in the app is
+the with-events projection and no without-events figure existed anywhere.
+**The mechanism is deliberately not a model:** each tool re-runs the REAL `computeGoalTimeline`
+(or `computeNetBreakdown`) with exactly one input changed and diffs it against the unchanged run,
+through the shared `runTimeline`/`summarizeGoal`/`diffGoals` helpers. `get_goal_detail` was
+converted onto the same pair, so a goal reported by the read tool and the "current" side of a
+simulation are one derivation rather than two that agree today.
+> **IF** a simulation is added, **THEN** it re-runs the authoritative function with a changed
+> input — never a closed-form estimate of the effect, which would be a parallel formula wearing a
+> different hat. **IF** it changes an expense, **THEN** it does so by rewriting that expense's
+> `history`/`monthlyOverrides` so `getExactEffectiveAmountForMonth` still resolves it (F38/F102),
+> never by bypassing the resolver. **IF** it removes a logged event, **THEN** it must verify the
+> event's impact is actually contained in the caller's `logNetLost`/`logNetGained` and REFUSE if
+> not — clamping the subtraction at zero yields an identical timeline and reports "this event cost
+> you nothing," a confident wrong answer rather than a missing one (found in test, guarded by
+> `coachTools.test.js`'s "refuses when the totals don't contain the event"). F114's goal-name
+> privacy carries through every simulation. Check: `coachTools.test.js`'s simulations block —
+> assertions are on direction and arithmetic, never snapshots, because a snapshot passes just as
+> happily with the diff inverted.
+
+**F169 · `periodsToFund` (duration) vs `periodsUntilFinish` (completion) — never diff the first** — `coachTools.js` `summarizeGoal` — **[L]**
+2026-09-02. `computeGoalTimeline` returns two different quantities that both read as "weeks":
+`wN = eW − sW`, how long a goal spends *funding* once surplus reaches it, and `eW`, when it
+actually *finishes*, counted from now. The app's own "weeks to fund" line (goal cards, and
+`aiContext.js`'s goal breakdown) is `wN`; the finish DATE is derived from `eW`. The first
+simulation diff compared `wN` and **inverted the sign for any goal below rank 1**: inserting a new
+goal ahead of an existing one delays its *start*, which can shorten its funding window even as it
+finishes later, so the tool reported "0.09 periods sooner" for a goal it had just pushed back.
+Caught in test, before any live call.
+> **IF** anything compares two goal timelines, **THEN** it compares `periodsUntilFinish` (`eW`),
+> never `periodsToFund` (`wN`) — duration and completion move independently for every goal except
+> rank 1, where `sW = 0` makes them coincidentally equal, which is exactly why a rank-1-only test
+> would have passed. **IF** a new field is added to `summarizeGoal`, **THEN** state which of the
+> two it is. Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
+> and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
+> ranks, which is what fails under the `wN` comparison.
+
+**F170 · `deriveWeekPayComponents` / `resolveNightDiffPerHour` — shared week-pay derivations** — `finance.js` — **[L]**
+2026-09-02, extracted so `simulate_overtime_hours` could build a simulated week from the same
+rules a real one is built from. `deriveWeekPayComponents(cfg, {grossPay, benefitsDeduction,
+has401k, active})` returns the 401k employee/employer split and taxable gross; `buildYear` is its
+other caller. `resolveNightDiffPerHour(cfg)` converges three prior hand-copies (`buildYear`,
+`projectedGross`, `calcEventImpact`) of a rule that is NOT a plain truthiness check — DHL opts OUT
+via `dhlNightShift === false` (on by default), a base user opts IN via `nightDiffEnabled === true`
+(off by default).
+> **IF** the 401k rule, the taxable-gross rule, or the night-differential default changes, **THEN**
+> change it in these functions only — a simulated week that derives its own components would drift
+> from the real week it is meant to be comparable to, which makes the whole simulation meaningless
+> rather than merely wrong. `has401k`/`active` stay caller-supplied: both depend on dates
+> (`k401StartDate`/`benefitsStartDate`, `firstActiveIdx`, New Job Season bounds) only the caller
+> knows, and a simulated week inherits them from its real basis.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

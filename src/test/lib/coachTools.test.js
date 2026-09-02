@@ -6,7 +6,7 @@ import {
   JOB_HUNT_TOOLS,
   executeCoachTool,
 } from "../../lib/coachTools.js";
-import { computeNet, computeNetBreakdown, fmtFullDate } from "../../lib/finance.js";
+import { computeNet, computeNetBreakdown, calcEventImpact, fmtFullDate } from "../../lib/finance.js";
 
 // Week fixtures shaped the way buildYear() emits them — the tools read real
 // week objects, so anything thinner would test a shape the app never produces.
@@ -120,9 +120,12 @@ describe("computeNetBreakdown", () => {
 });
 
 describe("COACH_TOOLS schemas", () => {
-  it("declares exactly the four drill-down tools", () => {
+  it("declares the drill-down, action and simulation tools", () => {
     expect(COACH_TOOL_NAMES).toEqual([
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
+      "navigate_to",
+      "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
+      "simulate_without_logged_event",
     ]);
   });
 
@@ -290,6 +293,25 @@ describe("executeCoachTool — list_log_entries", () => {
     expect(r.entries[1].netImpact).toBeGreaterThan(0);
     expect(r.entries[0].netImpact).toBeLessThan(0);
     expect(r.entries[1].note).toBe("Q2 bonus");
+    expect(r.entries[0].date).toMatch(/^the week of /);
+  });
+
+  it("labels an entry's week the same way every other period reference does", () => {
+    // Same regression as aiContext's: this returned `weekEnding`, an END date,
+    // while get_week_breakdown/get_goal_detail label a period by its START.
+    // Week 10 ends on the day week 11 begins, so both rendered "March 9th" and
+    // Coach attributed the week-10 event to week 11 despite having the right
+    // periodNumber in the payload.
+    const data = baseData();
+    const entry = executeCoachTool("list_log_entries", { type: "missed_unpaid" }, data).entries[0];
+    const week = executeCoachTool("get_week_breakdown", { weekOffset: 0 }, data);
+    expect(entry.periodNumber).toBe(27);
+    expect(entry.date).toBe(`the week of ${fmtFullDate(allWeeks[26].weekStart)}`);
+    // The raw end date stays available, but is no longer the only date field.
+    expect(entry.weekEndingDate).toBe(fmtFullDate("2026-07-04"));
+    // The entry's period is genuinely distinct from the current one.
+    expect(week.periodNumber).toBe(28);
+    expect(entry.date).not.toBe(week.date);
   });
 
   it("filters by event type", () => {
@@ -317,6 +339,210 @@ describe("executeCoachTool — list_log_entries", () => {
     const r = executeCoachTool("list_log_entries", {}, baseData({ logs: [] }));
     expect(r.entries).toEqual([]);
     expect(r.note).toContain("Nothing logged");
+  });
+});
+
+describe("executeCoachTool — navigate_to", () => {
+  it("maps each user-facing panel name to App.jsx's own view key", () => {
+    const d = baseData();
+    const key = (panel) => executeCoachTool("navigate_to", { panel }, d).viewKey;
+    expect(key("Home")).toBe("home");
+    expect(key("Income")).toBe("income");
+    expect(key("Budget")).toBe("budget");
+    expect(key("Log")).toBe("log");
+    // The one that differs: the panel users call "Account" is keyed "profile".
+    expect(key("Account")).toBe("profile");
+  });
+
+  it("accepts the panel name case-insensitively", () => {
+    expect(executeCoachTool("navigate_to", { panel: "budget" }, baseData()).viewKey).toBe("budget");
+  });
+
+  it("rejects a panel that doesn't exist rather than inventing a route", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Dashboard" }, baseData());
+    expect(r.error).toContain("Unknown panel");
+    expect(r.viewKey).toBeUndefined();
+    expect(r.validPanels).toContain("budget");
+  });
+
+  it("resolves an expense focus against real data, by label", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "gym" }, baseData());
+    expect(r.focusRef).toBe("expense:Gym");
+    expect(r.linkLabel).toBe("Budget · Gym");
+  });
+
+  it("resolves a goal focus by rank", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Home", focus: "goal 2" }, baseData());
+    expect(r.focusRef).toBe("goal:2");
+    expect(r.linkLabel).toBe("Home · Goal 2");
+  });
+
+  it("degrades to panel-only when the focus can't be resolved, and says so", () => {
+    // A chip that scrolls to nothing is worse than one that just opens the
+    // panel — and the model needs to know so it doesn't promise the highlight.
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Netflix" }, baseData());
+    expect(r.ok).toBe(true);
+    expect(r.viewKey).toBe("budget");
+    expect(r.focusRef).toBeNull();
+    expect(r.linkLabel).toBe("Open Budget");
+    expect(r.note).toContain("No expense matches");
+  });
+
+  it("degrades the same way for a goal rank that doesn't exist", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Home", focus: "goal 9" }, baseData());
+    expect(r.focusRef).toBeNull();
+    expect(r.note).toContain("no goal 9");
+  });
+
+  it("won't focus a paused expense that isn't on screen", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Paused Thing" }, baseData());
+    expect(r.focusRef).toBeNull();
+  });
+});
+
+describe("executeCoachTool — simulations", () => {
+  // Every simulation re-runs the REAL computeGoalTimeline with one input
+  // changed and diffs it. These assert direction and arithmetic, not snapshots
+  // — a snapshot would pass just as happily with the diff inverted.
+
+  // baseData() carries logs but leaves logNetLost/logNetGained at 0. The real
+  // app derives those from the same calcEventImpact call, so the counterfactual
+  // tests derive them too rather than hand-picking numbers that happen to work.
+  const logTotals = (d) => d.logs.reduce((acc, e) => {
+    const i = calcEventImpact(e, d.config, d.allWeeks.find((w) => w.idx === e.weekIdx) ?? null);
+    return { netLost: acc.netLost + i.netLost, netGained: acc.netGained + i.netGained };
+  }, { netLost: 0, netGained: 0 });
+  const withLogTotals = (over = {}) => {
+    const d = baseData(over);
+    const t = logTotals(d);
+    return { ...d, logNetLost: t.netLost, logNetGained: t.netGained };
+  };
+
+  it("simulate_expense_change: cutting a bill pulls every goal forward", () => {
+    const r = executeCoachTool("simulate_expense_change", { label: "Gym", newWeeklyCost: 0 }, baseData());
+    expect(r.expenseLabel).toBe("Gym");
+    expect(r.simulatedWeeklyCost).toBe(0);
+    expect(r.weeklyDifference).toBe(r.currentWeeklyCost);
+    for (const g of r.goals) {
+      expect(g.periodsSooner).toBeGreaterThan(0);
+      expect(g.simulated.periodsToFund).toBeLessThan(g.current.periodsToFund);
+    }
+    // The later goal gains more in absolute terms — it funds for longer.
+    expect(r.goals[1].periodsSooner).toBeGreaterThan(r.goals[0].periodsSooner);
+  });
+
+  it("simulate_expense_change: raising a bill pushes goals back", () => {
+    const r = executeCoachTool("simulate_expense_change", { label: "Gym", newWeeklyCost: 200 }, baseData());
+    expect(r.goals.every((g) => g.periodsSooner < 0)).toBe(true);
+  });
+
+  it("simulate_new_goal: a goal inserted first pushes the existing ones back", () => {
+    const r = executeCoachTool("simulate_new_goal", { target: 3000, insertAtRank: 1 }, baseData());
+    expect(r.newGoal.insertedAtRank).toBe(1);
+    expect(r.newGoal.targetAmount).toBe(3000);
+    expect(r.existingGoals).toHaveLength(2);
+    expect(r.existingGoals.every((g) => g.periodsSooner < 0)).toBe(true);
+    expect(r.existingGoals[0].simulated.periodsToFund)
+      .toBeGreaterThan(r.existingGoals[0].current.periodsToFund);
+  });
+
+  it("simulate_new_goal: a goal inserted last leaves the others alone", () => {
+    const r = executeCoachTool("simulate_new_goal", { target: 3000 }, baseData());
+    expect(r.newGoal.insertedAtRank).toBe(3);
+    for (const g of r.existingGoals) expect(g.periodsSooner).toBeCloseTo(0, 6);
+  });
+
+  it("simulate_overtime_hours: take-home is the gross minus each real deduction", () => {
+    const r = executeCoachTool("simulate_overtime_hours", { hours: 8 }, baseData());
+    // baseRate 30 x 1.5 OT multiplier, no night differential on this fixture.
+    expect(r.overtimeRatePerHour).toBeCloseTo(45, 6);
+    expect(r.addedGrossPay).toBeCloseTo(360, 6);
+    const taken = Object.values(r.takenBy).reduce((a, b) => a + b, 0);
+    expect(r.addedTakeHome).toBeCloseTo(r.addedGrossPay - taken, 1);
+    // The headline guard: gross is never presented as spendable.
+    expect(r.addedTakeHome).toBeLessThan(r.addedGrossPay);
+    expect(r.effectiveTakeHomePerHour).toBeCloseTo(r.addedTakeHome / 8, 1);
+    expect(r.keptShareOfGross).toBeGreaterThan(50);
+    expect(r.keptShareOfGross).toBeLessThan(100);
+  });
+
+  it("simulate_overtime_hours: returns the real goal effect rather than leaving it to be guessed", () => {
+    // Live testing caught Coach answering "is it worth it?" with a goal
+    // acceleration figure off a payload that carried no goal data at all.
+    const r = executeCoachTool("simulate_overtime_hours", { hours: 8 }, baseData());
+    expect(r.goals).toHaveLength(2);
+    for (const g of r.goals) expect(g.periodsSooner).toBeGreaterThan(0);
+    expect(r.note).toContain("do not estimate it yourself");
+  });
+
+  it("simulate_overtime_hours: says so when no goal timeline covers that period", () => {
+    const r = executeCoachTool("simulate_overtime_hours", { hours: 8 }, baseData({ goals: [] }));
+    expect(r.goals).toBeNull();
+    expect(r.addedTakeHome).toBeGreaterThan(0);
+    expect(r.note).toContain("do not estimate one");
+  });
+
+  it("simulate_overtime_hours: scales to per-paycheck on a biweekly schedule", () => {
+    const weekly = executeCoachTool("simulate_overtime_hours", { hours: 8 }, baseData());
+    const biweekly = executeCoachTool("simulate_overtime_hours", { hours: 8 },
+      baseData({ config: cfg({ userPaySchedule: "biweekly" }) }));
+    expect(biweekly.addedGrossPay).toBeCloseTo(weekly.addedGrossPay * 2, 6);
+  });
+
+  it("simulate_without_logged_event: removing a loss pulls goals forward", () => {
+    // The counterfactual no read-only tool can produce: computeGoalTimeline
+    // already folds logNetLost in, so every date elsewhere is the WITH-event one.
+    const r = executeCoachTool("simulate_without_logged_event", { type: "missed_unpaid" }, withLogTotals());
+    expect(r.event.netImpact).toBeLessThan(0);
+    expect(r.event.periodNumber).toBe(27);
+    for (const g of r.goals) {
+      expect(g.periodsSooner).toBeGreaterThan(0);
+      expect(g.simulated.periodsToFund).toBeLessThan(g.current.periodsToFund);
+    }
+    expect(r.note).toContain("already includes this event");
+  });
+
+  it("simulate_without_logged_event: removing a gain pushes goals back", () => {
+    const r = executeCoachTool("simulate_without_logged_event", { type: "bonus" }, withLogTotals());
+    expect(r.event.netImpact).toBeGreaterThan(0);
+    expect(r.goals.every((g) => g.periodsSooner < 0)).toBe(true);
+  });
+
+  it("simulate_without_logged_event: refuses when the totals don't contain the event", () => {
+    // Clamping the subtraction at 0 instead would return an identical timeline
+    // and report "this event cost you nothing" — a confident wrong answer.
+    const r = executeCoachTool("simulate_without_logged_event", { type: "bonus" },
+      baseData({ logNetLost: 0, logNetGained: 0 }));
+    expect(r.error).toContain("isn't reflected in the account's logged totals");
+    expect(r.goals).toBeUndefined();
+  });
+
+  it("never leaks a goal label from any simulation", () => {
+    const data = withLogTotals();
+    const calls = [
+      ["simulate_expense_change", { label: "Gym", newWeeklyCost: 0 }],
+      ["simulate_new_goal", { target: 1000 }],
+      ["simulate_without_logged_event", { type: "bonus" }],
+    ];
+    for (const [name, input] of calls) {
+      const out = JSON.stringify(executeCoachTool(name, input, data));
+      for (const g of data.goals) expect(out, name).not.toContain(g.label);
+    }
+  });
+
+  it("rejects nonsense arguments instead of returning a confident wrong answer", () => {
+    const d = baseData();
+    expect(executeCoachTool("simulate_expense_change", { label: "Nope", newWeeklyCost: 5 }, d).error).toContain("No active expense");
+    expect(executeCoachTool("simulate_expense_change", { label: "Rent", newWeeklyCost: -5 }, d).error).toContain("0 or more");
+    expect(executeCoachTool("simulate_new_goal", { target: 0 }, d).error).toContain("positive");
+    expect(executeCoachTool("simulate_overtime_hours", { hours: 0 }, d).error).toContain("positive");
+    expect(executeCoachTool("simulate_without_logged_event", { type: "pto" }, d).error).toContain("Nothing of type");
+    expect(executeCoachTool("simulate_without_logged_event", { type: "zzz" }, d).error).toContain("Unknown event type");
+  });
+
+  it("says so when there are no goals to measure a change against", () => {
+    const d = baseData({ goals: [] });
+    expect(executeCoachTool("simulate_expense_change", { label: "Rent", newWeeklyCost: 0 }, d).error).toContain("No active goals");
   });
 });
 

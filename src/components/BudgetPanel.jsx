@@ -1518,6 +1518,11 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             return <div
               key={exp.id}
               data-expense-id={exp.id}
+              /* Target for Coach's navigate_to chip (src/lib/coachFocus.js).
+                 Keyed by LABEL, not id: the tool resolves a user-spoken name
+                 ("my Groceries bill") against the account's real expenses and
+                 emits "expense:<label>", so the id is never in play. */
+              data-coach-ref={exp.label ? `expense:${exp.label}` : undefined}
               data-expense-pinned={isPinnedFoodCard ? "true" : undefined}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
               onClick={() => {

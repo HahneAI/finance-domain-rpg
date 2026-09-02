@@ -733,6 +733,11 @@ export function HomePanel({
                 return (
                   <div
                     key={g.id}
+                    /* Coach navigate_to target. Rank, never the goal's name —
+                       goal labels are withheld from Coach entirely (F114), so
+                       rank is the only handle it has. `tl` is the activeGoals
+                       timeline, so i + 1 matches get_goal_detail's own rank. */
+                    data-coach-ref={`goal:${i + 1}`}
                     style={{
                       background: "var(--color-bg-surface)",
                       border: `1px solid ${isEditing ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
@@ -874,6 +879,7 @@ export function HomePanel({
                 return (
                   <div
                     key={g.id}
+                    data-coach-ref={`goal:${i + 1}`}
                     style={{
                       background: "var(--color-bg-surface)",
                       border: "1px solid var(--color-border-accent)",

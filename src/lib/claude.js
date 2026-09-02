@@ -123,8 +123,20 @@ async function* streamTurn(res, collected) {
  * review, chat summaries) still uses.
  */
 export async function* chatWithCoach(messages, systemPrompt, contextBlock, model = "haiku", options = {}) {
-  const { tools = null, toolData = {}, maxToolRounds = MAX_TOOL_ROUNDS } = options;
+  // onToolEvent lets the UI react to tool use as it happens rather than only to
+  // the final text: it drives the "checking your Budget…" line during a round
+  // (tool rounds are otherwise dead air) and collects navigate_to results so the
+  // panel can render a real tappable chip instead of Coach describing a link in
+  // prose. Fired as { phase: "start" } before a tool runs and { phase: "result" }
+  // after, with the tool's own return value. Never awaited and always wrapped —
+  // a throwing listener must not take down the chat turn.
+  const { tools = null, toolData = {}, maxToolRounds = MAX_TOOL_ROUNDS, onToolEvent = null } = options;
+  const emit = (event) => {
+    if (!onToolEvent) return;
+    try { onToolEvent(event); } catch { /* a UI listener's failure is not the chat's problem */ }
+  };
   const convo = messages.map((m) => ({ role: m.role, content: m.content }));
+  let lastChar = "";
 
   for (let round = 0; ; round++) {
     // Withhold the tool list on the final permitted round so the model can't
@@ -139,7 +151,21 @@ export async function* chatWithCoach(messages, systemPrompt, contextBlock, model
     });
 
     const collected = { blocks: [], stopReason: null };
-    yield* streamTurn(res, collected);
+    // A model that says "let me pull that up" before calling a tool, then
+    // answers in the next round, produces two separate runs of text. Yielding
+    // them back to back ran the sentences together — live output read
+    // "...for you.You're on track". Insert one space at the seam, only when the
+    // previous round actually ended mid-sentence.
+    let seamPending = round > 0 && lastChar !== "" && !/\s/.test(lastChar);
+    for await (const chunk of streamTurn(res, collected)) {
+      if (!chunk) continue;
+      if (seamPending) {
+        seamPending = false;
+        if (!/^\s/.test(chunk)) yield " ";
+      }
+      lastChar = chunk.slice(-1);
+      yield chunk;
+    }
 
     // Hard termination bound: a round that was not offered tools is always the
     // last one. Without this the cap would rest on the assumption that the API
@@ -154,11 +180,12 @@ export async function* chatWithCoach(messages, systemPrompt, contextBlock, model
     convo.push({ role: "assistant", content: collected.blocks });
     convo.push({
       role: "user",
-      content: toolCalls.map((call) => ({
-        type: "tool_result",
-        tool_use_id: call.id,
-        content: JSON.stringify(executeCoachTool(call.name, call.input, toolData)),
-      })),
+      content: toolCalls.map((call) => {
+        emit({ phase: "start", name: call.name, input: call.input });
+        const result = executeCoachTool(call.name, call.input, toolData);
+        emit({ phase: "result", name: call.name, input: call.input, result });
+        return { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(result) };
+      }),
     });
   }
 }

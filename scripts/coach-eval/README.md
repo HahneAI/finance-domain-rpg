@@ -41,7 +41,32 @@ doesn't repeat their reasoning.
   which needs `.getFullYear()`), so `computeGoalTimeline()` has something
   genuine to project instead of the goal-free shortcut the other fixture
   takes. Ready to plug into a real prompt loader the moment that feature
-  exists; no fixture was built for Burnout Sentinel's "work-pattern half"
+  exists.
+  `buildToolTestAccount()` / `buildToolTestContext()` (2026-09-02) — a third
+  fixture, for Coach's drill-down tools (`src/lib/coachTools.js`), which take
+  the prop bag `AskCoachPanel` assembles rather than a rendered context
+  string. The two fixtures above can't serve them: their `allWeeks` are
+  label-shaped (`{ idx, weekEnd: "2026-03-01" }` — a date string, no
+  `weekStart`/`grossPay`/`taxableGross`/`payrollDeductions`), which is all
+  `buildCoachContext()`'s period labels need and nowhere near what
+  `get_week_breakdown` reads. This one runs the real `buildYear()` over a real
+  config and derives income, spend and log impacts through real
+  `computeNet()`/`computeRemainingSpend()`/`calcEventImpact()` — the same
+  "fake inputs, real functions" principle, one layer deeper. It is a SIBLING
+  account, deliberately tuned to the same identity (~$845/wk net, $520/wk
+  baseline spend, $400/wk rent, 2026-03-09, fiscal week 10) rather than the
+  same object: adding goals/logs/expenses to `buildTestContext()` would change
+  its prompt text and invalidate Phase 4/5's word-for-word repeat comparisons.
+  Its bag is a superset of `buildCoachContext()`'s params, so
+  `buildToolTestContext()` renders a context string for that same account — a
+  prompt test and a tool test can run against one account. Locked by
+  `src/test/lib/coachEvalFixture.test.js`.
+  `buildTestAccountArgs()` / `buildWeeklyBriefingAccountArgs()` — the raw
+  argument bags the two original fixtures feed `buildCoachContext()`. Both
+  `build*Context()` functions are now one-line wrappers over them, so their
+  output is unchanged by construction rather than by inspection. Need a bag
+  instead of a string? Take it from these; don't rebuild one.
+  No fixture was built for Burnout Sentinel's "work-pattern half"
   in the same pass — `buildCoachContext()` has no `weekConfirmations` param,
   `logs` only ever surfaces the single most-recent entry (never a streak),
   and `EVENT_TYPES` has no overtime/extra-shift category — faking that

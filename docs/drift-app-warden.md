@@ -5303,15 +5303,67 @@ split into the tool layer would have been a textbook D1 parallel formula.
 > **IF** paycheck arithmetic changes (rates, deduction order, unemployment handling, the
 > `taxedBySchedule` branch), **THEN** change it in `computeNetBreakdown` ONLY — `computeNet` must
 > stay a one-line accessor, which is what makes their agreement structural rather than a
-> coincidence re-verified by eye. **KNOWN, NOT FIXED HERE:** `BudgetPanel.jsx`'s `checkBreakdown`
-> memo still carries its own inline copy of this split and diverges from `computeNet` on
-> `otherDeductions` specifically — it reads only `row.weeklyAmount` and skips the
-> `checksPerYear/52` scaling `otherPostTaxDeductions()` applies. Folding it in would change
-> numbers a user already sees in that modal, so it was deliberately left alone rather than
-> silently corrected inside a Coach change; it is the obvious next convergence target for this
-> function. Check: `coachTools.test.js`'s `computeNetBreakdown` block asserts `.net ===
+> coincidence re-verified by eye. **RESOLVED 2026-09-02 (was "known, not fixed here"):**
+> `BudgetPanel.jsx`'s `checkBreakdown` memo carried its own inline copy of this split; it has
+> been converged onto `computeNetBreakdown` and the divergence it hid was a live user-facing
+> bug — see F166. There is now exactly one paycheck derivation in the app. Check: `coachTools.test.js`'s `computeNetBreakdown` block asserts `.net ===
 > computeNet()` across active/high/exempt/inactive/zero-gross weeks and that the components
 > recompose to the same total.
+
+**F165 · `resolveWithholdingRates` — the single rate-family resolver** — `finance.js`, `calcEventImpact` — **[L]**
+2026-09-02. Two withholding-rate field families coexist: the generalized `fedRateLow`/
+`fedRateHigh`/`stateRateLow`/`stateRateHigh`, and the legacy `w1FedRate`/`w2FedRate`/
+`w1StateRate`/`w2StateRate` they replaced. `DEFAULT_CONFIG` (constants/config.js:192) still
+defines all four and `db.js:296` back-fills `fedRateLow` FROM `w1FedRate` on load, so a loaded
+account carries both and they agree — which is exactly why the divergence below stayed invisible.
+Every consumer is obliged to read new-first with a legacy fallback (`finance.js:114`,
+`finance.js`'s `computeNetBreakdown`, `App.jsx:1800`, `BudgetPanel.jsx`) — and `calcEventImpact`
+was the one that did not, reading `cfg.w1FedRate + cfg.w1StateRate` directly with no fallback.
+**Failure mode, found live while building `buildToolTestAccount()`:** a config carrying only the
+generalized names made `withholdingRate` `undefined + undefined` → `NaN`, so `netLost`/`netGained`
+went NaN, which propagated into `computeGoalTimeline`'s per-week `surplus`, failed its
+`surplus > 0` check for every week, and reported **every goal as "not on track to finish within
+this fiscal year"** — a plausible-looking wrong answer on a real user-facing line, not a crash.
+Fixed by extracting `resolveWithholdingRates(cfg, isHighWeek)` and routing both
+`computeNetBreakdown` and `calcEventImpact` through it.
+> **IF** a new rate field family is introduced, or the generalized/legacy precedence changes,
+> **THEN** change `resolveWithholdingRates` ONLY — a second inline copy of this resolution is the
+> D1 pattern that produced this bug, and fixing one copy while leaving another free to drift just
+> resets the clock. **IF** a new consumer needs "which rates apply to this week," **THEN** it calls
+> this function; it must never read `cfg.fedRateLow`/`cfg.w1FedRate` directly. **Deliberate
+> omission:** no `?? 0` tail — an account missing BOTH families is a broken config, and a loud NaN
+> is safer there than a silent 0% withholding that overstates take-home. This matches what
+> `computeNet` has always done; `BudgetPanel`'s old inline copy had `?? 0` and lost it on
+> convergence (immaterial — no real account lacks both). Check:
+> `withholdingRates.test.js` — asserts precedence, legacy fallback, high-week selection, finite
+> impacts from a generalized-only config, and that both families give identical results.
+
+**F166 · `BudgetPanel` paycheck breakdown ↔ `computeNetBreakdown`** — `BudgetPanel.jsx` `checkBreakdown` — **[L]**
+2026-09-02. The Budget panel's paycheck-breakdown modal re-derived the whole gross → net split
+inline instead of calling the app's one derivation. It drifted, and the drift was **live and total,
+not an edge case**: its `otherPostTax` summed `row.weeklyAmount`, but `db.js:269–276` renames that
+field to `perCheckAmount` on **every load**, both wizards write only `perCheckAmount`, and
+`constants/config.js:92` documents `{ id, label, perCheckAmount }` as the canonical shape. So the
+field was `undefined` for every row of every real account: the sum was **always 0**, the modal
+**silently omitted other deductions entirely** — overstating Net Pay and Spendable by their full
+amount — and every "Other Deduction" row rendered **$0.00**. It also skipped the `checksPerYear/52`
+scaling `otherPostTaxDeductions()` applies, which mis-scales a non-weekly account once the amount
+is non-zero at all.
+> **IF** this modal needs a paycheck figure, **THEN** it comes from `computeNetBreakdown` (F164) —
+> never re-derived. The fix was convergence, not a field rename, precisely because renaming
+> `weeklyAmount` → `perCheckAmount` here would have fixed the symptom and left a second copy of the
+> paycheck formula free to drift again. **IF** a row's stored amount is rendered in this modal,
+> **THEN** it renders as stored, with NO `perCheckFactor` — `perCheckAmount` is already a
+> per-paycheck figure and the modal is per-paycheck; the engine's own round trip agrees
+> (perCheck × checksPerYear/52 → weekly, × 52/checksPerYear → display, is identity). **Verified
+> safe to converge:** `BudgetPanel` has no `showExtra`/`extraPerCheck` props, so `(0, false)`
+> matches its prior behavior exactly, and New Job Season renders `NewJobSeasonBudgetPanel` in place
+> of this panel (`App.jsx:2275`), so no week reachable here carries `unemploymentIncome`. One
+> intentional edge-case change: on an inactive (pre-employment) week the old code showed benefits
+> deducted from $0 gross, producing a negative net; the converged path returns all zeros. Check:
+> `budgetCheckBreakdown.test.jsx` — renders the real panel off `buildToolTestAccount()`, opens the
+> modal, and asserts a real amount on the row, Net Pay reduced by it, no `perCheckFactor` scaling
+> on a biweekly account, and the legacy `weeklyAmount` tail still read.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

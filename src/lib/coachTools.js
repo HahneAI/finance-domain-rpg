@@ -280,13 +280,17 @@ function toolGetExpenseDetail({ label }, data) {
   }
 
   if (exp.type === "loan" && exp.loanMeta) {
-    const payoff = computeLoanPayoffDate(exp);
+    // Both loan helpers take the loanMeta object, not the expense wrapper —
+    // every call site in BudgetPanel.jsx passes `meta`. Passing `exp` here
+    // silently produced an Invalid Date that formatted as the literal string
+    // "undefined NaNth, NaN", which Coach would have read out to a user.
+    const payoff = computeLoanPayoffDate(exp.loanMeta);
     out.loan = {
       totalAmount: round2(exp.loanMeta.totalAmount),
       paymentAmount: round2(exp.loanMeta.paymentAmount),
       paymentFrequency: exp.loanMeta.paymentFrequency,
       weeklyEquivalent: round2(loanWeeklyAmount(exp.loanMeta)),
-      paymentsRemaining: loanPaymentsRemaining(exp),
+      paymentsRemaining: loanPaymentsRemaining(exp.loanMeta),
       projectedPayoffDate: payoff ? fmtFullDate(payoff) : null,
     };
   }

@@ -239,6 +239,41 @@ describe("chatWithCoach — tool loop", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("reports each tool call to the UI, start then result", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(toolTurn("get_goal_detail", ['{"rank":1}']))
+      .mockResolvedValueOnce(textTurn("ok"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const events = [];
+    await drain(chatWithCoach([{ role: "user", content: "q" }], "sys", "ctx", "haiku", {
+      tools: TOOLS,
+      toolData: { goals: [{ id: "g1", target: 100, completed: false }], futureWeeks: [], timelineWeekNets: [], expenses: [], config: {} },
+      onToolEvent: (e) => events.push(e),
+    }));
+
+    expect(events.map((e) => e.phase)).toEqual(["start", "result"]);
+    expect(events[0].name).toBe("get_goal_detail");
+    expect(events[0].input).toEqual({ rank: 1 });
+    // The result is the tool's real return value, so the UI can render from it.
+    expect(events[1].result.rank).toBe(1);
+  });
+
+  it("survives a listener that throws", async () => {
+    // The activity indicator and chip rendering hang off this callback; a bug
+    // in either must not take down the chat turn.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(toolTurn("list_log_entries", ["{}"]))
+      .mockResolvedValueOnce(textTurn("still fine"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await drain(chatWithCoach([{ role: "user", content: "q" }], "sys", "ctx", "haiku", {
+      tools: TOOLS, toolData: { logs: [], config: {} },
+      onToolEvent: () => { throw new Error("listener blew up"); },
+    }));
+    expect(out).toBe("still fine");
+  });
+
   it("throws a real error from the route without retrying it", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false, status: 403, json: async () => ({ error: "Coach requires an active trial or subscription" }),

@@ -5302,6 +5302,19 @@ label-addressed, matching the existing asymmetry exactly.
 > a past event, **THEN** note that it invites exactly this counterfactual question, and that the
 > answer requires a `simulate_*` tool (docs/TODO.md §2.G) — not a prompt instruction telling Coach
 > to compute something it has no input for.
+> **UPDATE 2026-09-02 — building the simulations did NOT end this pattern.** Three occurrences now,
+> the third *after* `simulate_expense_change` shipped: asked "my Groceries bill feels high, what
+> should I do?", Coach called `get_expense_detail` (a read), then volunteered "if you could trim it
+> back to your normal rate, you'd fund your first goal **about three weeks sooner**" — a
+> counterfactual it did not compute, from a read-only payload, while the tool that answers it
+> exactly sat unused in the same list. The number is materially wrong: cutting Groceries to $0
+> entirely moves goal 1 by 1.21 periods, so a $30 trim is well under one. It then offered "want me
+> to show you exactly how much sooner?" — so the capability was not unknown to it, merely skipped.
+> **The lesson is that tool AVAILABILITY does not prevent fabrication; only tool USE does.** Treat
+> any Coach answer containing a comparative claim ("sooner", "instead of", "would have") as
+> suspect unless a `simulate_*` call appears in the same turn. This is the open end of F168 and
+> the strongest candidate for the few-shot approach DW-19 already recommends — a worked example of
+> declining to estimate and calling the simulation instead — not another prose rule.
 
 **F164 · `computeNetBreakdown` ↔ `computeNet` — one derivation, two shapes** — `finance.js:711–…` — **[L]**
 2026-09-02. `computeNet()` no longer contains the paycheck arithmetic; it is now
@@ -5493,6 +5506,34 @@ round ended on a non-whitespace character and the next chunk doesn't start with 
 > unit test that asserts on a single round's output, and only shows up in a real multi-round
 > answer. Check: `claudeToolLoop.test.js`'s "separates a pre-tool preamble" and "does not double a
 > space the model already supplied".
+
+**F173 · `navigate_to` and its chip — tool-driven UI, never parsed prose** — `coachTools.js`, `CoachToolUI.jsx`, `coachFocus.js` — **[G]**
+2026-09-02. Coach's persona forbids Markdown outright ("no asterisks, underscores, bullet points"),
+so there is no link syntax in its output to parse even in principle. Interactive UI is therefore
+driven by TOOL CALLS: `navigate_to` returns a validated `{viewKey, focusRef, linkLabel}` and
+`AskCoachPanel` renders `CoachNavChip` from it. `chatWithCoach` gained an `onToolEvent`
+callback ({phase:"start"|"result"}) as the single channel the UI observes tool use through — it
+also drives `CoachToolActivity`, which fills the dead air of a tool round.
+Live-verified 3/3 selection with nine tools, each with the right panel and focus, and the eight
+prior tools still selected correctly alongside it.
+> **IF** an action tool is added, **THEN** it returns a validated descriptor and the panel renders
+> it — never emit markup or a URL for the client to parse out of the message text. **IF** a chip
+> targets a specific row, **THEN** the target is resolved against real account data inside the tool
+> (`toolNavigateTo` checks expense labels and goal ranks) and degrades to panel-only with a `note`
+> when it cannot be — a chip that scrolls to nothing is worse than one that just opens the panel,
+> and the model must be told so it doesn't promise the highlight. **IF** `onToolEvent` gains a
+> listener, **THEN** it stays wrapped in try/catch in `claude.js`: chip rendering and the activity
+> line hang off it, and a UI bug must not take down the chat turn.
+> **Focus mechanism:** panels opt in with a `data-coach-ref` attribute only
+> (`expense:<label>` on BudgetPanel rows, `goal:<rank>` on HomePanel cards — rank, never a goal
+> name, since F114 withholds those from Coach entirely). `focusCoachTarget` retries briefly while
+> the panel mounts and gives up SILENTLY: a collapsed category or filtered view is a normal miss,
+> and opening the right panel is the chip's actual job. Do not turn that into an error path.
+> **Persistence:** chips are live-turn only, keyed by message index, and cleared in
+> `resetToNewChat`/`handleResumeChat`. `coach_chats` stores plain text and is deliberately
+> unchanged — a resumed conversation shows the words without the chip rather than needing a
+> row-shape migration. Check: `coachToolUI.test.jsx`, `coachTools.test.js`'s navigate_to block
+> (including that a paused expense is not focusable), `claudeToolLoop.test.js`'s onToolEvent cases.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

@@ -183,6 +183,35 @@ broad answer (~10, before and after). That is a property of the instruction's sh
 data volume behind it — the rubric's own note calling for a worked few-shot example still stands,
 and the trim should not be re-attempted as a fix for it.
 
+**`navigate_to` + chat UI, 2026-09-02** (drift-app-warden §21 F173). Coach's ninth tool returns a
+validated `{viewKey, focusRef, linkLabel}` and `AskCoachPanel` renders it as a tappable chip under
+the message — tool-driven, not parsed from prose, since the persona forbids Markdown outright and
+there is no link syntax in the output to parse. Tapping closes the chat, opens the panel, and
+scrolls to and flashes the exact row; panels opt in with a single `data-coach-ref` attribute
+(`expense:<label>` on Budget rows, `goal:<rank>` on Home cards — rank, never a name, per the
+privacy rule). A target that can't be resolved degrades to opening the panel, and the tool tells
+Coach so it doesn't promise a highlight that won't happen. Chips are live-turn only; `coach_chats`
+still stores plain text, so a resumed chat shows the words without the chip and needs no
+migration. A `CoachToolActivity` line ("Working out what those hours are worth…") now fills the
+dead air of a tool round, which previously sat on a bare "…" for a whole extra round-trip.
+
+Live: **3/3 correct selection at nine tools**, each with the right panel and focus, and the eight
+prior tools still chosen correctly alongside it — no degradation from the longer list. Coach
+paired the chip naturally with a read ("Groceries are running at 90 a week… check the Budget panel
+to see where it sits").
+
+**Open, and now clearly not a tooling gap: the fabricated counterfactual survived the fix.** Third
+occurrence, this one *after* `simulate_expense_change` shipped. Asked "my Groceries bill feels
+high, what should I do?", Coach read the expense and then volunteered "you'd fund your first goal
+about **three weeks sooner**" — never calling the simulation that answers exactly that, and landing
+on a materially wrong number (cutting Groceries to zero entirely moves goal 1 by 1.21 periods, so a
+partial trim is well under one). It then offered "want me to show you exactly how much sooner?",
+so the capability wasn't unknown to it — just skipped. **Tool availability does not prevent
+fabrication; only tool use does.** Any answer containing "sooner", "instead of" or "would have"
+should be treated as suspect unless a `simulate_*` call appears in the same turn. This is the same
+instruction-shape problem as DW-19 and wants the same remedy — a worked example of declining to
+estimate and calling the tool — not another prose rule.
+
 Minor and unfixed: in one answer Coach described a $90/wk bill as "nearly 17% of your current
 surplus" — 17% is its share of *spend* ($522); of surplus ($323) it is 28%. A self-derived ratio
 mislabelled, not a tool figure; same family as DW-19's number-handling limits. Summary generation uses a separate, narrower prompt,

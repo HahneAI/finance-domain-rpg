@@ -95,7 +95,21 @@ const SIMULATION = [
     text: "Why is my paycheck what it is this week? What actually came out of it?" },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION];
+// ── navigate_to round ───────────────────────────────────────────────────
+// navigate_to is an ACTION tool, not a read: it returns a chip for the panel to
+// render rather than data to reason about. Two things to check — that Coach
+// reaches for it on a question whose answer points somewhere, and that adding a
+// ninth tool hasn't disturbed selection of the eight already verified.
+const NAVIGATE = [
+  { id: "navexpense", expect: "navigate_to Budget with focus resolving to an expense",
+    text: "My Groceries bill feels high this month. What should I do about it?" },
+  { id: "navgoal", expect: "navigate_to Home focused on goal 1, alongside get_goal_detail",
+    text: "How's my first goal tracking, and where do I go to see it?" },
+  { id: "navnone", expect: "a general question with no obvious destination — chip is optional, not forced",
+    text: "What does Budget Health actually measure?" },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -104,6 +118,7 @@ const only = process.argv.slice(2);
 const PLANNED = only.length
   ? (only[0] === "adversarial" ? ADVERSARIAL
     : only[0] === "simulation" ? SIMULATION
+    : only[0] === "navigate" ? NAVIGATE
     : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }

@@ -124,6 +124,27 @@ export const COACH_TOOLS = [
     },
   },
   {
+    name: "navigate_to",
+    description:
+      "Offer the user a one-tap link to the panel that backs up what you just told them. The app renders it as a button under your message — so say what to do in words as usual, and call this to make it tappable. Call it at most once per message, and only when a specific panel genuinely follows from your answer. Pass `focus` to point at the exact expense or goal you discussed rather than just the panel.",
+    input_schema: {
+      type: "object",
+      properties: {
+        panel: {
+          type: "string",
+          enum: ["Home", "Income", "Budget", "Log", "Account"],
+          description: "Which of the five panels to open.",
+        },
+        focus: {
+          type: "string",
+          description:
+            "Optional. An expense label as it appears in the app (e.g. \"Groceries\"), or a goal by rank (e.g. \"goal 1\"). The app scrolls to that row and highlights it. Omitted or unrecognised means the panel simply opens.",
+        },
+      },
+      required: ["panel"],
+    },
+  },
+  {
     name: "simulate_expense_change",
     description:
       "Recalculate the user's goal timeline as if one expense cost a different amount per week (use 0 for cancelling it entirely). Answers \"how much sooner would my goals land if I cut this?\" Returns the current and simulated finish date for every active goal, so the difference is a real calculation rather than an estimate.",
@@ -762,7 +783,67 @@ function toolSimulateWithoutLoggedEvent({ type, periodNumber }, data) {
   };
 }
 
+// The five panels Coach can send someone to, mapped from the user-facing names
+// in the tool schema to App.jsx's own viewStack keys. The mapping exists so the
+// model never has to know that the Account panel is keyed "profile" internally.
+const PANEL_VIEW_KEYS = {
+  home: "home", income: "income", budget: "budget", log: "log", account: "profile",
+};
+
+function toolNavigateTo({ panel, focus }, data) {
+  const key = PANEL_VIEW_KEYS[String(panel ?? "").trim().toLowerCase()];
+  if (!key) {
+    return { error: `Unknown panel "${panel}".`, validPanels: Object.keys(PANEL_VIEW_KEYS) };
+  }
+  const panelLabel = String(panel).trim().replace(/^./, (c) => c.toUpperCase());
+
+  // A focus target is resolved against the account's REAL data here, not taken
+  // on trust. An unresolvable target degrades to opening the panel rather than
+  // producing a link that scrolls to nothing — and the model is told, so it
+  // doesn't promise the user something the chip won't do.
+  let focusRef = null;
+  let focusLabel = null;
+  let focusNote = null;
+  const raw = String(focus ?? "").trim();
+  if (raw) {
+    const goalMatch = raw.match(/^goal\s*(\d+)$/i);
+    if (goalMatch) {
+      const rank = Number(goalMatch[1]);
+      const total = activeGoalsOf(data).length;
+      if (rank >= 1 && rank <= total) {
+        focusRef = `goal:${rank}`;
+        focusLabel = `Goal ${rank}`;
+      } else {
+        focusNote = `There is no goal ${rank} — the panel will open without highlighting anything.`;
+      }
+    } else {
+      const active = (data.expenses ?? []).filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
+      const needle = raw.toLowerCase();
+      const hit = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
+        ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
+      if (hit) {
+        focusRef = `expense:${hit.label}`;
+        focusLabel = hit.label;
+      } else {
+        focusNote = `No expense matches "${raw}" — the panel will open without highlighting anything.`;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    panel: panelLabel,
+    viewKey: key,
+    focusRef,
+    // What the button itself reads. The app renders this; do not repeat it
+    // verbatim in your message.
+    linkLabel: focusLabel ? `${panelLabel} · ${focusLabel}` : `Open ${panelLabel}`,
+    ...(focusNote ? { note: focusNote } : {}),
+  };
+}
+
 const HANDLERS = {
+  navigate_to: toolNavigateTo,
   get_goal_detail: toolGetGoalDetail,
   get_expense_detail: toolGetExpenseDetail,
   get_week_breakdown: toolGetWeekBreakdown,

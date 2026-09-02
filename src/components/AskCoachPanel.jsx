@@ -3,6 +3,7 @@ import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS } from "../lib/coachTools.js";
+import { CoachNavChip, CoachToolActivity, TOOL_ACTIVITY_LABELS } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
@@ -95,6 +96,10 @@ function FeatherIcon({ children, size = 16 }) {
  */
 export function AskCoachPanel({
   onClose,
+  // Opens a panel (and optionally scrolls to a row) when the user taps a
+  // navigate_to chip. Absent = chips render disabled, so a caller that can't
+  // navigate never shows a dead button.
+  onNavigate = null,
   isExiting = false,
   config,
   expenses = [],
@@ -120,6 +125,14 @@ export function AskCoachPanel({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [errored, setErrored] = useState(false);
+  // Which tool is running right now, for the activity line. Tool rounds are
+  // otherwise dead air — the bubble sits on "…" for a full extra round-trip.
+  const [activeTool, setActiveTool] = useState(null);
+  // navigate_to results for the turn being streamed, keyed by the index of the
+  // assistant message they belong to. Deliberately NOT part of `messages`:
+  // coach_chats stores plain text only, so a resumed conversation shows the
+  // words without the chip rather than needing a row-shape migration.
+  const [navChips, setNavChips] = useState({});
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -224,6 +237,10 @@ export function AskCoachPanel({
     chatTitleRef.current = null;
     summaryGeneratedRef.current = false;
     setMessages([]);
+    // Chips are keyed by message index, so replacing the message list wholesale
+    // must clear them — otherwise index 3 of the old conversation would
+    // decorate index 3 of the new one.
+    setNavChips({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -241,6 +258,9 @@ export function AskCoachPanel({
     chatTitleRef.current = chat.title ?? null;
     summaryGeneratedRef.current = false;
     setMessages((chat.messages ?? []).map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+    // A resumed chat is plain text by design (coach_chats stores no tool calls),
+    // so it starts with no chips rather than inheriting the live turn's.
+    setNavChips({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -289,7 +309,22 @@ export function AskCoachPanel({
         timelineWeekNets, logNetLost, logNetGained, futureEventDeductions,
       };
       let accumulated = "";
-      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData })) {
+      // The assistant bubble this turn is writing into — chips attach to it.
+      const assistantIdx = nextMessages.length;
+      const onToolEvent = (event) => {
+        if (event.phase === "start") {
+          setActiveTool(event.name);
+          return;
+        }
+        setActiveTool(null);
+        // A navigate_to that failed validation returns an `error` and no
+        // viewKey; rendering nothing is right — Coach still has the error in
+        // its tool_result and can say so in words.
+        if (event.name === "navigate_to" && event.result?.viewKey) {
+          setNavChips((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
+      };
+      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData, onToolEvent })) {
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }
@@ -302,6 +337,7 @@ export function AskCoachPanel({
       persistChat(nextMessages);
     } finally {
       setSending(false);
+      setActiveTool(null);
     }
   };
 
@@ -491,6 +527,12 @@ export function AskCoachPanel({
                 >
                   {m.content || (sending && i === messages.length - 1 ? "…" : "")}
                 </div>
+                {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
+                  <CoachToolActivity toolName={activeTool} />
+                )}
+                {m.role === "assistant" && navChips[i] && (
+                  <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
+                )}
               </div>
             ))}
             {errored && (

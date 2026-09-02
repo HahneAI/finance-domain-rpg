@@ -47,6 +47,7 @@ import { NewJobSeasonBudgetPanel } from "./components/NewJobSeasonBudgetPanel.js
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
+import { focusCoachTarget } from "./lib/coachFocus.js";
 import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
 import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/newJobSeasonRunway.js";
 
@@ -758,6 +759,21 @@ export default function App() {
     setDrawerOpen(false);
     jumpToPanelTop();
   };
+
+  // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
+  // the panel, then asks coachFocus to scroll to and flash the specific row.
+  // navigateDirect rather than navigate: a chip is a jump to a destination, not
+  // a drill-down from the current view, so it should not deepen the view stack.
+  //
+  // The focus call is deliberately fire-and-forget — it retries for a moment
+  // while the panel mounts and gives up silently if the row isn't rendered
+  // (collapsed category, filtered view). Opening the right panel is the chip's
+  // job; the highlight is a bonus on top of it.
+  const handleCoachNavigate = useCallback((viewKey, focusRef) => {
+    closeAskCoachWithAnimation();
+    navigateDirect(viewKey);
+    if (focusRef) focusCoachTarget(focusRef);
+  }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
@@ -4482,6 +4498,7 @@ export default function App() {
       {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) && (
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
+          onNavigate={handleCoachNavigate}
           isExiting={askCoachExiting}
           config={config}
           expenses={expenses}

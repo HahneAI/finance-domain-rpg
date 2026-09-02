@@ -120,9 +120,10 @@ describe("computeNetBreakdown", () => {
 });
 
 describe("COACH_TOOLS schemas", () => {
-  it("declares the four drill-down tools plus the four simulations", () => {
+  it("declares the drill-down, action and simulation tools", () => {
     expect(COACH_TOOL_NAMES).toEqual([
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
+      "navigate_to",
       "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
       "simulate_without_logged_event",
     ]);
@@ -338,6 +339,64 @@ describe("executeCoachTool — list_log_entries", () => {
     const r = executeCoachTool("list_log_entries", {}, baseData({ logs: [] }));
     expect(r.entries).toEqual([]);
     expect(r.note).toContain("Nothing logged");
+  });
+});
+
+describe("executeCoachTool — navigate_to", () => {
+  it("maps each user-facing panel name to App.jsx's own view key", () => {
+    const d = baseData();
+    const key = (panel) => executeCoachTool("navigate_to", { panel }, d).viewKey;
+    expect(key("Home")).toBe("home");
+    expect(key("Income")).toBe("income");
+    expect(key("Budget")).toBe("budget");
+    expect(key("Log")).toBe("log");
+    // The one that differs: the panel users call "Account" is keyed "profile".
+    expect(key("Account")).toBe("profile");
+  });
+
+  it("accepts the panel name case-insensitively", () => {
+    expect(executeCoachTool("navigate_to", { panel: "budget" }, baseData()).viewKey).toBe("budget");
+  });
+
+  it("rejects a panel that doesn't exist rather than inventing a route", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Dashboard" }, baseData());
+    expect(r.error).toContain("Unknown panel");
+    expect(r.viewKey).toBeUndefined();
+    expect(r.validPanels).toContain("budget");
+  });
+
+  it("resolves an expense focus against real data, by label", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "gym" }, baseData());
+    expect(r.focusRef).toBe("expense:Gym");
+    expect(r.linkLabel).toBe("Budget · Gym");
+  });
+
+  it("resolves a goal focus by rank", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Home", focus: "goal 2" }, baseData());
+    expect(r.focusRef).toBe("goal:2");
+    expect(r.linkLabel).toBe("Home · Goal 2");
+  });
+
+  it("degrades to panel-only when the focus can't be resolved, and says so", () => {
+    // A chip that scrolls to nothing is worse than one that just opens the
+    // panel — and the model needs to know so it doesn't promise the highlight.
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Netflix" }, baseData());
+    expect(r.ok).toBe(true);
+    expect(r.viewKey).toBe("budget");
+    expect(r.focusRef).toBeNull();
+    expect(r.linkLabel).toBe("Open Budget");
+    expect(r.note).toContain("No expense matches");
+  });
+
+  it("degrades the same way for a goal rank that doesn't exist", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Home", focus: "goal 9" }, baseData());
+    expect(r.focusRef).toBeNull();
+    expect(r.note).toContain("no goal 9");
+  });
+
+  it("won't focus a paused expense that isn't on screen", () => {
+    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Paused Thing" }, baseData());
+    expect(r.focusRef).toBeNull();
   });
 });
 

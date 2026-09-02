@@ -358,6 +358,34 @@ code {
 }
 
 /* ── Log confirm pulse — brief radial green glow over hero cards on entry save ── */
+/* Coach tool-activity dot. Opacity only — the animation rules rule out spin,
+   and a pulsing scale on a 6px dot reads as jitter at this size. */
+.coach-tool-dot { animation: coachToolDot 1200ms ease-in-out infinite; }
+@keyframes coachToolDot { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .coach-tool-dot { animation: none; opacity: 0.8; }
+}
+
+/* Coach navigate_to focus flash (src/lib/coachFocus.js). An outline + background
+   tint only — no transform: the animation rules in CLAUDE.md rule out bounce,
+   scale and spin, and a row that jumps while the page is still settling from a
+   smooth scroll reads as a glitch rather than a pointer. Two gentle pulses,
+   each well under the 500ms per-step ceiling. */
+.coach-focus {
+  animation: coachFocusFlash 1600ms ease-out 1;
+  border-radius: 12px;
+}
+@keyframes coachFocusFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0);   background-color: rgba(0, 200, 150, 0); }
+  12%  { box-shadow: 0 0 0 2px var(--color-teal);    background-color: rgba(0, 200, 150, 0.14); }
+  45%  { box-shadow: 0 0 0 2px rgba(0, 200, 150, 0.35); background-color: rgba(0, 200, 150, 0.05); }
+  70%  { box-shadow: 0 0 0 2px var(--color-teal);    background-color: rgba(0, 200, 150, 0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 200, 150, 0);   background-color: rgba(0, 200, 150, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-focus { animation: none; box-shadow: 0 0 0 2px var(--color-teal); }
+}
+
 @keyframes logConfirmPulse {
   0%   { opacity: 0; }
   25%  { opacity: 1; }

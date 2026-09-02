@@ -88,6 +88,7 @@ describe("eval fixture — tool-ready sibling account", () => {
       get_expense_detail: { label: "Groceries" },
       get_week_breakdown: { weekOffset: 0 },
       list_log_entries: {},
+      navigate_to: { panel: "Budget", focus: "Groceries" },
       simulate_expense_change: { label: "Groceries", newWeeklyCost: 0 },
       simulate_new_goal: { target: 3000, insertAtRank: 1 },
       simulate_overtime_hours: { hours: 8 },
@@ -100,6 +101,10 @@ describe("eval fixture — tool-ready sibling account", () => {
       expect(r.error, `${name} errored`).toBeUndefined();
     }
     expect(executeCoachTool("list_log_entries", {}, bag).totalMatching).toBe(3);
+    // The focus target must resolve against this fixture's real expenses, not
+    // just return ok — a chip that scrolls to nothing is the failure mode.
+    expect(executeCoachTool("navigate_to", { panel: "Budget", focus: "Groceries" }, bag).focusRef)
+      .toBe("expense:Groceries");
   });
 
   // The payoff of a shared fixture: a tool and the prompt's context block are

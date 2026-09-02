@@ -219,7 +219,11 @@ describe("executeCoachTool — get_expense_detail", () => {
     expect(r.kind).toBe("loan");
     expect(r.loan.paymentAmount).toBe(400);
     expect(r.loan.paymentFrequency).toBe("monthly");
-    expect(r.loan.projectedPayoffDate).toBeTruthy();
+    expect(r.loan.paymentsRemaining).toEqual(expect.any(Number));
+    // Asserted against a real formatted date, not toBeTruthy() — the earlier
+    // truthiness check passed happily on the string "undefined NaNth, NaN",
+    // which is what a wrong argument to computeLoanPayoffDate actually yields.
+    expect(r.loan.projectedPayoffDate).toMatch(/^[A-Z][a-z]+ \d+(st|nd|rd|th), \d{4}$/);
   });
 });
 

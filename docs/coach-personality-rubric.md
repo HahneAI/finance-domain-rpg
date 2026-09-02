@@ -246,7 +246,7 @@ reproduce this.
 
 **UPDATE (2026-09-02) — it is not a data-volume problem, and tools don't touch it.** Coach gained
 eight drill-down/simulation tools and a trimmed context block this session
-(`docs/coach-entry-points.md` §1, `drift-app-warden.md` §21 F163/F168/F171). The same canonical
+(`docs/coach-entry-points.md` §1, `drift-app-warden.md` §21 F163/F169/F172). The same canonical
 phrasing — *"Give me a full breakdown of my whole dashboard — everything."* — was run four more
 times across those changes. The count never moved: **~9-11 numbers every time, against the
 instructed ≤3.** Three separate levers were pulled, and none of them mattered:
@@ -273,7 +273,7 @@ recommendation above stands as the only untried approach, and it is now better m
 example demonstrates what a *complete* answer looks like at three numbers, which is a different
 kind of instruction from a rule that merely forbids a fourth.
 
-Recorded in `drift-app-warden.md` §21 F171 as well, since the trim is where a future session is
+Recorded in `drift-app-warden.md` §21 F172 as well, since the trim is where a future session is
 most likely to reach for this.
 
 **`claude-haiku-4-5` may have a real ceiling below Metaphor Intensity score-5, replicated across

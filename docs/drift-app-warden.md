@@ -5312,7 +5312,7 @@ label-addressed, matching the existing asymmetry exactly.
 > to show you exactly how much sooner?" — so the capability was not unknown to it, merely skipped.
 > **The lesson is that tool AVAILABILITY does not prevent fabrication; only tool USE does.** Treat
 > any Coach answer containing a comparative claim ("sooner", "instead of", "would have") as
-> suspect unless a `simulate_*` call appears in the same turn. This is the open end of F168 and
+> suspect unless a `simulate_*` call appears in the same turn. This is the open end of F169 and
 > the strongest candidate for the few-shot approach DW-19 already recommends — a worked example of
 > declining to estimate and calling the simulation instead — not another prose rule.
 
@@ -5386,7 +5386,7 @@ is non-zero at all.
 > modal, and asserts a real amount on the row, Net Pay reduced by it, no `perCheckFactor` scaling
 > on a biweekly account, and the legacy `weeklyAmount` tail still read.
 
-**F167 · One period-label convention across every Coach surface** — `aiContext.js`, `coachTools.js` — **[L]**
+**F168 · One period-label convention across every Coach surface** — `aiContext.js`, `coachTools.js` — **[L]**
 2026-09-02, found by the first live tool-selection test (`scripts/coach-eval/toolLoopLiveTest.mjs`).
 A fiscal week ENDS on the same calendar day the next one BEGINS. `buildCoachContext`'s
 `formatPeriodWithDate` labels a period by its START ("the week of March 9th, 2026 (week 11)"),
@@ -5409,7 +5409,7 @@ the Log panel itself shows, but it is no longer the only date field.
 > (`""`, per `resolveEventWeekMeta`) keeps the old "week ending" phrasing, since there is no
 > period to name.
 
-**F168 · Coach simulation tools — one changed input, one real re-run** — `coachTools.js` — **[L]**
+**F169 · Coach simulation tools — one changed input, one real re-run** — `coachTools.js` — **[L]**
 2026-09-02. Four `simulate_*` tools (`simulate_expense_change`, `simulate_new_goal`,
 `simulate_overtime_hours`, `simulate_without_logged_event`) extend F163's read-only layer with
 "what if" answers. Built after an adversarial live test showed the read-only tools *invite* a
@@ -5434,7 +5434,7 @@ simulation are one derivation rather than two that agree today.
 > assertions are on direction and arithmetic, never snapshots, because a snapshot passes just as
 > happily with the diff inverted.
 
-**F169 · `periodsToFund` (duration) vs `periodsUntilFinish` (completion) — never diff the first** — `coachTools.js` `summarizeGoal` — **[L]**
+**F170 · `periodsToFund` (duration) vs `periodsUntilFinish` (completion) — never diff the first** — `coachTools.js` `summarizeGoal` — **[L]**
 2026-09-02. `computeGoalTimeline` returns two different quantities that both read as "weeks":
 `wN = eW − sW`, how long a goal spends *funding* once surplus reaches it, and `eW`, when it
 actually *finishes*, counted from now. The app's own "weeks to fund" line (goal cards, and
@@ -5451,7 +5451,7 @@ Caught in test, before any live call.
 > and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
 > ranks, which is what fails under the `wN` comparison.
 
-**F170 · `deriveWeekPayComponents` / `resolveNightDiffPerHour` — shared week-pay derivations** — `finance.js` — **[L]**
+**F171 · `deriveWeekPayComponents` / `resolveNightDiffPerHour` — shared week-pay derivations** — `finance.js` — **[L]**
 2026-09-02, extracted so `simulate_overtime_hours` could build a simulated week from the same
 rules a real one is built from. `deriveWeekPayComponents(cfg, {grossPay, benefitsDeduction,
 has401k, active})` returns the 401k employee/employer split and taxable gross; `buildYear` is its
@@ -5466,11 +5466,11 @@ via `dhlNightShift === false` (on by default), a base user opts IN via `nightDif
 > (`k401StartDate`/`benefitsStartDate`, `firstActiveIdx`, New Job Season bounds) only the caller
 > knows, and a simulated week inherits them from its real basis.
 
-**F171 · `detailAvailableViaTools` — the context block's per-item lines are opt-in trimmed** — `aiContext.js` — **[L/G]**
+**F172 · `detailAvailableViaTools` — the context block's per-item lines are opt-in trimmed** — `aiContext.js` — **[L/G]**
 2026-09-02. `buildCoachContext`'s two per-item lines (Expense breakdown, Goal breakdown) are the
 only ones that grow with the account — together 38% of the block on a 3-expense/2-goal fixture and
 the densest cluster of numbers in it. With Coach's tools able to serve that depth on demand
-(F163/F168), the flag shrinks both to an INDEX: expense LABELS (cost/cycle/due date/overrides move
+(F163/F169), the flag shrinks both to an INDEX: expense LABELS (cost/cycle/due date/overrides move
 to `get_expense_detail`) and goal rank + target + finish date (funding rate and periods-to-fund
 move to `get_goal_detail`). Measured: −17% block / 82→59 numbers at 8 expenses + 5 goals, −25% /
 110→75 at 15 + 8. Only `AskCoachPanel` sets it.
@@ -5497,7 +5497,7 @@ move to `get_goal_detail`). Measured: −17% block / 82→59 numbers at 8 expens
 > breakdowns, the flag swaps in the index, names/dates survive, goal names stay withheld, no other
 > line changes, and the saving grows super-linearly with account size.
 
-**F172 · Tool-loop text seam** — `claude.js` `chatWithCoach` — **[G]**
+**F173 · Tool-loop text seam** — `claude.js` `chatWithCoach` — **[G]**
 2026-09-02. A model that says "let me pull that up" before calling a tool and then answers in the
 next round produces two separate runs of text. The loop yielded them back to back, so live output
 read `"...for you.You're on track"`. One space is now inserted at the seam, only when the previous
@@ -5507,7 +5507,7 @@ round ended on a non-whitespace character and the next chunk doesn't start with 
 > answer. Check: `claudeToolLoop.test.js`'s "separates a pre-tool preamble" and "does not double a
 > space the model already supplied".
 
-**F173 · `navigate_to` and its chip — tool-driven UI, never parsed prose** — `coachTools.js`, `CoachToolUI.jsx`, `coachFocus.js` — **[G]**
+**F174 · `navigate_to` and its chip — tool-driven UI, never parsed prose** — `coachTools.js`, `CoachToolUI.jsx`, `coachFocus.js` — **[G]**
 2026-09-02. Coach's persona forbids Markdown outright ("no asterisks, underscores, bullet points"),
 so there is no link syntax in its output to parse even in principle. Interactive UI is therefore
 driven by TOOL CALLS: `navigate_to` returns a validated `{viewKey, focusRef, linkLabel}` and

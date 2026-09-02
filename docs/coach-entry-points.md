@@ -109,7 +109,7 @@ cached context block instead. Every figure Coach quoted cross-checked against th
 function. Two things worth carrying forward: `get_expense_detail` surfaced a month-override the
 summary line hides (billed $60/wk, actually $90/wk in March) and Coach explained the difference
 unprompted, which is the clearest evidence the drill-down layer earns its keep; and the run found
-one real bug — a period-label convention collision, now fixed (F167). Unchanged and still open:
+one real bug — a period-label convention collision, now fixed (F168). Unchanged and still open:
 DW-19's broad-question number cap (~9 numbers against an instructed ≤3) reproduced exactly as
 documented, and having tools available neither worsened nor improved it.
 
@@ -140,7 +140,7 @@ per-event dollar impacts, and no read-only tool can answer it. Deliberately **no
 a prompt instruction — the capability is missing, not the wording. **Resolved 2026-09-02** by
 building those tools, below.
 
-**Simulation tools, built and live-tested 2026-09-02** (drift-app-warden §21 F168–F170). Four
+**Simulation tools, built and live-tested 2026-09-02** (drift-app-warden §21 F169–F171). Four
 `simulate_*` tools bring the total to eight: `simulate_expense_change`, `simulate_new_goal`,
 `simulate_overtime_hours`, `simulate_without_logged_event`. Each re-runs the REAL
 `computeGoalTimeline`/`computeNetBreakdown` with exactly one input changed and diffs it against
@@ -163,7 +163,7 @@ on retest it reports "Goal 1 lands the week of April 20th (week 17) instead of A
 is the tool's own number. **The pattern worth remembering: when Coach invents a figure, check
 first whether the tool should have supplied it.** Twice now the answer was yes.
 
-**Context block trimmed 2026-09-02** (drift-app-warden §21 F171). With eight tools able to serve
+**Context block trimmed 2026-09-02** (drift-app-warden §21 F172). With eight tools able to serve
 depth on demand, `buildCoachContext`'s two per-item lines — the only ones that grow with the
 account — shrink to an index when the caller passes `detailAvailableViaTools: true`. Expense
 labels stay, per-expense cost moves to `get_expense_detail`; goal rank/target/finish date stay,
@@ -183,7 +183,7 @@ broad answer (~10, before and after). That is a property of the instruction's sh
 data volume behind it — the rubric's own note calling for a worked few-shot example still stands,
 and the trim should not be re-attempted as a fix for it.
 
-**`navigate_to` + chat UI, 2026-09-02** (drift-app-warden §21 F173). Coach's ninth tool returns a
+**`navigate_to` + chat UI, 2026-09-02** (drift-app-warden §21 F174). Coach's ninth tool returns a
 validated `{viewKey, focusRef, linkLabel}` and `AskCoachPanel` renders it as a tappable chip under
 the message — tool-driven, not parsed from prose, since the persona forbids Markdown outright and
 there is no link syntax in the output to parse. Tapping closes the chat, opens the panel, and

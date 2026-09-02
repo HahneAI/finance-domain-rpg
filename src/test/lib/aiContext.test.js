@@ -390,6 +390,25 @@ describe("buildJobHuntContext", () => {
     expect(block).toContain("Lifestyle spend still tracked (not counted in runway above): $20/wk");
   });
 
+  it("folds logged job-hunt income into the runway itself, not just the display line", () => {
+    // Regression: this used to pass `savings` to computeNewJobSeasonRunway(),
+    // which only destructures `extraCash` — the whole figure was silently
+    // dropped, so the runway number never moved no matter how much gig income
+    // was logged, even while the line right next to it said otherwise.
+    const days = (block) => Number(block.match(/Cash Runway: ~(\d+) days/)?.[1]);
+    const withoutIncome = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 2000 },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    const withIncome = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 2000, jobHuntIncomeLog: [{ id: "1", amount: 1000, loggedAt: "2026-07-01T00:00:00Z" }] },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    expect(days(withIncome)).toBeGreaterThan(days(withoutIncome));
+  });
+
   it("includes job-hunt income only when the user has logged any", () => {
     const withoutIncome = buildJobHuntContext({
       config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },

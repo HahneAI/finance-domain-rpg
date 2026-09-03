@@ -247,6 +247,54 @@ resolve — the original Haiku lock was grounded in Metaphor Intensity score-1 c
 still holds; this doesn't reverse that, it adds a second, different signal that the Phase 7
 decision hasn't weighed yet.
 
+**Extended to the other three built modes (2026-09-03) — `promptfooconfig.phase5d-networth.yaml`/
+`-jobhunt.yaml`/`-resume.yaml`, each mode's own shipped model, 6 calls (elicit-1 + elicit-5 per
+mode; score-3 natural reuses each mode's existing Phase 5 data rather than re-spending). Two real
+findings that refine, not overturn, the Ask Coach result above:**
+
+- **Haiku's low-end compression holds again (Net Worth Trigger, Green tier) — still can't reach
+  true score-1.** Same shape as Ask Coach: *"Your spend dropped to 85 this week and you're
+  running a 90 percent savings rate — that's the turnaround. Open your Home tile and lock in
+  next week's 900 takehome..."* — two sentences, not the one-fragment definition.
+- **But Haiku's high-end compression did NOT hold here — it produced a genuinely elaborate score-5
+  (4 paragraphs: surplus, savings rate, projected annual $40,280, expense line, budget health
+  ratio, weeks remaining, then the missing-goal gap, one clean corner-man touch — "go the
+  distance" — never stacked).** This is a real difference from Ask Coach's score-5 attempt, where
+  Haiku barely moved past its own natural default. **Reading: Haiku's Sentence Economy range may
+  be less a fixed per-model ceiling and more a function of how much genuinely relevant material a
+  scenario gives it to work with** — Green tier's addendum ("name the specific improvement...
+  acknowledge the turnaround plainly") plus a richer, more favorable account (this fixture's own
+  845/85 "well-managed" numbers) gave Haiku a real narrative to build out; Ask Coach's bare "how's
+  my week" against a thinner, more neutral account didn't. Worth keeping in mind before treating
+  "Haiku has a hard Sentence Economy ceiling" as a settled, model-wide fact — it held on the low
+  end here, not the high end.
+- **Job Hunt Chat (Sonnet) replicates Ask Coach's clean range exactly.** Score-1: one true
+  sentence (*"Riverbend — send a short note confirming the interview and reconfirming your
+  availability."*) — a different but equally grounded framing than the natural sample's (this one
+  leans on Riverbend's own next step rather than Cascade's silence), still a clean single-fragment
+  hit. Score-5: 5 genuine paragraphs, cites the real runway/burn numbers, addresses both
+  applications with real reasoning, zero boxing vocabulary at either extreme — consistent with
+  this mode's own "trace" target holding independent of length.
+- **New finding, distinct from anything the other three modes showed: Résumé Review's score-1
+  may be structurally unreachable, not just uncalibrated.** Despite a calibration override
+  explicitly suspending both the shared length rule AND this mode's own paragraph exception, the
+  "score-1" attempt came back as 4 full paragraphs — barely distinguishable in length from its
+  natural default. Likely cause: `RESUME_REVIEW_ADDENDUM` itself *requires* covering multiple
+  discrete elements every review ("call out weak or vague lines... name real gaps... note real
+  strengths... end with the single most important thing") — that checklist may be structurally
+  incompatible with a true one-sentence answer, independent of what Sentence Economy asks for. The
+  score-5 side worked as intended: a genuine step up from the natural default, an explicit
+  line-by-line walkthrough addressing the title, every résumé line, every skill, and the education
+  line individually, each with its own paragraph — visibly more granular than the natural sample's
+  grouped treatment. **Open question, not resolved here: is Résumé Review's floor a real score 2-3
+  rather than 1, because of what the mode's own addendum demands — or would a differently-worded
+  override still reach true score-1?** Left as a real limitation of this mode for the batch
+  decision, not assumed away.
+
+**Still not locked.** Elicited and compared across all four built modes now; target-picking and
+repeat-verification remain open, and Résumé Review's apparent score-1 floor is a genuine open
+question the batch decision needs to account for, not just a data gap.
+
 **Not yet locked — extremes found, target not chosen.** Per the Calibration Methodology: elicit
 (done), compare against definitions (done, above), pick a target with rationale (not done — this
 needs the batch decision, since a Haiku-specific target might reasonably differ from a

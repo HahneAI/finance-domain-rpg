@@ -20,10 +20,16 @@
 import { JOB_HUNT_SYSTEM_PROMPT } from "../../../src/lib/coachPrompts.js";
 import { buildJobHuntTestContext } from "../fixtures/testAccount.js";
 
+// vars.calibrationInstruction is OPTIONAL — added 2026-09-03 for Axis 3
+// (Sentence Economy) extremes-discovery, same pattern as
+// askCoachComposed.js. Omitting it samples natural behavior (already done
+// for both runway variants, Phase 5's second slice); passing it forces a
+// deliberate length extreme for this one response.
 export default function ({ vars }) {
   const context = buildJobHuntTestContext({ variant: vars.variant ?? "healthy" });
+  const calibrationBlock = vars.calibrationInstruction ? `\n\n${vars.calibrationInstruction}` : "";
   return [
-    { role: "system", content: `${JOB_HUNT_SYSTEM_PROMPT}\n\n${context}` },
+    { role: "system", content: `${JOB_HUNT_SYSTEM_PROMPT}\n\n${context}${calibrationBlock}` },
     { role: "user", content: vars.userMessage },
   ];
 }

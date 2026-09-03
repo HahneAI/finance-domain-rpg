@@ -1195,20 +1195,46 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     unchanged by this pass — this rerun covered Ask Coach only, per the user's specific ask.
 
   **Remaining before Phase 5 can conclude and hand off to the batch decision:**
-  - [~] **Sentence economy — Axis 3 defined and first extremes pass done (2026-09-03), not yet
-    locked.** Defined in `coach-personality-rubric.md` (1-5 scale: Telegraphic → Standard →
-    Exhaustive). `promptfooconfig.phase5d.yaml`, Ask Coach only so far (not yet run against Net
-    Worth Trigger/Job Hunt/Résumé), 9 calls (3 models × elicit-1/natural-3/elicit-5), no repeat.
-    **Real finding: Sonnet and Opus both show clean range from a one-sentence fragment to a full
-    multi-paragraph report; Haiku has the narrowest dynamic range of the three — it can't reach
-    true score-1 (stops at ~2 sentences), its score-5 attempt barely differs from its own natural
-    score-3, and its NATURAL, unforced default (2 paragraphs) already overshoots
-    `COACH_PERSONA_PROMPT`'s own instructed length with no push at all.** Worth weighing in
-    Phase 7's model-selection decision (Ask Coach is locked to Haiku on Metaphor Intensity
-    grounds, which still holds — this is a second, different signal Phase 7 hasn't seen yet, not
-    a reversal). Remaining: sample against Net Worth Trigger/Job Hunt/Résumé Review too, then
-    pick and repeat-verify a target (possibly Haiku-specific, given the range gap). Full writeup:
-    `coach-personality-rubric.md`'s Axis 3 section.
+  - [~] **Sentence economy — Axis 3 defined, extremes sampled across all four built modes
+    (2026-09-03), not yet locked.** Defined in `coach-personality-rubric.md` (1-5 scale:
+    Telegraphic → Standard → Exhaustive). Ask Coach: `promptfooconfig.phase5d.yaml`, 9 calls (3
+    models × elicit-1/natural-3/elicit-5). Net Worth Trigger/Job Hunt/Résumé Review:
+    `promptfooconfig.phase5d-networth.yaml`/`-jobhunt.yaml`/`-resume.yaml`, each mode's own
+    shipped model, 2 calls each (score-3 natural reuses existing Phase 5 data, not re-spent) — 15
+    calls total across the axis so far, no repeat.
+
+    **Ask Coach finding: Sonnet and Opus both show clean range from a one-sentence fragment to a
+    full multi-paragraph report; Haiku has the narrowest dynamic range of the three — can't reach
+    true score-1, its score-5 barely differs from its own natural score-3, and its natural,
+    unforced default already overshoots `COACH_PERSONA_PROMPT`'s own instructed length with no
+    push at all.**
+
+    **Extending to the other three modes refined this, didn't overturn it:**
+    - Haiku's low-end compression (can't reach true score-1) replicated on Net Worth Trigger too.
+    - **But Haiku's high-end compression did NOT replicate** — its Net Worth Trigger Green score-5
+      came back as a genuinely elaborate 4 paragraphs, unlike its compressed Ask Coach attempt.
+      Likely explanation: Haiku's range depends on how much real material a scenario gives it, not
+      a fixed per-model ceiling — Green's richer, more favorable account and its own "name the
+      turnaround" addendum gave Haiku something to build out; Ask Coach's bare "how's my week" on
+      a thinner account didn't. Don't treat "Haiku has a hard ceiling" as settled across every
+      mode.
+    - Job Hunt Chat (Sonnet) replicated Ask Coach's clean range exactly — a true one-sentence
+      score-1, a genuine 5-paragraph score-5, zero boxing vocabulary at either extreme.
+    - **New, mode-specific finding: Résumé Review's score-1 may be structurally unreachable, not
+      just uncalibrated.** Even with an override suspending both the shared length rule and this
+      mode's own paragraph exception, its "score-1" attempt came back as 4 full paragraphs —
+      barely different from its natural default. Likely cause: `RESUME_REVIEW_ADDENDUM` itself
+      requires covering multiple discrete elements every review (weak lines, gaps, strengths, one
+      fix) — a checklist that may be incompatible with a true one-sentence answer regardless of
+      what Sentence Economy asks for. Score-5 worked as intended (a genuine line-by-line
+      escalation past the natural default). Open question for the batch decision: is this mode's
+      real floor score 2-3, not 1, because of what its own addendum demands?
+
+    Worth weighing in Phase 7's model-selection decision (Ask Coach is locked to Haiku on
+    Metaphor Intensity grounds, which still holds — this is additional signal Phase 7 hasn't
+    weighed yet, not a reversal). Remaining: pick and repeat-verify a target per mode (possibly
+    Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
+    Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
   - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
     bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to

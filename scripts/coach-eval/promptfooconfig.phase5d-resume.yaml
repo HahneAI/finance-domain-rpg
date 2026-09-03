@@ -1,0 +1,63 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L) — Axis 3 (Sentence Economy) extremes for
+  Résumé Review, on the mode's own shipped model (claude-sonnet-5, matching
+  ResumeReviewCard.jsx).
+
+  Different case from the other three modes: RESUME_REVIEW_ADDENDUM already
+  grants its own exception to the shared two-to-three-sentence default ("a
+  real review can run several short paragraphs, each grounded in one
+  specific line") — its natural score-3-equivalent is already closer to
+  score-4 (Elaborated) by design, confirmed by the 3/3 repeat-verified
+  samples from the prompt-tuning pass. So the score-1 override here has to
+  explicitly suspend BOTH the shared rule and this mode's own addendum
+  exception, or the model has two separate permissions to fall back on. The
+  score-5 override has to ask for something visibly MORE exhaustive than
+  the mode's already-elaborate default, not just "multiple paragraphs" —
+  the mode already does that unprompted.
+
+  Score-3 (natural) is NOT re-run here — real data already exists (3/3
+  repeat-verified, `promptfooconfig.phase5c-verify.yaml`). Only the two
+  extremes are new: 2 calls.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 2048
+
+prompts:
+  - id: file://prompts/resumeReview.js
+    label: resume-review
+
+tests:
+  - description: "Elicit score-1 (Telegraphic) — overrides this mode's own paragraph exception too"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including BOTH the
+        shared "two to three sentences, never more" rule AND this mode's own
+        exception to it above ("a real review can run several short
+        paragraphs") — suspend that exception too, just for this one
+        response): produce output scoring exactly 1 on Sentence Economy per
+        docs/coach-personality-rubric.md Axis 3 — "One short sentence,
+        sometimes a fragment — the absolute minimum words needed to answer
+        and give the one required action, no elaboration, no supporting
+        detail." Every other rule above (grounding, no Markdown, metaphor
+        cap) still applies normally.
+
+  - description: "Elicit score-5 (Exhaustive) — visibly more than this mode's already-elaborate default"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response
+        only): produce output scoring exactly 5 on Sentence Economy per
+        docs/coach-personality-rubric.md Axis 3 — "Multiple paragraphs,
+        every relevant number or consideration named, a full written
+        explanation rather than a quick check-in — reads as a report, not a
+        reply." This mode's own addendum already permits several short
+        paragraphs by default, so score 5 here means visibly MORE than
+        that: address every single line of the résumé explicitly and in
+        full depth, not just the weakest ones, so the response reads as an
+        exhaustive line-by-line audit rather than the usual selective
+        review. Every other rule above (grounding, no Markdown, metaphor
+        cap) still applies normally.

@@ -31,7 +31,13 @@ doesn't repeat their reasoning.
   `promptfooconfig.phase5d.yaml` — Axis 3 (Sentence Economy)'s first
   extremes-discovery pass: `askCoachComposed.js`, 3 models × {elicit-1,
   natural-3, elicit-5}, same account/question as every other Ask Coach
-  calibration pass in this harness.
+  calibration pass in this harness. `promptfooconfig.phase5d-networth.yaml`/
+  `-jobhunt.yaml`/`-resume.yaml` — the same axis extended to the other three
+  built modes, each on its own shipped model, elicit-1/elicit-5 only (each
+  mode's score-3 natural default already existed from earlier Phase 5
+  slices, not re-spent). `netWorthTrigger.js`/`jobHuntChat.js`/
+  `resumeReview.js` all gained an optional `vars.calibrationInstruction`
+  for this pass, same pattern `askCoachComposed.js` already had.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
   this harness can never silently test a stale prompt. One file per
@@ -328,23 +334,38 @@ retry-on-a-hunch.** Concretely for this file:
     difference on the near-limit sample (shorter, follow-up-invitation
     close instead of naming the pattern outright) — not repeat-verified,
     flagged rather than treated as stable.
-  - [~] Axis 3 (Sentence Economy) defined + first extremes pass (2026-09-03,
-    `promptfooconfig.phase5d.yaml`) — Ask Coach only so far. **Sonnet/Opus
-    show clean 1-to-5 range (a true one-sentence fragment up to a genuine
-    multi-paragraph report); Haiku has the narrowest range of the three —
-    can't reach true score-1, its score-5 barely differs from its own
-    natural score-3, and that natural default already overshoots
-    `COACH_PERSONA_PROMPT`'s own instructed length unprompted.** Weighed
-    against measured cost (~3.6-4.5x/call for Sonnet) — **decision: Ask
-    Coach stays on Haiku for now, but the finding is real enough to set a
-    future direction: per-MESSAGE model routing within a session (Haiku for
-    routine turns, Sonnet reached for when a turn needs more range), tuned
-    once every mode/axis has been through this phase at least once, not
-    decided per-finding.** A speculative paid tier ("Coach Upgrade") is also
-    recorded in `docs/TODO.md` §2.G as a cost-contingency direction, not a
-    roadmap item. Remaining: sample against Net Worth Trigger/Job Hunt/
-    Résumé Review, pick + repeat-verify a target. Full writeup:
-    `coach-personality-rubric.md`'s Axis 3 section.
+  - [~] Axis 3 (Sentence Economy) defined + extremes sampled across all four
+    built modes (2026-09-03). Ask Coach (`promptfooconfig.phase5d.yaml`, 3
+    models): **Sonnet/Opus show clean 1-to-5 range (a true one-sentence
+    fragment up to a genuine multi-paragraph report); Haiku has the
+    narrowest range of the three — can't reach true score-1, its score-5
+    barely differs from its own natural score-3, and that natural default
+    already overshoots `COACH_PERSONA_PROMPT`'s own instructed length
+    unprompted.** Weighed against measured cost (~3.6-4.5x/call for Sonnet)
+    — **decision: Ask Coach stays on Haiku for now, but the finding is real
+    enough to set a future direction: per-MESSAGE model routing within a
+    session (Haiku for routine turns, Sonnet reached for when a turn needs
+    more range), tuned once every mode/axis has been through this phase at
+    least once, not decided per-finding.** A speculative paid tier ("Coach
+    Upgrade") is also recorded in `docs/TODO.md` §2.G as a cost-contingency
+    direction, not a roadmap item.
+
+    Extended to the other three (`promptfooconfig.phase5d-networth.yaml`/
+    `-jobhunt.yaml`/`-resume.yaml`, each mode's own shipped model) —
+    **refined, not overturned:** Haiku's low-end compression replicated on
+    Net Worth Trigger, but its high-end compression did NOT — a richer
+    scenario (Green tier's favorable numbers + its own "name the turnaround"
+    addendum) produced a genuinely elaborate 4-paragraph score-5, unlike Ask
+    Coach's compressed attempt — Haiku's range looks tied to available
+    material, not a fixed ceiling. Job Hunt Chat (Sonnet) replicated Ask
+    Coach's clean range exactly. **New finding: Résumé Review's score-1 may
+    be structurally unreachable** — even overriding both the shared length
+    rule and this mode's own paragraph exception, its attempt came back as 4
+    full paragraphs, likely because `RESUME_REVIEW_ADDENDUM`'s own required
+    elements (weak lines, gaps, strengths, one fix) don't fit a true
+    one-sentence answer regardless of what's asked; score-5 worked as
+    intended. Remaining: pick + repeat-verify a target per mode. Full
+    writeup: `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
     Warmth/formality (still undefined), fixing Net Worth Trigger Amber's
     stacked-touch rule violation (a real, already-identified bug, not just

@@ -1,0 +1,54 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L) — Axis 3 (Sentence Economy) extremes for Net
+  Worth Trigger, on the tier's own shipped model (claude-haiku-4-5, matching
+  CoachNetWorthCard.jsx). Green tier only — the "clean baseline" tier with no
+  urgency-driven length interference (Amber stacks touches, Red's own
+  anti-escalation instruction wasn't fully holding per Phase 5's first
+  slice), so this isolates the axis the same way Ask Coach's phase5d pass
+  did with one scenario, not three.
+
+  Score-3 (natural) is NOT re-run here — real data for all three tiers
+  already exists from Phase 5's first slice (`promptfooconfig.phase5.yaml`),
+  repeat-verified 3/3. Only the two extremes are new: 2 calls.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/netWorthTrigger.js
+    label: net-worth-trigger
+
+defaultTest:
+  vars:
+    tier: green
+
+tests:
+  - description: "Elicit score-1 (Telegraphic) — one short sentence/fragment, absolute minimum"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 1 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "One short sentence, sometimes a fragment — the absolute
+        minimum words needed to answer and give the one required action, no
+        elaboration, no supporting detail." Every other rule above
+        (grounding, one concrete action, no Markdown, metaphor cap) still
+        applies normally.
+
+  - description: "Elicit score-5 (Exhaustive) — multiple paragraphs, every relevant number named"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 5 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "Multiple paragraphs, every relevant number or
+        consideration named, a full written explanation rather than a quick
+        check-in — reads as a report, not a reply." Every other rule above
+        (grounding, one concrete action, no Markdown, metaphor cap) still
+        applies normally.

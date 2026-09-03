@@ -1203,7 +1203,18 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     shipped model, 2 calls each (score-3 natural reuses existing Phase 5 data, not re-spent) — 15
     calls total across the axis so far, no repeat.
 
-    **Ask Coach finding: Sonnet and Opus both show clean range from a one-sentence fragment to a
+    **RESCALED 2026-09-03, same day, before any target locked — the findings below use the OLD
+    numbering (score-1 = a rigid one-sentence fragment) because that's genuinely what was tested,
+    but the scale itself has since shifted up one full notch: old score 2 is now score 1 ("2-3
+    sentences, minimal" — the one-sentence floor is retired outright, no test in this harness
+    should target it again), old score 3 (the persona-default anchor) is now score 2, old score 4
+    is now score 3, old score 5 ("just more paragraphs") is now score 4, and a genuinely new score
+    5 (an itemized, line-by-line audit — real anchor data already exists in Résumé Review's own
+    natural output) sits above it. Full rationale and the old-to-new translation of every finding
+    below: `coach-personality-rubric.md`'s Axis 3 section. The promptfoo config files themselves
+    are already updated to elicit the new score-1 definition on any future re-run.**
+
+    **Ask Coach finding (old numbering): Sonnet and Opus both show clean range from a one-sentence fragment to a
     full multi-paragraph report; Haiku has the narrowest dynamic range of the three — can't reach
     true score-1, its score-5 barely differs from its own natural score-3, and its natural,
     unforced default already overshoots `COACH_PERSONA_PROMPT`'s own instructed length with no

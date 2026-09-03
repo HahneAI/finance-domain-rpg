@@ -335,8 +335,18 @@ retry-on-a-hunch.** Concretely for this file:
     close instead of naming the pattern outright) — not repeat-verified,
     flagged rather than treated as stable.
   - [~] Axis 3 (Sentence Economy) defined + extremes sampled across all four
-    built modes (2026-09-03). Ask Coach (`promptfooconfig.phase5d.yaml`, 3
-    models): **Sonnet/Opus show clean 1-to-5 range (a true one-sentence
+    built modes (2026-09-03). **RESCALED the same day, before any target
+    locked: the rigid one-sentence/fragment floor at score 1 is retired —
+    old score 2 is the new score 1, every other level shifts up a notch, and
+    a genuinely new top score 5 (itemized, line-by-line audit) replaces the
+    old score 5's "just more paragraphs."** The findings below still use the
+    OLD numbering (that's what was actually tested) — see
+    `coach-personality-rubric.md`'s Axis 3 section for the full rationale
+    and the old-to-new translation. Config files here are already updated
+    to elicit the new score-1 definition on any future re-run.
+
+    Ask Coach (`promptfooconfig.phase5d.yaml`, 3
+    models, old numbering): **Sonnet/Opus show clean 1-to-5 range (a true one-sentence
     fragment up to a genuine multi-paragraph report); Haiku has the
     narrowest range of the three — can't reach true score-1, its score-5
     barely differs from its own natural score-3, and that natural default

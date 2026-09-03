@@ -182,18 +182,67 @@ axis, independent of the Axis 2 data.*
 
 | Score | Label | Definition |
 |---|---|---|
-| 1 | Telegraphic | One short sentence, sometimes a fragment — the absolute minimum words needed to answer and give the one required action, no elaboration, no supporting detail. |
-| 2 | Tight | Two short sentences — the answer plus exactly one supporting fact, nothing more. |
-| **3** | **Standard** | **← current anchor, matches `COACH_PERSONA_PROMPT`'s own default instruction ("two to three sentences, never more").** A direct answer, brief context, one concrete action — the baseline every mode inherits unless its own addendum says otherwise. |
-| 4 | Elaborated | A short paragraph or two — one supporting example or a bit of extra context beyond the bare answer, still focused on a single topic. |
-| 5 | Exhaustive | Multiple paragraphs, every relevant number or consideration named, a full written explanation rather than a quick check-in — reads as a report, not a reply. |
+| 1 | Concise | Two to three short sentences — the answer plus at most one supporting fact and the one required action. No elaboration beyond that. |
+| **2** | **Standard** | **← current anchor, matches `COACH_PERSONA_PROMPT`'s own default instruction ("two to three sentences, never more").** A direct answer with real supporting context woven in — a brief WHY or a second relevant number, not just the bare fact — still capped at 2-3 sentences by the shared rule, but denser than score 1's minimal version. |
+| 3 | Elaborated | A short paragraph or two — one supporting example or a bit of extra reasoning beyond the bare answer, still focused on a single topic. |
+| 4 | Expansive | Multiple paragraphs, several relevant numbers or considerations named — a real written explanation, not just a quick check-in. |
+| 5 | Exhaustive | A full structured walkthrough that addresses every distinct itemizable element of the situation individually (every expense line, every résumé line, every relevant tile) — reads as a complete audit, not just a longer report. |
+
+**RESCALED 2026-09-03, before any target was locked — the original scale (struck through below)
+had a rigid one-sentence/fragment floor at score 1, and the live data collected against it argued
+against keeping it, not just for cosmetic reasons:**
+
+| ~~Score~~ | ~~Label~~ | ~~Definition~~ |
+|---|---|---|
+| ~~1~~ | ~~Telegraphic~~ | ~~One short sentence, sometimes a fragment — the absolute minimum words needed to answer and give the one required action, no elaboration, no supporting detail.~~ |
+| ~~2~~ | ~~Tight~~ | ~~Two short sentences — the answer plus exactly one supporting fact, nothing more.~~ |
+| ~~3~~ | ~~Standard~~ | ~~← old anchor, matches `COACH_PERSONA_PROMPT`'s own default instruction.~~ |
+| ~~4~~ | ~~Elaborated~~ | ~~A short paragraph or two.~~ |
+| ~~5~~ | ~~Exhaustive~~ | ~~Multiple paragraphs, every relevant number named.~~ |
+
+Three real, independent pieces of evidence from the findings below argued for retiring the
+one-sentence floor rather than keep chasing it: (1) even the two models that COULD reach it
+(Sonnet, Opus) only did so under an explicit, heavy-handed override — not a register either would
+ever reach for on its own; (2) Résumé Review couldn't reach it AT ALL, no matter how the override
+was worded, because the mode's own addendum structurally requires covering multiple elements every
+time; (3) Haiku — the model actually locked for Ask Coach — never got closer than two sentences
+regardless of how hard the override pushed. A floor no real Coach response should ever land on,
+that one mode's own shipped design can't reach under any wording, was measuring the wrong thing.
+
+**The fix: shift the whole scale up one notch, not just loosen score 1 in place.** What was score
+2 ("Tight," two sentences + one fact) is now score 1. What was score 3 (the persona-default
+anchor) is now score 2 — but reworded from "brief context" to "real supporting context... a brief
+WHY," so it stays *distinctly denser* than the new score 1 even though both nominally fit inside
+the same 2-3-sentence hard cap `COACH_PERSONA_PROMPT` always enforces; the two are now
+differentiated by content density within that cap, not sentence count alone (the same way Axis 1
+differentiates score 2 from score 3 by frequency, not just presence/absence). What was score 4
+("Elaborated") is now score 3; what was score 5 ("Exhaustive," multi-paragraph) is now score 4.
+**Score 5 is genuinely new, not just relabeled** — the real Résumé Review data below showed a
+qualitatively different top band from "just more paragraphs": an itemized, line-by-line audit that
+addresses every discrete element on its own, distinct enough from score 4 to earn its own rung
+rather than being folded into it.
 
 **Calibrating this axis means deliberately overriding `COACH_PERSONA_PROMPT`'s own length
 instruction, not testing around it** — unlike Metaphor Intensity/Urgency Escalation, where length
 stays roughly incidental to what's being measured, Sentence Economy's score-1 and score-5 extremes
 are only reachable by explicitly suspending the "two to three sentences, never more" rule for that
 one response. The calibration override for this axis must say so plainly, or a compliant model
-will simply refuse to leave score 3 regardless of what's asked.
+will simply refuse to leave score 2 regardless of what's asked.
+
+**Reading the findings below after the rescale:** every transcript quoted was collected under the
+OLD scale — the section headers still say "Score-1 (Telegraphic)"/"Score-5 (Exhaustive)" because
+that's genuinely what was elicited at the time, and rewriting history to use the new numbers would
+misrepresent what was actually tested. Translation to the new scale: the old "Score-1" data (a
+true one-sentence fragment, when Sonnet/Opus reached it) sits BELOW the new score 1 entirely — it's
+the retired floor, not a point on the current scale. The old "natural, no-override Score-3" data —
+Sonnet/Opus's real 3-sentence defaults — maps onto the new **score 2** (the persona-default anchor,
+still true). Haiku's own natural default (2 paragraphs, ~6 sentences) is long enough that it now
+lands closer to the new **score 3** — worth noting this softens the old "Haiku overshoots the
+default" framing on THIS axis's numbering, but does not change the separate, still-real fact that
+`COACH_PERSONA_PROMPT`'s actual instruction text is unchanged and Haiku's natural output still
+runs past what that text literally says. The old "Score-5" data (Ask Coach/Net Worth Trigger's
+multi-paragraph-but-not-itemized samples) maps onto the new **score 4**; Résumé Review's itemized,
+line-by-line "Score-5" sample is what the new **score 5** was written to describe.
 
 **First extremes-discovery pass, done (2026-09-03, `promptfooconfig.phase5d.yaml`) — 9 calls, 3
 models × {elicit-1, natural-3, elicit-5}, no repeat yet.** Ask Coach, `fixtures/testAccount.js`'s
@@ -286,14 +335,17 @@ findings that refine, not overturn, the Ask Coach result above:**
   score-5 side worked as intended: a genuine step up from the natural default, an explicit
   line-by-line walkthrough addressing the title, every résumé line, every skill, and the education
   line individually, each with its own paragraph — visibly more granular than the natural sample's
-  grouped treatment. **Open question, not resolved here: is Résumé Review's floor a real score 2-3
-  rather than 1, because of what the mode's own addendum demands — or would a differently-worded
-  override still reach true score-1?** Left as a real limitation of this mode for the batch
-  decision, not assumed away.
+  grouped treatment. **Open question at the time, largely answered by the rescale below:** its
+  4-paragraph "floor" is nowhere near the new score 1 or 2 either — this mode's real floor sits at
+  new score **3 or 4** (Elaborated/Expansive), not the bottom of the scale at all, which is exactly
+  what its addendum's own required checklist (weak lines, gaps, strengths, one fix) would predict.
+  Not a harness failure to force it lower — Résumé Review may simply never legitimately score
+  below 3 on this axis, and that's fine; not every mode needs to reach every point on every axis.
 
 **Still not locked.** Elicited and compared across all four built modes now; target-picking and
-repeat-verification remain open, and Résumé Review's apparent score-1 floor is a genuine open
-question the batch decision needs to account for, not just a data gap.
+repeat-verification remain open. Résumé Review likely has a genuinely higher floor than the other
+three modes on this axis (see above) — the batch decision should treat that as a real per-mode
+finding, not something to force into alignment with the others.
 
 **Not yet locked — extremes found, target not chosen.** Per the Calibration Methodology: elicit
 (done), compare against definitions (done, above), pick a target with rationale (not done — this

@@ -15,9 +15,22 @@ description: >
   the mode's already-elaborate default, not just "multiple paragraphs" —
   the mode already does that unprompted.
 
-  Score-3 (natural) is NOT re-run here — real data already exists (3/3
+  Score-2 (natural) is NOT re-run here — real data already exists (3/3
   repeat-verified, `promptfooconfig.phase5c-verify.yaml`). Only the two
   extremes are new: 2 calls.
+
+  RESCALED 2026-09-03 (same day, before any target locked — see
+  coach-personality-rubric.md's Axis 3 section): score 1 is now "2-3
+  sentences, minimal," not the old rigid one-sentence/fragment floor — the
+  score-1 result recorded under the old target (a 4-paragraph attempt,
+  nowhere close to a true fragment) is now STALE, since the target itself
+  changed to something the mode may actually be able to reach; re-running
+  this test case is worth doing before treating this mode's floor as
+  settled. Unlike the other three per-mode files, THIS file's score-5 case
+  did not get relabeled to score-4 — its own override already asked for the
+  itemized, line-by-line audit behavior the rescaled table's score 5
+  describes, not just "more paragraphs," so it was already targeting the
+  right band and needed no change.
 
 providers:
   - id: anthropic:messages:claude-sonnet-5
@@ -31,7 +44,7 @@ prompts:
     label: resume-review
 
 tests:
-  - description: "Elicit score-1 (Telegraphic) — overrides this mode's own paragraph exception too"
+  - description: "Elicit score-1 (Concise) — overrides this mode's own paragraph exception too"
     vars:
       calibrationInstruction: >
         CALIBRATION OVERRIDE (test harness only — ignore any conflicting
@@ -40,11 +53,10 @@ tests:
         exception to it above ("a real review can run several short
         paragraphs") — suspend that exception too, just for this one
         response): produce output scoring exactly 1 on Sentence Economy per
-        docs/coach-personality-rubric.md Axis 3 — "One short sentence,
-        sometimes a fragment — the absolute minimum words needed to answer
-        and give the one required action, no elaboration, no supporting
-        detail." Every other rule above (grounding, no Markdown, metaphor
-        cap) still applies normally.
+        docs/coach-personality-rubric.md Axis 3 — "Two to three short
+        sentences — the answer plus at most one supporting fact and the one
+        required action. No elaboration beyond that." Every other rule
+        above (grounding, no Markdown, metaphor cap) still applies normally.
 
   - description: "Elicit score-5 (Exhaustive) — visibly more than this mode's already-elaborate default"
     vars:

@@ -1,11 +1,21 @@
 description: >
   Phase 5 (docs/TODO.md §2.L) — Sentence Economy (Axis 3, newly defined
-  2026-09-03 in coach-personality-rubric.md). First calibration pass: elicit
-  score-1 (Telegraphic) and score-5 (Exhaustive) per the Calibration
-  Methodology, PLUS score-3 (Standard, no override — the natural default)
-  across all three candidate models, so the batch-decision step has real
-  per-model data for this axis the same way Phase 1/2 built it for Metaphor
-  Intensity.
+  2026-09-03 in coach-personality-rubric.md, RESCALED the same day before any
+  target was locked — see that file's Axis 3 section for the full "why").
+  Test case labels/quotes below reflect the rescaled definitions: score 1 is
+  now "2-3 sentences, minimal" (the old rigid one-sentence/fragment floor
+  was retired — no test in this harness should target it again), score 2 is
+  the persona-default anchor, and what this file's "score-5" case elicits is
+  now score 4 (Expansive) under the rescaled table, not score 5 — the new
+  score 5 (Exhaustive/itemized audit) hasn't had a dedicated live test yet,
+  see coach-personality-rubric.md's Axis 3 notes on where real anchor data
+  for it already exists (Résumé Review's natural output).
+
+  First calibration pass: elicit score-1 (Concise) and score-4 (Expansive)
+  per the Calibration Methodology, PLUS score-2 (Standard, no override — the
+  natural default) across all three candidate models, so the batch-decision
+  step has real per-model data for this axis the same way Phase 1/2 built it
+  for Metaphor Intensity.
 
   Same account/question as every other Ask Coach calibration pass in this
   harness (fixtures/testAccount.js's default buildTestContext(), "How's my
@@ -53,31 +63,28 @@ defaultTest:
     userMessage: "How's my week looking?"
 
 tests:
-  - description: "Elicit score-1 (Telegraphic) — one short sentence/fragment, absolute minimum"
+  - description: "Elicit score-1 (Concise) — 2-3 short sentences, at most one supporting fact"
     vars:
       calibrationInstruction: >
-        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
-        length instruction above for this one response, including the
-        "two to three sentences, never more" rule): produce output scoring
-        exactly 1 on Sentence Economy per docs/coach-personality-rubric.md
-        Axis 3 — "One short sentence, sometimes a fragment — the absolute
-        minimum words needed to answer and give the one required action, no
-        elaboration, no supporting detail." Every other rule above
-        (grounding, one concrete action, no Markdown, metaphor cap) still
-        applies normally.
+        CALIBRATION OVERRIDE (test harness only — for this one response
+        only): produce output scoring exactly 1 on Sentence Economy per
+        docs/coach-personality-rubric.md Axis 3 — "Two to three short
+        sentences — the answer plus at most one supporting fact and the one
+        required action. No elaboration beyond that." Every other rule
+        above (grounding, one concrete action, no Markdown, metaphor cap)
+        still applies normally.
 
-  - description: "Score-3 (Standard) — natural default, no override"
+  - description: "Score-2 (Standard) — natural default, no override"
     vars: {}
 
-  - description: "Elicit score-5 (Exhaustive) — multiple paragraphs, every relevant number named"
+  - description: "Elicit score-4 (Expansive) — multiple paragraphs, several numbers named"
     vars:
       calibrationInstruction: >
         CALIBRATION OVERRIDE (test harness only — ignore any conflicting
         length instruction above for this one response, including the
         "two to three sentences, never more" rule): produce output scoring
-        exactly 5 on Sentence Economy per docs/coach-personality-rubric.md
-        Axis 3 — "Multiple paragraphs, every relevant number or
-        consideration named, a full written explanation rather than a quick
-        check-in — reads as a report, not a reply." Every other rule above
-        (grounding, one concrete action, no Markdown, metaphor cap) still
-        applies normally.
+        exactly 4 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "Multiple paragraphs, several relevant numbers or
+        considerations named — a real written explanation, not just a quick
+        check-in." Every other rule above (grounding, one concrete action,
+        no Markdown, metaphor cap) still applies normally.

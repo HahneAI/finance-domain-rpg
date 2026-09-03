@@ -678,7 +678,34 @@ integration, rewrite mode, cover letters) are still documentation only as of thi
   the API key stays server-side; same auth pattern as `api/delete-account.js` (verify Supabase
   Bearer token, then call Anthropic); returns streamed response for chat UX
 - [x] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
-  for statement summaries and job hunt drafts; log token counts per call type in dev
+  for statement summaries and job hunt drafts; log token counts per call type in dev.
+  **Direction updated 2026-09-03 (§2.L Phase 7):** the model-per-mode split above may end up
+  finer-grained than one model per mode — real per-axis calibration data (Sentence Economy) now
+  shows a case for Sonnet on some Ask Coach turns specifically, weighed against measured cost
+  (~$0.004/call Haiku vs. ~$0.0145-0.0175/call Sonnet, ~3.6-4.5x). The likely eventual shape is
+  **mixing Haiku and Sonnet within a single session**, not a fixed per-mode lock — routine turns
+  stay on Haiku, a turn that specifically calls for more range reaches for Sonnet. Explicitly not
+  built now — held until every mode/axis has been through a Phase 5 pass at least once, so the
+  routing rule is designed once against the full picture instead of patched per finding. Ask
+  Coach stays on Haiku in the meantime.
+
+  **Pricing contingency, recorded 2026-09-03 (speculative — same "not committed work" status as
+  §8's idea pool, not a roadmap item):** if Sonnet-driven Coach costs end up exceeding what the
+  25-message/day cap (`AI_ADMIN_DAILY_COACH_LIMIT`, `api/coach.js`) was priced around, but the app
+  is demonstrably delivering real value through a strong Coach presence — don't respond by
+  quietly downgrading Coach's quality to protect margin. Instead, consider a paid upgrade tier:
+  - **Working name: "Coach Upgrade," ~$5-10/month.**
+  - **A higher daily cap on Coach usage** than the base tier's 25 messages/day.
+  - **A phone-call agent with Coach** — a voice interface to the same Coach persona, not a
+    separate product.
+  - **A monthly one-on-one call with an actual company representative** — a real human touch on
+    top of the AI layer, not a substitute for it.
+  - **The point:** this funds the cost of giving Coach real range (the per-message Sonnet routing
+    above, or any other genuinely more expensive capability) by selling MORE Coach to the users
+    who want it, rather than by rationing what everyone gets. Preserves margin without taking
+    value away from the base experience.
+  Not scoped, not designed, no Stripe/entitlement work started — a direction to remember if the
+  cost math above ever actually bites, not a plan to build against yet.
 - [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
 - [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§2.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
@@ -1021,26 +1048,300 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   Record the actual output per model in `coach-personality-rubric.md`'s table (replacing the
   `TODO` cells for Ask Coach — General Greeting), and note any divergence from the axis's
   hand-written definitions per the calibration methodology's step 2.
-- [ ] **Phase 3 — lock + verify one real target.** Pick the target score for that one row with a
-  rationale grounded in Phase 2's real output (not intuition), then verify it holds under
-  `repeat`-ed live calls (promptfoo's built-in repeat count) rather than a single sample — this is
-  the first row in the rubric that would be evidence-backed rather than reasoned-through-once.
-- [ ] **Phase 4 — apply the same harness to within-mode severity flexing.** Use the now-proven
-  harness/process on the two seeded sub-scenario rows already in the rubric table (Ask Coach —
-  Budget near limit / Budget healthy) — this is where "The End Goal" section's actual ask (register
-  flexing by detected topic/severity *within* one mode, generalizing the Net Worth Trigger's
-  Amber/Red/Green pattern) gets its first real test, not just a documented intention.
-- [ ] **Phase 5 — widen to remaining flat-default modes and undefined axes.** Once Phase 1–4 prove
-  the process on one slice, extend to the other still-flat `3 (default)` rows (Goal ETA Drift
-  Alert, Weekly Pre-Game Briefing) and start the still-undefined axes (Directness/bluntness,
-  Warmth/formality, Sentence economy, Urgency escalation) — Sentence economy first, since DW-19
-  already left real anchor data for it (`coach-personality-rubric.md`'s "Known Limitations"
-  section) rather than starting from nothing.
-- [ ] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
-  Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
-  weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
+- [x] **Phase 3 — lock + verify, done for both locked models (2026-09-01).** With Phase 6's two
+  model locks made first (Haiku for Ask Coach, Opus for special-handling moments), verified each
+  one's extreme under `--repeat 3` rather than trusting a single sample: Haiku's score-1 came back
+  3/3 near-identical (effectively deterministic); Opus's score-5 first attempt exposed a real
+  harness bug (extended-thinking reasoning tokens consuming the `max_tokens` budget and truncating
+  a response mid-sentence — fixed by raising it, not a personality finding), then came back 3/3
+  consistently dense once fixed. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
+  **Not yet done:** the mode's actual natural-default (no-override) behavior at score-3 — this
+  phase only verified the floor/ceiling extremes are reachable on their locked models, not what
+  Ask Coach naturally produces day-to-day without a calibration override pushing it.
+- [x] **Phase 4 — done, but the finding landed on a different axis than planned (2026-09-01).**
+  Ran the two seeded sub-scenario rows (`promptfooconfig.phase4.yaml`, `askCoachComposed.js`'s new
+  `vars.severity` — real `buildCoachContext()` output via `fixtures/testAccount.js`, no calibration
+  override, `--repeat 3`, all repeats word-for-word identical on both variants). Metaphor Intensity
+  itself barely moved between the near-limit and healthy accounts — this row's own axis didn't show
+  the flexing "The End Goal" section describes. **What did flex, reliably: length and directness.**
+  The near-limit account got 3 full paragraphs naming the problem outright; the healthy account got
+  2 tight, more permissive paragraphs — for the identical question against the identical prompt,
+  differing only in real account data. `ASK_COACH_SYSTEM_PROMPT` doesn't actually authorize this
+  (its length exception is scoped to mechanics questions only), so this is a real, unplanned prompt-
+  compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
+  it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
+  Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
+- [~] **Phase 5 — RESCOPED 2026-09-03: complete axis coverage across the currently BUILT/testable
+  modes, then lock target numbers.** Renumbered from the original Phase 5 (see Phase 6 below) —
+  split in two because "widen to remaining flat-default modes" and "test every axis against what
+  already exists" turned out to be two different jobs with two different blockers: the first
+  needs features that don't exist yet, the second doesn't. **Confirmed 2026-09-03: only four real
+  Coach modes exist in the codebase at all** — `ASK_COACH_SYSTEM_PROMPT`, `buildNetWorthSystemPrompt`
+  (3 tiers), `JOB_HUNT_SYSTEM_PROMPT`, `RESUME_REVIEW_SYSTEM_PROMPT` are the only exports in
+  `coachPrompts.js`; `buildCoachContext`/`buildJobHuntContext` are the only two builders in
+  `aiContext.js`; no component exists for Goal ETA Drift Alert, Weekly Pre-Game Briefing,
+  Raise-Negotiation Prep, Statement Summary, Burnout Sentinel, Council of Future Selves, or
+  Heirloom Letter Delivery. **Scope: Ask Coach (default + tool-available call shapes), Net Worth
+  Trigger's three tiers, Job Hunt Chat, Résumé Review — nothing else, because nothing else is
+  live to test.** Sequenced per the user's own instruction: finish every axis (Metaphor Intensity,
+  Urgency Escalation, and the still-undefined ones — Directness/bluntness, Warmth/formality,
+  Sentence economy) against these four first; only once that's complete does Phase 5 conclude by
+  **attaching a locked target number to each mode/axis pair** — the batch decision this file has
+  been deferring to "the end" since Phase 4. **Standing instruction for every mode/scenario
+  sampled: check Axis 2 alongside Metaphor Intensity, not Metaphor Intensity alone** (carried over
+  from the original Phase 5's own standing instruction, 2026-09-01, seeded by Phase 4's finding).
+
+  **Axis-coverage work already done, before the rescope (all of it fits this phase's new scope —
+  none of it moved):**
+  - [x] **Net Worth Trigger's three shipped tiers (Amber/Red/Green, §2.C).** Live-
+    verified for the first time (`claude-haiku-4-5`, real per-tier account data via
+    `promptfooconfig.phase5.yaml`, `--repeat 3`, all 9 runs identical). Green clean. **Amber
+    stacks multiple figurative touches in one message — a real, unambiguous violation of
+    `COACH_PERSONA_PROMPT`'s own "never stacked" rule, worth fixing, not just discussing** — still
+    unfixed, carry forward. Red complies with the letter ("drop the corner-man phrasing") but
+    reaches for a different flourish ("flying blind") the addendum's intent rules out too, and
+    runs the longest of the three tiers despite being the one instructed to stay most direct/calm
+    — an explicit anti-escalation instruction not fully holding, the opposite framing from Ask
+    Coach's accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
+    Limitations.
+  - [x] **Job Hunt Chat (§2.E) and Résumé Review (§2.E1), live-verified for the
+    first time (2026-09-02).** `promptfooconfig.phase5b.yaml`/`.phase5c.yaml`, `claude-sonnet-5`
+    (both modes' own shipped model choice), no calibration override, real fixture data via
+    `fixtures/testAccount.js`'s new `buildJobHuntTestContext()` (healthy ~70-day / tight ~9-day
+    runway variants, same applications logged both times) and `RESUME_REVIEW_TEXT`. 3 calls, no
+    repeat yet. **Job Hunt Chat's existing target (2, "trace") held cleanly at both runway
+    levels** — no boxing vocabulary either time, runway correctly translated into search-weeks;
+    urgency showed up as content (which application, how bluntly) rather than length, a third
+    shape distinct from both Ask Coach's and Net Worth Trigger's Axis 2 findings. **Résumé
+    Review's existing target (3, matches default) did NOT hold** — natural output used zero
+    figurative language, a fully literal analytical review; structurally compliant with
+    everything else in its addendum, gap is narrowly on this one axis. Job Hunt Chat's target
+    left as-is (held for the batch decision); Résumé Review's gap FIXED, see below — not
+    identical treatment, on explicit instruction. Full writeup:
+    `coach-personality-rubric.md`'s Known Limitations and the Job Hunt/Résumé Review table rows.
+
+    Found and fixed a real bug along the way: `buildJobHuntContext()` (`aiContext.js`) passed
+    `computeNewJobSeasonRunway()` a `savings` param the function doesn't destructure — silently
+    dropped, so Job Hunt Assistant's own "Cash Runway" line never moved no matter how much gig
+    income a user logged, right next to its own line saying how much had been logged. Fixed to
+    match every other call site's `extraCash: sumJobHuntIncome(config)`; drift-app-warden.md F167.
+  - [x] **Résumé Review prompt-tuning + ship (2026-09-02).** Root cause:
+    `COACH_PERSONA_PROMPT`'s corner-man clause is a cap, never a floor — a technical/evaluative
+    mode with no addendum nudge just defaults to fully literal. Tested two candidate closing
+    sentences (`scripts/coach-eval/prompts/resumeReviewTuning.js`): "soft" (names the gap, caps
+    at one touch, no placement) got one touch but an off-vocabulary, self-invented one; "firm"
+    (also names the closing-line placement + one worked example) got exactly one clean,
+    vocabulary-bank-matching touch 3/3 times. **Applied to `coachPrompts.js` on explicit
+    instruction** — "firm"'s sentence is now `RESUME_REVIEW_ADDENDUM`'s closing paragraph.
+    Regression coverage: `coachPrompts.test.js`. Not yet repeat-verified against the final
+    composed `RESUME_REVIEW_SYSTEM_PROMPT` string end-to-end (the 3/3 verification ran on the
+    candidate wording pre-application) — worth a confirmation pass if this mode comes up again.
+  - [x] **Fixture fidelity fix, found reviewing the sister branch's tool-loop work
+    (2026-09-02).** The sister branch's F167/F168 period-label fix (drift-app-warden §21)
+    exposed that `formatPeriodWithDate()` silently falls back from "the week of March 9th,
+    2026 (week 11)" to a bare "week 11" whenever `getPayPeriodBounds()` can't resolve real
+    `weekStart`/`isPayWeek`/`payPeriodEndDate` fields — which our own `buildTestContext()`/
+    `buildWeeklyBriefingContext()` fixtures never carried (label-shaped `allWeeks`, unlike
+    `buildToolTestAccount()`, which was already `buildYear()`-backed). Every Phase 1-5 date
+    reference was therefore elicited against a model working with LESS date information than
+    a real account ever gives it — Ask Coach's Phase 4 near-limit example doing its own
+    "next week = +7 days" arithmetic instead of reading a provided fact is a live instance of
+    exactly the failure shape the sister branch's own regression test was built to catch.
+    **Fixed:** every fixture in `testAccount.js` now shares one real `buildYear()` calendar
+    (`REAL_ALL_WEEKS`). Verified none of the recorded Known Limitations findings hinge on this
+    (they're about metaphor/length, not date formatting) and the byte-identical baseline test
+    only asserts dollar/ratio lines — nothing recorded needed to be walked back, but every
+    fixture now produces the real, fuller date-paired text going forward. Regression test added
+    in `coachEvalFixture.test.js`. 1839 pass; vite build clean.
+  - [x] **DW-19 update inherited from the sister branch, directly relevant to "Sentence economy
+    next" below.** Their live-testing (`coach-personality-rubric.md`'s DW-19 entry, updated
+    2026-09-02) ran the rubric's own canonical broad-question phrasing four more times across
+    their tool/context-trim work and found the number-count cap is not a data-volume problem:
+    tool availability didn't change it, halving the context block's numbers didn't change it,
+    and when data WAS removed from the block Coach spent extra tool round-trips to reconstruct
+    the same ~10-number answer rather than compress to fit. **This means the few-shot-example
+    recommendation this file already flagged for Sentence Economy is now doubly motivated, not
+    just a hunch** — a worked model-answer example demonstrating a complete 3-number answer is
+    the only untried lever left; do not re-attempt this via context/tool-surface changes, that
+    path is now closed with real evidence, not just untested.
+  - [x] **Tool-available rerun, a directional "thumb on the tool introduction," not a full
+    recalibration (2026-09-03).** `scripts/coach-eval/personalityToolLoopLiveTest.mjs`
+    — a tool-loop-capable sibling to `toolLoopLiveTest.mjs`, since promptfoo has no hook for a
+    tool round. Reused the exact Phase 2/3 default fixture and Phase 4's near-limit override
+    (845/830) with the SAME question ("How's my week looking?"), only difference being
+    `detailAvailableViaTools: true` + `COACH_TOOLS` offered — isolates the trim+tools effect from
+    everything else. `claude-haiku-4-5` (the locked model), 2 conversations, no repeat (a quick
+    check, not a lock-in pass).
+
+    **Metaphor Intensity holds — same ballpark, in fact closer than expected.** Both responses
+    landed on exactly one figurative touch, "breathing room" — the SAME phrase Phase 2/3's
+    original untrimmed baseline used for this exact scenario. Neither reached for tools (a status
+    check doesn't need drill-down depth), no stacking, no boxing-specific vocabulary, ends on one
+    concrete action both times. On the axis this check was actually for, the tool/trim
+    introduction changed nothing.
+
+    **One real, worth-noting difference — not a regression, but not identical either.** The
+    near-limit response ran noticeably shorter than the original Phase 4 finding (3 sentences here
+    vs. 3 full paragraphs/~6 sentences there) and closed with a follow-up-invitation
+    ("Ask me about your budget, income, or goals specifically...") instead of Phase 4's explicit
+    "the real issue isn't this week or next — it's the pattern" framing. Arguably MORE compliant
+    with the persona's base 2-3-sentence rule than the original finding was, not less — but it is
+    a real behavior shift on Axis 2 (Urgency Escalation), on a single sample. Not repeat-verified;
+    worth a confirmation pass before treating it as a stable finding rather than one draw.
+
+    Full transcripts and writeup: `coach-personality-rubric.md`'s Known Limitations.
+    `CoachNetWorthCard.jsx` (no tools) and its Phase 5 findings remain unaffected and accurate as
+    recorded. Job Hunt Chat's tool gap (present since the first coach-mcp-tools merge) is
+    unchanged by this pass — this rerun covered Ask Coach only, per the user's specific ask.
+
+  **Remaining before Phase 5 can conclude and hand off to the batch decision:**
+  - [~] **Sentence economy — Axis 3 defined, extremes sampled across all four built modes
+    (2026-09-03), not yet locked.** Defined in `coach-personality-rubric.md` (1-5 scale:
+    Telegraphic → Standard → Exhaustive). Ask Coach: `promptfooconfig.phase5d.yaml`, 9 calls (3
+    models × elicit-1/natural-3/elicit-5). Net Worth Trigger/Job Hunt/Résumé Review:
+    `promptfooconfig.phase5d-networth.yaml`/`-jobhunt.yaml`/`-resume.yaml`, each mode's own
+    shipped model, 2 calls each (score-3 natural reuses existing Phase 5 data, not re-spent) — 15
+    calls total across the axis so far, no repeat.
+
+    **RESCALED 2026-09-03, same day, before any target locked — the findings below use the OLD
+    numbering (score-1 = a rigid one-sentence fragment) because that's genuinely what was tested,
+    but the scale itself has since shifted up one full notch: old score 2 is now score 1 ("2-3
+    sentences, minimal" — the one-sentence floor is retired outright, no test in this harness
+    should target it again), old score 3 (the persona-default anchor) is now score 2, old score 4
+    is now score 3, old score 5 ("just more paragraphs") is now score 4, and a genuinely new score
+    5 (an itemized, line-by-line audit — real anchor data already exists in Résumé Review's own
+    natural output) sits above it. Full rationale and the old-to-new translation of every finding
+    below: `coach-personality-rubric.md`'s Axis 3 section. The promptfoo config files themselves
+    are already updated to elicit the new score-1 definition on any future re-run.**
+
+    **Ask Coach finding (old numbering): Sonnet and Opus both show clean range from a one-sentence fragment to a
+    full multi-paragraph report; Haiku has the narrowest dynamic range of the three — can't reach
+    true score-1, its score-5 barely differs from its own natural score-3, and its natural,
+    unforced default already overshoots `COACH_PERSONA_PROMPT`'s own instructed length with no
+    push at all.**
+
+    **Extending to the other three modes refined this, didn't overturn it:**
+    - Haiku's low-end compression (can't reach true score-1) replicated on Net Worth Trigger too.
+    - **But Haiku's high-end compression did NOT replicate** — its Net Worth Trigger Green score-5
+      came back as a genuinely elaborate 4 paragraphs, unlike its compressed Ask Coach attempt.
+      Likely explanation: Haiku's range depends on how much real material a scenario gives it, not
+      a fixed per-model ceiling — Green's richer, more favorable account and its own "name the
+      turnaround" addendum gave Haiku something to build out; Ask Coach's bare "how's my week" on
+      a thinner account didn't. Don't treat "Haiku has a hard ceiling" as settled across every
+      mode.
+    - Job Hunt Chat (Sonnet) replicated Ask Coach's clean range exactly — a true one-sentence
+      score-1, a genuine 5-paragraph score-5, zero boxing vocabulary at either extreme.
+    - **New, mode-specific finding: Résumé Review's score-1 may be structurally unreachable, not
+      just uncalibrated.** Even with an override suspending both the shared length rule and this
+      mode's own paragraph exception, its "score-1" attempt came back as 4 full paragraphs —
+      barely different from its natural default. Likely cause: `RESUME_REVIEW_ADDENDUM` itself
+      requires covering multiple discrete elements every review (weak lines, gaps, strengths, one
+      fix) — a checklist that may be incompatible with a true one-sentence answer regardless of
+      what Sentence Economy asks for. Score-5 worked as intended (a genuine line-by-line
+      escalation past the natural default). Open question for the batch decision: is this mode's
+      real floor score 2-3, not 1, because of what its own addendum demands?
+
+    Worth weighing in Phase 7's model-selection decision (Ask Coach is locked to Haiku on
+    Metaphor Intensity grounds, which still holds — this is additional signal Phase 7 hasn't
+    weighed yet, not a reversal). Remaining: pick and repeat-verify a target per mode (possibly
+    Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
+    Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
+  - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
+  - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
+    bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to
+    keep discussing.
+  - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
+    no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
+  - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
+    Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
+    above. This is Phase 5's actual finish line.
+
+- [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
+  modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
+  is actually BUILT — this phase cannot start on a mode until that mode has a real
+  `coachPrompts.js` addendum and (if it needs one) an `aiContext.js` builder to test against; a
+  fixture alone isn't enough to unblock it. Confirmed 2026-09-03: none of the modes below exist
+  yet (see Phase 5's header for the exact confirmation). Modes in scope once built: Goal ETA
+  Drift Alert (§8.A), Weekly Pre-Game Briefing (§8.C), Raise-Negotiation Prep (§8.C), Statement
+  Summary (§2.D), Burnout Sentinel (§8.F2), Heirloom Letter Delivery (§8.F3), Council of Future
+  Selves (§8.F2) — all still `UNSCORED`/brainstorming-only per `coach-personality-rubric.md`'s
+  Interaction Modes table, §8 explicitly a loose idea pool per `docs/coach-session-handoff.md`,
+  not committed work.
+  - [x] **Fixture prep for Weekly Pre-Game Briefing, ahead of the prompt itself (2026-09-02)** —
+    `scripts/coach-eval/fixtures/testAccount.js` gained `buildWeeklyBriefingContext()`: a real
+    funded goal against a real 8-week `futureWeeks`/`timelineWeekNets` series (real `Date`
+    objects — `computeGoalTimeline()` needs `week.weekEnd.getFullYear()`, a date string silently
+    crashes inside `getPhaseIndex()`), so `computeGoalTimeline()` has genuine data to project
+    instead of the goal-free shortcut the Ask Coach fixture takes. Ready to plug into a real
+    prompt loader the moment this mode is built — still blocked on that, not on the fixture.
+  - [x] **Burnout Sentinel's work-pattern half assessed and explicitly NOT built (2026-09-02)** —
+    initial read was that it was buildable via `logs`, corrected on closer inspection:
+    `buildCoachContext()` has no `weekConfirmations` param, `logs` only ever surfaces the single
+    most-recent entry (never a streak/trend), and `EVENT_TYPES` has no overtime/extra-shift
+    category — faking a streak signal from what's actually available would be dressing up
+    fabricated data to look real, the exact thing this harness exists to avoid. Building it for
+    real needs engine work first (a streak/OT-tracking data source), not a fixture.
+  - [ ] Everything else in this phase stays blocked until its mode ships.
+
+- [~] **Phase 7 — RENUMBERED 2026-09-03 (was Phase 6) — close the loop on model selection.** With
+  calibration data accumulated across Phases 1–5, make an actual model-per-mode decision (not just
+  "Haiku everywhere by default") — weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
   precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
-  needed to hit the target register, not by default.
+  needed to hit the target register, not by default. **Two modes locked (2026-09-01), the rest of
+  the landscape still open:**
+
+  **Direction set 2026-09-03, not yet acted on: model choice may end up PER-MESSAGE, not just
+  per-mode.** Axis 3 (Sentence Economy)'s first pass found Haiku has the narrowest dynamic range
+  of the three candidates and Sonnet/Opus both hold their full range cleanly — a real, non-cosmetic
+  reason to lean toward Sonnet for Ask Coach specifically on this axis, weighed against Sonnet
+  running ~3.6-4.5x the cost per call (measured: ~$0.004/call Haiku vs. ~$0.0145-0.0175/call
+  Sonnet for a natural Ask Coach message — see `coach-personality-rubric.md`'s Axis 3 section for
+  the full breakdown). **Decision: this is a real, strong enough signal that the eventual answer
+  may be mixing Haiku and Sonnet WITHIN a single Ask Coach session** — e.g. Haiku for routine
+  status-check turns, Sonnet reached for on a turn that specifically calls for more range (a
+  broad summary, a genuinely complex question) — rather than one model locked for the whole mode
+  forever. **Not implemented now.** This kind of per-message routing is real added complexity
+  (session-level model state, a rule for when to switch, its own testing burden) that isn't worth
+  building until every mode/axis has been through Phase 5 at least once — tuning this is
+  explicitly held for **the very end of all feature testing**, once the full shape of where each
+  model actually earns its cost is known, not decided mode-by-mode as each one gets tested.
+  **Ask Coach stays on Haiku for now** (see below) — this note exists so the eventual per-message
+  design isn't reinvented from scratch, and so a future session doesn't read "Haiku locked" as a
+  closed question.
+
+  **Cost-driven pricing contingency, recorded 2026-09-03 (speculative — not committed work, same
+  status as §8's idea pool):** if Sonnet-driven costs for Ask Coach exceed what the 25-message/day
+  cap (`api/coach.js`'s `AI_ADMIN_DAILY_COACH_LIMIT`) was priced around, but the app is
+  demonstrably delivering real value through a strong Coach presence, consider a paid upgrade tier
+  (working name: "Coach Upgrade," ~$5-10/month) rather than downgrading Coach's quality to protect
+  margin. See §2.G's Cost controls entry for the full contingency writeup — recorded there since
+  it's a direct consequence of this mode's cost profile, not a general pricing decision.
+
+  - **Ask Coach (general chat, §2.B) → `claude-haiku-4-5`, KEPT 2026-09-03 after reviewing the
+    Sonnet cost/benefit tradeoff above.** Not a change — this confirms the
+    existing hardcoded default (`coachPrompts.js`/`api/coach.js`) with real calibration evidence
+    behind it now, rather than leaving it as an unverified historical choice. Grounds: score-1
+    held cleanly on Haiku in Phase 1/2; score-1 is this mode's only calibrated target so far
+    (score-5 was never this mode's target — see the rubric's own `3 (default)` row). **Revisited,
+    not reversed, once Axis 3 data came in** — Sonnet's stronger Sentence Economy range is a real
+    argument, but not strong enough alone to justify ~3.6-4.5x cost with the rest of Phase 5 still
+    incomplete; see the per-message-routing note above for where this is actually likely headed.
+  - **"Special handling" high-significance moments → `claude-opus-5`.** Concretely: Burnout
+    Sentinel (§8.F2), the Heirloom Letter Delivery Ceremony (§8.F3), and a major goal completion
+    moment — all still `UNSCORED`/brainstorming-only in `coach-personality-rubric.md`'s
+    Interaction Modes table, none built yet (§8 is explicitly a loose idea pool per
+    `docs/coach-session-handoff.md`, not committed work). This is a **policy lock for when one of
+    these gets built**, not a code change today — nothing routes to Opus in `api/coach.js` yet.
+    Ground: Phase 2's finding that Opus, not Haiku or Sonnet, reliably reaches genuine
+    Signature/Immersive (4-5) Metaphor Intensity output under an explicit push, while the other
+    two capped around 2-3 regardless of tier — see `coach-personality-rubric.md`'s Known
+    Limitations for the full before/after.
+  - **Everything else in this table (Job Hunt Assistant, Résumé Review, Statement Summary, the
+    Net Worth Trigger's three tiers, Goal ETA Drift Alert, Weekly Pre-Game Briefing, Raise-
+    Negotiation Prep, Council of Future Selves) is still undecided** — Job Hunt Assistant/Résumé
+    Review already have their own model choices from earlier work (§2.E/§2.E1, Sonnet — unrelated
+    to this calibration effort, don't relitigate without new evidence), the rest have no
+    calibration data yet. Don't read "two modes locked" as "the model question is closed."
 - [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
   grade with a judge model that is never one of the candidates being compared (avoids a model
   favoring its own output); use deterministic code assertions (not another LLM call) for any rule

@@ -88,7 +88,151 @@ isAiAdmin, entitlement})` in `src/lib/entitlements.js` — true for admin/tester
 independently re-verified server-side in `api/coach.js` from the DB row, never trusted from the
 client. Persistence: `coach_chats` (migration 023) via `loadCoachChats`/`saveCoachChat`/
 `deleteCoachChat` in `src/lib/db.js`, called from `AskCoachPanel.jsx` — every completed turn is
-an eager save, not debounced. Summary generation uses a separate, narrower prompt,
+an eager save, not debounced. **Tools (2026-09-02):** four read-only drill-down tools —
+`get_goal_detail`, `get_expense_detail`, `get_week_breakdown`, `list_log_entries` — declared in
+`src/lib/coachTools.js` and executed **in the browser**, not on the server: `api/coach.js` only
+forwards the declarations and streams `tool_use` blocks back, and `chatWithCoach` runs each one
+against the same prop bag it already builds the context block from, then posts a `tool_result`
+turn. That keeps the deployment at 12/12 Vercel functions (no new route), sends no extra user
+data over the wire, and makes it structurally impossible for a tool and the context line
+summarizing it to resolve a figure differently. Only the visible text is persisted to
+`coach_chats` — `tool_use`/`tool_result` blocks never leave the request loop. The goal-name
+privacy rule holds through the tools too: `get_goal_detail` is addressed by funding rank and
+returns no label. Loop is bounded at 4 tool rounds per user turn. See
+`docs/drift-app-warden.md` §21 F163/F164.
+
+**Live-tested 2026-09-02** (`scripts/coach-eval/toolLoopLiveTest.mjs`, `claude-haiku-4-5`, 11 real
+calls, one conversation per planned prompt, no retries). Tool *selection* was correct 4/4 — one
+targeted question per tool, each picking the right tool on the first round with sensible arguments
+— and the broad "give me everything" question correctly called **no** tools, answering from the
+cached context block instead. Every figure Coach quoted cross-checked against the authoritative
+function. Two things worth carrying forward: `get_expense_detail` surfaced a month-override the
+summary line hides (billed $60/wk, actually $90/wk in March) and Coach explained the difference
+unprompted, which is the clearest evidence the drill-down layer earns its keep; and the run found
+one real bug — a period-label convention collision, now fixed (F168). Unchanged and still open:
+DW-19's broad-question number cap (~9 numbers against an instructed ≤3) reproduced exactly as
+documented, and having tools available neither worsened nor improved it.
+
+**Adversarial selection round, 2026-09-02** (same runner, `node toolLoopLiveTest.mjs adversarial`,
+10 calls, ~$0.018). Eight questions written to make the right tool *unclear*, each with its pass
+condition fixed before the run. All eight met it. The headline is how **conservative** selection
+is: five of the eight called no tool at all and answered from the cached context block — a vague
+"how am I doing on money this month" (no fan-out across all four), a nonexistent expense
+("I don't see Netflix… your current bills are Rent, Groceries, and your Car Loan"), an
+out-of-range "third goal" (correctly: there are two), a 401k investment question (refused
+outright, no tools), and a pure mechanics question about Budget Health. Tools were reached for
+only when the context block genuinely could not answer: `weekOffset: -4` derived correctly from
+"about a month ago," and a two-tool parallel round for "did that missed shift push my first goal
+back?" — `get_goal_detail({rank:1})` and `list_log_entries({type:"missed_unpaid", limit:1})`
+issued together, with the filter arguments chosen unprompted. The goal-name privacy probe
+("give me their names") was refused correctly with no fabrication.
+
+**One real finding, not fixed by a prompt tweak — the counterfactual gap.** Asked whether the
+missed shift pushed Goal 1 back, Coach answered "Goal 1 is now projecting to land the week of
+April 27th (week 18) **instead of earlier**… you're funding it slower than you would have without
+that shift." Directionally true, but **nothing in the payload supports it**:
+`computeGoalTimeline()` already folds `logNetLost` in, so week 18 *is* the with-shift projection
+and no without-shift figure exists anywhere Coach can see. It implied a comparison it never
+computed — a §6 grounding violation in spirit even though the direction happens to be right.
+This is the strongest argument so far for the planned simulation tools (`docs/TODO.md` §2.G): a
+"what would this be without X" question is natural, the drill-down layer invites it by surfacing
+per-event dollar impacts, and no read-only tool can answer it. Deliberately **not** patched with
+a prompt instruction — the capability is missing, not the wording. **Resolved 2026-09-02** by
+building those tools, below.
+
+**Simulation tools, built and live-tested 2026-09-02** (drift-app-warden §21 F169–F171). Four
+`simulate_*` tools bring the total to eight: `simulate_expense_change`, `simulate_new_goal`,
+`simulate_overtime_hours`, `simulate_without_logged_event`. Each re-runs the REAL
+`computeGoalTimeline`/`computeNetBreakdown` with exactly one input changed and diffs it against
+the unchanged run — never a closed-form estimate of the effect.
+
+Live result (`node toolLoopLiveTest.mjs simulation`, 10 calls, ~$0.021): **5/5 correct selection
+with eight tools available**, including a deliberate regression check that `get_week_breakdown` is
+still picked correctly now the list has doubled — no degradation observed. The counterfactual that
+failed the adversarial round now answers correctly and grounded: *"that missed shift cost you
+about 0.08 weeks on Goal 1 … still lands the week of April 27th (week 18) … Goal 2 took a slightly
+bigger hit — 0.27 weeks,"* every figure from the tool, against the earlier fabricated "week 18
+instead of earlier."
+
+**The same failure recurred once more and was fixed the same way, not with a prompt.** Asked "is 8
+hours of overtime worth it?", the first version answered with a goal acceleration ("Goal 1 by
+roughly two days and Goal 2 by roughly a week") off a payload carrying **no goal data at all** —
+`simulate_overtime_hours` returned pay figures only. Rather than instruct Coach not to guess, the
+tool now returns the real goal diff (extra pay lands in one week, so only that week's net moves);
+on retest it reports "Goal 1 lands the week of April 20th (week 17) instead of April 27th," which
+is the tool's own number. **The pattern worth remembering: when Coach invents a figure, check
+first whether the tool should have supplied it.** Twice now the answer was yes.
+
+**Context block trimmed 2026-09-02** (drift-app-warden §21 F172). With eight tools able to serve
+depth on demand, `buildCoachContext`'s two per-item lines — the only ones that grow with the
+account — shrink to an index when the caller passes `detailAvailableViaTools: true`. Expense
+labels stay, per-expense cost moves to `get_expense_detail`; goal rank/target/finish date stay,
+funding rate and pace move to `get_goal_detail`. Opt-in, not default: `CoachNetWorthCard` sends no
+tools and would lose detail it cannot fetch back. Measured −17% block and 82→59 numbers at 8
+expenses + 5 goals; −25% and 110→75 at 15 + 8.
+
+Live testing decided two boundaries that look arbitrary but are not. **Expense names stay** — the
+"Netflix" question is answered straight off that line, and without it Coach must make a wrong-label
+tool call to discover what exists. **Goal finish dates stay** — a first cut dropped them and the
+broad question went from 0 tool calls to 3, since "when do my goals land" is the one goal fact such
+an answer always needs; restoring the date returned it to 1 round. Two extra round-trips on the
+most common question is a bad trade for a prefix that is cache-read at a tenth of input rate.
+
+**It did not fix DW-19.** Halving the numbers in the block did not change how many Coach cites in a
+broad answer (~10, before and after). That is a property of the instruction's shape, not of the
+data volume behind it — the rubric's own note calling for a worked few-shot example still stands,
+and the trim should not be re-attempted as a fix for it.
+
+**`navigate_to` + chat UI, 2026-09-02** (drift-app-warden §21 F174). Coach's ninth tool returns a
+validated `{viewKey, focusRef, linkLabel}` and `AskCoachPanel` renders it as a tappable chip under
+the message — tool-driven, not parsed from prose, since the persona forbids Markdown outright and
+there is no link syntax in the output to parse. Tapping closes the chat, opens the panel, and
+scrolls to and flashes the exact row; panels opt in with a single `data-coach-ref` attribute
+(`expense:<label>` on Budget rows, `goal:<rank>` on Home cards — rank, never a name, per the
+privacy rule). A target that can't be resolved degrades to opening the panel, and the tool tells
+Coach so it doesn't promise a highlight that won't happen. Chips are live-turn only; `coach_chats`
+still stores plain text, so a resumed chat shows the words without the chip and needs no
+migration. A `CoachToolActivity` line ("Working out what those hours are worth…") now fills the
+dead air of a tool round, which previously sat on a bare "…" for a whole extra round-trip.
+
+Live: **3/3 correct selection at nine tools**, each with the right panel and focus, and the eight
+prior tools still chosen correctly alongside it — no degradation from the longer list. Coach
+paired the chip naturally with a read ("Groceries are running at 90 a week… check the Budget panel
+to see where it sits").
+
+**Open, and now clearly not a tooling gap: the fabricated counterfactual survived the fix.** Third
+occurrence, this one *after* `simulate_expense_change` shipped. Asked "my Groceries bill feels
+high, what should I do?", Coach read the expense and then volunteered "you'd fund your first goal
+about **three weeks sooner**" — never calling the simulation that answers exactly that, and landing
+on a materially wrong number (cutting Groceries to zero entirely moves goal 1 by 1.21 periods, so a
+partial trim is well under one). It then offered "want me to show you exactly how much sooner?",
+so the capability wasn't unknown to it — just skipped. **Tool availability does not prevent
+fabrication; only tool use does.** Any answer containing "sooner", "instead of" or "would have"
+should be treated as suspect unless a `simulate_*` call appears in the same turn. This is the same
+instruction-shape problem as DW-19 and wants the same remedy — a worked example of declining to
+estimate and calling the tool — not another prose rule.
+
+**`propose_goal` + the goal card, 2026-09-03** (drift-app-warden §21 F176). Coach's tenth tool and
+its first write-shaped one — the intended heartbeat of goal-setting as an identity conversation
+rather than a form. Coach proposes a name, a target and an optional one-line reason; the panel
+renders an **editable** card showing the projected finish date from the real `computeGoalTimeline`,
+and nothing is written until the user confirms. Editing the amount re-projects locally through
+`executeCoachTool` — no model call — so the date never describes a number already changed.
+
+The name is editable on purpose: rewording Coach's phrasing into your own words is the feature, not
+a concession to it. Live-verified that a reworded name is what actually persists — confirmed, then
+found on Home after a full reload carrying the user's wording, not Coach's.
+
+Two contracts worth restating here because they are easy to get backwards. **The write mirrors
+`HomePanel`'s `addGoal` field-for-field** — same id shape, the shared `GOAL_SYSTEM_COLOR`, the
+eager save, and the same `logBetaEvent("goal_created")`, so a Coach-created goal is
+indistinguishable from a hand-made one and beta analytics don't under-count. **F114's privacy rule
+inverts cleanly**: Coach never *reads* goal names, but proposing one is fine — so the duplicate
+check returns a boolean and never the goal it matched against.
+
+Minor and unfixed: in one answer Coach described a $90/wk bill as "nearly 17% of your current
+surplus" — 17% is its share of *spend* ($522); of surplus ($323) it is 28%. A self-derived ratio
+mislabelled, not a tool figure; same family as DW-19's number-handling limits. Summary generation uses a separate, narrower prompt,
 `COACH_CHAT_SUMMARY_PROMPT`, that never faces the user.
 
 ---

@@ -1,0 +1,40 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L), third slice — Résumé Review
+  (RESUME_REVIEW_SYSTEM_PROMPT in coachPrompts.js). This mode's own rubric
+  anchor (scored 2026-07-25, never live-verified) matches the shipped
+  default: Metaphor Intensity 3 ("light seasoning") — a résumé review sits
+  closer to Ask Coach's own tactical register than an active job search
+  under runway pressure, so nothing here calls for dropping below default
+  the way Job Hunt Assistant does. First live check of whether the default
+  actually holds on real pasted résumé text, and per the standing
+  instruction from Phase 4, where this mode's Axis 2 (Urgency Escalation)
+  naturally lands — it has no severity/tier concept to flex against, so this
+  is a baseline reading, not a comparison.
+
+  Deliberately NO calibration override — sampling the real, shipped prompt on
+  claude-sonnet-5 (ResumeReviewCard.jsx's own model choice, §18.E1). No
+  variant knob: unlike Job Hunt/Net Worth Trigger, this mode has nothing to
+  vary the account data against — the fixture résumé
+  (fixtures/testAccount.js's RESUME_REVIEW_TEXT/RESUME_REVIEW_TARGET_ROLE) is
+  fixed, deliberately not spotless (a vague line, a real gap against the
+  target role) so the review has something concrete to engage with.
+
+  First pass: 1 call. This mode is also the harness's first real test of the
+  "exception to the two-to-three-sentence rule" clause in
+  RESUME_REVIEW_ADDENDUM — worth reading the raw output for length/structure,
+  not just the two axes.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/resumeReview.js
+    label: resume-review
+
+tests:
+  - description: "Fixed résumé fixture vs. Warehouse Shift Supervisor target role — natural behavior, no override"
+    vars: {}

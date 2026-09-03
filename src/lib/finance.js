@@ -614,8 +614,7 @@ export function buildYear(cfg, baseRateHistory = null) {
     const nonWeekendH = totalHours - weekendHours;
     const regWkndH = Math.max(0, Math.min(weekendHours, effectiveOtThreshold - nonWeekendH));
     const otWkndH  = weekendHours - regWkndH;
-    const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
-    const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
+    const nightDiffHr = resolveNightDiffPerHour(cfg);
     // Point-in-time baseRate (TODO §1.D / §3 narrow slice — see resolveBaseRateForWeek):
     // a rate change only recomputes weeks from its effective date forward; weeks before it
     // keep resolving to whatever baseRate was actually in effect at the time.
@@ -662,13 +661,8 @@ export function buildYear(cfg, baseRateHistory = null) {
     const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
     const k401ActivationDate = k401Start ?? benefitsStart;
     const has401k = active && (!k401ActivationDate || weekEnd >= k401ActivationDate);
-    const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
-    // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
-    const effectiveMatchRate = cfg.employerPreset === "DHL"
-      ? dhlEmployerMatchRate(cfg.k401Rate)
-      : cfg.k401MatchRate;
-    const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
-    const taxableGross = active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0;
+    const { k401kEmployee, k401kEmployer, taxableGross } =
+      deriveWeekPayComponents(cfg, { grossPay, benefitsDeduction, has401k, active });
     const isTaxed = active && taxedSet.has(idx);
     if (!adminRotationTag) adminRotationTag = rotation;
     const payPeriodEndDate = getPayPeriodEndDate(weekStart, cfg.payPeriodEndDay ?? 0);
@@ -708,26 +702,155 @@ export function buildYear(cfg, baseRateHistory = null) {
   return weeks;
 }
 
-export function computeNet(w, cfg, extraPerCheck, showExtra) {
+/**
+ * The one place "which withholding rates apply to this week" is answered.
+ *
+ * Two field families exist: the generalized fedRateLow/fedRateHigh/
+ * stateRateLow/stateRateHigh, and the legacy w1/w2 pair they replaced
+ * (constants/config.js still defines both; db.js back-fills fedRateLow FROM
+ * w1FedRate on load, so a loaded account always carries both and they agree).
+ * Every consumer is therefore obliged to read new-first with a legacy
+ * fallback — and calcEventImpact was the one that didn't, reading only the
+ * legacy names. A config carrying just the generalized family made its
+ * withholdingRate NaN, which silently propagated through netLost/netGained
+ * into computeGoalTimeline's per-week surplus and reported every goal as
+ * "not on track" — a plausible-looking wrong answer, not a crash.
+ *
+ * Extracted rather than fixed inline: two hand-maintained copies of this
+ * resolution IS the parallel-formula pattern (docs/drift-app-warden.md §12),
+ * and fixing one copy while leaving the other free to drift again would only
+ * reset the clock. Callers pass the week's own isHighWeek (computeNetBreakdown)
+ * or the event's derived isWeek2 (calcEventImpact) — the same boolean.
+ *
+ * Deliberately no `?? 0` tail: an account missing BOTH families is a broken
+ * config, and a loud NaN is safer there than a silent 0% withholding that
+ * overstates take-home. This matches what computeNet has always done.
+ */
+export function resolveWithholdingRates(cfg, isHighWeek) {
+  return isHighWeek
+    ? { fed: cfg.fedRateHigh ?? cfg.w2FedRate, state: cfg.stateRateHigh ?? cfg.w2StateRate }
+    : { fed: cfg.fedRateLow ?? cfg.w1FedRate, state: cfg.stateRateLow ?? cfg.w1StateRate };
+}
+
+/**
+ * Itemized counterpart to computeNet() — same inputs, same arithmetic, but
+ * returns every component instead of only the final scalar. computeNet()
+ * below is a thin `.net` accessor over this function, which is the whole
+ * point: an itemized week breakdown and the app's authoritative net figure
+ * are computed once, here, and cannot drift apart the way a hand-copied
+ * second derivation would (docs/drift-app-warden.md's parallel-formula case
+ * law; §6's grounding rule).
+ *
+ * Added for the Coach `get_week_breakdown` tool (docs/coach-entry-points.md
+ * §1), which needs the fed/state/FICA/benefits/401k split that computeNet()
+ * deliberately collapses. BudgetPanel.jsx's `checkBreakdown` memo is the app's
+ * other itemized consumer and now calls this too (converged 2026-09-02) — its
+ * old inline copy had drifted to reading `row.weeklyAmount`, a field db.js
+ * renames away on load, so the modal silently omitted other deductions for
+ * every account. See docs/drift-app-warden.md §21 F166. There is exactly one
+ * paycheck derivation in the app; keep it that way.
+ *
+ * All figures are PER WEEK, matching computeNet()'s own basis — callers that
+ * display per-paycheck amounts scale by 52/checksPerYear themselves, exactly
+ * as IncomePanel does.
+ */
+/**
+ * Derives the 401k and taxable-gross components of a week from its gross pay.
+ *
+ * Extracted from buildYear (which is still its only production caller) so a
+ * SIMULATED week — "what if I picked up 8 more overtime hours" — can be built
+ * from the same rules a real week is, instead of a hand-copied second version
+ * that would drift the moment the 401k or taxable-gross rule changed
+ * (docs/drift-app-warden.md §12's parallel-formula case law). Coach's
+ * `simulate_overtime_hours` tool is the other caller.
+ *
+ * `has401k` and `active` are passed in rather than derived here because both
+ * depend on dates (k401StartDate/benefitsStartDate, firstActiveIdx, New Job
+ * Season boundaries) that only the caller knows — a simulated week inherits
+ * them from the real week it is based on.
+ */
+/**
+ * Per-hour night differential in effect for this account, or 0.
+ *
+ * DHL and base users express the same setting through different fields — DHL
+ * opts OUT via `dhlNightShift === false` (on by default), a base user opts IN
+ * via `nightDiffEnabled === true` (off by default) — so the resolution is not
+ * a plain truthiness check and was hand-copied at three call sites (buildYear,
+ * projectedGross, calcEventImpact). Extracted when a fourth caller appeared
+ * (Coach's `simulate_overtime_hours`), rather than adding one more copy of a
+ * rule that has an employer-specific default on each side.
+ */
+export function resolveNightDiffPerHour(cfg) {
+  const enabled = cfg.employerPreset === "DHL"
+    ? cfg.dhlNightShift !== false
+    : cfg.nightDiffEnabled === true;
+  return enabled ? (cfg.nightDiffRate ?? 0) : 0;
+}
+
+export function deriveWeekPayComponents(cfg, { grossPay, benefitsDeduction, has401k, active }) {
+  const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
+  // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
+  const effectiveMatchRate = cfg.employerPreset === "DHL"
+    ? dhlEmployerMatchRate(cfg.k401Rate)
+    : cfg.k401MatchRate;
+  return {
+    k401kEmployee,
+    k401kEmployer: has401k ? grossPay * effectiveMatchRate : 0,
+    taxableGross: active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0,
+  };
+}
+
+export function computeNetBreakdown(w, cfg, extraPerCheck, showExtra) {
   // Unemployment benefits (§1.C2) are non-taxed at the engine layer — withholding
   // is optional and out of scope for v1. Surfaces on every week regardless of
   // active state so the user sees benefit income even though the job-loss week
   // isn't "active" in the employment sense.
   const unemployment = w.unemploymentIncome ?? 0;
-  if (!w.active) return unemployment;
+  const base = {
+    active: !!w.active,
+    taxedBySchedule: !!w.taxedBySchedule,
+    isHighWeek: !!w.isHighWeek,
+    grossPay: 0,
+    taxableGross: 0,
+    federalTax: 0,
+    stateTax: 0,
+    fica: 0,
+    benefits: 0,
+    k401Employee: 0,
+    otherPostTax: 0,
+    unemploymentIncome: unemployment,
+  };
+  if (!w.active) return { ...base, net: unemployment };
+
   const fica = w.grossPay * cfg.ficaRate;
   const payrollDeductions = deriveWeeklyPayrollDeductions(w, cfg);
   const ded = payrollDeductions.total;
   const otherPostTax = otherPostTaxDeductions(cfg);
-  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax + unemployment;
-  // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
-  const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
-  const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
-  const stLow   = cfg.stateRateLow  ?? cfg.w1StateRate;
-  const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
-  const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
-  const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
-  return (w.grossPay - fed - st - fica - ded) - otherPostTax + unemployment;
+  const common = {
+    ...base,
+    grossPay: w.grossPay,
+    taxableGross: w.taxableGross ?? 0,
+    fica,
+    benefits: payrollDeductions.benefits,
+    k401Employee: payrollDeductions.k401Employee,
+    otherPostTax,
+  };
+  if (!w.taxedBySchedule) {
+    return { ...common, net: (w.grossPay - fica - ded) - otherPostTax + unemployment };
+  }
+  const rates = resolveWithholdingRates(cfg, w.isHighWeek);
+  const fed = w.taxableGross * rates.fed + (showExtra ? extraPerCheck : 0);
+  const st = w.taxableGross * rates.state;
+  return {
+    ...common,
+    federalTax: fed,
+    stateTax: st,
+    net: (w.grossPay - fed - st - fica - ded) - otherPostTax + unemployment,
+  };
+}
+
+export function computeNet(w, cfg, extraPerCheck, showExtra) {
+  return computeNetBreakdown(w, cfg, extraPerCheck, showExtra).net;
 }
 
 export function projectedGross(isWeek2, cfg) {
@@ -746,9 +869,7 @@ export function projectedGross(isWeek2, cfg) {
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, effectiveOtThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
-  const isEmployerDHL = cfg.employerPreset === "DHL";
-  const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
-  const nightDiff = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
+  const nightDiff = resolveNightDiffPerHour(cfg);
   return reg     * (cfg.baseRate + nightDiff)
        + regWknd * cfg.diffRate
        + ot      * (cfg.baseRate + nightDiff) * cfg.otMultiplier
@@ -1353,8 +1474,7 @@ export function resolveEventWeekMeta(event, allWeeks) {
 // Falls back to event.weekRotation / projectedGross when weekMeta is absent.
 export function calcEventImpact(event, cfg, weekMeta = null) {
   const isEmployerDHL = cfg.employerPreset === "DHL";
-  const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
-  const nightDiffPerHour = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
+  const nightDiffPerHour = resolveNightDiffPerHour(cfg);
   const isWeek2 = weekMeta != null
     ? !!weekMeta.isHighWeek
     : ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
@@ -1443,9 +1563,11 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
       ? Boolean(_overrides[_wIdx])
       : (Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(_wIdx))
   );
-  const withholdingRate = isTaxedWeek
-    ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
-    : 0;
+  // resolveWithholdingRates, not the legacy w1/w2 fields directly: reading
+  // those alone made this NaN for any config carrying only the generalized
+  // rate names (see that function's comment for the full failure path).
+  const eventRates = resolveWithholdingRates(cfg, isWeek2);
+  const withholdingRate = isTaxedWeek ? eventRates.fed + eventRates.state : 0;
   const effectiveTaxRate = cfg.ficaRate + withholdingRate;
   const netLost = grossLost * (1 - effectiveTaxRate), netGained = grossGained * (1 - effectiveTaxRate);
   const weekDate = event.weekEnd ? new Date(event.weekEnd) : null;

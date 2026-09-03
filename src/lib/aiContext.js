@@ -89,6 +89,22 @@ export function buildCoachContext({
   futureEventDeductions = {},
   prevWeekNet = null,
   allWeeks = [],
+  // Set by a caller that also sends Coach's drill-down tools (src/lib/
+  // coachTools.js). When true, the two per-item breakdown lines below shrink to
+  // an INDEX — the labels and targets that identify each item — and drop the
+  // derived detail (per-expense cost, per-goal rate/ETA/finish date) that
+  // get_expense_detail and get_goal_detail now return on demand.
+  //
+  // Deliberately opt-in rather than the default: CoachNetWorthCard is a
+  // single-shot generator with NO tools, so trimming unconditionally would take
+  // detail away from a surface that has no way to fetch it back.
+  //
+  // The index itself is NOT dropped. The adversarial live test's "what's going
+  // on with my Netflix bill?" was answered correctly ("your current bills are
+  // Rent, Groceries, and your Car Loan") straight off this line — removing the
+  // names outright would have forced a wrong-label tool call just to discover
+  // what exists.
+  detailAvailableViaTools = false,
 } = {}) {
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
@@ -176,25 +192,65 @@ export function buildCoachContext({
       `Active goals total (Home tile — unfunded target sum): ${fmt$(totalActiveGoalsTarget)}`,
       `Weeks to complete all active goals (Home tile): ~${Math.ceil(lastGoalPeriods)} ${periodUnitPlural}`,
     ] : []),
-    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${fmtFullDate(mostRecentLog.weekEnd)})` : ""}`,
+    // The most-recent log entry is stated in the same "the week of <START>
+    // (week N)" form as the Current period line directly below it. It used to
+    // read "(week ending <END date>)", and because a fiscal week ends on the
+    // same calendar day the next one begins, that put two different weeks
+    // behind one identical date string two lines apart — Coach conflated them
+    // in live testing, attributing a week-10 event to week 11. Falls back to
+    // the old phrasing when the entry has no resolvable weekIdx (an unresolved
+    // row carries weekIdx "", see resolveEventWeekMeta).
+    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type}${
+      Number.isFinite(Number(mostRecentLog.weekIdx)) && mostRecentLog.weekIdx !== "" && mostRecentLog.weekIdx != null
+        // formatPeriodWithDate supplies its own "(week N)" parens — wrapping it
+        // in another pair renders "(the week of March 2nd, 2026 (week 10))".
+        ? `, ${formatPeriodWithDate(Number(mostRecentLog.weekIdx), allWeeks, checksPerYear)}`
+        : ` (week ending ${fmtFullDate(mostRecentLog.weekEnd)})`
+    }` : ""}`,
     `Current period: ${currentPeriodLabel}${periodsLeft != null ? `, ${periodsLeft} ${periodUnitPlural} left in the fiscal year` : ""}`,
     `Today: ${today ? fmtFullDate(today) : "—"}`,
   ];
 
   if (activeExpenses.length) {
-    const monthKey = today ? today.slice(0, 7) : null;
-    const phaseIdx = today ? getPhaseIndex(new Date(`${today}T12:00:00`)) : null;
-    const items = activeExpenses
-      .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(resolveWeeklyCost(exp, monthKey, phaseIdx))}/wk`)
-      .join("; ");
-    lines.push(`Expense breakdown: ${items}`);
+    if (detailAvailableViaTools) {
+      lines.push(`Expense labels (cost, cycle, due date and month overrides via get_expense_detail): ${
+        activeExpenses.map((exp) => exp.label ?? "Unnamed").join(", ")}`);
+    } else {
+      const monthKey = today ? today.slice(0, 7) : null;
+      const phaseIdx = today ? getPhaseIndex(new Date(`${today}T12:00:00`)) : null;
+      const items = activeExpenses
+        .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(resolveWeeklyCost(exp, monthKey, phaseIdx))}/wk`)
+        .join("; ");
+      lines.push(`Expense breakdown: ${items}`);
+    }
   }
 
   if (goalTimeline.length) {
-    const items = goalTimeline
-      .map((g, i) => formatGoalTimelineEntry(g, i + 1, goalTimeline.length, checksPerYear, currentWeek?.idx ?? null, allWeeks))
-      .join("; ");
-    lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
+    if (detailAvailableViaTools) {
+      // Rank, target and FINISH DATE — the funding rate and periods-to-fund
+      // move to get_goal_detail.
+      //
+      // The finish date deliberately stays. A first cut dropped it too, and
+      // live testing showed the cost immediately: "give me a full breakdown"
+      // went from 0 tool calls to 3, because "when do my goals land" is the one
+      // goal fact a broad answer always needs. Two extra round-trips on the
+      // most common question is a bad trade for ~250 characters of a prefix
+      // that is cache-read at a tenth of input rate. Pace and rate are genuine
+      // drill-down; the date is not.
+      lines.push(`Active goals by funding priority, names withheld for privacy (funding rate and pace via get_goal_detail by rank): ${
+        goalTimeline.map((g, i) => {
+          const onTrack = Number.isFinite(g.eW);
+          const done = onTrack && currentWeek?.idx != null
+            ? formatPeriodWithDate(currentWeek.idx + Math.ceil(g.eW), allWeeks, checksPerYear)
+            : null;
+          return `Goal ${i + 1}: ${fmt$(g.target)}${done ? `, on track for ${done}` : ", not on track to finish this fiscal year"}`;
+        }).join("; ")}`);
+    } else {
+      const items = goalTimeline
+        .map((g, i) => formatGoalTimelineEntry(g, i + 1, goalTimeline.length, checksPerYear, currentWeek?.idx ?? null, allWeeks))
+        .join("; ");
+      lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
+    }
   }
 
   if (config?.newJobSeasonMode) {
@@ -222,9 +278,8 @@ export function buildCoachContext({
  */
 export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
   const lines = [];
-  const manualSavings = Math.max(0, config?.newJobSeasonCashOnHand ?? 0);
   const huntIncome = sumJobHuntIncome(config);
-  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, savings: manualSavings + huntIncome });
+  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, extraCash: huntIncome });
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);

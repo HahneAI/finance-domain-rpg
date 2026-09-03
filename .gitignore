@@ -28,3 +28,10 @@ coverage
 *.sw?
 
 agent-and-skill-overview.md
+
+# Coach personality eval harness (docs/TODO.md §2.L) — raw run output/cache
+# are ephemeral working files; curated calibration findings belong in
+# docs/coach-personality-rubric.md instead, not committed JSON blobs.
+.promptfoo/
+scripts/coach-eval/results/*
+!scripts/coach-eval/results/.gitkeep

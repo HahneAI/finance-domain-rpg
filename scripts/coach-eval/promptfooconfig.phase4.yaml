@@ -1,0 +1,45 @@
+description: >
+  Phase 4 (docs/TODO.md §2.L) — within-mode severity flexing. The first real
+  test of "The End Goal" section in docs/coach-personality-rubric.md: does
+  Ask Coach's register actually differ based on detected topic/severity
+  WITHIN the same mode, the way the Net Worth Trigger already flexes across
+  its Amber/Red/Green tiers — or is that still just a documented intention?
+
+  Deliberately NO calibration override this time. Phases 1-3 forced extremes
+  to discover what's reachable; this phase samples NATURAL behavior — the
+  real, unmodified ASK_COACH_SYSTEM_PROMPT, on claude-haiku-4-5 (the model
+  locked for this mode in Phase 6) — against two real data variants of the
+  SAME test account: budget near its limit (~98% spend ratio, lands on
+  buildCoachContext's own "watch spend" threshold) vs. budget healthy
+  (~10% spend ratio, "well-managed"). Same question both times
+  (askCoachComposed.js's vars.severity swaps only the account data, via
+  fixtures/testAccount.js's real buildTestContext()) — isolates whether any
+  register shift comes from the data itself, not from different wording.
+
+  This is a first, exploratory pass — 2 live calls, no repeat yet. Decide on
+  repeat-verification (or a redesign) after reading the actual output, not
+  before.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Budget near limit (~98% spend ratio, watch-spend) — natural behavior, no override"
+    vars:
+      severity: "near-limit"
+
+  - description: "Budget healthy (~10% spend ratio, well-managed) — natural behavior, no override"
+    vars:
+      severity: "healthy"

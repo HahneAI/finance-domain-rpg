@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
+import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeNetBreakdown, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -438,29 +438,36 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : checksPerYear === 12 ? "This Month" : "This Paycheck");
   const checkBreakdown = useMemo(() => {
     if (!infoRefWeek || !config) return null;
-    const gross = infoRefWeek.grossPay ?? 0;
-    const fica  = gross * (config.ficaRate ?? 0);
-    const payroll   = deriveWeeklyPayrollDeductions(infoRefWeek, config);
-    const benefits  = payroll.benefits;
-    const k401      = payroll.k401Employee;
-    let fedTax = 0, stateTax = 0;
-    if (infoRefWeek.taxedBySchedule) {
-      const fedRate = infoRefWeek.isHighWeek
-        ? (config.fedRateHigh ?? config.w2FedRate ?? 0)
-        : (config.fedRateLow  ?? config.w1FedRate ?? 0);
-      const stRate  = infoRefWeek.isHighWeek
-        ? (config.stateRateHigh ?? config.w2StateRate ?? 0)
-        : (config.stateRateLow  ?? config.w1StateRate ?? 0);
-      fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
-      stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
-    }
+    // computeNetBreakdown is the app's single paycheck derivation — computeNet()
+    // is a `.net` accessor over this same call. This block used to re-derive the
+    // whole split inline, and drifted: its otherPostTax read `row.weeklyAmount`,
+    // but db.js renames that field to `perCheckAmount` on every load and both
+    // wizards only ever write `perCheckAmount`, so the sum was ALWAYS 0 — this
+    // modal silently omitted other deductions entirely and overstated Net Pay
+    // and Spendable by their full amount. It also skipped the checksPerYear/52
+    // scaling otherPostTaxDeductions() applies, which mis-scales a non-weekly
+    // account once that amount is non-zero.
+    //
+    // Converged rather than field-renamed: patching `weeklyAmount` here would
+    // fix today's symptom and leave a second copy of the paycheck formula free
+    // to drift again (docs/drift-app-warden.md §12).
+    //
+    // (0, false) for extraPerCheck/showExtra matches this panel exactly — it
+    // has no such props and never added extra withholding. Unemployment income
+    // is likewise a non-issue: New Job Season renders NewJobSeasonBudgetPanel
+    // in place of this panel (App.jsx:2275), so no week reachable here carries
+    // any.
+    const breakdown = computeNetBreakdown(infoRefWeek, config, 0, false);
+    const gross     = breakdown.grossPay;
+    const fica      = breakdown.fica;
+    const benefits  = breakdown.benefits;
+    const k401      = breakdown.k401Employee;
+    const fedTax    = breakdown.federalTax;
+    const stateTax  = breakdown.stateTax;
     // All values below are per-week. Multiply by perCheckFactor at return so the
     // modal always shows per-paycheck amounts regardless of pay schedule.
-    const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
-      const amt = row?.weeklyAmount;
-      return sum + (typeof amt === "number" ? amt : 0);
-    }, 0);
-    const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
+    const otherPostTax = breakdown.otherPostTax;
+    const netPay    = breakdown.net;
     const spendable = netPay - freedomAllowancePerWeek;
     // Exact math — this is a real paycheck accounting breakdown, not a bill-card
     // mental-math display (product decision, 2026-08-31).
@@ -1379,6 +1386,14 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + exactEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + exactEffective(e, ap), 0);
+        // Category dropdown title only earns the exact-math asterisk once the
+        // rounding drift it's flagging is actually big enough to matter — a
+        // 1-2-bill category can't accumulate meaningful 48-week-vs-52-week
+        // drift, so the marker stays hidden below this bar to avoid noise on
+        // every dropdown. Threshold checked against the same displayed total
+        // shown on the title (cTot * perCheckFactor), not the raw weekly cTot.
+        const catBillCount = cExp.length + loanItems.length;
+        const catShowsExactMark = catBillCount >= 3 || (cTot * perCheckFactor) > 200;
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
         // Paywall-expired read-only mode (§17.E "Locked expense categories"):
         // force every category collapsed and non-expandable, regardless of the
@@ -1423,6 +1438,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         >
           <div
             data-cat-header={cat}
+            /* Lets Coach's navigate_to deep link open a collapsed category
+               before highlighting a row inside it (src/lib/coachFocus.js).
+               Categories are collapsed by default, and a collapsed one clips
+               its rows to height 0 — so without this the highlight fired on a
+               row the user could not see. */
+            data-coach-expand={cat}
             onClick={readOnly ? undefined : () => toggleCat(cat)}
             role="button"
             aria-expanded={isCatExpanded}
@@ -1445,7 +1466,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             <div style={{ width: "100%" }}>
               <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}<ExactMathMark /></span>
+                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}{catShowsExactMark && <ExactMathMark />}</span>
                   {!readOnly && (
                   <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
                   )}
@@ -1503,6 +1524,11 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
             return <div
               key={exp.id}
               data-expense-id={exp.id}
+              /* Target for Coach's navigate_to chip (src/lib/coachFocus.js).
+                 Keyed by LABEL, not id: the tool resolves a user-spoken name
+                 ("my Groceries bill") against the account's real expenses and
+                 emits "expense:<label>", so the id is never in play. */
+              data-coach-ref={exp.label ? `expense:${exp.label}` : undefined}
               data-expense-pinned={isPinnedFoodCard ? "true" : undefined}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
               onClick={() => {
@@ -2121,7 +2147,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
           <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
           {checkBreakdown.otherDeductions.map((row, i) => (
-            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * perCheckFactor)} />
+            /* perCheckAmount is already a per-paycheck figure and this modal is
+               per-paycheck, so it renders as stored — no perCheckFactor. The
+               engine's own round trip agrees: perCheck × (checksPerYear/52)
+               to weekly, then × (52/checksPerYear) to display, is identity.
+               The legacy `weeklyAmount` tail mirrors finance.js's own ?? chain
+               for a config not yet through db.js's rename. */
+            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2(row.perCheckAmount ?? row.weeklyAmount ?? 0)} />
           ))}
           <MathDivider thick />
 

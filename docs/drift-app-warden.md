@@ -2583,6 +2583,17 @@ Income panel's monthly component cards (their real-calendar-week-count display, 
   per-row Weekly/Monthly/Annual cells above them, to avoid the marker itself becoming visual
   noise on a 12-row table). Individual bill/loan row cards (display math, see below) intentionally
   get no marker — they're the reference point, not the thing needing an asterisk.
+- **Category dropdown title threshold (2026-09-01, same-day follow-up).** Anthony didn't want the
+  marker on every category dropdown title regardless of size — a 1-2-bill category can't
+  accumulate enough 48-week-vs-52-week rounding drift to be worth flagging. `catShowsExactMark =
+  catBillCount >= 3 || (cTot * perCheckFactor) > 200` gates the category header's `ExactMathMark`
+  only (line ~1447) — `catBillCount` is `cExp.length + loanItems.length` (regular expenses +
+  loans, since loans render inside the Needs category), and the $200 check is against the same
+  displayed total the title shows (`cTot * perCheckFactor`, i.e. the per-check/per-week figure as
+  rendered — not the raw weekly `cTot` before the display-unit conversion, and not the annual
+  figure). This threshold is local to the category dropdown title only — every other
+  `ExactMathMark` placement from the entry above (summary cards, Loans tab total, waterfall,
+  paycheck-breakdown modal, Breakdown tab footer) is unconditional, unaffected by this gate.
 - **Consumers deliberately left on display math** (individual bill/loan row cards — the "mental
   math, not pennies" surface): every per-expense row amount in the Budget list, the Bulk Edit
   list, the expense detail sheet's "Per Check"/"Monthly" tiles, the Restore Deleted sheet, edit-
@@ -5252,6 +5263,371 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > there's no established alternative pattern to diverge from yet. Check:
 > `dbResumeProfile.test.js`'s partial-upsert block, `resumeFile.test.js`'s extraction-dispatch
 > cases, `ResumeReviewCard.test.jsx`'s v2 file-upload block.
+
+**F163 · Coach drill-down tools — client-side execution + grounding contract** — `coachTools.js`, `claude.js`, `api/coach.js` — **[L]**
+2026-09-02. Coach gained four read-only drill-down tools (`get_goal_detail`,
+`get_expense_detail`, `get_week_breakdown`, `list_log_entries`) so it can fetch depth on demand
+instead of having every figure pre-stuffed into F113's fixed context block. **Three structural
+properties define this entry.** (1) **Tools execute in the BROWSER, never on the server** —
+`api/coach.js` forwards the declarations and streams `tool_use` blocks back; `chatWithCoach`
+(`claude.js`) runs them against the caller's live prop bag and posts a `tool_result` turn. No new
+Vercel function (the deployment is at 12/12 on the Hobby cap), and no additional user data crosses
+the network. (2) **Every tool arm resolves through the same authoritative Spine-A function its UI
+twin uses** — `computeGoalTimeline` (with the F18 epoch arg), `getExactEffectiveAmountForMonth`
+(F38/F102 — never `billingMeta.amount`), `computeNetBreakdown`, `calcEventImpact`,
+`resolveEventWeekMeta`. Not one figure is re-derived locally; that is the same D1 contract F113
+holds, extended to the tool layer. (3) **F114's privacy split carries over unchanged** —
+`get_goal_detail` is rank-addressed and returns no `goal.label`, while `get_expense_detail` is
+label-addressed, matching the existing asymmetry exactly.
+> **IF** a tool is added to `COACH_TOOLS`, **THEN** it MUST (a) resolve every returned figure
+> through the Spine-A function its UI twin calls, (b) inherit F114's withholding for any goal or
+> aspirational entity, and (c) be added only to a per-surface set whose panel actually holds that
+> tool's data — `JOB_HUNT_TOOLS` is deliberately just `get_expense_detail` because
+> NewJobSeasonHomePanel receives only `{config, expenses, effectiveToday, currentWeek}`; widening
+> it means threading the missing props first, not appending a name. **IF** a tool arm is changed,
+> **THEN** it is a named consumer in the blast radius of F18/F38/F102 and of `computeNetBreakdown`
+> (F164). **IF** a Coach surface starts passing `tools`, **THEN** its `toolData` bag must be the
+> same object graph it feeds `buildCoachContext()`, or a tool and the context line summarizing it
+> can disagree. Check: `coachTools.test.js` (per-tool grounding + privacy + failure cases),
+> `claudeToolLoop.test.js` (SSE `tool_use` parsing, fragmented `input_json_delta` reassembly,
+> round cap, error passthrough), `coach.test.js`'s tools-forwarding block.
+> **Termination invariant:** the loop is bounded twice — `maxToolRounds` (default 4) AND a hard
+> "a round not offered tools is the last one" return, so an unexpected `tool_use` stop_reason can
+> never spin the client. Keep both; the cap alone rests on an assumption about a remote service.
+> **Counterfactual gap (adversarial live test, 2026-09-02):** every tool here is READ-ONLY and
+> reports current state. `computeGoalTimeline()` already folds `logNetLost` in, so a goal's date
+> is always the *with-events* projection and no without-events figure exists in any payload. Asked
+> "did that missed shift push my goal back," live output asserted "week 18 instead of earlier,"
+> implying a comparison it never computed. **IF** a tool is added that reports the dollar impact of
+> a past event, **THEN** note that it invites exactly this counterfactual question, and that the
+> answer requires a `simulate_*` tool (docs/TODO.md §2.G) — not a prompt instruction telling Coach
+> to compute something it has no input for.
+> **UPDATE 2026-09-02 — building the simulations did NOT end this pattern.** Three occurrences now,
+> the third *after* `simulate_expense_change` shipped: asked "my Groceries bill feels high, what
+> should I do?", Coach called `get_expense_detail` (a read), then volunteered "if you could trim it
+> back to your normal rate, you'd fund your first goal **about three weeks sooner**" — a
+> counterfactual it did not compute, from a read-only payload, while the tool that answers it
+> exactly sat unused in the same list. The number is materially wrong: cutting Groceries to $0
+> entirely moves goal 1 by 1.21 periods, so a $30 trim is well under one. It then offered "want me
+> to show you exactly how much sooner?" — so the capability was not unknown to it, merely skipped.
+> **The lesson is that tool AVAILABILITY does not prevent fabrication; only tool USE does.** Treat
+> any Coach answer containing a comparative claim ("sooner", "instead of", "would have") as
+> suspect unless a `simulate_*` call appears in the same turn. This is the open end of F169 and
+> the strongest candidate for the few-shot approach DW-19 already recommends — a worked example of
+> declining to estimate and calling the simulation instead — not another prose rule.
+
+**F164 · `computeNetBreakdown` ↔ `computeNet` — one derivation, two shapes** — `finance.js:711–…` — **[L]**
+2026-09-02. `computeNet()` no longer contains the paycheck arithmetic; it is now
+`computeNetBreakdown(...).net`. The itemizer exists because `get_week_breakdown` (F163) needs the
+fed/state/FICA/benefits/401k split that `computeNet` collapses to a scalar, and hand-copying that
+split into the tool layer would have been a textbook D1 parallel formula.
+> **IF** paycheck arithmetic changes (rates, deduction order, unemployment handling, the
+> `taxedBySchedule` branch), **THEN** change it in `computeNetBreakdown` ONLY — `computeNet` must
+> stay a one-line accessor, which is what makes their agreement structural rather than a
+> coincidence re-verified by eye. **RESOLVED 2026-09-02 (was "known, not fixed here"):**
+> `BudgetPanel.jsx`'s `checkBreakdown` memo carried its own inline copy of this split; it has
+> been converged onto `computeNetBreakdown` and the divergence it hid was a live user-facing
+> bug — see F166. There is now exactly one paycheck derivation in the app. Check: `coachTools.test.js`'s `computeNetBreakdown` block asserts `.net ===
+> computeNet()` across active/high/exempt/inactive/zero-gross weeks and that the components
+> recompose to the same total.
+
+**F165 · `resolveWithholdingRates` — the single rate-family resolver** — `finance.js`, `calcEventImpact` — **[L]**
+2026-09-02. Two withholding-rate field families coexist: the generalized `fedRateLow`/
+`fedRateHigh`/`stateRateLow`/`stateRateHigh`, and the legacy `w1FedRate`/`w2FedRate`/
+`w1StateRate`/`w2StateRate` they replaced. `DEFAULT_CONFIG` (constants/config.js:192) still
+defines all four and `db.js:296` back-fills `fedRateLow` FROM `w1FedRate` on load, so a loaded
+account carries both and they agree — which is exactly why the divergence below stayed invisible.
+Every consumer is obliged to read new-first with a legacy fallback (`finance.js:114`,
+`finance.js`'s `computeNetBreakdown`, `App.jsx:1800`, `BudgetPanel.jsx`) — and `calcEventImpact`
+was the one that did not, reading `cfg.w1FedRate + cfg.w1StateRate` directly with no fallback.
+**Failure mode, found live while building `buildToolTestAccount()`:** a config carrying only the
+generalized names made `withholdingRate` `undefined + undefined` → `NaN`, so `netLost`/`netGained`
+went NaN, which propagated into `computeGoalTimeline`'s per-week `surplus`, failed its
+`surplus > 0` check for every week, and reported **every goal as "not on track to finish within
+this fiscal year"** — a plausible-looking wrong answer on a real user-facing line, not a crash.
+Fixed by extracting `resolveWithholdingRates(cfg, isHighWeek)` and routing both
+`computeNetBreakdown` and `calcEventImpact` through it.
+> **IF** a new rate field family is introduced, or the generalized/legacy precedence changes,
+> **THEN** change `resolveWithholdingRates` ONLY — a second inline copy of this resolution is the
+> D1 pattern that produced this bug, and fixing one copy while leaving another free to drift just
+> resets the clock. **IF** a new consumer needs "which rates apply to this week," **THEN** it calls
+> this function; it must never read `cfg.fedRateLow`/`cfg.w1FedRate` directly. **Deliberate
+> omission:** no `?? 0` tail — an account missing BOTH families is a broken config, and a loud NaN
+> is safer there than a silent 0% withholding that overstates take-home. This matches what
+> `computeNet` has always done; `BudgetPanel`'s old inline copy had `?? 0` and lost it on
+> convergence (immaterial — no real account lacks both). Check:
+> `withholdingRates.test.js` — asserts precedence, legacy fallback, high-week selection, finite
+> impacts from a generalized-only config, and that both families give identical results.
+
+**F166 · `BudgetPanel` paycheck breakdown ↔ `computeNetBreakdown`** — `BudgetPanel.jsx` `checkBreakdown` — **[L]**
+2026-09-02. The Budget panel's paycheck-breakdown modal re-derived the whole gross → net split
+inline instead of calling the app's one derivation. It drifted, and the drift was **live and total,
+not an edge case**: its `otherPostTax` summed `row.weeklyAmount`, but `db.js:269–276` renames that
+field to `perCheckAmount` on **every load**, both wizards write only `perCheckAmount`, and
+`constants/config.js:92` documents `{ id, label, perCheckAmount }` as the canonical shape. So the
+field was `undefined` for every row of every real account: the sum was **always 0**, the modal
+**silently omitted other deductions entirely** — overstating Net Pay and Spendable by their full
+amount — and every "Other Deduction" row rendered **$0.00**. It also skipped the `checksPerYear/52`
+scaling `otherPostTaxDeductions()` applies, which mis-scales a non-weekly account once the amount
+is non-zero at all.
+> **IF** this modal needs a paycheck figure, **THEN** it comes from `computeNetBreakdown` (F164) —
+> never re-derived. The fix was convergence, not a field rename, precisely because renaming
+> `weeklyAmount` → `perCheckAmount` here would have fixed the symptom and left a second copy of the
+> paycheck formula free to drift again. **IF** a row's stored amount is rendered in this modal,
+> **THEN** it renders as stored, with NO `perCheckFactor` — `perCheckAmount` is already a
+> per-paycheck figure and the modal is per-paycheck; the engine's own round trip agrees
+> (perCheck × checksPerYear/52 → weekly, × 52/checksPerYear → display, is identity). **Verified
+> safe to converge:** `BudgetPanel` has no `showExtra`/`extraPerCheck` props, so `(0, false)`
+> matches its prior behavior exactly, and New Job Season renders `NewJobSeasonBudgetPanel` in place
+> of this panel (`App.jsx:2275`), so no week reachable here carries `unemploymentIncome`. One
+> intentional edge-case change: on an inactive (pre-employment) week the old code showed benefits
+> deducted from $0 gross, producing a negative net; the converged path returns all zeros. Check:
+> `budgetCheckBreakdown.test.jsx` — renders the real panel off `buildToolTestAccount()`, opens the
+> modal, and asserts a real amount on the row, Net Pay reduced by it, no `perCheckFactor` scaling
+> on a biweekly account, and the legacy `weeklyAmount` tail still read.
+
+**F167 · `buildJobHuntContext` silently dropped logged gig income from the runway it quotes** — `aiContext.js:223` — **[L]**
+2026-09-02. Found while building the coach-eval harness's Job Hunt Assistant fixture (scripts/
+coach-eval/) — every other `computeNewJobSeasonRunway` call site (`NewJobSeasonHomePanel.jsx`,
+`NewJobSeasonBudgetPanel.jsx`, `CoachNetWorthCard.jsx`, `App.jsx`) passes `extraCash:
+sumJobHuntIncome(config)`; `buildJobHuntContext` alone passed `savings: manualSavings +
+huntIncome` — a param name the function's `{ config, expenses, effectiveToday, extraCash = 0 }`
+signature doesn't destructure, so the whole figure was silently discarded and `extraCash`
+defaulted to 0. Live and total, not an edge case: a user could log any amount of gig/odd-job
+income on New Job Season Home and Job Hunt Assistant's own "Cash Runway" line — right next to its
+own "Extra job-hunt income logged so far: $X" line — would never move. A plausible-looking wrong
+answer, not a crash; no existing test caught it because `aiContext.test.js`'s income coverage only
+asserted the display line's text, never that the runway number itself changed.
+> **IF** `buildJobHuntContext` needs cash beyond the persisted `config.newJobSeasonCashOnHand`
+> (which `computeNewJobSeasonRunway` already reads internally as `rawCashOnHand`), **THEN** pass
+> only `extraCash: sumJobHuntIncome(config)` — the exact shape every other call site uses. The
+> removed `manualSavings` local was `config?.newJobSeasonCashOnHand` re-read a second time; adding
+> it into `extraCash` (rather than just dropping the bad param name) would have "fixed" the crash
+> by double-counting cash-on-hand instead. Check: `aiContext.test.js`'s new "folds logged job-hunt
+> income into the runway itself" case — asserts the runway day count itself increases, not just
+> that the income line renders.
+
+**F168 · One period-label convention across every Coach surface** — `aiContext.js`, `coachTools.js` — **[L]**
+2026-09-02, found by the first live tool-selection test (`scripts/coach-eval/toolLoopLiveTest.mjs`).
+A fiscal week ENDS on the same calendar day the next one BEGINS. `buildCoachContext`'s
+`formatPeriodWithDate` labels a period by its START ("the week of March 9th, 2026 (week 11)"),
+but the log line labelled the most recent entry by its END ("week ending March 9th, 2026"), and
+`list_log_entries` returned the same end-date field. So the identical string "March 9th, 2026"
+named **two different fiscal weeks two lines apart** — week 10 (Mar 2→Mar 9) and week 11
+(Mar 9→Mar 16). Live output conflated them and attributed a week-10 missed shift to week 11,
+in the tool path (where the payload already carried the correct `periodNumber: 10`) and in the
+no-tool path from the context block alone. Fixed by routing both through the same start-date +
+period-number form; `list_log_entries` keeps the raw end date as `weekEndingDate`, which is what
+the Log panel itself shows, but it is no longer the only date field.
+> **IF** any Coach-facing surface names a fiscal week, pay period, or dated event, **THEN** it uses
+> `formatPeriodWithDate`/`periodLabels` — start date plus period number, in the unit this account's
+> pay schedule uses — never a bare end date and never a date without its period number. A date
+> alone is ambiguous by one week at every boundary in the app. **IF** a new tool returns a dated
+> row, **THEN** it inherits this shape (F163's contract). Check: `aiContext.test.js`'s
+> "same convention as Current period" case and `coachTools.test.js`'s "labels an entry's week the
+> same way" case — both assert the log's period is distinct from the current one, which is the
+> exact confusion that occurred. Note the fallback branch: an entry with no resolvable `weekIdx`
+> (`""`, per `resolveEventWeekMeta`) keeps the old "week ending" phrasing, since there is no
+> period to name.
+
+**F169 · Coach simulation tools — one changed input, one real re-run** — `coachTools.js` — **[L]**
+2026-09-02. Four `simulate_*` tools (`simulate_expense_change`, `simulate_new_goal`,
+`simulate_overtime_hours`, `simulate_without_logged_event`) extend F163's read-only layer with
+"what if" answers. Built after an adversarial live test showed the read-only tools *invite* a
+counterfactual ("did that missed shift push my goal back?") and Haiku fabricates one rather than
+declining — `computeGoalTimeline` already folds `logNetLost` in, so every goal date in the app is
+the with-events projection and no without-events figure existed anywhere.
+**The mechanism is deliberately not a model:** each tool re-runs the REAL `computeGoalTimeline`
+(or `computeNetBreakdown`) with exactly one input changed and diffs it against the unchanged run,
+through the shared `runTimeline`/`summarizeGoal`/`diffGoals` helpers. `get_goal_detail` was
+converted onto the same pair, so a goal reported by the read tool and the "current" side of a
+simulation are one derivation rather than two that agree today.
+> **IF** a simulation is added, **THEN** it re-runs the authoritative function with a changed
+> input — never a closed-form estimate of the effect, which would be a parallel formula wearing a
+> different hat. **IF** it changes an expense, **THEN** it does so by rewriting that expense's
+> `history`/`monthlyOverrides` so `getExactEffectiveAmountForMonth` still resolves it (F38/F102),
+> never by bypassing the resolver. **IF** it removes a logged event, **THEN** it must verify the
+> event's impact is actually contained in the caller's `logNetLost`/`logNetGained` and REFUSE if
+> not — clamping the subtraction at zero yields an identical timeline and reports "this event cost
+> you nothing," a confident wrong answer rather than a missing one (found in test, guarded by
+> `coachTools.test.js`'s "refuses when the totals don't contain the event"). F114's goal-name
+> privacy carries through every simulation. Check: `coachTools.test.js`'s simulations block —
+> assertions are on direction and arithmetic, never snapshots, because a snapshot passes just as
+> happily with the diff inverted.
+
+**F170 · `periodsToFund` (duration) vs `periodsUntilFinish` (completion) — never diff the first** — `coachTools.js` `summarizeGoal` — **[L]**
+2026-09-02. `computeGoalTimeline` returns two different quantities that both read as "weeks":
+`wN = eW − sW`, how long a goal spends *funding* once surplus reaches it, and `eW`, when it
+actually *finishes*, counted from now. The app's own "weeks to fund" line (goal cards, and
+`aiContext.js`'s goal breakdown) is `wN`; the finish DATE is derived from `eW`. The first
+simulation diff compared `wN` and **inverted the sign for any goal below rank 1**: inserting a new
+goal ahead of an existing one delays its *start*, which can shorten its funding window even as it
+finishes later, so the tool reported "0.09 periods sooner" for a goal it had just pushed back.
+Caught in test, before any live call.
+> **IF** anything compares two goal timelines, **THEN** it compares `periodsUntilFinish` (`eW`),
+> never `periodsToFund` (`wN`) — duration and completion move independently for every goal except
+> rank 1, where `sW = 0` makes them coincidentally equal, which is exactly why a rank-1-only test
+> would have passed. **IF** a new field is added to `summarizeGoal`, **THEN** state which of the
+> two it is. Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
+> and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
+> ranks, which is what fails under the `wN` comparison.
+
+**F171 · `deriveWeekPayComponents` / `resolveNightDiffPerHour` — shared week-pay derivations** — `finance.js` — **[L]**
+2026-09-02, extracted so `simulate_overtime_hours` could build a simulated week from the same
+rules a real one is built from. `deriveWeekPayComponents(cfg, {grossPay, benefitsDeduction,
+has401k, active})` returns the 401k employee/employer split and taxable gross; `buildYear` is its
+other caller. `resolveNightDiffPerHour(cfg)` converges three prior hand-copies (`buildYear`,
+`projectedGross`, `calcEventImpact`) of a rule that is NOT a plain truthiness check — DHL opts OUT
+via `dhlNightShift === false` (on by default), a base user opts IN via `nightDiffEnabled === true`
+(off by default).
+> **IF** the 401k rule, the taxable-gross rule, or the night-differential default changes, **THEN**
+> change it in these functions only — a simulated week that derives its own components would drift
+> from the real week it is meant to be comparable to, which makes the whole simulation meaningless
+> rather than merely wrong. `has401k`/`active` stay caller-supplied: both depend on dates
+> (`k401StartDate`/`benefitsStartDate`, `firstActiveIdx`, New Job Season bounds) only the caller
+> knows, and a simulated week inherits them from its real basis.
+
+**F172 · `detailAvailableViaTools` — the context block's per-item lines are opt-in trimmed** — `aiContext.js` — **[L/G]**
+2026-09-02. `buildCoachContext`'s two per-item lines (Expense breakdown, Goal breakdown) are the
+only ones that grow with the account — together 38% of the block on a 3-expense/2-goal fixture and
+the densest cluster of numbers in it. With Coach's tools able to serve that depth on demand
+(F163/F169), the flag shrinks both to an INDEX: expense LABELS (cost/cycle/due date/overrides move
+to `get_expense_detail`) and goal rank + target + finish date (funding rate and periods-to-fund
+move to `get_goal_detail`). Measured: −17% block / 82→59 numbers at 8 expenses + 5 goals, −25% /
+110→75 at 15 + 8. Only `AskCoachPanel` sets it.
+> **IF** a caller sets this flag, **THEN** it MUST also be sending the tools — the flag's whole
+> premise is that the omitted detail is fetchable. `CoachNetWorthCard` is a single-shot generator
+> with NO tools and deliberately leaves it false; making the trim unconditional would strip detail
+> from a surface with no way to get it back. **IF** a new per-item line is added to the block,
+> **THEN** decide explicitly which side of this flag it sits on.
+> **Two things live testing established that must not be re-litigated by inspection:**
+> (1) **Expense NAMES stay in the index.** The adversarial round answered "what's going on with my
+> Netflix bill?" correctly straight off that line; dropping the names forces a wrong-label tool
+> call just to discover what exists. Re-verified after the trim — still correct, still 0 tools.
+> (2) **Goal FINISH DATES stay in the index.** A first cut dropped them and "give me a full
+> breakdown" went from 0 tool calls to 3 — "when do my goals land" is the one goal fact a broad
+> answer always needs. Two extra round-trips on the most common question is a bad trade for ~250
+> characters of a prefix that is cache-read at a tenth of input rate. Restoring the date returned
+> it to 1 round / 0 tools.
+> **What this did NOT fix:** DW-19's broad-question number cap. Halving the numbers available in
+> the block did not reduce how many Coach cites (~10 against an instructed ≤3, unchanged before
+> and after). That limitation is about the instruction's shape, not the data volume behind it —
+> see `coach-personality-rubric.md`'s Known Limitations, which still calls for a worked few-shot
+> example rather than another prose rewrite. Do not re-attempt the trim as a fix for it.
+> Check: `aiContext.test.js`'s `detailAvailableViaTools` block — default keeps the full
+> breakdowns, the flag swaps in the index, names/dates survive, goal names stay withheld, no other
+> line changes, and the saving grows super-linearly with account size.
+
+**F173 · Tool-loop text seam** — `claude.js` `chatWithCoach` — **[G]**
+2026-09-02. A model that says "let me pull that up" before calling a tool and then answers in the
+next round produces two separate runs of text. The loop yielded them back to back, so live output
+read `"...for you.You're on track"`. One space is now inserted at the seam, only when the previous
+round ended on a non-whitespace character and the next chunk doesn't start with one.
+> **IF** the loop's text handling changes, **THEN** preserve the seam — this is invisible to every
+> unit test that asserts on a single round's output, and only shows up in a real multi-round
+> answer. Check: `claudeToolLoop.test.js`'s "separates a pre-tool preamble" and "does not double a
+> space the model already supplied".
+
+**F174 · `navigate_to` and its chip — tool-driven UI, never parsed prose** — `coachTools.js`, `CoachToolUI.jsx`, `coachFocus.js` — **[G]**
+2026-09-02. Coach's persona forbids Markdown outright ("no asterisks, underscores, bullet points"),
+so there is no link syntax in its output to parse even in principle. Interactive UI is therefore
+driven by TOOL CALLS: `navigate_to` returns a validated `{viewKey, focusRef, linkLabel}` and
+`AskCoachPanel` renders `CoachNavChip` from it. `chatWithCoach` gained an `onToolEvent`
+callback ({phase:"start"|"result"}) as the single channel the UI observes tool use through — it
+also drives `CoachToolActivity`, which fills the dead air of a tool round.
+Live-verified 3/3 selection with nine tools, each with the right panel and focus, and the eight
+prior tools still selected correctly alongside it.
+> **IF** an action tool is added, **THEN** it returns a validated descriptor and the panel renders
+> it — never emit markup or a URL for the client to parse out of the message text. **IF** a chip
+> targets a specific row, **THEN** the target is resolved against real account data inside the tool
+> (`toolNavigateTo` checks expense labels and goal ranks) and degrades to panel-only with a `note`
+> when it cannot be — a chip that scrolls to nothing is worse than one that just opens the panel,
+> and the model must be told so it doesn't promise the highlight. **IF** `onToolEvent` gains a
+> listener, **THEN** it stays wrapped in try/catch in `claude.js`: chip rendering and the activity
+> line hang off it, and a UI bug must not take down the chat turn.
+> **Focus mechanism:** panels opt in with a `data-coach-ref` attribute only
+> (`expense:<label>` on BudgetPanel rows, `goal:<rank>` on HomePanel cards — rank, never a goal
+> name, since F114 withholds those from Coach entirely). `focusCoachTarget` retries briefly while
+> the panel mounts and gives up SILENTLY: a collapsed category or filtered view is a normal miss,
+> and opening the right panel is the chip's actual job. Do not turn that into an error path.
+> **Persistence:** chips are live-turn only, keyed by message index, and cleared in
+> `resetToNewChat`/`handleResumeChat`. `coach_chats` stores plain text and is deliberately
+> unchanged — a resumed conversation shows the words without the chip rather than needing a
+> row-shape migration. Check: `coachToolUI.test.jsx`, `coachTools.test.js`'s navigate_to block
+> (including that a paused expense is not focusable), `claudeToolLoop.test.js`'s onToolEvent cases.
+
+
+**F175 · Coach chat UI — three defects only a live render could show** — `AskCoachPanel.jsx`, `coachFocus.js`, `BudgetPanel.jsx` — **[G]**
+2026-09-02, first browser pass over F174's chip and activity line (Playwright, real app, `/api/coach`
+stubbed with a canned SSE stream — the model's tool selection was already verified live, so what
+was untested was purely the UI). All three passed their unit tests and all three were broken on
+screen, which is the exact blind spot CLAUDE.md's testing section warns about.
+> **1 · The activity line never painted.** `AskCoachPanel` set `activeTool` on the tool event's
+> `start` phase and cleared it on `result`. The tools are pure client-side functions that finish in
+> microseconds, so it was set and unset inside a single tick and React never rendered it. The dead
+> air a user actually sits through is the model ROUND-TRIP that follows the tool, so it now clears
+> on the first text chunk of the next round instead. **IF** a tool becomes async, this still holds;
+> **IF** the clearing point is moved back to `result`, the indicator silently disappears again and
+> no unit test will notice — the component test only proves it renders when given a `toolName`.
+> **2 · The chip rendered inline beside the bubble, truncated to "Bud…".** The message row is
+> `display:flex; alignItems:flex-end` for the avatar, so the chip and activity line became
+> additional flex items in that ROW. Both now live in a column wrapper under the bubble. **IF**
+> anything else is attached to a message, it goes inside that wrapper — jsdom computes no layout,
+> so a flex regression here is invisible to the suite.
+> **3 · The deep link highlighted a row nobody could see.** Two compounding causes. `navigateDirect`
+> ends in `jumpToPanelTop()` inside a `requestAnimationFrame` — i.e. AFTER `focusCoachTarget` runs —
+> so the panel scrolled back to top and the flash expired off-screen (row at 877px in an 844px
+> viewport). And Budget's categories are collapsed BY DEFAULT: a collapsed category clips its rows
+> to `height:0; overflow:hidden` while they still report a real bounding box, so viewport maths
+> alone reported success. Fixed by re-asserting the scroll on a short schedule (only when the row
+> has actually drifted out of view, so a user who scrolled away deliberately isn't yanked back),
+> and by clicking the nearest collapsed `[data-coach-expand]` ancestor before scrolling.
+> **IF** a panel adds a collapsible section containing `data-coach-ref` rows, **THEN** its toggle
+> needs `data-coach-expand` + a truthful `aria-expanded`, or the deep link degrades to
+> panel-only. Note the expander is NOT the clipper's parent (in BudgetPanel it is two levels
+> above), so resolution walks up for the nearest collapsed one.
+> Check: `coachToolUI.test.jsx`'s `focusCoachTarget` block — collapsed-ancestor expansion and
+> scroll re-assertion both verified to fail against the pre-fix code. Defects 1 and 2 are timing
+> and layout properties jsdom cannot express; the browser pass is their only proof, and re-running
+> `scripts/coach-eval`-adjacent UI driving is the way to re-verify them.
+
+**F176 · `propose_goal` — Coach's first WRITE-shaped tool, via a confirm card** — `coachTools.js`, `CoachToolUI.jsx`, `App.jsx` — **[G/L]**
+2026-09-03. Every Coach tool before this was read-only or navigational; `propose_goal` is the
+first that can put a row in the user's data. It does not write. It returns a proposal, the panel
+renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
+`handleCoachCreateGoal`.
+> **The write must be indistinguishable from a hand-made goal.** `handleCoachCreateGoal` mirrors
+> `HomePanel`'s own `addGoal` field-for-field — same `g_<ts>` id shape, the shared
+> `GOAL_SYSTEM_COLOR` (exported from HomePanel rather than re-typed, so the two cannot drift),
+> `completed: false`, the `savePersistedStateNow` eager save CLAUDE.md's Persistence section
+> requires, and the same `logBetaEvent("goal_created")` — omit that last one and beta analytics
+> silently under-count goals for anyone who creates them through Coach. **IF** `addGoal` gains a
+> field, **THEN** this handler needs it too.
+> **The privacy rule inverts, and the inversion is the trap.** F114 withholds goal NAMES from
+> Coach. Proposing a name is the opposite direction and is fine — but `propose_goal`'s duplicate
+> check compares against existing labels, so it returns a BOOLEAN
+> (`alreadyHaveOneNamedThis`) and never the matching goal. **IF** a tool ever needs to compare
+> against goal names, **THEN** it reports the comparison's result, never its inputs.
+> **Projection comes from `simulate_new_goal`, not a second estimate** — the card's date is the
+> same `computeGoalTimeline` the goal cards use (F169's `periodsUntilFinish` distinction applies),
+> and editing the amount re-projects locally through `executeCoachTool` with no model call, so the
+> date can never describe a number the user has already changed.
+> **Read-only gate:** the card disables its own button, AND `handleCoachCreateGoal` refuses
+> independently — the write path must not depend on the UI for a paywall check, same rule as
+> `HomePanel`/`BudgetPanel` shadowing their eager-save callbacks.
+> **Hook placement (cost two blank-app crashes to learn).** `handleCoachCreateGoal` sits ABOVE
+> `App.jsx`'s `!authChecked`/`!authedUser` early returns, with the paywall flag read through
+> `isExpiredReadOnlyRef` rather than `isExpiredReadOnly` directly. Both alternatives fail:
+> putting the hook below those returns skips it on those render paths ("Rendered more hooks than
+> during the previous render"), and naming the const in the dependency array from above hits its
+> temporal dead zone, since dependency arrays evaluate during render. Each failure blanked the
+> entire app — there is no top-level error boundary — while `vite build` and all 1859 unit tests
+> passed. **IF** a callback defined near the other Coach handlers needs a value computed after
+> those early returns, **THEN** it reads a ref assigned during render, never the const.
+> Check: `coachTools.test.js`'s propose_goal block (projection parity with simulate_new_goal, the
+> no-date branch, duplicate-without-leak, validation), `coachToolUI.test.jsx`'s `CoachGoalCard`
+> block (edits are what get created, re-projection on amount change, single-confirm, read-only),
+> and `live-testing-checklist.md` item 10 for the browser pass.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

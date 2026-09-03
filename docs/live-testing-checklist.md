@@ -250,3 +250,35 @@ weeks, and `WeekConfirmModal` (`.wc-modal-in`) blocks the whole shell — skippi
 next, so a dismiss helper must loop. Never click "Confirm Week" there; it writes a real
 confirmation to the shared account. Coach is also reachable only from the mobile bottom nav, so a
 mobile viewport is required before it exists at all.
+
+### 10. Coach `propose_goal` card — the goal-setting chip ✅
+Browser pass over Coach's first write-shaped tool, `/api/coach` stubbed with a canned SSE stream
+carrying a `propose_goal` tool_use (same rationale as item 9 — deterministic, no Anthropic spend).
+
+Verified end to end: the card prefills Coach's proposed name and amount, shows the note, and
+projects "On track for the week of November 30th, 2026" from the real `computeGoalTimeline`.
+Rewording the name and changing the amount, then confirming, produced "Added to your goals ✓",
+removed the button (no double-add), and — after a **full page reload** — the goal appeared on Home
+carrying the EDITED name, not Coach's original wording. That rewording path is the point of the
+feature, so it is the thing worth proving.
+
+**Found and fixed three defects, two of them blank-app crashes that the full unit suite and
+`vite build` both passed.** (1) `handleCoachCreateGoal`'s `useCallback` named `isExpiredReadOnly`
+in its dependency array while sitting above that const — dependency arrays evaluate during render,
+so it hit the temporal dead zone. (2) Moving the hook below the const put it below `App.jsx`'s
+`!authChecked`/`!authedUser` early returns, so it was skipped on those render paths — "Rendered
+more hooks than during the previous render". Resolved by keeping the hook above the early returns
+and reading the flag through a ref assigned during render. (3) The chat's auto-scroll keyed only
+on `messages`, but a card arrives from a tool result afterwards, so a tall goal card landed below
+the fold; the effect now also keys on the attachments.
+
+**⚠️ Test-account hygiene — a real mistake worth recording.** Playwright's click retry loop
+succeeded on several attempts that then reported a timeout, creating **6 duplicate goals** on the
+shared account before I noticed. They were identified by label and deleted through the real UI,
+verified clean after a reload (back to the account's 2 real goals: New Gaming Computer, ATM
+Purchase). Any future driver that exercises a WRITE path on the shared account should use a
+distinctive throwaway label and delete it in the same script — the final driver for this item does
+exactly that and ends with the account unchanged. Note also that a failed Playwright action does
+not mean no write happened.
+
+Full suite green (1859). Documented in `drift-app-warden.md` F176.

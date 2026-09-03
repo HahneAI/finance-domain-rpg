@@ -5591,6 +5591,44 @@ screen, which is the exact blind spot CLAUDE.md's testing section warns about.
 > and layout properties jsdom cannot express; the browser pass is their only proof, and re-running
 > `scripts/coach-eval`-adjacent UI driving is the way to re-verify them.
 
+**F176 · `propose_goal` — Coach's first WRITE-shaped tool, via a confirm card** — `coachTools.js`, `CoachToolUI.jsx`, `App.jsx` — **[G/L]**
+2026-09-03. Every Coach tool before this was read-only or navigational; `propose_goal` is the
+first that can put a row in the user's data. It does not write. It returns a proposal, the panel
+renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
+`handleCoachCreateGoal`.
+> **The write must be indistinguishable from a hand-made goal.** `handleCoachCreateGoal` mirrors
+> `HomePanel`'s own `addGoal` field-for-field — same `g_<ts>` id shape, the shared
+> `GOAL_SYSTEM_COLOR` (exported from HomePanel rather than re-typed, so the two cannot drift),
+> `completed: false`, the `savePersistedStateNow` eager save CLAUDE.md's Persistence section
+> requires, and the same `logBetaEvent("goal_created")` — omit that last one and beta analytics
+> silently under-count goals for anyone who creates them through Coach. **IF** `addGoal` gains a
+> field, **THEN** this handler needs it too.
+> **The privacy rule inverts, and the inversion is the trap.** F114 withholds goal NAMES from
+> Coach. Proposing a name is the opposite direction and is fine — but `propose_goal`'s duplicate
+> check compares against existing labels, so it returns a BOOLEAN
+> (`alreadyHaveOneNamedThis`) and never the matching goal. **IF** a tool ever needs to compare
+> against goal names, **THEN** it reports the comparison's result, never its inputs.
+> **Projection comes from `simulate_new_goal`, not a second estimate** — the card's date is the
+> same `computeGoalTimeline` the goal cards use (F169's `periodsUntilFinish` distinction applies),
+> and editing the amount re-projects locally through `executeCoachTool` with no model call, so the
+> date can never describe a number the user has already changed.
+> **Read-only gate:** the card disables its own button, AND `handleCoachCreateGoal` refuses
+> independently — the write path must not depend on the UI for a paywall check, same rule as
+> `HomePanel`/`BudgetPanel` shadowing their eager-save callbacks.
+> **Hook placement (cost two blank-app crashes to learn).** `handleCoachCreateGoal` sits ABOVE
+> `App.jsx`'s `!authChecked`/`!authedUser` early returns, with the paywall flag read through
+> `isExpiredReadOnlyRef` rather than `isExpiredReadOnly` directly. Both alternatives fail:
+> putting the hook below those returns skips it on those render paths ("Rendered more hooks than
+> during the previous render"), and naming the const in the dependency array from above hits its
+> temporal dead zone, since dependency arrays evaluate during render. Each failure blanked the
+> entire app — there is no top-level error boundary — while `vite build` and all 1859 unit tests
+> passed. **IF** a callback defined near the other Coach handlers needs a value computed after
+> those early returns, **THEN** it reads a ref assigned during render, never the const.
+> Check: `coachTools.test.js`'s propose_goal block (projection parity with simulate_new_goal, the
+> no-date branch, duplicate-without-leak, validation), `coachToolUI.test.jsx`'s `CoachGoalCard`
+> block (edits are what get created, re-projection on amount change, single-confirm, read-only),
+> and `live-testing-checklist.md` item 10 for the browser pass.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

@@ -212,6 +212,24 @@ should be treated as suspect unless a `simulate_*` call appears in the same turn
 instruction-shape problem as DW-19 and wants the same remedy — a worked example of declining to
 estimate and calling the tool — not another prose rule.
 
+**`propose_goal` + the goal card, 2026-09-03** (drift-app-warden §21 F176). Coach's tenth tool and
+its first write-shaped one — the intended heartbeat of goal-setting as an identity conversation
+rather than a form. Coach proposes a name, a target and an optional one-line reason; the panel
+renders an **editable** card showing the projected finish date from the real `computeGoalTimeline`,
+and nothing is written until the user confirms. Editing the amount re-projects locally through
+`executeCoachTool` — no model call — so the date never describes a number already changed.
+
+The name is editable on purpose: rewording Coach's phrasing into your own words is the feature, not
+a concession to it. Live-verified that a reworded name is what actually persists — confirmed, then
+found on Home after a full reload carrying the user's wording, not Coach's.
+
+Two contracts worth restating here because they are easy to get backwards. **The write mirrors
+`HomePanel`'s `addGoal` field-for-field** — same id shape, the shared `GOAL_SYSTEM_COLOR`, the
+eager save, and the same `logBetaEvent("goal_created")`, so a Coach-created goal is
+indistinguishable from a hand-made one and beta analytics don't under-count. **F114's privacy rule
+inverts cleanly**: Coach never *reads* goal names, but proposing one is fine — so the duplicate
+check returns a boolean and never the goal it matched against.
+
 Minor and unfixed: in one answer Coach described a $90/wk bill as "nearly 17% of your current
 surplus" — 17% is its share of *spend* ($522); of surplus ($323) it is 28%. A self-derived ratio
 mislabelled, not a tool figure; same family as DW-19's number-handling limits. Summary generation uses a separate, narrower prompt,

@@ -15,7 +15,7 @@ import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
-import { HomePanel } from "./components/HomePanel.jsx";
+import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -759,6 +759,46 @@ export default function App() {
     setDrawerOpen(false);
     jumpToPanelTop();
   };
+
+  // Latest paywall read-only state, for callbacks defined above the component's
+  // early returns (see handleCoachCreateGoal). Assigned during render once
+  // isExpiredReadOnly is computed, further down.
+  const isExpiredReadOnlyRef = useRef(false);
+
+  // Writes a goal Coach proposed and the user confirmed on the card
+  // (propose_goal → CoachGoalCard). Mirrors HomePanel's own addGoal
+  // field-for-field — same id shape, same GOAL_SYSTEM_COLOR, same
+  // completed:false, the same eager save, and the same beta event — so a
+  // Coach-created goal is indistinguishable from a hand-created one and beta
+  // analytics don't silently under-count.
+  //
+  // Only the paywall check needs a ref — goals/isTester/betaCodeUsed are plain
+  // state declared near the top of the component, so they are ordinary
+  // dependencies. isExpiredReadOnly is the exception. That
+  // const is computed below this component's `!authChecked`/`!authedUser` early
+  // returns, so a hook placed after it is skipped on those render paths —
+  // "Rendered more hooks than during the previous render", a blank app. Putting
+  // it in the dependency array from up here is equally broken: dependency
+  // arrays evaluate during render, so the const is still in its temporal dead
+  // zone. A ref sidesteps both: the hook stays unconditional up here, and the
+  // value is read at call time, by which point it is always assigned.
+  // Both failures blanked the whole app (there is no top-level error boundary)
+  // while `vite build` and the full unit suite passed — CLAUDE.md's documented
+  // React blind spot, hit twice in one change.
+  const handleCoachCreateGoal = useCallback(({ label, target, note }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    const next = [...goals, {
+      id: `g_${Date.now()}`,
+      label,
+      target: Number(target) || 0,
+      color: GOAL_SYSTEM_COLOR,
+      note: note ?? "",
+      completed: false,
+    }];
+    setGoals(next);
+    savePersistedStateNow({ goals: next });
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+  }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2194,6 +2234,8 @@ export default function App() {
   // here, not an unconditional bypass; that asymmetry is now closed.
   const paywallBypassed = isAdmin || isAiAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
+  isExpiredReadOnlyRef.current = isExpiredReadOnly;
+
 
   // Beta Homebase / Money Moves badge count+color — single source shared by
   // the mobile header's icon buttons AND the desktop sidebar's nav item
@@ -4499,6 +4541,8 @@ export default function App() {
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
           onNavigate={handleCoachNavigate}
+          onCreateGoal={handleCoachCreateGoal}
+          readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
           config={config}
           expenses={expenses}

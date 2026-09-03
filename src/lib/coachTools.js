@@ -145,6 +145,26 @@ export const COACH_TOOLS = [
     },
   },
   {
+    name: "propose_goal",
+    description:
+      "Offer the user a new goal to add, with a name you write and a target amount. The app renders it as an editable card under your message — they can reword the name, adjust the amount, and confirm; nothing is saved unless they do. Use this when a conversation lands on something they want to become or achieve, rather than telling them to go add it themselves. Name it the way THEY described it, in their words. Call at most once per message.",
+    input_schema: {
+      type: "object",
+      properties: {
+        label: {
+          type: "string",
+          description: "The goal's name, in the user's own words, e.g. \"Six months of runway\". Short — this is a card title, not a sentence.",
+        },
+        target: { type: "number", description: "Target amount in dollars." },
+        note: {
+          type: "string",
+          description: "Optional one-line reason it matters to them, in their words. Shown on the goal, not to anyone else.",
+        },
+      },
+      required: ["label", "target"],
+    },
+  },
+  {
     name: "simulate_expense_change",
     description:
       "Recalculate the user's goal timeline as if one expense cost a different amount per week (use 0 for cancelling it entirely). Answers \"how much sooner would my goals land if I cut this?\" Returns the current and simulated finish date for every active goal, so the difference is a real calculation rather than an estimate.",
@@ -842,8 +862,54 @@ function toolNavigateTo({ panel, focus }, data) {
   };
 }
 
+function toolProposeGoal({ label, target, note }, data) {
+  const name = String(label ?? "").trim();
+  const amount = Number(target);
+  if (!name) return { error: "A goal needs a name." };
+  if (name.length > 60) return { error: "That name is too long for a goal card — keep it under 60 characters." };
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "target must be a positive dollar amount." };
+
+  // Duplicate check WITHOUT returning any existing label. F114 withholds goal
+  // names from Coach; proposing one is the opposite direction and is fine, but
+  // the reply must not leak the names it compared against — so this reports a
+  // boolean, never the matching goal.
+  const existing = activeGoalsOf(data);
+  const duplicate = existing.some((g) => (g.label ?? "").trim().toLowerCase() === name.toLowerCase());
+
+  // Projected finish comes from the REAL computeGoalTimeline via the same
+  // simulate_new_goal path, appended last (the rank a confirmed goal actually
+  // lands at). Without this the card would be a prefilled text field; with it,
+  // an intention becomes a dated commitment before it is committed to.
+  const sim = toolSimulateNewGoal({ target: amount }, data);
+  const projection = sim.error ? null : sim.newGoal;
+
+  return {
+    ok: true,
+    label: name,
+    target: round2(amount),
+    ...(note ? { note: String(note).trim().slice(0, 140) } : {}),
+    insertAtRank: existing.length + 1,
+    ofTotalAfterAdding: existing.length + 1,
+    projectedFinishDate: projection?.finishDate ?? null,
+    projectedFinishPeriodNumber: projection?.finishPeriodNumber ?? null,
+    onTrackThisFiscalYear: projection?.onTrackThisFiscalYear ?? null,
+    payPeriodUnit: payPeriodUnit(checksPerYearFor(data.config), "lower"),
+    alreadyHaveOneNamedThis: duplicate,
+    // Branches on whether a DATE exists, not on whether a projection object came
+    // back: a goal that cannot finish this fiscal year still returns a
+    // projection, with a null date inside it. Keying off the object told the
+    // model a date was on the card when the card had none.
+    note_to_model: `The card is editable and unsaved — do not tell the user it has been added. ${
+      projection?.finishDate
+        ? "The projected finish date is already on the card; don't repeat it verbatim."
+        : "At their current pace this one does NOT finish inside the fiscal year, so the card shows no date — say that plainly rather than implying a timeline."
+    }${duplicate ? " They already have a goal by this exact name — say so plainly before they confirm." : ""}`,
+  };
+}
+
 const HANDLERS = {
   navigate_to: toolNavigateTo,
+  propose_goal: toolProposeGoal,
   get_goal_detail: toolGetGoalDetail,
   get_expense_detail: toolGetExpenseDetail,
   get_week_breakdown: toolGetWeekBreakdown,

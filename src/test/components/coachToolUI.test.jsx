@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { CoachNavChip, CoachToolActivity, TOOL_ACTIVITY_LABELS } from "../../components/CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, TOOL_ACTIVITY_LABELS } from "../../components/CoachToolUI.jsx";
 import { focusCoachTarget, describeCoachRef } from "../../lib/coachFocus.js";
 import { COACH_TOOL_NAMES } from "../../lib/coachTools.js";
 
@@ -63,6 +63,89 @@ describe("CoachToolActivity", () => {
     for (const name of COACH_TOOL_NAMES) {
       expect(TOOL_ACTIVITY_LABELS[name], name).toBeTruthy();
     }
+  });
+});
+
+describe("CoachGoalCard", () => {
+  const draft = (over = {}) => ({
+    ok: true, label: "Six months of runway", target: 9000, insertAtRank: 3,
+    projectedFinishDate: "the week of April 27th, 2026", projectedFinishPeriodNumber: 18,
+    onTrackThisFiscalYear: true, alreadyHaveOneNamedThis: false, ...over,
+  });
+
+  it("prefills Coach's proposed name and amount", () => {
+    render(<CoachGoalCard draft={draft()} onCreate={() => {}} />);
+    expect(screen.getByLabelText("Goal name").value).toBe("Six months of runway");
+    expect(screen.getByLabelText("Goal target amount").value).toBe("9000");
+    expect(screen.getByText(/On track for the week of April 27th/)).toBeTruthy();
+  });
+
+  it("creates the goal with the user's edits, not Coach's original wording", () => {
+    // The name IS the identity claim — rewording it is the point of the
+    // feature, so the confirmed goal must carry what the user typed.
+    const onCreate = vi.fn();
+    render(<CoachGoalCard draft={draft()} onCreate={onCreate} />);
+    fireEvent.change(screen.getByLabelText("Goal name"), { target: { value: "My own words" } });
+    fireEvent.change(screen.getByLabelText("Goal target amount"), { target: { value: "4500" } });
+    fireEvent.click(screen.getByRole("button", { name: /add goal/i }));
+    expect(onCreate).toHaveBeenCalledWith({ label: "My own words", target: 4500, note: "" });
+  });
+
+  it("re-projects the finish date when the amount is edited", () => {
+    // Otherwise the date would describe a number the user already changed.
+    const onEstimate = vi.fn(() => ({ finishDate: "the week of June 1st, 2026", onTrackThisFiscalYear: true }));
+    render(<CoachGoalCard draft={draft()} onCreate={() => {}} onEstimate={onEstimate} />);
+    fireEvent.change(screen.getByLabelText("Goal target amount"), { target: { value: "1000" } });
+    expect(onEstimate).toHaveBeenCalledWith(1000);
+    expect(screen.getByText(/On track for the week of June 1st/)).toBeTruthy();
+  });
+
+  it("does not re-project a target the user hasn't touched", () => {
+    const onEstimate = vi.fn();
+    render(<CoachGoalCard draft={draft()} onCreate={() => {}} onEstimate={onEstimate} />);
+    expect(onEstimate).not.toHaveBeenCalled();
+  });
+
+  it("says plainly when the goal doesn't finish this fiscal year", () => {
+    render(<CoachGoalCard draft={draft({ projectedFinishDate: null, onTrackThisFiscalYear: false })} onCreate={() => {}} />);
+    expect(screen.getByText(/Not on track to finish this fiscal year/)).toBeTruthy();
+  });
+
+  it("warns about a duplicate name before the user commits", () => {
+    render(<CoachGoalCard draft={draft({ alreadyHaveOneNamedThis: true })} onCreate={() => {}} />);
+    expect(screen.getByText(/already have a goal with this name/i)).toBeTruthy();
+  });
+
+  it("blocks confirming an emptied name or a bad amount", () => {
+    const onCreate = vi.fn();
+    render(<CoachGoalCard draft={draft()} onCreate={onCreate} />);
+    fireEvent.change(screen.getByLabelText("Goal name"), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /add goal/i }));
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /add goal/i }).disabled).toBe(true);
+  });
+
+  it("refuses to write under the paywall's read-only mode", () => {
+    const onCreate = vi.fn();
+    render(<CoachGoalCard draft={draft()} onCreate={onCreate} readOnly />);
+    fireEvent.click(screen.getByRole("button", { name: /add goal/i }));
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it("confirms once and then shows it was added", () => {
+    // Guards against a double-tap creating two goals.
+    const onCreate = vi.fn();
+    render(<CoachGoalCard draft={draft()} onCreate={onCreate} />);
+    const btn = screen.getByRole("button", { name: /add goal/i });
+    fireEvent.click(btn);
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Added to your goals/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /add goal/i })).toBeNull();
+  });
+
+  it("renders nothing for a failed proposal", () => {
+    const { container } = render(<CoachGoalCard draft={{ error: "target must be positive" }} onCreate={() => {}} />);
+    expect(container.firstChild).toBeNull();
   });
 });
 

@@ -1,0 +1,58 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L) — Axis 3 (Sentence Economy) extremes for Job
+  Hunt Assistant, on the mode's own shipped model (claude-sonnet-5, matching
+  JobHuntChatPanel.jsx). Healthy runway variant only — same reasoning as the
+  Net Worth Trigger slice: isolate the axis on the "clean baseline" scenario,
+  not the tight-runway one where Axis 2 (Urgency Escalation) findings
+  already showed a content-based (not length-based) urgency signal.
+
+  Score-2 (natural) is NOT re-run here — real data already exists from
+  Phase 5's second slice (`promptfooconfig.phase5b.yaml`). Only the two
+  extremes are new: 2 calls.
+
+  RESCALED 2026-09-03 (same day, before any target locked — see
+  coach-personality-rubric.md's Axis 3 section): score 1 is now "2-3
+  sentences, minimal," not the old rigid one-sentence/fragment floor. What
+  this file calls "score-5" below elicits what the rescaled table now calls
+  score 4 (Expansive) — the new score 5 (Exhaustive/itemized) hasn't had a
+  dedicated live test on this mode.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/jobHuntChat.js
+    label: job-hunt-chat
+
+defaultTest:
+  vars:
+    variant: healthy
+    userMessage: "Which of these two applications should I follow up on first, and how?"
+
+tests:
+  - description: "Elicit score-1 (Concise) — 2-3 short sentences, at most one supporting fact"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response
+        only): produce output scoring exactly 1 on Sentence Economy per
+        docs/coach-personality-rubric.md Axis 3 — "Two to three short
+        sentences — the answer plus at most one supporting fact and the one
+        required action. No elaboration beyond that." Every other rule
+        above (grounding, one concrete action, no Markdown, metaphor cap)
+        still applies normally.
+
+  - description: "Elicit score-4 (Expansive) — multiple paragraphs, several numbers named"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 4 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "Multiple paragraphs, several relevant numbers or
+        considerations named — a real written explanation, not just a quick
+        check-in." Every other rule above (grounding, one concrete action,
+        no Markdown, metaphor cap) still applies normally.

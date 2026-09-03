@@ -171,6 +171,207 @@ accident that a Metaphor-Intensity-only pass would have missed entirely.
 
 ---
 
+## Axis 3 — Sentence Economy *(new — promoted from "Future Axes" 2026-09-03, `docs/TODO.md` §2.L
+Phase 5)*
+
+*Target message length at a SINGLE severity level — how much a mode says by default, holding the
+situation constant. Distinct from Axis 2 (Urgency Escalation): Axis 2 is how much a mode's length
+moves *across* severity within itself; this is where its length sits to begin with. DW-19's
+before/after transcripts (Known Limitations, below) are real anchor data for the high end of this
+axis, independent of the Axis 2 data.*
+
+| Score | Label | Definition |
+|---|---|---|
+| 1 | Concise | Two to three short sentences — the answer plus at most one supporting fact and the one required action. No elaboration beyond that. |
+| **2** | **Standard** | **← current anchor, matches `COACH_PERSONA_PROMPT`'s own default instruction ("two to three sentences, never more").** A direct answer with real supporting context woven in — a brief WHY or a second relevant number, not just the bare fact — still capped at 2-3 sentences by the shared rule, but denser than score 1's minimal version. |
+| 3 | Elaborated | A short paragraph or two — one supporting example or a bit of extra reasoning beyond the bare answer, still focused on a single topic. |
+| 4 | Expansive | Multiple paragraphs, several relevant numbers or considerations named — a real written explanation, not just a quick check-in. |
+| 5 | Exhaustive | A full structured walkthrough that addresses every distinct itemizable element of the situation individually (every expense line, every résumé line, every relevant tile) — reads as a complete audit, not just a longer report. |
+
+**RESCALED 2026-09-03, before any target was locked — the original scale (struck through below)
+had a rigid one-sentence/fragment floor at score 1, and the live data collected against it argued
+against keeping it, not just for cosmetic reasons:**
+
+| ~~Score~~ | ~~Label~~ | ~~Definition~~ |
+|---|---|---|
+| ~~1~~ | ~~Telegraphic~~ | ~~One short sentence, sometimes a fragment — the absolute minimum words needed to answer and give the one required action, no elaboration, no supporting detail.~~ |
+| ~~2~~ | ~~Tight~~ | ~~Two short sentences — the answer plus exactly one supporting fact, nothing more.~~ |
+| ~~3~~ | ~~Standard~~ | ~~← old anchor, matches `COACH_PERSONA_PROMPT`'s own default instruction.~~ |
+| ~~4~~ | ~~Elaborated~~ | ~~A short paragraph or two.~~ |
+| ~~5~~ | ~~Exhaustive~~ | ~~Multiple paragraphs, every relevant number named.~~ |
+
+Three real, independent pieces of evidence from the findings below argued for retiring the
+one-sentence floor rather than keep chasing it: (1) even the two models that COULD reach it
+(Sonnet, Opus) only did so under an explicit, heavy-handed override — not a register either would
+ever reach for on its own; (2) Résumé Review couldn't reach it AT ALL, no matter how the override
+was worded, because the mode's own addendum structurally requires covering multiple elements every
+time; (3) Haiku — the model actually locked for Ask Coach — never got closer than two sentences
+regardless of how hard the override pushed. A floor no real Coach response should ever land on,
+that one mode's own shipped design can't reach under any wording, was measuring the wrong thing.
+
+**The fix: shift the whole scale up one notch, not just loosen score 1 in place.** What was score
+2 ("Tight," two sentences + one fact) is now score 1. What was score 3 (the persona-default
+anchor) is now score 2 — but reworded from "brief context" to "real supporting context... a brief
+WHY," so it stays *distinctly denser* than the new score 1 even though both nominally fit inside
+the same 2-3-sentence hard cap `COACH_PERSONA_PROMPT` always enforces; the two are now
+differentiated by content density within that cap, not sentence count alone (the same way Axis 1
+differentiates score 2 from score 3 by frequency, not just presence/absence). What was score 4
+("Elaborated") is now score 3; what was score 5 ("Exhaustive," multi-paragraph) is now score 4.
+**Score 5 is genuinely new, not just relabeled** — the real Résumé Review data below showed a
+qualitatively different top band from "just more paragraphs": an itemized, line-by-line audit that
+addresses every discrete element on its own, distinct enough from score 4 to earn its own rung
+rather than being folded into it.
+
+**Calibrating this axis means deliberately overriding `COACH_PERSONA_PROMPT`'s own length
+instruction, not testing around it** — unlike Metaphor Intensity/Urgency Escalation, where length
+stays roughly incidental to what's being measured, Sentence Economy's score-1 and score-5 extremes
+are only reachable by explicitly suspending the "two to three sentences, never more" rule for that
+one response. The calibration override for this axis must say so plainly, or a compliant model
+will simply refuse to leave score 2 regardless of what's asked.
+
+**Reading the findings below after the rescale:** every transcript quoted was collected under the
+OLD scale — the section headers still say "Score-1 (Telegraphic)"/"Score-5 (Exhaustive)" because
+that's genuinely what was elicited at the time, and rewriting history to use the new numbers would
+misrepresent what was actually tested. Translation to the new scale: the old "Score-1" data (a
+true one-sentence fragment, when Sonnet/Opus reached it) sits BELOW the new score 1 entirely — it's
+the retired floor, not a point on the current scale. The old "natural, no-override Score-3" data —
+Sonnet/Opus's real 3-sentence defaults — maps onto the new **score 2** (the persona-default anchor,
+still true). Haiku's own natural default (2 paragraphs, ~6 sentences) is long enough that it now
+lands closer to the new **score 3** — worth noting this softens the old "Haiku overshoots the
+default" framing on THIS axis's numbering, but does not change the separate, still-real fact that
+`COACH_PERSONA_PROMPT`'s actual instruction text is unchanged and Haiku's natural output still
+runs past what that text literally says. The old "Score-5" data (Ask Coach/Net Worth Trigger's
+multi-paragraph-but-not-itemized samples) maps onto the new **score 4**; Résumé Review's itemized,
+line-by-line "Score-5" sample is what the new **score 5** was written to describe.
+
+**First extremes-discovery pass, done (2026-09-03, `promptfooconfig.phase5d.yaml`) — 9 calls, 3
+models × {elicit-1, natural-3, elicit-5}, no repeat yet.** Ask Coach, `fixtures/testAccount.js`'s
+default account, "How's my week looking?" — same account/question as every other Ask Coach
+calibration pass in this harness, only the register instruction varies.
+
+**Score-1 (Telegraphic): Sonnet and Opus both nail it, Haiku doesn't reach it.**
+- Sonnet: *"$330 left this week — check Left This Week on Home."* — one true fragment, exactly
+  the definition.
+- Opus: *"$330 left this week — set your first goal on Home."* — same shape, clean hit.
+- Haiku: *"You've got 330 dollars free this week after rent and your other regular spend, and
+  next week's check is running 55 dollars above your average, so you're tracking steady. Set up
+  your first goal in the Goals section of Home and I'll show you exactly how fast you can fund
+  it."* — two sentences, extra detail (the next-week comparison) neither other model included.
+  This reads as score-2 (Tight), not score-1 — **Haiku did not comply with the override as
+  cleanly as the other two candidates.**
+
+**Score-3 (Standard, no override — the natural, unforced default): Sonnet and Opus land almost
+exactly on `COACH_PERSONA_PROMPT`'s own stated rule; Haiku overshoots it with no push at all.**
+- Sonnet: 3 sentences, 1 paragraph — matches the "two to three sentences" instruction almost
+  exactly.
+- Opus: 3 sentences, 1 paragraph — same.
+- Haiku: 2 paragraphs, ~6 sentences total (*"You're running a 325 dollar surplus... Your budget
+  health is at 62 percent... The one thing missing is a goal..."*) — already past the persona's
+  own default before any calibration override was even applied.
+
+**Score-5 (Exhaustive): Sonnet and Opus both produce a genuine multi-paragraph report; Haiku's
+"exhaustive" attempt is barely longer than its own natural score-3.**
+- Sonnet: 4 full paragraphs, walks every context field in turn (income/spend/surplus, next-week
+  status explained, Left This Week defined, savings rate, net worth trend, Budget Health's 50/75%
+  band explained, the expense line, log entries) before closing on one action — genuinely reads
+  as a report.
+- Opus: 5 paragraphs, similarly thorough, and goes one step further than Sonnet — computes a
+  derived figure not directly in context (*"that surplus adds up to roughly $13,650"* across the
+  42 remaining weeks, real arithmetic on the $325 surplus) and reasons about the unitemized
+  remainder of spend. The most expansive of the three.
+- Haiku: 2 paragraphs, ~5 sentences — structurally almost identical to its own natural score-3
+  response above. Asking for "multiple paragraphs, every relevant number named" moved it only
+  slightly past where it already sits unprompted.
+
+**The real finding: Haiku has the narrowest dynamic range of the three models on this axis —
+Sonnet and Opus both show clean range from a one-sentence fragment to a full report; Haiku
+clusters tightly around ~2 paragraphs regardless of what's asked, on either end.** This is a
+mirror-image of Phase 2's Metaphor Intensity finding (there, Sonnet had the narrowest range and
+Opus the widest; Haiku held its floor cleanly but couldn't reach score-5). For Sentence Economy,
+it's specifically Haiku — the model already locked for Ask Coach (`docs/TODO.md` §2.L Phase 7) —
+that shows compression, and notably: **its NATURAL, unforced default already runs longer than the
+persona's own instructed length**, independent of any calibration extreme. Worth surfacing to
+Phase 7's model-selection decision as a new consideration, not something this axis alone should
+resolve — the original Haiku lock was grounded in Metaphor Intensity score-1 compliance, which
+still holds; this doesn't reverse that, it adds a second, different signal that the Phase 7
+decision hasn't weighed yet.
+
+**Extended to the other three built modes (2026-09-03) — `promptfooconfig.phase5d-networth.yaml`/
+`-jobhunt.yaml`/`-resume.yaml`, each mode's own shipped model, 6 calls (elicit-1 + elicit-5 per
+mode; score-3 natural reuses each mode's existing Phase 5 data rather than re-spending). Two real
+findings that refine, not overturn, the Ask Coach result above:**
+
+- **Haiku's low-end compression holds again (Net Worth Trigger, Green tier) — still can't reach
+  true score-1.** Same shape as Ask Coach: *"Your spend dropped to 85 this week and you're
+  running a 90 percent savings rate — that's the turnaround. Open your Home tile and lock in
+  next week's 900 takehome..."* — two sentences, not the one-fragment definition.
+- **But Haiku's high-end compression did NOT hold here — it produced a genuinely elaborate score-5
+  (4 paragraphs: surplus, savings rate, projected annual $40,280, expense line, budget health
+  ratio, weeks remaining, then the missing-goal gap, one clean corner-man touch — "go the
+  distance" — never stacked).** This is a real difference from Ask Coach's score-5 attempt, where
+  Haiku barely moved past its own natural default. **Reading: Haiku's Sentence Economy range may
+  be less a fixed per-model ceiling and more a function of how much genuinely relevant material a
+  scenario gives it to work with** — Green tier's addendum ("name the specific improvement...
+  acknowledge the turnaround plainly") plus a richer, more favorable account (this fixture's own
+  845/85 "well-managed" numbers) gave Haiku a real narrative to build out; Ask Coach's bare "how's
+  my week" against a thinner, more neutral account didn't. Worth keeping in mind before treating
+  "Haiku has a hard Sentence Economy ceiling" as a settled, model-wide fact — it held on the low
+  end here, not the high end.
+- **Job Hunt Chat (Sonnet) replicates Ask Coach's clean range exactly.** Score-1: one true
+  sentence (*"Riverbend — send a short note confirming the interview and reconfirming your
+  availability."*) — a different but equally grounded framing than the natural sample's (this one
+  leans on Riverbend's own next step rather than Cascade's silence), still a clean single-fragment
+  hit. Score-5: 5 genuine paragraphs, cites the real runway/burn numbers, addresses both
+  applications with real reasoning, zero boxing vocabulary at either extreme — consistent with
+  this mode's own "trace" target holding independent of length.
+- **New finding, distinct from anything the other three modes showed: Résumé Review's score-1
+  may be structurally unreachable, not just uncalibrated.** Despite a calibration override
+  explicitly suspending both the shared length rule AND this mode's own paragraph exception, the
+  "score-1" attempt came back as 4 full paragraphs — barely distinguishable in length from its
+  natural default. Likely cause: `RESUME_REVIEW_ADDENDUM` itself *requires* covering multiple
+  discrete elements every review ("call out weak or vague lines... name real gaps... note real
+  strengths... end with the single most important thing") — that checklist may be structurally
+  incompatible with a true one-sentence answer, independent of what Sentence Economy asks for. The
+  score-5 side worked as intended: a genuine step up from the natural default, an explicit
+  line-by-line walkthrough addressing the title, every résumé line, every skill, and the education
+  line individually, each with its own paragraph — visibly more granular than the natural sample's
+  grouped treatment. **Open question at the time, largely answered by the rescale below:** its
+  4-paragraph "floor" is nowhere near the new score 1 or 2 either — this mode's real floor sits at
+  new score **3 or 4** (Elaborated/Expansive), not the bottom of the scale at all, which is exactly
+  what its addendum's own required checklist (weak lines, gaps, strengths, one fix) would predict.
+  Not a harness failure to force it lower — Résumé Review may simply never legitimately score
+  below 3 on this axis, and that's fine; not every mode needs to reach every point on every axis.
+
+**Still not locked.** Elicited and compared across all four built modes now; target-picking and
+repeat-verification remain open. Résumé Review likely has a genuinely higher floor than the other
+three modes on this axis (see above) — the batch decision should treat that as a real per-mode
+finding, not something to force into alignment with the others.
+
+**Not yet locked — extremes found, target not chosen.** Per the Calibration Methodology: elicit
+(done), compare against definitions (done, above), pick a target with rationale (not done — this
+needs the batch decision, since a Haiku-specific target might reasonably differ from a
+Sonnet/Opus-capable one), verify under repeat calls (not done, single sample each). Full
+transcripts: `scripts/coach-eval/results/phase5d.json` (gitignored) or re-run
+`promptfooconfig.phase5d.yaml`.
+
+**Model decision made 2026-09-03 (`docs/TODO.md` §2.L Phase 7): Ask Coach stays on
+`claude-haiku-4-5` for now — but this finding was strong enough to set a real future direction,
+not just get filed.** Reviewed the real cost delta this axis raises (measured: ~$0.004/call on
+Haiku vs. ~$0.0145-0.0175/call on Sonnet for a natural Ask Coach message, ~3.6-4.5x). Sonnet's
+cleaner range on this axis alone doesn't clear that bar yet, with the rest of Phase 5 (other
+modes, other undefined axes) still incomplete — but the gap is real, not cosmetic, so the likely
+eventual answer isn't "pick one model for Ask Coach forever," it's **routing model choice
+per-message within a session**: Haiku for routine turns, Sonnet reached for on a turn that
+specifically needs more range. Deliberately not built now — that's real added complexity
+(session-level model state, a switching rule, its own test burden) not worth designing until
+every mode/axis has been through Phase 5 at least once, so the rule gets designed against the
+full picture rather than patched per finding. Full direction note and the cost math behind it:
+`docs/TODO.md` §2.G/§2.L Phase 7 — including a recorded, speculative pricing contingency (a paid
+"Coach Upgrade" tier) if Sonnet-driven costs ever do outrun what the app's usage caps were priced
+around.
+
+---
+
 ## Interaction Modes — Target Scores
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
@@ -202,12 +403,10 @@ accident that a Metaphor-Intensity-only pass would have missed entirely.
   this would be the absolute register at a single severity level. The near-limit example under
   Axis 2 above is already real anchor data for this axis too, whenever it gets defined.
 - **Warmth / formality** — how personal vs. professional the register is
-- **Sentence economy** — target message length by mode. Also related to Axis 2, same distinction:
-  this is a per-mode static target, Axis 2 is how much that target moves within a mode by
-  situation. DW-19's before/after transcripts (Known Limitations, above) are real anchor data
-  for this one, independent of the Axis 2 data.
 - ~~**Urgency escalation** — how the voice shifts under Red-tier / runway-critical signals~~ —
   **promoted to Axis 2 above (2026-09-01).**
+- ~~**Sentence economy** — target message length by mode~~ — **promoted to Axis 3 above
+  (2026-09-03).**
 
 ---
 
@@ -327,8 +526,8 @@ completion — are locked to `claude-opus-5` for when each one gets built; none 
 code yet (§8 is still a brainstorming pool, not committed work), so this is a policy for a future
 build, not a change shipped today. Everything else in the Interaction Modes table (Job Hunt
 Assistant, Résumé Review, Statement Summary, the Net Worth Trigger's three tiers, and the rest)
-is still undecided — see §2.L Phase 6's own entry for the exact scope of what this lock does and
-doesn't cover.
+is still undecided — see §2.L Phase 7's own entry (renumbered 2026-09-03, was Phase 6) for the
+exact scope of what this lock does and doesn't cover.
 
 **Phase 3 (repeat-verify) — same day, both locked targets confirmed reliable, one harness bug
 found and fixed along the way.** Ran each locked target 3x (`--repeat 3`) instead of trusting the
@@ -500,6 +699,38 @@ landing on this wording. **Not yet repeat-verified against the live shipped prom
 (the 3/3 verification ran against the candidate wording pre-application, not the final composed
 `RESUME_REVIEW_SYSTEM_PROMPT` string) — worth a confirmation pass whenever this mode comes up
 again, though the composition is mechanically identical (same persona + same addendum text).
+
+**Ask Coach's tool-available, trimmed-context prompt — a directional rerun against the Phase
+1-4 baseline, not a new calibration (2026-09-03).** `AskCoachPanel.jsx` now sends
+`detailAvailableViaTools: true` plus `COACH_TOOLS` (the sister branch's tool-loop work) — every
+Phase 1-4 finding above was recorded against the full, untrimmed context with no tools at all,
+a real and growing divergence between this harness and what actually ships. Per the user's own
+request ("a thumb on the tool introduction," not a full re-lock), ran
+`scripts/coach-eval/personalityToolLoopLiveTest.mjs` — the exact Phase 2/3 default fixture and
+Phase 4's near-limit override (845/830), the exact same question ("How's my week looking?"),
+`claude-haiku-4-5` (the locked model), only the trim flag + tools added. 2 conversations, no
+repeat — a quick check, not a lock-in pass.
+
+- **Metaphor Intensity holds — same ballpark, closer than expected.** Both responses landed on
+  exactly one figurative touch, "breathing room" — the SAME phrase the original untrimmed Phase
+  2/3 baseline used for this identical scenario. Neither reached for a tool (a plain status check
+  doesn't need drill-down depth on a one-expense account), no stacking, no boxing-specific
+  vocabulary, both ended on one concrete action. On the axis this check exists to protect, the
+  tool/trim introduction changed nothing.
+- **One real difference, not a regression — Axis 2 (Urgency Escalation) shifted on this sample.**
+  The near-limit response ran noticeably shorter than the original Phase 4 finding it's being
+  compared against: 3 sentences here vs. 3 full paragraphs (~6 sentences) there, and it closed
+  with a follow-up invitation ("Ask me about your budget, income, or goals specifically...")
+  rather than Phase 4's explicit "the real issue isn't this week or next — it's the pattern"
+  framing. If anything this reads as MORE compliant with the persona's base 2-3-sentence default,
+  not less — but it's a genuine behavior difference on a single, unrepeated sample, not something
+  to treat as a stable finding yet.
+
+Full transcripts: run the script yourself (see `scripts/coach-eval/README.md`) — nothing here was
+truncated in the write-up above. `CoachNetWorthCard.jsx` has no tools and is unaffected; its
+Phase 5 tier findings remain accurate as recorded. Job Hunt Chat's own tool gap (present since
+the first coach-mcp-tools merge, `JOB_HUNT_TOOLS`) is unchanged by this pass — this rerun covered
+Ask Coach only.
 
 ---
 

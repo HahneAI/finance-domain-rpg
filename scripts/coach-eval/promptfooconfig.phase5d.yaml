@@ -1,0 +1,90 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L) — Sentence Economy (Axis 3, newly defined
+  2026-09-03 in coach-personality-rubric.md, RESCALED the same day before any
+  target was locked — see that file's Axis 3 section for the full "why").
+  Test case labels/quotes below reflect the rescaled definitions: score 1 is
+  now "2-3 sentences, minimal" (the old rigid one-sentence/fragment floor
+  was retired — no test in this harness should target it again), score 2 is
+  the persona-default anchor, and what this file's "score-5" case elicits is
+  now score 4 (Expansive) under the rescaled table, not score 5 — the new
+  score 5 (Exhaustive/itemized audit) hasn't had a dedicated live test yet,
+  see coach-personality-rubric.md's Axis 3 notes on where real anchor data
+  for it already exists (Résumé Review's natural output).
+
+  First calibration pass: elicit score-1 (Concise) and score-4 (Expansive)
+  per the Calibration Methodology, PLUS score-2 (Standard, no override — the
+  natural default) across all three candidate models, so the batch-decision
+  step has real per-model data for this axis the same way Phase 1/2 built it
+  for Metaphor Intensity.
+
+  Same account/question as every other Ask Coach calibration pass in this
+  harness (fixtures/testAccount.js's default buildTestContext(), "How's my
+  week looking?") — only the register instruction varies, per the
+  methodology's own rule that only ONE thing should change between cases.
+
+  Sentence Economy is different from Metaphor Intensity/Urgency Escalation
+  in one important way: its score-1/score-5 extremes require explicitly
+  suspending COACH_PERSONA_PROMPT's own "two to three sentences, never more"
+  instruction for that one response, not just adding a stylistic push on top
+  of it — the calibration overrides below say so plainly, or a compliant
+  model would simply refuse to leave score 3 regardless of what's asked.
+
+  9 calls total (3 models × 3 conditions), no repeat yet — a first
+  extremes-discovery pass, same shape as Phase 1. Opus gets max_tokens 3072
+  (extended thinking headroom, the same fix Phase 3 needed); Haiku/Sonnet get
+  1536, bumped from the usual 1024 specifically because this axis's own
+  score-5 condition asks for "multiple paragraphs" and a tight cap would
+  truncate a legitimate long attempt rather than reveal a real ceiling —
+  don't shrink it back down without re-reading this note.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+  - id: anthropic:messages:claude-opus-5
+    label: opus
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 3072
+
+prompts:
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Elicit score-1 (Concise) — 2-3 short sentences, at most one supporting fact"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response
+        only): produce output scoring exactly 1 on Sentence Economy per
+        docs/coach-personality-rubric.md Axis 3 — "Two to three short
+        sentences — the answer plus at most one supporting fact and the one
+        required action. No elaboration beyond that." Every other rule
+        above (grounding, one concrete action, no Markdown, metaphor cap)
+        still applies normally.
+
+  - description: "Score-2 (Standard) — natural default, no override"
+    vars: {}
+
+  - description: "Elicit score-4 (Expansive) — multiple paragraphs, several numbers named"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 4 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "Multiple paragraphs, several relevant numbers or
+        considerations named — a real written explanation, not just a quick
+        check-in." Every other rule above (grounding, one concrete action,
+        no Markdown, metaphor cap) still applies normally.

@@ -33,11 +33,17 @@ const TIER_CONTEXT = {
   green: () => buildTestContext({ weeklyIncome: 845, avgWeeklySpend: 85 }),
 };
 
+// vars.calibrationInstruction is OPTIONAL — added 2026-09-03 for Axis 3
+// (Sentence Economy) extremes-discovery, same pattern as
+// askCoachComposed.js. Omitting it samples natural behavior (already done
+// for all three tiers, Phase 5's first slice); passing it forces a
+// deliberate length extreme for this one response.
 export default function ({ vars }) {
   const systemPrompt = buildNetWorthSystemPrompt(vars.tier);
   const context = TIER_CONTEXT[vars.tier]();
+  const calibrationBlock = vars.calibrationInstruction ? `\n\n${vars.calibrationInstruction}` : "";
   return [
-    { role: "system", content: `${systemPrompt}\n\n${context}` },
+    { role: "system", content: `${systemPrompt}\n\n${context}${calibrationBlock}` },
     { role: "user", content: "Write my check-in message now." },
   ];
 }

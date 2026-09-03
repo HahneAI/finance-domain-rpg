@@ -334,10 +334,17 @@ retry-on-a-hunch.** Concretely for this file:
     multi-paragraph report); Haiku has the narrowest range of the three —
     can't reach true score-1, its score-5 barely differs from its own
     natural score-3, and that natural default already overshoots
-    `COACH_PERSONA_PROMPT`'s own instructed length unprompted.** Worth
-    weighing in Phase 7's model decision. Remaining: sample against Net
-    Worth Trigger/Job Hunt/Résumé Review, pick + repeat-verify a target.
-    Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
+    `COACH_PERSONA_PROMPT`'s own instructed length unprompted.** Weighed
+    against measured cost (~3.6-4.5x/call for Sonnet) — **decision: Ask
+    Coach stays on Haiku for now, but the finding is real enough to set a
+    future direction: per-MESSAGE model routing within a session (Haiku for
+    routine turns, Sonnet reached for when a turn needs more range), tuned
+    once every mode/axis has been through this phase at least once, not
+    decided per-finding.** A speculative paid tier ("Coach Upgrade") is also
+    recorded in `docs/TODO.md` §2.G as a cost-contingency direction, not a
+    roadmap item. Remaining: sample against Net Worth Trigger/Job Hunt/
+    Résumé Review, pick + repeat-verify a target. Full writeup:
+    `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
     Warmth/formality (still undefined), fixing Net Worth Trigger Amber's
     stacked-touch rule violation (a real, already-identified bug, not just

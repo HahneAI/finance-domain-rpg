@@ -254,6 +254,22 @@ Sonnet/Opus-capable one), verify under repeat calls (not done, single sample eac
 transcripts: `scripts/coach-eval/results/phase5d.json` (gitignored) or re-run
 `promptfooconfig.phase5d.yaml`.
 
+**Model decision made 2026-09-03 (`docs/TODO.md` §2.L Phase 7): Ask Coach stays on
+`claude-haiku-4-5` for now — but this finding was strong enough to set a real future direction,
+not just get filed.** Reviewed the real cost delta this axis raises (measured: ~$0.004/call on
+Haiku vs. ~$0.0145-0.0175/call on Sonnet for a natural Ask Coach message, ~3.6-4.5x). Sonnet's
+cleaner range on this axis alone doesn't clear that bar yet, with the rest of Phase 5 (other
+modes, other undefined axes) still incomplete — but the gap is real, not cosmetic, so the likely
+eventual answer isn't "pick one model for Ask Coach forever," it's **routing model choice
+per-message within a session**: Haiku for routine turns, Sonnet reached for on a turn that
+specifically needs more range. Deliberately not built now — that's real added complexity
+(session-level model state, a switching rule, its own test burden) not worth designing until
+every mode/axis has been through Phase 5 at least once, so the rule gets designed against the
+full picture rather than patched per finding. Full direction note and the cost math behind it:
+`docs/TODO.md` §2.G/§2.L Phase 7 — including a recorded, speculative pricing contingency (a paid
+"Coach Upgrade" tier) if Sonnet-driven costs ever do outrun what the app's usage caps were priced
+around.
+
 ---
 
 ## Interaction Modes — Target Scores

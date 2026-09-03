@@ -678,7 +678,34 @@ integration, rewrite mode, cover letters) are still documentation only as of thi
   the API key stays server-side; same auth pattern as `api/delete-account.js` (verify Supabase
   Bearer token, then call Anthropic); returns streamed response for chat UX
 - [x] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
-  for statement summaries and job hunt drafts; log token counts per call type in dev
+  for statement summaries and job hunt drafts; log token counts per call type in dev.
+  **Direction updated 2026-09-03 (§2.L Phase 7):** the model-per-mode split above may end up
+  finer-grained than one model per mode — real per-axis calibration data (Sentence Economy) now
+  shows a case for Sonnet on some Ask Coach turns specifically, weighed against measured cost
+  (~$0.004/call Haiku vs. ~$0.0145-0.0175/call Sonnet, ~3.6-4.5x). The likely eventual shape is
+  **mixing Haiku and Sonnet within a single session**, not a fixed per-mode lock — routine turns
+  stay on Haiku, a turn that specifically calls for more range reaches for Sonnet. Explicitly not
+  built now — held until every mode/axis has been through a Phase 5 pass at least once, so the
+  routing rule is designed once against the full picture instead of patched per finding. Ask
+  Coach stays on Haiku in the meantime.
+
+  **Pricing contingency, recorded 2026-09-03 (speculative — same "not committed work" status as
+  §8's idea pool, not a roadmap item):** if Sonnet-driven Coach costs end up exceeding what the
+  25-message/day cap (`AI_ADMIN_DAILY_COACH_LIMIT`, `api/coach.js`) was priced around, but the app
+  is demonstrably delivering real value through a strong Coach presence — don't respond by
+  quietly downgrading Coach's quality to protect margin. Instead, consider a paid upgrade tier:
+  - **Working name: "Coach Upgrade," ~$5-10/month.**
+  - **A higher daily cap on Coach usage** than the base tier's 25 messages/day.
+  - **A phone-call agent with Coach** — a voice interface to the same Coach persona, not a
+    separate product.
+  - **A monthly one-on-one call with an actual company representative** — a real human touch on
+    top of the AI layer, not a substitute for it.
+  - **The point:** this funds the cost of giving Coach real range (the per-message Sonnet routing
+    above, or any other genuinely more expensive capability) by selling MORE Coach to the users
+    who want it, rather than by rationing what everyone gets. Preserves margin without taking
+    value away from the base experience.
+  Not scoped, not designed, no Stripe/entitlement work started — a direction to remember if the
+  cost math above ever actually bites, not a plan to build against yet.
 - [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
 - [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§2.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
@@ -1225,11 +1252,43 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
   needed to hit the target register, not by default. **Two modes locked (2026-09-01), the rest of
   the landscape still open:**
-  - **Ask Coach (general chat, §2.B) → `claude-haiku-4-5`.** Not a change — this confirms the
+
+  **Direction set 2026-09-03, not yet acted on: model choice may end up PER-MESSAGE, not just
+  per-mode.** Axis 3 (Sentence Economy)'s first pass found Haiku has the narrowest dynamic range
+  of the three candidates and Sonnet/Opus both hold their full range cleanly — a real, non-cosmetic
+  reason to lean toward Sonnet for Ask Coach specifically on this axis, weighed against Sonnet
+  running ~3.6-4.5x the cost per call (measured: ~$0.004/call Haiku vs. ~$0.0145-0.0175/call
+  Sonnet for a natural Ask Coach message — see `coach-personality-rubric.md`'s Axis 3 section for
+  the full breakdown). **Decision: this is a real, strong enough signal that the eventual answer
+  may be mixing Haiku and Sonnet WITHIN a single Ask Coach session** — e.g. Haiku for routine
+  status-check turns, Sonnet reached for on a turn that specifically calls for more range (a
+  broad summary, a genuinely complex question) — rather than one model locked for the whole mode
+  forever. **Not implemented now.** This kind of per-message routing is real added complexity
+  (session-level model state, a rule for when to switch, its own testing burden) that isn't worth
+  building until every mode/axis has been through Phase 5 at least once — tuning this is
+  explicitly held for **the very end of all feature testing**, once the full shape of where each
+  model actually earns its cost is known, not decided mode-by-mode as each one gets tested.
+  **Ask Coach stays on Haiku for now** (see below) — this note exists so the eventual per-message
+  design isn't reinvented from scratch, and so a future session doesn't read "Haiku locked" as a
+  closed question.
+
+  **Cost-driven pricing contingency, recorded 2026-09-03 (speculative — not committed work, same
+  status as §8's idea pool):** if Sonnet-driven costs for Ask Coach exceed what the 25-message/day
+  cap (`api/coach.js`'s `AI_ADMIN_DAILY_COACH_LIMIT`) was priced around, but the app is
+  demonstrably delivering real value through a strong Coach presence, consider a paid upgrade tier
+  (working name: "Coach Upgrade," ~$5-10/month) rather than downgrading Coach's quality to protect
+  margin. See §2.G's Cost controls entry for the full contingency writeup — recorded there since
+  it's a direct consequence of this mode's cost profile, not a general pricing decision.
+
+  - **Ask Coach (general chat, §2.B) → `claude-haiku-4-5`, KEPT 2026-09-03 after reviewing the
+    Sonnet cost/benefit tradeoff above.** Not a change — this confirms the
     existing hardcoded default (`coachPrompts.js`/`api/coach.js`) with real calibration evidence
     behind it now, rather than leaving it as an unverified historical choice. Grounds: score-1
     held cleanly on Haiku in Phase 1/2; score-1 is this mode's only calibrated target so far
-    (score-5 was never this mode's target — see the rubric's own `3 (default)` row).
+    (score-5 was never this mode's target — see the rubric's own `3 (default)` row). **Revisited,
+    not reversed, once Axis 3 data came in** — Sonnet's stronger Sentence Economy range is a real
+    argument, but not strong enough alone to justify ~3.6-4.5x cost with the rest of Phase 5 still
+    incomplete; see the per-message-routing note above for where this is actually likely headed.
   - **"Special handling" high-significance moments → `claude-opus-5`.** Concretely: Burnout
     Sentinel (§8.F2), the Heirloom Letter Delivery Ceremony (§8.F3), and a major goal completion
     moment — all still `UNSCORED`/brainstorming-only in `coach-personality-rubric.md`'s

@@ -327,8 +327,8 @@ completion — are locked to `claude-opus-5` for when each one gets built; none 
 code yet (§8 is still a brainstorming pool, not committed work), so this is a policy for a future
 build, not a change shipped today. Everything else in the Interaction Modes table (Job Hunt
 Assistant, Résumé Review, Statement Summary, the Net Worth Trigger's three tiers, and the rest)
-is still undecided — see §2.L Phase 6's own entry for the exact scope of what this lock does and
-doesn't cover.
+is still undecided — see §2.L Phase 7's own entry (renumbered 2026-09-03, was Phase 6) for the
+exact scope of what this lock does and doesn't cover.
 
 **Phase 3 (repeat-verify) — same day, both locked targets confirmed reliable, one harness bug
 found and fixed along the way.** Ran each locked target 3x (`--repeat 3`) instead of trusting the

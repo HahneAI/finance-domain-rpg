@@ -1044,39 +1044,40 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   compliance finding, not the planned Metaphor Intensity result. Full writeup and the open question
   it raises (formalize this behavior, or suppress it?) in `coach-personality-rubric.md`'s Known
   Limitations — **not yet decided, and the two seeded rows stay unscored pending that decision.**
-- [~] **Phase 5 — widen to remaining flat-default modes and undefined axes. In progress, first
-  slice done (2026-09-01).** Sequenced per the user's own instruction: find real 1s/5s for the
-  other Interaction Modes table rows first; batch-decide every mode's default "3" together at the
-  end, not mode by mode. **Urgency Escalation is no longer a "future axis" to start from
-  scratch** — promoted to a defined Axis 2 in `coach-personality-rubric.md` (2026-09-01), seeded
-  by Phase 4's real finding. **Standing instruction for every mode/scenario sampled from here on:
-  check Axis 2 alongside Metaphor Intensity, not Metaphor Intensity alone.**
-  - [x] **First slice — Net Worth Trigger's three shipped tiers (Amber/Red/Green, §2.C).** Live-
+- [~] **Phase 5 — RESCOPED 2026-09-03: complete axis coverage across the currently BUILT/testable
+  modes, then lock target numbers.** Renumbered from the original Phase 5 (see Phase 6 below) —
+  split in two because "widen to remaining flat-default modes" and "test every axis against what
+  already exists" turned out to be two different jobs with two different blockers: the first
+  needs features that don't exist yet, the second doesn't. **Confirmed 2026-09-03: only four real
+  Coach modes exist in the codebase at all** — `ASK_COACH_SYSTEM_PROMPT`, `buildNetWorthSystemPrompt`
+  (3 tiers), `JOB_HUNT_SYSTEM_PROMPT`, `RESUME_REVIEW_SYSTEM_PROMPT` are the only exports in
+  `coachPrompts.js`; `buildCoachContext`/`buildJobHuntContext` are the only two builders in
+  `aiContext.js`; no component exists for Goal ETA Drift Alert, Weekly Pre-Game Briefing,
+  Raise-Negotiation Prep, Statement Summary, Burnout Sentinel, Council of Future Selves, or
+  Heirloom Letter Delivery. **Scope: Ask Coach (default + tool-available call shapes), Net Worth
+  Trigger's three tiers, Job Hunt Chat, Résumé Review — nothing else, because nothing else is
+  live to test.** Sequenced per the user's own instruction: finish every axis (Metaphor Intensity,
+  Urgency Escalation, and the still-undefined ones — Directness/bluntness, Warmth/formality,
+  Sentence economy) against these four first; only once that's complete does Phase 5 conclude by
+  **attaching a locked target number to each mode/axis pair** — the batch decision this file has
+  been deferring to "the end" since Phase 4. **Standing instruction for every mode/scenario
+  sampled: check Axis 2 alongside Metaphor Intensity, not Metaphor Intensity alone** (carried over
+  from the original Phase 5's own standing instruction, 2026-09-01, seeded by Phase 4's finding).
+
+  **Axis-coverage work already done, before the rescope (all of it fits this phase's new scope —
+  none of it moved):**
+  - [x] **Net Worth Trigger's three shipped tiers (Amber/Red/Green, §2.C).** Live-
     verified for the first time (`claude-haiku-4-5`, real per-tier account data via
     `promptfooconfig.phase5.yaml`, `--repeat 3`, all 9 runs identical). Green clean. **Amber
     stacks multiple figurative touches in one message — a real, unambiguous violation of
-    `COACH_PERSONA_PROMPT`'s own "never stacked" rule, worth fixing, not just discussing.** Red
-    complies with the letter ("drop the corner-man phrasing") but reaches for a different
-    flourish ("flying blind") the addendum's intent rules out too, and runs the longest of the
-    three tiers despite being the one instructed to stay most direct/calm — an explicit
-    anti-escalation instruction not fully holding, the opposite framing from Ask Coach's
-    accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
+    `COACH_PERSONA_PROMPT`'s own "never stacked" rule, worth fixing, not just discussing** — still
+    unfixed, carry forward. Red complies with the letter ("drop the corner-man phrasing") but
+    reaches for a different flourish ("flying blind") the addendum's intent rules out too, and
+    runs the longest of the three tiers despite being the one instructed to stay most direct/calm
+    — an explicit anti-escalation instruction not fully holding, the opposite framing from Ask
+    Coach's accidental escalation in Phase 4. Full writeup: `coach-personality-rubric.md`'s Known
     Limitations.
-  - [x] **Fixture prep for unbuilt modes (2026-09-02)**, ahead of the prompts themselves —
-    `scripts/coach-eval/fixtures/testAccount.js` gained `buildWeeklyBriefingContext()` for Weekly
-    Pre-Game Briefing (§8.A): a real funded goal against a real 8-week `futureWeeks`/
-    `timelineWeekNets` series (real `Date` objects — `computeGoalTimeline()` needs
-    `week.weekEnd.getFullYear()`, a date string silently crashes inside `getPhaseIndex()`), so
-    `computeGoalTimeline()` has genuine data to project instead of the goal-free shortcut the
-    original fixture takes. Ready to plug into a real prompt loader the moment this mode is built.
-    **Burnout Sentinel's work-pattern half was assessed and explicitly not built** — initial
-    read was that it was buildable via `logs`, corrected on closer inspection:
-    `buildCoachContext()` has no `weekConfirmations` param, `logs` only ever surfaces the single
-    most-recent entry (never a streak/trend), and `EVENT_TYPES` has no overtime/extra-shift
-    category — faking a streak signal from what's actually available would be dressing up
-    fabricated data to look real, the exact thing this harness exists to avoid. Building it for
-    real needs engine work first (a streak/OT-tracking data source), not a fixture.
-  - [x] **Second slice — Job Hunt Chat (§2.E) and Résumé Review (§2.E1), live-verified for the
+  - [x] **Job Hunt Chat (§2.E) and Résumé Review (§2.E1), live-verified for the
     first time (2026-09-02).** `promptfooconfig.phase5b.yaml`/`.phase5c.yaml`, `claude-sonnet-5`
     (both modes' own shipped model choice), no calibration override, real fixture data via
     `fixtures/testAccount.js`'s new `buildJobHuntTestContext()` (healthy ~70-day / tight ~9-day
@@ -1108,10 +1109,6 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Regression coverage: `coachPrompts.test.js`. Not yet repeat-verified against the final
     composed `RESUME_REVIEW_SYSTEM_PROMPT` string end-to-end (the 3/3 verification ran on the
     candidate wording pre-application) — worth a confirmation pass if this mode comes up again.
-  - [ ] Remaining: the still-unbuilt flat rows (Goal ETA Drift Alert, Weekly Pre-Game Briefing);
-    the remaining undefined axes (Directness/bluntness, Warmth/formality, Sentence economy —
-    Sentence economy next after those, since DW-19 already left real anchor data for it); a
-    repeat-verify pass on Job Hunt Chat if worth locking in before the batch decision.
   - [x] **Fixture fidelity fix, found reviewing the sister branch's tool-loop work
     (2026-09-02).** The sister branch's F167/F168 period-label fix (drift-app-warden §21)
     exposed that `formatPeriodWithDate()` silently falls back from "the week of March 9th,
@@ -1130,7 +1127,7 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     fixture now produces the real, fuller date-paired text going forward. Regression test added
     in `coachEvalFixture.test.js`. 1839 pass; vite build clean.
   - [x] **DW-19 update inherited from the sister branch, directly relevant to "Sentence economy
-    next" above.** Their live-testing (`coach-personality-rubric.md`'s DW-19 entry, updated
+    next" below.** Their live-testing (`coach-personality-rubric.md`'s DW-19 entry, updated
     2026-09-02) ran the rubric's own canonical broad-question phrasing four more times across
     their tool/context-trim work and found the number-count cap is not a data-volume problem:
     tool availability didn't change it, halving the context block's numbers didn't change it,
@@ -1140,8 +1137,8 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     just a hunch** — a worked model-answer example demonstrating a complete 3-number answer is
     the only untried lever left; do not re-attempt this via context/tool-surface changes, that
     path is now closed with real evidence, not just untested.
-  - [x] **Tool-available rerun, a directional "thumb on the tool introduction," not a new phase
-    (2026-09-03).** Closes the open item above. `scripts/coach-eval/personalityToolLoopLiveTest.mjs`
+  - [x] **Tool-available rerun, a directional "thumb on the tool introduction," not a full
+    recalibration (2026-09-03).** `scripts/coach-eval/personalityToolLoopLiveTest.mjs`
     — a tool-loop-capable sibling to `toolLoopLiveTest.mjs`, since promptfoo has no hook for a
     tool round. Reused the exact Phase 2/3 default fixture and Phase 4's near-limit override
     (845/830) with the SAME question ("How's my week looking?"), only difference being
@@ -1169,9 +1166,52 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     `CoachNetWorthCard.jsx` (no tools) and its Phase 5 findings remain unaffected and accurate as
     recorded. Job Hunt Chat's tool gap (present since the first coach-mcp-tools merge) is
     unchanged by this pass — this rerun covered Ask Coach only, per the user's specific ask.
-- [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
-  Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
-  weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
+
+  **Remaining before Phase 5 can conclude and hand off to the batch decision:**
+  - [ ] **Sentence economy — next up.** DW-19 already left real before/after anchor data, and the
+    sister branch's 2026-09-02 update (above) confirms a worked few-shot example is the only
+    untried lever; define the axis's 1-5 scale the same way Axis 1/2 were defined, then sample it
+    against all four built modes.
+  - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
+  - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
+    bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to
+    keep discussing.
+  - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
+    no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
+  - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
+    Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
+    above. This is Phase 5's actual finish line.
+
+- [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
+  modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
+  is actually BUILT — this phase cannot start on a mode until that mode has a real
+  `coachPrompts.js` addendum and (if it needs one) an `aiContext.js` builder to test against; a
+  fixture alone isn't enough to unblock it. Confirmed 2026-09-03: none of the modes below exist
+  yet (see Phase 5's header for the exact confirmation). Modes in scope once built: Goal ETA
+  Drift Alert (§8.A), Weekly Pre-Game Briefing (§8.C), Raise-Negotiation Prep (§8.C), Statement
+  Summary (§2.D), Burnout Sentinel (§8.F2), Heirloom Letter Delivery (§8.F3), Council of Future
+  Selves (§8.F2) — all still `UNSCORED`/brainstorming-only per `coach-personality-rubric.md`'s
+  Interaction Modes table, §8 explicitly a loose idea pool per `docs/coach-session-handoff.md`,
+  not committed work.
+  - [x] **Fixture prep for Weekly Pre-Game Briefing, ahead of the prompt itself (2026-09-02)** —
+    `scripts/coach-eval/fixtures/testAccount.js` gained `buildWeeklyBriefingContext()`: a real
+    funded goal against a real 8-week `futureWeeks`/`timelineWeekNets` series (real `Date`
+    objects — `computeGoalTimeline()` needs `week.weekEnd.getFullYear()`, a date string silently
+    crashes inside `getPhaseIndex()`), so `computeGoalTimeline()` has genuine data to project
+    instead of the goal-free shortcut the Ask Coach fixture takes. Ready to plug into a real
+    prompt loader the moment this mode is built — still blocked on that, not on the fixture.
+  - [x] **Burnout Sentinel's work-pattern half assessed and explicitly NOT built (2026-09-02)** —
+    initial read was that it was buildable via `logs`, corrected on closer inspection:
+    `buildCoachContext()` has no `weekConfirmations` param, `logs` only ever surfaces the single
+    most-recent entry (never a streak/trend), and `EVENT_TYPES` has no overtime/extra-shift
+    category — faking a streak signal from what's actually available would be dressing up
+    fabricated data to look real, the exact thing this harness exists to avoid. Building it for
+    real needs engine work first (a streak/OT-tracking data source), not a fixture.
+  - [ ] Everything else in this phase stays blocked until its mode ships.
+
+- [~] **Phase 7 — RENUMBERED 2026-09-03 (was Phase 6) — close the loop on model selection.** With
+  calibration data accumulated across Phases 1–5, make an actual model-per-mode decision (not just
+  "Haiku everywhere by default") — weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split
   precedent, so a mode only moves to a pricier model when the calibration data shows it's actually
   needed to hit the target register, not by default. **Two modes locked (2026-09-01), the rest of
   the landscape still open:**

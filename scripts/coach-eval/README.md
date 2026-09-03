@@ -209,13 +209,14 @@ retry-on-a-hunch.** Concretely for this file:
   not a smooth function of model tier (the middle model did worst); it's
   specifically Opus that unlocks real range on this axis. Full writeup in
   `coach-personality-rubric.md`'s "Known Limitations".
-- [x] Phase 6 (pulled forward) — two model locks made (2026-09-01),
-  ahead of the rest of Phase 6's scope: Ask Coach (§2.B) → `claude-haiku-
-  4-5` (confirms the existing default with real evidence); "special
-  handling" high-significance moments (Burnout Sentinel, Heirloom Letter
-  Delivery, major goal completion — none built yet) → `claude-opus-5`,
-  a policy for when they ship, not a code change today. Full scope note
-  (what's still undecided): `docs/TODO.md` §2.L Phase 6.
+- [x] Phase 7 (pulled forward — renumbered 2026-09-03, was Phase 6) — two
+  model locks made (2026-09-01), ahead of the rest of Phase 7's scope: Ask
+  Coach (§2.B) → `claude-haiku-4-5` (confirms the existing default with
+  real evidence); "special handling" high-significance moments (Burnout
+  Sentinel, Heirloom Letter Delivery, major goal completion — none built
+  yet) → `claude-opus-5`, a policy for when they ship, not a code change
+  today. Full scope note (what's still undecided): `docs/TODO.md` §2.L
+  Phase 7.
 - [x] Phase 3 — lock + verify, done for both locked targets (2026-09-01).
   `--repeat 3` on each: Haiku's score-1 came back 3/3 near-identical.
   Opus's score-5 first attempt exposed a real harness bug (extended
@@ -237,12 +238,20 @@ retry-on-a-hunch.** Concretely for this file:
   **Promoted to Axis 2 (Urgency Escalation)** in the rubric (2026-09-01)
   rather than left as a side note — real anchor data (score 3) from this
   exact pair, own 1-5 table, own still-open calibration TODO.
-- [~] Phase 5 — widen to remaining modes/axes, in progress. Per the
-  user's own sequencing (2026-09-01): find real 1s/5s for the other
-  Interaction Modes table rows first, batch-decide every mode's default
-  "3" together at the end. **Standing instruction from here on: sample
-  both Axis 1 (Metaphor Intensity) and Axis 2 (Urgency Escalation) for
-  every mode/scenario**, not Axis 1 alone.
+- [~] Phase 5 — RESCOPED 2026-09-03: complete axis coverage across the four
+  Coach modes that actually exist (Ask Coach — default + tool-available,
+  Net Worth Trigger, Job Hunt Chat, Résumé Review), then lock target
+  numbers. Split off from the original Phase 5 (see Phase 6 below), which
+  bundled this with "widen to still-unbuilt modes" — two jobs with two
+  different blockers. Confirmed 2026-09-03 via a full grep of
+  `coachPrompts.js`/`aiContext.js`/`src/components/`: no other Coach mode
+  exists in the codebase at all. Per the user's own sequencing (2026-09-01):
+  find real 1s/5s for the other Interaction Modes table rows first,
+  batch-decide every mode's default "3" together at the end — that batch
+  decision (**attaching a locked number to each mode/axis pair**) is this
+  phase's finish line. **Standing instruction from here on: sample both
+  Axis 1 (Metaphor Intensity) and Axis 2 (Urgency Escalation) for every
+  mode/scenario**, not Axis 1 alone.
   - [x] First slice — `promptfooconfig.phase5.yaml`, Net Worth Trigger's
     three shipped tiers (Amber/Red/Green), `prompts/netWorthTrigger.js`
     (real `buildNetWorthSystemPrompt`, matches `CoachNetWorthCard.jsx`'s
@@ -254,17 +263,6 @@ retry-on-a-hunch.** Concretely for this file:
     but not fully the spirit, and runs longest of the three despite being
     the one tier told to stay calm. Full writeup in
     `coach-personality-rubric.md`'s Known Limitations.
-  - [x] Fixture prep for unbuilt modes (2026-09-02) — per the user's
-    "build the data frames now so we can plug and play later" request.
-    `fixtures/testAccount.js` gained `buildWeeklyBriefingContext()` for
-    Weekly Pre-Game Briefing (§8.A) — real funded-goal timeline, ready
-    for a real prompt loader whenever that feature ships. Burnout
-    Sentinel's work-pattern half was assessed and explicitly NOT built —
-    the engine has no data path for it today (no `weekConfirmations` in
-    `buildCoachContext()`, `logs` never carries a streak, no overtime
-    event type) — building it would fake a signal the app can't actually
-    see, not prepare a fixture. Building Burnout Sentinel for real needs
-    engine work first (a streak/OT-tracking data source), not a fixture.
   - [x] Second slice (2026-09-02) — `promptfooconfig.phase5b.yaml` (Job
     Hunt Chat) + `promptfooconfig.phase5c.yaml` (Résumé Review),
     `prompts/jobHuntChat.js`/`prompts/resumeReview.js`, `claude-sonnet-5`
@@ -300,10 +298,60 @@ retry-on-a-hunch.** Concretely for this file:
     string, so it can't silently drift from what's shipped.
     `coachPrompts.test.js` gained regression coverage. Full writeup in
     `coach-personality-rubric.md`'s Known Limitations.
-  - [ ] Not yet run: the still-unbuilt flat rows, the remaining undefined
-    axes, and a repeat-verify pass on Job Hunt Chat if it's worth locking
-    in before the batch decision.
-- [x] Phase 6 (pulled forward, partial) — Ask Coach → Haiku, special-
-  handling moments → Opus, both locked and Phase-3-verified. Everything
-  else in the table (Job Hunt Assistant, Résumé Review, Statement
-  Summary, Net Worth Trigger's tiers, the rest) is still undecided.
+  - [x] Fixture fidelity fix (2026-09-02) — found reviewing the sister
+    `coach-mcp-tools` branch's period-label fix (drift-app-warden §21
+    F167/F168): `formatPeriodWithDate()` silently falls back to a bare
+    "week 11" whenever `allWeeks` lacks real `weekStart`/`isPayWeek`/
+    `payPeriodEndDate` fields — which our label-shaped fixtures never
+    carried. Every fixture in `testAccount.js` now shares one real
+    `buildYear()` calendar (`REAL_ALL_WEEKS`, see "What's here" above).
+    None of the recorded findings hinged on it; every fixture produces the
+    real, fuller date-paired text now. Regression test in
+    `coachEvalFixture.test.js`.
+  - [x] DW-19 update inherited from the sister branch (2026-09-02) —
+    their live-testing found the broad-question number-cap is not a
+    data-volume or tool-surface problem (tool availability, halving the
+    context block, and removing data outright all left the ~10-number
+    citation unchanged or made Coach spend tool round-trips to reconstruct
+    it). Doubly motivates the few-shot-example approach already flagged
+    for Sentence economy — do not re-attempt via context/tool changes.
+  - [x] Tool-available rerun (2026-09-03) — `personalityToolLoopLiveTest.mjs`,
+    a directional check ("a thumb on the tool introduction"), not a new
+    calibration: reused the exact Phase 2/3 default fixture and Phase 4's
+    near-limit override with the identical question, only adding
+    `detailAvailableViaTools: true` + `COACH_TOOLS`. Metaphor Intensity
+    held exactly (same phrase, "breathing room," both samples); one Axis 2
+    difference on the near-limit sample (shorter, follow-up-invitation
+    close instead of naming the pattern outright) — not repeat-verified,
+    flagged rather than treated as stable.
+  - [ ] Remaining before Phase 5 can conclude: Sentence economy (next —
+    DW-19 + the sister branch's update both point at a worked few-shot
+    example), Directness/bluntness and Warmth/formality (still undefined),
+    fixing Net Worth Trigger Amber's stacked-touch rule violation (a real,
+    already-identified bug, not just a finding), repeat-verify passes on
+    Job Hunt Chat and the tool-available rerun — then the batch decision:
+    lock one target number per mode/axis pair across all four modes.
+- [~] Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to
+  remaining flat-default modes" scope). Widen live testing to Coach modes
+  beyond the four that exist today, once each is actually built — blocked
+  on the feature shipping, not on this harness. Confirmed 2026-09-03: none
+  of Goal ETA Drift Alert, Weekly Pre-Game Briefing, Raise-Negotiation
+  Prep, Statement Summary, Burnout Sentinel, Heirloom Letter Delivery, or
+  Council of Future Selves exist in the codebase yet.
+  - [x] Fixture prep for Weekly Pre-Game Briefing (2026-09-02) — per the
+    user's "build the data frames now so we can plug and play later"
+    request. `fixtures/testAccount.js` gained `buildWeeklyBriefingContext()`
+    — real funded-goal timeline, ready for a real prompt loader whenever
+    that feature ships; still blocked on the feature, not the fixture.
+  - [x] Burnout Sentinel's work-pattern half assessed and explicitly NOT
+    built (2026-09-02) — the engine has no data path for it today (no
+    `weekConfirmations` in `buildCoachContext()`, `logs` never carries a
+    streak, no overtime event type) — building it would fake a signal the
+    app can't actually see, not prepare a fixture. Needs engine work
+    first, not a fixture.
+  - [ ] Everything else stays blocked until its mode ships.
+- [x] Phase 7 (pulled forward, partial — renumbered 2026-09-03, was Phase
+  6) — Ask Coach → Haiku, special-handling moments → Opus, both locked and
+  Phase-3-verified. Everything else in the table (Job Hunt Assistant,
+  Résumé Review, Statement Summary, Net Worth Trigger's tiers, the rest)
+  is still undecided.

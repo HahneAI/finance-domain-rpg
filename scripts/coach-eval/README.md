@@ -28,6 +28,10 @@ doesn't repeat their reasoning.
   (`prompts/resumeReviewTuning.js`) against the same fixture to find what
   actually reaches the target, before touching `coachPrompts.js`. Same
   separate-file-per-pass reasoning as above.
+  `promptfooconfig.phase5d.yaml` — Axis 3 (Sentence Economy)'s first
+  extremes-discovery pass: `askCoachComposed.js`, 3 models × {elicit-1,
+  natural-3, elicit-5}, same account/question as every other Ask Coach
+  calibration pass in this harness.
 - `prompts/*.js` — prompt loaders. Each one `import`s a real, live export
   from `src/lib/coachPrompts.js` — never a hand-copied prompt string — so
   this harness can never silently test a stale prompt. One file per
@@ -324,11 +328,20 @@ retry-on-a-hunch.** Concretely for this file:
     difference on the near-limit sample (shorter, follow-up-invitation
     close instead of naming the pattern outright) — not repeat-verified,
     flagged rather than treated as stable.
-  - [ ] Remaining before Phase 5 can conclude: Sentence economy (next —
-    DW-19 + the sister branch's update both point at a worked few-shot
-    example), Directness/bluntness and Warmth/formality (still undefined),
-    fixing Net Worth Trigger Amber's stacked-touch rule violation (a real,
-    already-identified bug, not just a finding), repeat-verify passes on
+  - [~] Axis 3 (Sentence Economy) defined + first extremes pass (2026-09-03,
+    `promptfooconfig.phase5d.yaml`) — Ask Coach only so far. **Sonnet/Opus
+    show clean 1-to-5 range (a true one-sentence fragment up to a genuine
+    multi-paragraph report); Haiku has the narrowest range of the three —
+    can't reach true score-1, its score-5 barely differs from its own
+    natural score-3, and that natural default already overshoots
+    `COACH_PERSONA_PROMPT`'s own instructed length unprompted.** Worth
+    weighing in Phase 7's model decision. Remaining: sample against Net
+    Worth Trigger/Job Hunt/Résumé Review, pick + repeat-verify a target.
+    Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
+  - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
+    Warmth/formality (still undefined), fixing Net Worth Trigger Amber's
+    stacked-touch rule violation (a real, already-identified bug, not just
+    a finding), repeat-verify passes on
     Job Hunt Chat and the tool-available rerun — then the batch decision:
     lock one target number per mode/axis pair across all four modes.
 - [~] Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to

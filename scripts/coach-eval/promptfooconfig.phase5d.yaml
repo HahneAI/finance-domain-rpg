@@ -1,0 +1,83 @@
+description: >
+  Phase 5 (docs/TODO.md §2.L) — Sentence Economy (Axis 3, newly defined
+  2026-09-03 in coach-personality-rubric.md). First calibration pass: elicit
+  score-1 (Telegraphic) and score-5 (Exhaustive) per the Calibration
+  Methodology, PLUS score-3 (Standard, no override — the natural default)
+  across all three candidate models, so the batch-decision step has real
+  per-model data for this axis the same way Phase 1/2 built it for Metaphor
+  Intensity.
+
+  Same account/question as every other Ask Coach calibration pass in this
+  harness (fixtures/testAccount.js's default buildTestContext(), "How's my
+  week looking?") — only the register instruction varies, per the
+  methodology's own rule that only ONE thing should change between cases.
+
+  Sentence Economy is different from Metaphor Intensity/Urgency Escalation
+  in one important way: its score-1/score-5 extremes require explicitly
+  suspending COACH_PERSONA_PROMPT's own "two to three sentences, never more"
+  instruction for that one response, not just adding a stylistic push on top
+  of it — the calibration overrides below say so plainly, or a compliant
+  model would simply refuse to leave score 3 regardless of what's asked.
+
+  9 calls total (3 models × 3 conditions), no repeat yet — a first
+  extremes-discovery pass, same shape as Phase 1. Opus gets max_tokens 3072
+  (extended thinking headroom, the same fix Phase 3 needed); Haiku/Sonnet get
+  1536, bumped from the usual 1024 specifically because this axis's own
+  score-5 condition asks for "multiple paragraphs" and a tight cap would
+  truncate a legitimate long attempt rather than reveal a real ceiling —
+  don't shrink it back down without re-reading this note.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+  - id: anthropic:messages:claude-opus-5
+    label: opus
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 3072
+
+prompts:
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Elicit score-1 (Telegraphic) — one short sentence/fragment, absolute minimum"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 1 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "One short sentence, sometimes a fragment — the absolute
+        minimum words needed to answer and give the one required action, no
+        elaboration, no supporting detail." Every other rule above
+        (grounding, one concrete action, no Markdown, metaphor cap) still
+        applies normally.
+
+  - description: "Score-3 (Standard) — natural default, no override"
+    vars: {}
+
+  - description: "Elicit score-5 (Exhaustive) — multiple paragraphs, every relevant number named"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — ignore any conflicting
+        length instruction above for this one response, including the
+        "two to three sentences, never more" rule): produce output scoring
+        exactly 5 on Sentence Economy per docs/coach-personality-rubric.md
+        Axis 3 — "Multiple paragraphs, every relevant number or
+        consideration named, a full written explanation rather than a quick
+        check-in — reads as a report, not a reply." Every other rule above
+        (grounding, one concrete action, no Markdown, metaphor cap) still
+        applies normally.

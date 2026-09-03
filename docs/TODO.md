@@ -1168,10 +1168,20 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     unchanged by this pass — this rerun covered Ask Coach only, per the user's specific ask.
 
   **Remaining before Phase 5 can conclude and hand off to the batch decision:**
-  - [ ] **Sentence economy — next up.** DW-19 already left real before/after anchor data, and the
-    sister branch's 2026-09-02 update (above) confirms a worked few-shot example is the only
-    untried lever; define the axis's 1-5 scale the same way Axis 1/2 were defined, then sample it
-    against all four built modes.
+  - [~] **Sentence economy — Axis 3 defined and first extremes pass done (2026-09-03), not yet
+    locked.** Defined in `coach-personality-rubric.md` (1-5 scale: Telegraphic → Standard →
+    Exhaustive). `promptfooconfig.phase5d.yaml`, Ask Coach only so far (not yet run against Net
+    Worth Trigger/Job Hunt/Résumé), 9 calls (3 models × elicit-1/natural-3/elicit-5), no repeat.
+    **Real finding: Sonnet and Opus both show clean range from a one-sentence fragment to a full
+    multi-paragraph report; Haiku has the narrowest dynamic range of the three — it can't reach
+    true score-1 (stops at ~2 sentences), its score-5 attempt barely differs from its own natural
+    score-3, and its NATURAL, unforced default (2 paragraphs) already overshoots
+    `COACH_PERSONA_PROMPT`'s own instructed length with no push at all.** Worth weighing in
+    Phase 7's model-selection decision (Ask Coach is locked to Haiku on Metaphor Intensity
+    grounds, which still holds — this is a second, different signal Phase 7 hasn't seen yet, not
+    a reversal). Remaining: sample against Net Worth Trigger/Job Hunt/Résumé Review too, then
+    pick and repeat-verify a target (possibly Haiku-specific, given the range gap). Full writeup:
+    `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
   - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
     bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to

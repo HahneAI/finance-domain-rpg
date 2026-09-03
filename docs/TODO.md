@@ -3091,6 +3091,32 @@ here as a second currency the app helps the user stop hemorrhaging.*
   then — "you left yourself a letter when this began, 14 months ago. Ready?" — one tap opens
   it; the letter is theirs to keep, screenshot, or seal into the Chronicle.
   *Tether: a `sealed_until_complete` text field.*
+- [ ] **Visualize the Goal** — added 2026-09-03. Same goal-creation-time, personal-artifact shape
+  as Heirloom Letters above, opposite restraint: this one leans all the way into generative AI
+  instead of avoiding it. The user provides a photo of themselves and a reference image/photo of
+  the goal item (a truck, a destination, a piece of gear, a house) — AI generates a single image
+  of the two together, the moment of already having it, not a literal photo-edit collage. Lives
+  on the goal card itself (a small "Visualize" action alongside the existing goal-detail
+  affordances) so it's discoverable the same way every other goal action is, not buried in a
+  separate flow — findable without a hunt.
+  - **Not free to build the way Heirloom Letters is.** Every other AI surface in this app
+    (`docs/TODO.md` §2, `lib/claude.js`) calls Anthropic's TEXT API only — this needs an actual
+    image-generation model call, a genuinely new third-party dependency this app has never taken
+    on before (Anthropic doesn't offer this natively in this app's current integration; would need
+    a separate provider/endpoint, its own cost-per-call profile, and its own review before adding
+    a vendor). Don't assume this reuses `api/coach.js` as-is — likely its own serverless route
+    (mind the 12/12 Vercel Hobby-plan function cap noted at the top of this file), or folded into
+    an existing route's dispatch pattern the way `api/seed.js`/`api/admin-beta-hub.js` already do.
+  - **A real privacy/consent question, not a formality.** A photo of the user's own face is a
+    meaningfully more sensitive upload than anything else this app currently collects (financial
+    data, a paystub photo for OCR) — needs its own explicit opt-in copy, a clear no-training-on
+    this data guarantee, and a real deletion path, mirroring the consent rigor already called out
+    for the paystub-photo OCR idea elsewhere in this file, not assumed to inherit it silently.
+  - **Tether: none yet — this is the one Horizon Tier idea with no existing infra to lean on.**
+    Every other F-tier item reuses data or a mechanism this app already has; this is the first
+    one that would need real new infrastructure (image storage, an image-gen vendor integration,
+    its own moderation/consent review) before a line of feature code gets written. Flagged here
+    so a future scoping pass starts from that honestly, not discovers it partway through.
 
 #### F4. Honesty rails for the whole horizon tier
 

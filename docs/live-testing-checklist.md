@@ -215,3 +215,70 @@ error page) rendered correctly with zero network access, confirming workbox's `n
 + precache setup works as configured. Full test suite (1687 tests) green throughout — no test
 exercises the manifest file directly. Documented in `drift-app-warden.md` F162 /
 `BUG_FIX_TODO.md` DW-21.
+
+### 9. Coach chat UI — navigate_to chip + tool-activity indicator ✅
+First browser pass over the Coach chat's new interactive UI (F174). `/api/coach` is a Vercel
+function with no local dev proxy, so it was stubbed via `page.route()` with a canned SSE stream
+containing a `navigate_to` tool_use — the right call rather than a limitation, since the model's
+tool *selection* was already verified live (3/3) and what was untested was purely the UI; a stub
+also makes the run deterministic, spends no Anthropic budget, and lets a round be held open long
+enough for the activity indicator to be observable at all.
+
+**Found three real defects, all of which passed their unit tests.** (1) The activity line never
+painted — it was cleared when the tool returned, but the tools are pure functions finishing in
+microseconds, so it was set and unset inside one tick; it now spans the model round-trip that
+follows, which is the dead air users actually sit through. (2) The chip rendered *inline beside*
+the bubble and truncated to "Bud…" — the message row is a flex row for the avatar, so the chip
+became a third item in it; both attachments now sit in a column wrapper below the bubble. (3) The
+deep link highlighted a row nobody could see, for two compounding reasons: `navigateDirect`'s
+`jumpToPanelTop()` fires in a rAF *after* `focusCoachTarget`, scrolling the panel back to top
+(the row sat at 877px in an 844px viewport with the flash expiring off-screen), and Budget's
+categories are collapsed by default, which clips rows to `height:0` while they still report a real
+bounding box — so a viewport check reported success while the user saw nothing.
+
+Post-fix, verified end to end in the browser: `data-coach-ref` present on all six Budget expense
+rows, chip renders below the bubble reading "Budget · Rent", activity line reads "Finding the
+right panel…" during the tool round, and tapping the chip closes Coach, opens Budget, expands the
+collapsed NEEDS category, scrolls the Rent row to `top: 223` in an 844px viewport
+(`trulyVisible: true`) and flashes it, with the flash clearing afterwards. Also confirmed the
+request carries all 9 tools and the second round carries 3 messages (user + tool_use +
+tool_result). Full suite green (1842). Documented in `drift-app-warden.md` F175 /
+`BUG_FIX_TODO.md` DW-23.
+
+**Testing note for whoever picks this up:** the shared test account has a QUEUE of unconfirmed
+weeks, and `WeekConfirmModal` (`.wc-modal-in`) blocks the whole shell — skipping one reveals the
+next, so a dismiss helper must loop. Never click "Confirm Week" there; it writes a real
+confirmation to the shared account. Coach is also reachable only from the mobile bottom nav, so a
+mobile viewport is required before it exists at all.
+
+### 10. Coach `propose_goal` card — the goal-setting chip ✅
+Browser pass over Coach's first write-shaped tool, `/api/coach` stubbed with a canned SSE stream
+carrying a `propose_goal` tool_use (same rationale as item 9 — deterministic, no Anthropic spend).
+
+Verified end to end: the card prefills Coach's proposed name and amount, shows the note, and
+projects "On track for the week of November 30th, 2026" from the real `computeGoalTimeline`.
+Rewording the name and changing the amount, then confirming, produced "Added to your goals ✓",
+removed the button (no double-add), and — after a **full page reload** — the goal appeared on Home
+carrying the EDITED name, not Coach's original wording. That rewording path is the point of the
+feature, so it is the thing worth proving.
+
+**Found and fixed three defects, two of them blank-app crashes that the full unit suite and
+`vite build` both passed.** (1) `handleCoachCreateGoal`'s `useCallback` named `isExpiredReadOnly`
+in its dependency array while sitting above that const — dependency arrays evaluate during render,
+so it hit the temporal dead zone. (2) Moving the hook below the const put it below `App.jsx`'s
+`!authChecked`/`!authedUser` early returns, so it was skipped on those render paths — "Rendered
+more hooks than during the previous render". Resolved by keeping the hook above the early returns
+and reading the flag through a ref assigned during render. (3) The chat's auto-scroll keyed only
+on `messages`, but a card arrives from a tool result afterwards, so a tall goal card landed below
+the fold; the effect now also keys on the attachments.
+
+**⚠️ Test-account hygiene — a real mistake worth recording.** Playwright's click retry loop
+succeeded on several attempts that then reported a timeout, creating **6 duplicate goals** on the
+shared account before I noticed. They were identified by label and deleted through the real UI,
+verified clean after a reload (back to the account's 2 real goals: New Gaming Computer, ATM
+Purchase). Any future driver that exercises a WRITE path on the shared account should use a
+distinctive throwaway label and delete it in the same script — the final driver for this item does
+exactly that and ends with the account unchanged. Note also that a failed Playwright action does
+not mean no write happened.
+
+Full suite green (1859). Documented in `drift-app-warden.md` F176.

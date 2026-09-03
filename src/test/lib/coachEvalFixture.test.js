@@ -105,6 +105,7 @@ describe("eval fixture — tool-ready sibling account", () => {
       get_week_breakdown: { weekOffset: 0 },
       list_log_entries: {},
       navigate_to: { panel: "Budget", focus: "Groceries" },
+      propose_goal: { label: "Six months of runway", target: 800 },
       simulate_expense_change: { label: "Groceries", newWeeklyCost: 0 },
       simulate_new_goal: { target: 3000, insertAtRank: 1 },
       simulate_overtime_hours: { hours: 8 },

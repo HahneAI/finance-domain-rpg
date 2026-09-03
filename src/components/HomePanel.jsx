@@ -12,7 +12,10 @@ import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, Pressable, useFoldTransition, useCountUp, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
+// Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
+// stamps the same colour a hand-created goal gets, rather than a second copy of
+// the literal drifting away from this one.
+export const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
 const FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
 
 const fmt$ = (n) => {

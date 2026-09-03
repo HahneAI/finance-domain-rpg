@@ -1140,14 +1140,35 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     just a hunch** — a worked model-answer example demonstrating a complete 3-number answer is
     the only untried lever left; do not re-attempt this via context/tool-surface changes, that
     path is now closed with real evidence, not just untested.
-  - [ ] **Open, not decided: `AskCoachPanel.jsx` now sends a TRIMMED context block
-    (`detailAvailableViaTools: true`, sister branch's F171→F172 work) plus 9 tools — a real,
-    growing divergence from what `askCoachComposed.js` tests** (full untrimmed context, zero
-    tools, single-turn). `CoachNetWorthCard.jsx` has no tools and is unaffected — that fixture
-    stays accurate. Job Hunt Chat has had tools since the first coach-mcp-tools merge (already a
-    known, deferred gap). Per the user's own sequencing ("tools come later, after the base
-    feature prompts are scored and nailed"), not fixed here — flagged so the gap is sized
-    accurately whenever tool-augmented testing starts, rather than discovered by surprise.
+  - [x] **Tool-available rerun, a directional "thumb on the tool introduction," not a new phase
+    (2026-09-03).** Closes the open item above. `scripts/coach-eval/personalityToolLoopLiveTest.mjs`
+    — a tool-loop-capable sibling to `toolLoopLiveTest.mjs`, since promptfoo has no hook for a
+    tool round. Reused the exact Phase 2/3 default fixture and Phase 4's near-limit override
+    (845/830) with the SAME question ("How's my week looking?"), only difference being
+    `detailAvailableViaTools: true` + `COACH_TOOLS` offered — isolates the trim+tools effect from
+    everything else. `claude-haiku-4-5` (the locked model), 2 conversations, no repeat (a quick
+    check, not a lock-in pass).
+
+    **Metaphor Intensity holds — same ballpark, in fact closer than expected.** Both responses
+    landed on exactly one figurative touch, "breathing room" — the SAME phrase Phase 2/3's
+    original untrimmed baseline used for this exact scenario. Neither reached for tools (a status
+    check doesn't need drill-down depth), no stacking, no boxing-specific vocabulary, ends on one
+    concrete action both times. On the axis this check was actually for, the tool/trim
+    introduction changed nothing.
+
+    **One real, worth-noting difference — not a regression, but not identical either.** The
+    near-limit response ran noticeably shorter than the original Phase 4 finding (3 sentences here
+    vs. 3 full paragraphs/~6 sentences there) and closed with a follow-up-invitation
+    ("Ask me about your budget, income, or goals specifically...") instead of Phase 4's explicit
+    "the real issue isn't this week or next — it's the pattern" framing. Arguably MORE compliant
+    with the persona's base 2-3-sentence rule than the original finding was, not less — but it is
+    a real behavior shift on Axis 2 (Urgency Escalation), on a single sample. Not repeat-verified;
+    worth a confirmation pass before treating it as a stable finding rather than one draw.
+
+    Full transcripts and writeup: `coach-personality-rubric.md`'s Known Limitations.
+    `CoachNetWorthCard.jsx` (no tools) and its Phase 5 findings remain unaffected and accurate as
+    recorded. Job Hunt Chat's tool gap (present since the first coach-mcp-tools merge) is
+    unchanged by this pass — this rerun covered Ask Coach only, per the user's specific ask.
 - [~] **Phase 6 — close the loop on model selection.** With calibration data accumulated across
   Phases 1–5, make an actual model-per-mode decision (not just "Haiku everywhere by default") —
   weighing calibration fit against `docs/TODO.md` §2.G's existing Haiku/Sonnet cost-split

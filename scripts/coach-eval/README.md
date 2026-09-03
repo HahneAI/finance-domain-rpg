@@ -144,6 +144,17 @@ doesn't repeat their reasoning.
   *availability* doesn't prevent this, only tool *use* does, still open.
   Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
   F168-F174.
+- `personalityToolLoopLiveTest.mjs` (2026-09-03) — this harness's own tool-loop-capable
+  sibling, same reason as `toolLoopLiveTest.mjs` above (promptfoo can't drive a tool round). A
+  DIRECTIONAL rerun of the Phase 1-4 Ask Coach baseline under `AskCoachPanel.jsx`'s real
+  production call shape (`detailAvailableViaTools: true` + `COACH_TOOLS`), not a new phase or a
+  fresh calibration — reuses `buildTestAccountArgs()` (Phase 2/3's default fixture and Phase 4's
+  exact near-limit override) and the exact same question, changing only the trim flag + tools, to
+  check whether introducing them shifted Metaphor Intensity/tone. Finding: Metaphor Intensity held
+  exactly (same phrase, same count, both samples); Axis 2 shifted on one sample (near-limit ran
+  shorter, closed with a follow-up invitation instead of naming the pattern outright) — not
+  repeat-verified, flagged rather than treated as stable. Full writeup:
+  `coach-personality-rubric.md`'s Known Limitations.
 
 ## Running it
 

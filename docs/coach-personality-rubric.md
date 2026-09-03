@@ -501,6 +501,38 @@ landing on this wording. **Not yet repeat-verified against the live shipped prom
 `RESUME_REVIEW_SYSTEM_PROMPT` string) — worth a confirmation pass whenever this mode comes up
 again, though the composition is mechanically identical (same persona + same addendum text).
 
+**Ask Coach's tool-available, trimmed-context prompt — a directional rerun against the Phase
+1-4 baseline, not a new calibration (2026-09-03).** `AskCoachPanel.jsx` now sends
+`detailAvailableViaTools: true` plus `COACH_TOOLS` (the sister branch's tool-loop work) — every
+Phase 1-4 finding above was recorded against the full, untrimmed context with no tools at all,
+a real and growing divergence between this harness and what actually ships. Per the user's own
+request ("a thumb on the tool introduction," not a full re-lock), ran
+`scripts/coach-eval/personalityToolLoopLiveTest.mjs` — the exact Phase 2/3 default fixture and
+Phase 4's near-limit override (845/830), the exact same question ("How's my week looking?"),
+`claude-haiku-4-5` (the locked model), only the trim flag + tools added. 2 conversations, no
+repeat — a quick check, not a lock-in pass.
+
+- **Metaphor Intensity holds — same ballpark, closer than expected.** Both responses landed on
+  exactly one figurative touch, "breathing room" — the SAME phrase the original untrimmed Phase
+  2/3 baseline used for this identical scenario. Neither reached for a tool (a plain status check
+  doesn't need drill-down depth on a one-expense account), no stacking, no boxing-specific
+  vocabulary, both ended on one concrete action. On the axis this check exists to protect, the
+  tool/trim introduction changed nothing.
+- **One real difference, not a regression — Axis 2 (Urgency Escalation) shifted on this sample.**
+  The near-limit response ran noticeably shorter than the original Phase 4 finding it's being
+  compared against: 3 sentences here vs. 3 full paragraphs (~6 sentences) there, and it closed
+  with a follow-up invitation ("Ask me about your budget, income, or goals specifically...")
+  rather than Phase 4's explicit "the real issue isn't this week or next — it's the pattern"
+  framing. If anything this reads as MORE compliant with the persona's base 2-3-sentence default,
+  not less — but it's a genuine behavior difference on a single, unrepeated sample, not something
+  to treat as a stable finding yet.
+
+Full transcripts: run the script yourself (see `scripts/coach-eval/README.md`) — nothing here was
+truncated in the write-up above. `CoachNetWorthCard.jsx` has no tools and is unaffected; its
+Phase 5 tier findings remain accurate as recorded. Job Hunt Chat's own tool gap (present since
+the first coach-mcp-tools merge, `JOB_HUNT_TOOLS`) is unchanged by this pass — this rerun covered
+Ask Coach only.
+
 ---
 
 ## Process For Filling This In

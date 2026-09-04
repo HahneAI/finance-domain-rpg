@@ -1013,21 +1013,30 @@ export function HomePanel({
                               })()}
                             </div>
                           )}
+                          {/* `flex: 1` on four buttons divides a narrow card into
+                              slices too thin for the longest label, so the text broke
+                              *inside* the button — "✓ CLAIM IT" rendered as two lines
+                              on a 390px viewport. Each button now sizes to its content
+                              and the ROW wraps instead: a wrapped row reads as
+                              deliberate, wrapped text inside a button never does.
+                              The single-glyph ✕ is `0 0 auto` so it stops claiming an
+                              equal quarter of the width. Caught live — no unit test
+                              sees layout. */}
                           {!readOnly && (
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ CLAIM IT</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>✓ CLAIM IT</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>✕</SmBtn>}
                           </div>
                           )}
                         </div>
@@ -1191,21 +1200,30 @@ export function HomePanel({
                               })()}
                             </div>
                           )}
+                          {/* `flex: 1` on four buttons divides a narrow card into
+                              slices too thin for the longest label, so the text broke
+                              *inside* the button — "✓ CLAIM IT" rendered as two lines
+                              on a 390px viewport. Each button now sizes to its content
+                              and the ROW wraps instead: a wrapped row reads as
+                              deliberate, wrapped text inside a button never does.
+                              The single-glyph ✕ is `0 0 auto` so it stops claiming an
+                              equal quarter of the width. Caught live — no unit test
+                              sees layout. */}
                           {!readOnly && (
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ CLAIM IT</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>✓ CLAIM IT</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: "0 0 auto", whiteSpace: "nowrap" }}>✕</SmBtn>}
                           </div>
                           )}
                         </div>

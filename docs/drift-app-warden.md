@@ -1604,6 +1604,22 @@ on the card.
 > `HomePanel.test.jsx`'s "Claim Date surface" block, which asserts the hero *does*
 > render for active goals first, so the two absence assertions can't pass vacuously.
 
+**Live-verified 2026-09 against a production build** (`npm run build` + `npm run preview`,
+not the dev server — the React Compiler only runs in a real build, and §12.4's miscompilation
+class is invisible to Vitest). HomePanel painted, hero read
+"NEXT CLAIM DATE / New Gaming Computer / October 12 2026 / $3,000 to go / THEN ATM Purchase
+Nov 9 2026", no HTML-nesting warnings, no page errors. `✓ CLAIM IT` rendered the "Claimed"
+state inside the 900ms window, dropped the goal from the queue, and **survived an immediate
+reload** (eager save intact, F19's updater-capture path unchanged). The test account was
+restored via the completed fold's UNDO.
+
+That pass found **DW-24**: with the label lengthened from `✓ DONE` to `✓ CLAIM IT`, four
+`flex: 1` buttons on a 390px card left too little room and the text wrapped *inside* the
+button. Fixed by sizing buttons to content (`flex: 1 1 auto` + `whiteSpace: nowrap`) in a
+`flexWrap: wrap` row so the row wraps instead of the label.
+> **IF** any action-row label grows, **THEN** re-check it at 390px in a real browser —
+> jsdom has no layout engine and the suite cannot see this class of defect at all.
+
 ⚠️ **The goal card body is duplicated verbatim between the mobile `ScrollSnapRow` branch
 and the desktop grid branch** (`HomePanel.jsx` ~`:863` and ~`:1009`). The two were
 byte-identical apart from three wrapper style properties before this change and were

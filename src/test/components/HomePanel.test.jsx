@@ -156,6 +156,19 @@ describe('HomePanel', () => {
       expect(screen.queryByText('✓ DONE')).toBeNull()
     })
 
+    // Live-caught: four `flex: 1` buttons in a narrow card broke "✓ CLAIM IT"
+    // onto two lines INSIDE the button. jsdom has no layout engine, so this
+    // asserts the structural fix (content-sized, non-breaking buttons in a
+    // wrapping row) rather than the pixel outcome.
+    it('keeps action-button labels on one line so the row wraps instead of the text', () => {
+      render(<HomePanel {...goalProps} />)
+      const claim = screen.getAllByText('✓ CLAIM IT')[0].closest('button')
+      expect(claim).not.toBeNull()
+      expect(claim.style.whiteSpace).toBe('nowrap')
+      expect(claim.style.flex).not.toBe('1')
+      expect(claim.parentElement.style.flexWrap).toBe('wrap')
+    })
+
     it('hides every goal mutation control on a read-only (paywall-expired) account', () => {
       render(<HomePanel {...goalProps} readOnly />)
       expect(screen.queryByText('✓ CLAIM IT')).toBeNull()

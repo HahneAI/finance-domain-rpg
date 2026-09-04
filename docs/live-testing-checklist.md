@@ -282,3 +282,28 @@ exactly that and ends with the account unchanged. Note also that a failed Playwr
 not mean no write happened.
 
 Full suite green (1859). Documented in `drift-app-warden.md` F176.
+
+### 11. Claim Date goal surface on Home ✅ (DW-24 — 2026-09-04)
+First live pass on the new Claim Date surface (`drift-app-warden.md` F177) — the goal card now
+leads with the **date** rather than the dollar target, plus a "Next Claim Date" hero and a
+`then …` funding queue above the cards. Driven against a **production build**
+(`npm run build` + `npm run preview -- --port 4173`), deliberately not the dev server: the
+React Compiler only runs in a real build, and §12.4's miscompilation class is invisible to
+Vitest. HomePanel painted normally (no blank-page crash), the hero resolved a real date
+("New Gaming Computer / October 12 2026 / $3,000 to go") with "THEN ATM Purchase Nov 9 2026"
+queued beneath it, and the console showed no HTML-nesting warnings and no page errors — the two
+blind spots CLAUDE.md calls out. `✓ CLAIM IT` was exercised end to end on a real goal: the
+"Claimed" state rendered inside the 900ms celebration window, the goal left the active queue,
+the hero correctly dropped its `then` row, and the change **survived an immediate reload**
+(eager save intact). The shared test account was restored to its original two active goals via
+the completed fold's UNDO and re-verified.
+
+Found and fixed one real defect (**DW-24**): lengthening the button label from `✓ DONE` to
+`✓ CLAIM IT` overflowed the goal card's four-across `flex: 1` action row at 390px, wrapping the
+text *inside* the button — on the single most important control of the new surface. 1867 unit
+tests were green throughout and could never have caught it; jsdom has no layout engine. Fixed by
+letting the row wrap instead of the label (`flex: 1 1 auto` + `whiteSpace: nowrap`, `✕` at
+`flex: 0 0 auto`), applied to **both** the mobile and desktop copies of the duplicated card body,
+and re-verified live: every action button 44px tall and single-line. Regression test added
+asserting the structural fix. Full suite green.
+

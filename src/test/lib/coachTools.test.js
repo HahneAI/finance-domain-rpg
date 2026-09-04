@@ -123,7 +123,7 @@ describe("COACH_TOOLS schemas", () => {
   it("declares the drill-down, action and simulation tools", () => {
     expect(COACH_TOOL_NAMES).toEqual([
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
-      "navigate_to",
+      "navigate_to", "propose_goal",
       "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
       "simulate_without_logged_event",
     ]);
@@ -348,27 +348,30 @@ describe("executeCoachTool — navigate_to", () => {
     const key = (panel) => executeCoachTool("navigate_to", { panel }, d).viewKey;
     expect(key("Home")).toBe("home");
     expect(key("Income")).toBe("income");
-    expect(key("Budget")).toBe("budget");
+    // Renamed panel, unchanged route key — the label moved, the view key did not.
+    expect(key("Upkeep")).toBe("budget");
     expect(key("Log")).toBe("log");
     // The one that differs: the panel users call "Account" is keyed "profile".
     expect(key("Account")).toBe("profile");
   });
 
   it("accepts the panel name case-insensitively", () => {
-    expect(executeCoachTool("navigate_to", { panel: "budget" }, baseData()).viewKey).toBe("budget");
+    expect(executeCoachTool("navigate_to", { panel: "upkeep" }, baseData()).viewKey).toBe("budget");
   });
 
   it("rejects a panel that doesn't exist rather than inventing a route", () => {
     const r = executeCoachTool("navigate_to", { panel: "Dashboard" }, baseData());
     expect(r.error).toContain("Unknown panel");
     expect(r.viewKey).toBeUndefined();
-    expect(r.validPanels).toContain("budget");
+    // validPanels echoes the user-facing names, which now say "runway" — the
+    // internal route key is still "budget" and deliberately not exposed here.
+    expect(r.validPanels).toContain("upkeep");
   });
 
   it("resolves an expense focus against real data, by label", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "gym" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "gym" }, baseData());
     expect(r.focusRef).toBe("expense:Gym");
-    expect(r.linkLabel).toBe("Budget · Gym");
+    expect(r.linkLabel).toBe("Upkeep · Gym");
   });
 
   it("resolves a goal focus by rank", () => {
@@ -380,11 +383,11 @@ describe("executeCoachTool — navigate_to", () => {
   it("degrades to panel-only when the focus can't be resolved, and says so", () => {
     // A chip that scrolls to nothing is worse than one that just opens the
     // panel — and the model needs to know so it doesn't promise the highlight.
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Netflix" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "Netflix" }, baseData());
     expect(r.ok).toBe(true);
     expect(r.viewKey).toBe("budget");
     expect(r.focusRef).toBeNull();
-    expect(r.linkLabel).toBe("Open Budget");
+    expect(r.linkLabel).toBe("Open Upkeep");
     expect(r.note).toContain("No expense matches");
   });
 
@@ -395,8 +398,71 @@ describe("executeCoachTool — navigate_to", () => {
   });
 
   it("won't focus a paused expense that isn't on screen", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Paused Thing" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "Paused Thing" }, baseData());
     expect(r.focusRef).toBeNull();
+  });
+});
+
+describe("executeCoachTool — propose_goal", () => {
+  it("returns an editable proposal with a real projected finish", () => {
+    const r = executeCoachTool("propose_goal", { label: "Six months of runway", target: 800, note: "so a bad month stops being a crisis" }, baseData());
+    expect(r.ok).toBe(true);
+    expect(r.label).toBe("Six months of runway");
+    expect(r.target).toBe(800);
+    expect(r.note).toBe("so a bad month stops being a crisis");
+    // Appended last: that is the rank a confirmed goal actually lands at.
+    expect(r.insertAtRank).toBe(3);
+    expect(r.onTrackThisFiscalYear).toBe(true);
+    expect(r.projectedFinishDate).toMatch(/^the week of /);
+  });
+
+  it("agrees with simulate_new_goal, because it IS simulate_new_goal", () => {
+    // The card's date must come from the same engine the goal cards use — not
+    // a second projection that happens to look similar.
+    const d = baseData();
+    const proposed = executeCoachTool("propose_goal", { label: "X", target: 800 }, d);
+    const simulated = executeCoachTool("simulate_new_goal", { target: 800 }, d).newGoal;
+    expect(proposed.projectedFinishDate).toBe(simulated.finishDate);
+    expect(proposed.projectedFinishPeriodNumber).toBe(simulated.finishPeriodNumber);
+  });
+
+  it("reports no date, and says so, when the goal can't finish this fiscal year", () => {
+    // Regression: this branched on the projection OBJECT existing rather than
+    // on a date existing, so an unreachable goal told the model "the projected
+    // finish date is already on the card" when the card had none.
+    const r = executeCoachTool("propose_goal", { label: "Huge", target: 900000 }, baseData());
+    expect(r.onTrackThisFiscalYear).toBe(false);
+    expect(r.projectedFinishDate).toBeNull();
+    expect(r.note_to_model).toContain("does NOT finish inside the fiscal year");
+    expect(r.note_to_model).not.toContain("already on the card");
+  });
+
+  it("flags a duplicate name without ever naming the existing goals", () => {
+    // F114 withholds goal names from Coach. Proposing one is the opposite
+    // direction and is fine, but the reply must not leak what it compared to.
+    const d = baseData();
+    const r = executeCoachTool("propose_goal", { label: "emergency fund", target: 500 }, d);
+    expect(r.alreadyHaveOneNamedThis).toBe(true);
+    const out = JSON.stringify(r);
+    for (const g of d.goals) if (g.label) expect(out).not.toContain(g.label);
+  });
+
+  it("does not flag a name the user doesn't already have", () => {
+    expect(executeCoachTool("propose_goal", { label: "Something new", target: 500 }, baseData())
+      .alreadyHaveOneNamedThis).toBe(false);
+  });
+
+  it("always tells the model the card is unsaved", () => {
+    const r = executeCoachTool("propose_goal", { label: "X", target: 500 }, baseData());
+    expect(r.note_to_model).toContain("do not tell the user it has been added");
+  });
+
+  it("rejects proposals that could not become a real goal", () => {
+    const d = baseData();
+    expect(executeCoachTool("propose_goal", { label: "  ", target: 500 }, d).error).toContain("needs a name");
+    expect(executeCoachTool("propose_goal", { label: "X", target: 0 }, d).error).toContain("positive");
+    expect(executeCoachTool("propose_goal", { label: "X", target: "abc" }, d).error).toContain("positive");
+    expect(executeCoachTool("propose_goal", { label: "y".repeat(61), target: 5 }, d).error).toContain("too long");
   });
 });
 

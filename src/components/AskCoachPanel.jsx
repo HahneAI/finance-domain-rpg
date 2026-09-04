@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
-import { ASK_COACH_TOOLS } from "../lib/coachTools.js";
-import { CoachNavChip, CoachToolActivity, TOOL_ACTIVITY_LABELS } from "./CoachToolUI.jsx";
+import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
@@ -100,6 +100,11 @@ export function AskCoachPanel({
   // navigate_to chip. Absent = chips render disabled, so a caller that can't
   // navigate never shows a dead button.
   onNavigate = null,
+  // Writes a confirmed goal. Absent (or readOnly) renders the card's button
+  // disabled rather than hiding it, so a missing handler is visible in
+  // development instead of silently swallowing a confirm.
+  onCreateGoal = null,
+  readOnly = false,
   isExiting = false,
   config,
   expenses = [],
@@ -133,6 +138,10 @@ export function AskCoachPanel({
   // coach_chats stores plain text only, so a resumed conversation shows the
   // words without the chip rather than needing a row-shape migration.
   const [navChips, setNavChips] = useState({});
+  // Proposed goals, same live-turn-only keying as navChips — coach_chats stores
+  // plain text, so a resumed conversation shows the words without a stale,
+  // unconfirmed card whose numbers may no longer be true.
+  const [goalDrafts, setGoalDrafts] = useState({});
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -155,9 +164,13 @@ export function AskCoachPanel({
     setBodyFold("entering");
   }, [view]);
 
+  // Also keyed on the attachments, not just `messages`. A nav chip or goal card
+  // arrives from a tool result AFTER the message text has settled, so scrolling
+  // only on `messages` left them below the fold — a tall goal card landed
+  // underneath the fixed composer with its confirm button unclickable.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  }, [messages, navChips, goalDrafts, activeTool]);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,6 +254,7 @@ export function AskCoachPanel({
     // must clear them — otherwise index 3 of the old conversation would
     // decorate index 3 of the new one.
     setNavChips({});
+    setGoalDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -261,6 +275,7 @@ export function AskCoachPanel({
     // A resumed chat is plain text by design (coach_chats stores no tool calls),
     // so it starts with no chips rather than inheriting the live turn's.
     setNavChips({});
+    setGoalDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -311,20 +326,35 @@ export function AskCoachPanel({
       let accumulated = "";
       // The assistant bubble this turn is writing into — chips attach to it.
       const assistantIdx = nextMessages.length;
+      // Cleared when the NEXT round starts producing text, not when the tool
+      // returns. The tools are pure client-side functions that finish in
+      // microseconds, so clearing on "result" set and unset this within a
+      // single tick and the indicator never painted at all — live testing
+      // caught it showing nothing. The dead air a user actually sits through
+      // is the model round-trip that follows the tool, which is what this now
+      // spans.
+      let toolRoundOpen = false;
       const onToolEvent = (event) => {
         if (event.phase === "start") {
           setActiveTool(event.name);
+          toolRoundOpen = true;
           return;
         }
-        setActiveTool(null);
         // A navigate_to that failed validation returns an `error` and no
         // viewKey; rendering nothing is right — Coach still has the error in
         // its tool_result and can say so in words.
         if (event.name === "navigate_to" && event.result?.viewKey) {
           setNavChips((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
+        if (event.name === "propose_goal" && event.result?.ok) {
+          setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
       };
       for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData, onToolEvent })) {
+        if (toolRoundOpen) {
+          toolRoundOpen = false;
+          setActiveTool(null);
+        }
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }
@@ -340,6 +370,18 @@ export function AskCoachPanel({
       setActiveTool(null);
     }
   };
+
+  // Re-projects an edited target through the REAL goal timeline, locally — the
+  // same executeCoachTool the chat loop uses, so the card's date can never
+  // describe a different engine than the goal cards do. No model call.
+  const estimateGoalFinish = useCallback((target) => {
+    const r = executeCoachTool("simulate_new_goal", { target }, {
+      config, goals, expenses, currentWeek, today, allWeeks, futureWeeks,
+      timelineWeekNets, logNetLost, logNetGained, futureEventDeductions,
+    });
+    return r?.newGoal ?? null;
+  }, [config, goals, expenses, currentWeek, today, allWeeks, futureWeeks,
+      timelineWeekNets, logNetLost, logNetGained, futureEventDeductions]);
 
   const groupedHistory = groupChatsByDate(historyChats);
 
@@ -514,25 +556,40 @@ export function AskCoachPanel({
                     </div>
                   </div>
                 )}
-                <div
-                  className="text-md" style={{
-                    background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
-                    border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
-                    borderRadius: "14px",
-                    padding: "10px 14px",
-                    lineHeight: 1.5,
-                    color: "var(--color-text-primary)",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                {/* Column wrapper so the activity line and nav chip stack BELOW
+                    the bubble. The row above is `display:flex; alignItems:
+                    flex-end` for the avatar, so without this they become
+                    additional flex items beside the bubble — live testing
+                    showed the chip rendered inline and squashed to "Bud…". */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
+                  <div
+                    className="text-md" style={{
+                      background: m.role === "user" ? "var(--color-bg-raised)" : "var(--color-bg-surface)",
+                      border: m.role === "user" ? "none" : "1px solid var(--color-border-subtle)",
+                      borderRadius: "14px",
+                      padding: "10px 14px",
+                      lineHeight: 1.5,
+                      color: "var(--color-text-primary)",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {m.content || (sending && i === messages.length - 1 ? "…" : "")}
+                  </div>
+                  {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
+                    <CoachToolActivity toolName={activeTool} />
+                  )}
+                  {m.role === "assistant" && navChips[i] && (
+                    <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
+                  )}
+                  {m.role === "assistant" && goalDrafts[i] && (
+                    <CoachGoalCard
+                      draft={goalDrafts[i]}
+                      readOnly={readOnly || typeof onCreateGoal !== "function"}
+                      onCreate={onCreateGoal}
+                      onEstimate={estimateGoalFinish}
+                    />
+                  )}
                 </div>
-                {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
-                  <CoachToolActivity toolName={activeTool} />
-                )}
-                {m.role === "assistant" && navChips[i] && (
-                  <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
-                )}
               </div>
             ))}
             {errored && (

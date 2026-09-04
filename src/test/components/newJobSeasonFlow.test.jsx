@@ -505,6 +505,39 @@ describe('NewJobSeasonHomePanel', () => {
     expect(screen.getByText('Cash Runway')).toBeTruthy()
   })
 
+  // Paused Claim Dates — goals the user was chasing before the job ended stay
+  // on screen rather than vanishing. No date is rendered on purpose: with no
+  // income there is no surplus, so no Claim Date the math can support.
+  describe('paused Claim Dates', () => {
+    const GOALS = [
+      { id: 'g1', label: 'New tires', target: 900, completed: false },
+      { id: 'g2', label: 'Cancun', target: 2400, completed: false },
+    ]
+    const base = { config: JOB_LOSS_CONFIG, setConfig: () => {}, expenses: [], effectiveToday: '2026-06-15', includeBenefits: true }
+
+    it('shows PAUSED over the goal that was active, never a date', () => {
+      render(<NewJobSeasonHomePanel {...base} goals={GOALS} />)
+      expect(screen.getByText('PAUSED')).toBeTruthy()
+      expect(screen.getByText('New tires')).toBeTruthy()
+      expect(screen.getByText(/1 more on hold/)).toBeTruthy()
+    })
+
+    it('renders nothing when there are no goals to pause', () => {
+      render(<NewJobSeasonHomePanel {...base} goals={[]} />)
+      expect(screen.queryByText('PAUSED')).toBeNull()
+    })
+
+    it('ignores already-claimed goals', () => {
+      render(<NewJobSeasonHomePanel {...base} goals={[{ id: 'g1', label: 'Done thing', target: 500, completed: true }]} />)
+      expect(screen.queryByText('PAUSED')).toBeNull()
+    })
+
+    it('defaults to no goals when the prop is omitted entirely', () => {
+      render(<NewJobSeasonHomePanel {...base} />)
+      expect(screen.queryByText('PAUSED')).toBeNull()
+    })
+  })
+
   // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from
   // weeklyBurn on purpose (survival-spend focus), but a user who keeps those
   // bills tracked is still paying for them; this caption is the transparency

@@ -1269,7 +1269,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
 
   return (<div>
-    <PanelHero eyebrow="Expenses & Liabilities">Budget</PanelHero>
+    <PanelHero eyebrow="Expenses & Liabilities">Upkeep</PanelHero>
     {/* ── Period selector — month row + quarter row + adv. edit in one glass box ── */}
     <MonthQuarterSelector
       activeMonth={activeMonth}
@@ -1438,6 +1438,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
         >
           <div
             data-cat-header={cat}
+            /* Lets Coach's navigate_to deep link open a collapsed category
+               before highlighting a row inside it (src/lib/coachFocus.js).
+               Categories are collapsed by default, and a collapsed one clips
+               its rows to height 0 — so without this the highlight fired on a
+               row the user could not see. */
+            data-coach-expand={cat}
             onClick={readOnly ? undefined : () => toggleCat(cat)}
             role="button"
             aria-expanded={isCatExpanded}
@@ -1987,7 +1993,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
               {/* Drop-off banner */}
               {!isPaidOff && !inRunway && dropsThisYear && <div className="text-xs" style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", color: "var(--color-green)" }}>
-                ✓ Drops off in {fmtWeeksDuration(weeksUntilPayoff)} — budget improves after payoff
+                ✓ Drops off in {fmtWeeksDuration(weeksUntilPayoff)} — upkeep drops after payoff
               </div>}
 
               {/* Actions */}

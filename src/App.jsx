@@ -15,7 +15,7 @@ import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
-import { HomePanel } from "./components/HomePanel.jsx";
+import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -80,10 +80,16 @@ import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome }
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
-  { key: "budget",   label: "Budget" },
+  { key: "budget",   label: "Upkeep" },
   { key: "log",      label: "Log" },
   { key: "profile",  label: "Account" },
 ];
+
+// Route key → the name users actually see. The keys are internal and stay put
+// through a rename (Budget → Upkeep kept key "budget"), so anything that PRINTS
+// a view must translate rather than render the key — the "Viewing:" status line
+// showed a stale "BUDGET" for exactly that reason.
+const VIEW_LABELS = { home: "Home", ...Object.fromEntries(NAV_ITEMS.map((n) => [n.key, n.label])) };
 
 // Bottom nav items with SVG icons — Chime-style icon+label layout
 const BOTTOM_NAV = [
@@ -107,7 +113,7 @@ const BOTTOM_NAV = [
   },
   {
     key: "budget",
-    label: "Budget",
+    label: "Upkeep",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
@@ -759,6 +765,46 @@ export default function App() {
     setDrawerOpen(false);
     jumpToPanelTop();
   };
+
+  // Latest paywall read-only state, for callbacks defined above the component's
+  // early returns (see handleCoachCreateGoal). Assigned during render once
+  // isExpiredReadOnly is computed, further down.
+  const isExpiredReadOnlyRef = useRef(false);
+
+  // Writes a goal Coach proposed and the user confirmed on the card
+  // (propose_goal → CoachGoalCard). Mirrors HomePanel's own addGoal
+  // field-for-field — same id shape, same GOAL_SYSTEM_COLOR, same
+  // completed:false, the same eager save, and the same beta event — so a
+  // Coach-created goal is indistinguishable from a hand-created one and beta
+  // analytics don't silently under-count.
+  //
+  // Only the paywall check needs a ref — goals/isTester/betaCodeUsed are plain
+  // state declared near the top of the component, so they are ordinary
+  // dependencies. isExpiredReadOnly is the exception. That
+  // const is computed below this component's `!authChecked`/`!authedUser` early
+  // returns, so a hook placed after it is skipped on those render paths —
+  // "Rendered more hooks than during the previous render", a blank app. Putting
+  // it in the dependency array from up here is equally broken: dependency
+  // arrays evaluate during render, so the const is still in its temporal dead
+  // zone. A ref sidesteps both: the hook stays unconditional up here, and the
+  // value is read at call time, by which point it is always assigned.
+  // Both failures blanked the whole app (there is no top-level error boundary)
+  // while `vite build` and the full unit suite passed — CLAUDE.md's documented
+  // React blind spot, hit twice in one change.
+  const handleCoachCreateGoal = useCallback(({ label, target, note }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    const next = [...goals, {
+      id: `g_${Date.now()}`,
+      label,
+      target: Number(target) || 0,
+      color: GOAL_SYSTEM_COLOR,
+      note: note ?? "",
+      completed: false,
+    }];
+    setGoals(next);
+    savePersistedStateNow({ goals: next });
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+  }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2194,6 +2240,8 @@ export default function App() {
   // here, not an unconditional bypass; that asymmetry is now closed.
   const paywallBypassed = isAdmin || isAiAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
+  isExpiredReadOnlyRef.current = isExpiredReadOnly;
+
 
   // Beta Homebase / Money Moves badge count+color — single source shared by
   // the mobile header's icon buttons AND the desktop sidebar's nav item
@@ -2227,10 +2275,14 @@ export default function App() {
   const activePanel = (
     <>
       {currentView === "home" && (config.newJobSeasonMode ? (
+        /* `goals` is threaded READ-ONLY — the panel renders paused Claim Dates
+           and never mutates one, so no setGoals/onSaveGoalsNow goes with it and
+           F20's readOnly shadow block needs no new entry. */
         <NewJobSeasonHomePanel
           config={config}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
+          goals={goals}
           expenses={expenses}
           effectiveToday={effectiveToday}
           includeBenefits={newJobSeasonIncludeBenefits}
@@ -3396,7 +3448,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {/* TODO §1 mode rebuild — triage now lives inline on Budget
+                {/* TODO §1 mode rebuild — triage now lives inline on Upkeep
                     itself (NewJobSeasonBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
@@ -3411,7 +3463,7 @@ export default function App() {
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  Go to Budget
+                  Go to Upkeep
                 </Pressable>
                 <Pressable
                   onClick={handleBackToWork}
@@ -4064,7 +4116,7 @@ export default function App() {
             </div>
           )}
           <div className="text-xs" style={{ padding: "16px 20px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-            Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+            Viewing: <span style={{ color: "var(--color-teal)" }}>{VIEW_LABELS[currentView] ?? currentView}</span>
           </div>
         </div>
       </div>
@@ -4499,6 +4551,8 @@ export default function App() {
         <AskCoachPanel
           onClose={closeAskCoachWithAnimation}
           onNavigate={handleCoachNavigate}
+          onCreateGoal={handleCoachCreateGoal}
+          readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
           config={config}
           expenses={expenses}

@@ -55,7 +55,7 @@ src/
 ├── index.css                — @theme design tokens (single source of truth)
 ├── components/
 │   ├── ui.jsx               — shared primitives (MetricCard, NT, VT, SmBtn, SH, iS, lS)
-│   ├── HomePanel.jsx        — dashboard home tiles
+│   ├── HomePanel.jsx        — dashboard home tiles + the Claim Date goal surface
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
@@ -527,6 +527,36 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
 **Layout:** card gap `12px` · section `marginBottom` `20px` · card pad `18px 16px` (static) / `16px 18px` + `minHeight: 88px` (interactive).
 
 **Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-teal/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
+
+### Panel naming — "Upkeep", not "Budget"
+
+The Budget panel is called **Upkeep** everywhere a user can read it. Route keys, filenames
+(`BudgetPanel.jsx`), `data-coach-ref` targets and `sessionStorage` keys all still say `budget` —
+that split is deliberate, so a future rename only touches copy. Two traps, both real:
+`navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit (the lookup lowercases the enum
+value), and **any surface that prints a view key instead of a label leaks the internal name** —
+see `VIEW_LABELS` in `App.jsx`. Grep finds neither; only a live sweep does. See
+`docs/drift-app-warden.md` §8 F178.
+
+It was briefly called "Runway", which collided with New Job Season's cash-runway metric and with
+BudgetPanel's own `inRunway` loan window (DW-25). **Screen any future panel name by grepping it
+against existing app vocabulary first** — "Runway" read fine on paper and was already taken twice.
+
+### The Claim Date (goal surface)
+
+Goals on HomePanel lead with the **date**, not the dollar target — the app-side half of
+the marketing site's reframe: every budgeting app measures in dollars-per-category,
+backward; Authority measures in dates, forward. "Claim Date" is real product language,
+not a marketing term: the card labels the date `CLAIM DATE`, the completion action reads
+`✓ CLAIM IT`, and a "Next Claim Date" hero plus a `then …` funding queue sit above the
+cards so goal priority order is visible without opening the reorder modal.
+
+**It is presentation only.** Every date traces back to `resolveGoalFinishInfo()` — the
+same authoritative ETA the cards already showed. Never compute a Claim Date from anything
+else, or the hero and the card beneath it can disagree about the same goal. See
+`docs/drift-app-warden.md` §8 F177 before touching it, including the standing warning that
+the goal card body is **duplicated verbatim** between the mobile and desktop branches and
+must be edited as a pair.
 
 ### Numeric Input Standard
 **Never coerce on `onChange`.** Use string draft state (`field ?? ""`); only `parseFloat` at commit (blur/save). For required fields, pass `attempted` bool — show red label + border + `↑ Required` when `attempted && fieldEmpty`. Reference implementation: `Field` + `errBorder` in SetupWizard.

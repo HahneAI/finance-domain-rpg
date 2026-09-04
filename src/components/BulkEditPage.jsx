@@ -294,7 +294,7 @@ export function BulkEditPage({ phaseIdx, selectedMonthIso, expenses, cpm, onSave
                       {isDeleteOpen && (
                         <div style={{ marginTop: "10px", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "10px" }}>
                           <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "10px", letterSpacing: "0.3px" }}>
-                            Remove <strong style={{ color: "var(--color-text-primary)" }}>{exp.label}</strong> from budget for:
+                            Remove <strong style={{ color: "var(--color-text-primary)" }}>{exp.label}</strong> from upkeep for:
                           </div>
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             <SmBtn

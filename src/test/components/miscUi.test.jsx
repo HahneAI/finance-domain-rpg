@@ -65,13 +65,13 @@ describe('NetWorthHealthTips', () => {
   it('starts collapsed with a calm teaser line', () => {
     render(<NetWorthHealthTips />)
     expect(screen.getByText(/tap to read/i)).toBeTruthy()
-    expect(screen.queryByText('Pick one number, not the whole budget')).toBeNull()
+    expect(screen.queryByText('Pick one number, not the whole month')).toBeNull()
   })
 
   it('shows three tips once expanded', () => {
     render(<NetWorthHealthTips />)
     expand()
-    expect(screen.getByText('Pick one number, not the whole budget')).toBeTruthy()
+    expect(screen.getByText('Pick one number, not the whole month')).toBeTruthy()
     expect(screen.getByText('Put your easiest goal first')).toBeTruthy()
     expect(screen.getByText('Check your Freedom Allowance, not just your balance')).toBeTruthy()
   })
@@ -79,7 +79,7 @@ describe('NetWorthHealthTips', () => {
   it('rotates the tip window based on the seed', () => {
     render(<NetWorthHealthTips seed={1} />)
     expand()
-    expect(screen.queryByText('Pick one number, not the whole budget')).toBeNull()
+    expect(screen.queryByText('Pick one number, not the whole month')).toBeNull()
     expect(screen.getByText('Put your easiest goal first')).toBeTruthy()
   })
 

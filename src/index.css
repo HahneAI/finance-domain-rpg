@@ -372,7 +372,7 @@ code {
    smooth scroll reads as a glitch rather than a pointer. Two gentle pulses,
    each well under the 500ms per-step ceiling. */
 .coach-focus {
-  animation: coachFocusFlash 1600ms ease-out 1;
+  animation: coachFocusFlash 2600ms ease-out 1;
   border-radius: 12px;
 }
 @keyframes coachFocusFlash {

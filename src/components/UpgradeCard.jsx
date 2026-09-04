@@ -68,7 +68,7 @@ export function UpgradeCard({ onClose, tagline } = {}) {
         Your free trial has ended
       </div>
       <div className="text-base" style={{ color: "var(--color-text-secondary)", marginBottom: "22px", lineHeight: 1.5 }}>
-        Subscribe to keep editing your income, budget, and goals.
+        Subscribe to keep editing your income, upkeep, and goals.
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Pressable onClick={() => handleCheckout("monthly")} disabled={checkoutState.plan !== null} style={planBtnStyle("monthly")}>

@@ -177,7 +177,7 @@ export function NewJobSeasonBudgetPanel({
 
   return (
     <div>
-      <PanelHero eyebrow="New Job Season">Runway</PanelHero>
+      <PanelHero eyebrow="New Job Season">Upkeep</PanelHero>
 
       {/* ── Savings + unemployment scenario ── */}
       <SectionHeader sub="Feeds the runway numbers on Home">Savings & Benefits</SectionHeader>

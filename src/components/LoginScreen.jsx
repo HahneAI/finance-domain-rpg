@@ -489,7 +489,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           <>
             <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
               Sign back in with Google to restore your account. You'll pick a
-              plan and re-subscribe — your income setup, budget, goals, and
+              plan and re-subscribe — your income setup, upkeep, goals, and
               history come back as soon as your payment goes through.
             </div>
             <OAuthBtn label="Continue with Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} />
@@ -500,7 +500,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
             <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
               Set a new password for <span style={{ color: "var(--color-text-primary)" }}>{email}</span> to
               continue. You'll then pick a plan and re-subscribe — your income
-              setup, budget, goals, and history come back as soon as your
+              setup, upkeep, goals, and history come back as soon as your
               payment goes through.
             </div>
             <form onSubmit={handleReviveSignUp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

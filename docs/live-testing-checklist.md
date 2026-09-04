@@ -329,10 +329,16 @@ pay-structure wizard, which would have rewritten real account fields. The block 
 **no date** (no income means no surplus means no Claim Date the math can support), and produced
 no HTML-nesting warnings or page errors.
 
-Found one open item (**DW-25**): "Runway" now means two things at once. In New Job Season the nav
+Found and then closed **DW-25**: "Runway" meant three things at once. In New Job Season the nav
 collapses to Runway + Account, so a single screen shows "GO TO RUNWAY" (the panel), "Your Runway"
 (the metrics section), "CASH RUNWAY — 66 days" (days of cash left), and a "RUNWAY" nav tab. Four
-labels, two meanings. Not a code defect — the rename was requested and the collision was disclosed
-when the name was picked — but it needs an owner call, and it's copy-only either way. Full suite
-(1872 tests) green.
+labels, two meanings — and a third already lived inside the renamed panel itself (`inRunway`, the
+pre-first-payment saving window on a loan). Resolved by renaming again to **Upkeep**, picked from a
+shortlist screened by grepping each candidate against existing app vocabulary so the winner had
+zero prior uses. That second pass also caught two leftover classes the first sweep structurally
+could not: a *conditional* loan banner ("budget improves after payoff") that only renders for a
+loan dropping off this year, and six strings on surfaces outside the five panels (login, revive,
+upgrade card, trial explainer, setup wizard, bulk edit). Re-swept live: zero "Budget" and zero
+visible "Runway" on all five panels, Upkeep Health tile on Home, and the Upkeep tab routes.
+Full suite (1872 tests) green.
 

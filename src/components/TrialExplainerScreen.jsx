@@ -38,7 +38,7 @@ export function TrialExplainerScreen({ trialDaysLeft, trialEndsAt, onContinue })
   const rows = [
     {
       label: "Full access",
-      detail: `Every feature — income modeling, budgeting, goals, and event logging — unlocked for ${days} ${dayWord}.`,
+      detail: `Every feature — income modeling, upkeep, goals, and event logging — unlocked for ${days} ${dayWord}.`,
     },
     {
       label: "No card required",

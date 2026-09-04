@@ -1635,7 +1635,7 @@ with no income there is no surplus, so no Claim Date the math can support — in
 break the same never-render-an-unsupported-date rule the rest of the surface keeps. No setter is
 threaded, so F20's readOnly shadow needs no new entry.
 
-**The Budget panel is named "Runway" in all user-visible text**; every route key, filename and
+**The Budget panel is named "Upkeep" in all user-visible text**; every route key, filename and
 `data-coach-ref` stays `budget`. Sites moved: `NAV_ITEMS`, `BOTTOM_NAV`, `DemoAccountTree`'s tab
 list, both panels' `PanelHero`, Home's "Runway Health" tile, `aiContext.js`'s emitted context
 line, `coachFeatureGuide.js`, `coachPrompts.js`, and `navigate_to`'s `panel` enum.
@@ -1659,10 +1659,17 @@ pay-structure wizard and would have rewritten real account fields. Result: the b
 `CLAIM DATE / PAUSED / New Gaming Computer / $3,000 target · 1 more on hold`, **no date leaked**,
 no HTML-nesting warnings, no page errors.
 
-That pass also produced **DW-25**: the Runway rename collides with New Job Season's own runway
-vocabulary. One 390px screen in that mode shows "GO TO RUNWAY" (panel), "Your Runway" (metrics
-section), "CASH RUNWAY — 66 days" (days of cash), and a "RUNWAY" nav tab — four labels, two
-meanings. Not a defect; an owner call, filed open.
+That pass produced **DW-25** — the first name, "Runway", collided with New Job Season's own
+runway vocabulary AND with `inRunway`, BudgetPanel's own pre-first-payment loan window. Resolved
+by renaming again to **Upkeep**, picked from a shortlist screened by grepping every candidate
+against existing app vocabulary so the winner had zero prior uses. Do that screen before choosing
+any future panel name; "Runway" read fine on paper and was already taken twice.
+
+**Two classes of leftover that a grep and a panel sweep each miss on their own**, both found here:
+a *conditional* banner ("budget improves after payoff") that only paints for a loan dropping off
+this year, and six strings on surfaces outside the five panels entirely (login, revive, upgrade
+card, trial explainer, setup wizard, bulk edit). A rename is only done when BOTH a widened grep
+(bare JSX text, not just quoted strings) and a live sweep agree.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 

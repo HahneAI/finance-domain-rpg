@@ -959,7 +959,7 @@ function Step2({ formData, onChange, attempted }) {
                 style={{ marginTop: "3px", accentColor: "var(--color-teal)", width: "16px", height: "16px", flexShrink: 0 }}
               />
               <span className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: "1.6" }}>
-                I understand — my income projections, budget, and goals are all built from this ceiling. I'll log my actual hours each week so my real earnings stay accurate.
+                I understand — my income projections, upkeep, and goals are all built from this ceiling. I'll log my actual hours each week so my real earnings stay accurate.
               </span>
             </label>
           </div>
@@ -2121,7 +2121,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <label style={lSp}>Freedom Allowance</label>
         <p className="text-base" style={{ margin: 0, color: "var(--color-text-primary)", lineHeight: "1.6" }}>
-          A fixed amount from every check that the app treats as invisible — quietly builds a safety reserve without cluttering your budget.
+          A fixed amount from every check that the app treats as invisible — quietly builds a safety reserve without cluttering your upkeep.
         </p>
         <div style={{ display: "flex", gap: "8px" }}>
           <Pill label="On"  active={freedomAllowanceOn}  onClick={() => onChange({ freedomAllowanceEnabled: true  })} />

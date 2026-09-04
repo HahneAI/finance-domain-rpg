@@ -95,4 +95,70 @@ describe('HomePanel', () => {
       await waitFor(() => expect(screen.getByText('investor demo check-in')).toBeTruthy())
     })
   })
+  // ── Claim Date presentation (2026-09) ──────────────────────────────────
+  // The goal surface leads with the DATE, not the dollar amount — the app-side
+  // half of the site's "we are not a budgeting app" reframe. These walk the
+  // §8.3 gate-matrix Goals row (empty / active / all-completed), because the
+  // hero must not fabricate a signal when there is nothing to claim.
+  describe('Claim Date surface', () => {
+    const goalProps = {
+      ...baseProps,
+      weeklyIncome: 1200,
+      futureWeekNets: Array(52).fill(1200),
+      goals: [
+        { id: 'g1', label: 'four new tires', target: 900, completed: false },
+        { id: 'g2', label: 'a week in Cancun', target: 2400, completed: false },
+      ],
+    }
+
+    // Guards the two absence assertions below from passing vacuously: if the
+    // hero never rendered at all, "not present when empty" would still pass.
+    it('renders the Next Claim Date hero with a real date for active goals', () => {
+      render(<HomePanel {...goalProps} />)
+      expect(screen.getByText('Next Claim Date')).toBeTruthy()
+      const hero = screen.getByText('Next Claim Date').parentElement
+      // A month name and a four-digit year, i.e. an actual resolved date.
+      expect(hero.textContent).toMatch(/(January|February|March|April|May|June|July|August|September|October|November|December)/)
+      expect(hero.textContent).toMatch(/20\d\d/)
+    })
+
+    it('shows the funding queue so the priority order is visible outside the reorder modal', () => {
+      render(<HomePanel {...goalProps} />)
+      // Two active goals: the second one appears as a queued "then" row.
+      expect(screen.getAllByText('then').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('renders no Claim Date hero when there are no goals (no fabricated signal)', () => {
+      render(<HomePanel {...baseProps} goals={[]} />)
+      expect(screen.queryByText('Next Claim Date')).toBeNull()
+    })
+
+    it('renders no Claim Date hero when every goal is already claimed', () => {
+      render(
+        <HomePanel
+          {...goalProps}
+          goals={goalProps.goals.map((g) => ({ ...g, completed: true, completedAt: '2026-03-01T00:00:00.000Z' }))}
+        />
+      )
+      expect(screen.queryByText('Next Claim Date')).toBeNull()
+    })
+
+    it('leads each goal card with a Claim date label, not the target amount', () => {
+      render(<HomePanel {...goalProps} />)
+      expect(screen.getAllByText('Claim date').length).toBeGreaterThanOrEqual(1)
+      // The target is still present — demoted, not deleted.
+      expect(screen.getAllByText('Target').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('names the claim action rather than a checkbox verb', () => {
+      render(<HomePanel {...goalProps} />)
+      expect(screen.getAllByText('✓ CLAIM IT').length).toBeGreaterThanOrEqual(1)
+      expect(screen.queryByText('✓ DONE')).toBeNull()
+    })
+
+    it('hides every goal mutation control on a read-only (paywall-expired) account', () => {
+      render(<HomePanel {...goalProps} readOnly />)
+      expect(screen.queryByText('✓ CLAIM IT')).toBeNull()
+    })
+  })
 })

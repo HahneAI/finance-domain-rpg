@@ -516,6 +516,18 @@ export function HomePanel({
     return fallback ?? { text: "Timeline pending", finishDate: null, badge: null };
   };
 
+  // The claim queue — every active goal that has a real date, soonest first.
+  // Built entirely from resolveGoalFinishInfo (F18's authoritative path, already
+  // on every card); this adds a second *view* of those dates, never a second
+  // derivation of them. A goal whose timeline is still pending has no date to
+  // claim and drops out rather than showing a placeholder.
+  const claimQueue = tl
+    .map((g) => ({ goal: g, info: resolveGoalFinishInfo(g) }))
+    .filter((x) => x.info.finishDate instanceof Date && !Number.isNaN(x.info.finishDate.getTime()))
+    .sort((a, b) => a.info.finishDate - b.info.finishDate);
+  const nextClaim = claimQueue[0] ?? null;
+  const laterClaims = claimQueue.slice(1, 4);
+
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
   // Every handler below computes `next` synchronously from the `goals` prop
   // (not a setState updater) so the same value can go to setGoals AND
@@ -684,6 +696,131 @@ export function HomePanel({
         </div>
       </div>
 
+      {/* ── Next Claim Date ──────────────────────────────────────────────────
+          The panel's emotional anchor, and the app-side half of the site's
+          reframe: the unit of a goal is a DATE, not a dollar amount. Every
+          budgeting app leads with the amount; leading with the day you get the
+          thing is what "we're not a budgeting app" means in practice.
+
+          Purely presentational. Every number here comes from `claimQueue`,
+          which reads resolveGoalFinishInfo — the same authoritative ETA the
+          cards below already display (drift map §8 F18). Nothing is recomputed.
+
+          Gate matrix (§8.3, Goals row): empty → the block does not render at
+          all rather than fabricating a signal; all-completed → same, since
+          `tl` holds only active goals. */}
+      {nextClaim && (
+        <div style={{
+          marginBottom: "20px",
+          padding: "20px 18px 18px",
+          borderRadius: "18px",
+          background: "linear-gradient(180deg, rgba(0,200,150,0.10), rgba(0,200,150,0.02))",
+          border: "1px solid var(--color-border-accent)",
+        }}>
+          <div className="text-2xs" style={{
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            color: "var(--color-teal)",
+            marginBottom: "6px",
+          }}>
+            Next Claim Date
+          </div>
+
+          <div className="text-md" style={{
+            fontWeight: 700,
+            color: "var(--color-text-primary)",
+            marginBottom: "10px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {nextClaim.goal.label}
+          </div>
+
+          {/* The date, stacked the way the marketing site stacks it so the two
+              surfaces read as one product. Sized outside the 9–14px band the
+              typography audit guards, because this is numeric display, not
+              label copy. */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap", lineHeight: 1 }}>
+            <span style={{
+              fontSize: "40px",
+              fontWeight: 900,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "-0.01em",
+              color: "var(--color-text-primary)",
+            }}>
+              {nextClaim.info.finishDate.toLocaleDateString("en-US", { month: "long" })}
+            </span>
+            <span style={{
+              fontSize: "40px",
+              fontWeight: 900,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "-0.01em",
+              color: "var(--color-accent-primary)",
+            }}>
+              {nextClaim.info.finishDate.getDate()}
+            </span>
+            <span style={{
+              fontSize: "20px",
+              fontWeight: 600,
+              fontFamily: "var(--font-display)",
+              color: "var(--color-text-secondary)",
+            }}>
+              {nextClaim.info.finishDate.getFullYear()}
+            </span>
+          </div>
+
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginTop: "10px" }}>
+            {fmt$(nextClaim.goal.target)} to go
+            {nextClaim.info.badge ? ` · ${nextClaim.info.badge}` : ""}
+          </div>
+
+          {/* The funding queue, made visible. Goals fund in PRIORITY ORDER
+              against real surplus — one at a time, not all at once — which is
+              the single thing A:Fin does that a savings-bucket app doesn't.
+              Until now that ordering only existed inside the reorder modal. */}
+          {laterClaims.length > 0 && (
+            <div style={{ marginTop: "16px", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "12px" }}>
+              {laterClaims.map(({ goal, info }) => (
+                <div key={goal.id} style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "10px",
+                  marginBottom: "6px",
+                }}>
+                  <span className="text-2xs" style={{
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "var(--color-text-disabled)",
+                    flexShrink: 0,
+                  }}>
+                    then
+                  </span>
+                  <span className="text-xs" style={{
+                    color: "var(--color-text-secondary)",
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {goal.label}
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--color-text-primary)", fontWeight: 600, flexShrink: 0 }}>
+                    {info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+              ))}
+              {claimQueue.length > 4 && (
+                <div className="text-2xs" style={{ color: "var(--color-text-disabled)", marginTop: "8px" }}>
+                  +{claimQueue.length - 4} more in the queue
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         {/* margin: "0 -16px" cancels out .main-content's own 16px horizontal padding
             (App.jsx's inline `padding: "18px 16px"` on the .main-content div) so this
@@ -778,30 +915,64 @@ export function HomePanel({
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
-                              <span className="text-md" style={{ fontWeight: "bold" }}>{g.label}</span>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
-                            {/* minHeight reserves the badge/PAST DUE row's space even when
-                                neither shows, so a goal completing within the current fiscal
-                                year (no badge) renders the same card height as one further out
-                                (badge present) — instead of the carousel's cards visibly
-                                varying in height card to card. */}
-                            <div style={{ minHeight: "38px" }}>
-                              {(() => {
-                                const info = resolveGoalFinishInfo(g);
-                                return <>
-                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
-                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                                </>;
-                              })()}
-                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
-                            </div>
-                          </div>
+                        {/* Claim Date leads, target demotes.
+                            Inverted 2026-09 to match the marketing site's reframe:
+                            a budgeting app leads with the dollar amount, and the
+                            whole "we are not a budgeting app" claim is that the
+                            unit here is the DATE you get the thing. The target is
+                            still on the card — it just stops being the headline.
+                            Presentation only; the date is resolveGoalFinishInfo's
+                            existing value (§8 F18), not a new derivation. */}
+                        <div style={{ marginBottom: "10px" }}>
+                          <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                          {(() => {
+                            const info = resolveGoalFinishInfo(g);
+                            const isClaiming = celebrating === g.id;
+                            const dateColor = isClaiming
+                              ? "var(--color-green)"
+                              : !Number.isFinite(g.eW)
+                                ? "var(--color-warning)"
+                                : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
+                            const claimText = isClaiming
+                              ? "Claimed"
+                              : info.finishDate
+                                ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                : (info.text ?? "Timeline pending");
+                            return (
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
+                                    {isClaiming ? "Claimed" : "Claim date"}
+                                  </div>
+                                  {/* 22px sits outside the 9–14px band the typography
+                                      audit guards — this is numeric display, not label copy. */}
+                                  <div style={{
+                                    fontSize: "22px",
+                                    fontWeight: 900,
+                                    fontFamily: "var(--font-display)",
+                                    lineHeight: 1.1,
+                                    color: dateColor,
+                                    transition: "color 220ms ease",
+                                  }}>
+                                    {claimText}
+                                  </div>
+                                  {/* minHeight reserves the badge/PAST DUE row's space even
+                                      when neither shows, so a goal completing within the
+                                      current fiscal year (no badge) renders the same card
+                                      height as one further out (badge present) — instead of
+                                      the carousel's cards visibly varying card to card. */}
+                                  <div style={{ minHeight: "24px", marginTop: "3px" }}>
+                                    {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                    {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
+                                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
@@ -850,7 +1021,7 @@ export function HomePanel({
                               </SmBtn>
                             )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ CLAIM IT</SmBtn>
                             {delGoalId === g.id ? (
                               <>
                                 <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
@@ -922,30 +1093,64 @@ export function HomePanel({
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
-                              <span className="text-md" style={{ fontWeight: "bold" }}>{g.label}</span>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
-                            {/* minHeight reserves the badge/PAST DUE row's space even when
-                                neither shows, so a goal completing within the current fiscal
-                                year (no badge) renders the same card height as one further out
-                                (badge present) — instead of the carousel's cards visibly
-                                varying in height card to card. */}
-                            <div style={{ minHeight: "38px" }}>
-                              {(() => {
-                                const info = resolveGoalFinishInfo(g);
-                                return <>
-                                  {info.text && <div className="text-xs" style={{ color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{info.text}</div>}
-                                  {info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                                </>;
-                              })()}
-                              {g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
-                            </div>
-                          </div>
+                        {/* Claim Date leads, target demotes.
+                            Inverted 2026-09 to match the marketing site's reframe:
+                            a budgeting app leads with the dollar amount, and the
+                            whole "we are not a budgeting app" claim is that the
+                            unit here is the DATE you get the thing. The target is
+                            still on the card — it just stops being the headline.
+                            Presentation only; the date is resolveGoalFinishInfo's
+                            existing value (§8 F18), not a new derivation. */}
+                        <div style={{ marginBottom: "10px" }}>
+                          <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                          {(() => {
+                            const info = resolveGoalFinishInfo(g);
+                            const isClaiming = celebrating === g.id;
+                            const dateColor = isClaiming
+                              ? "var(--color-green)"
+                              : !Number.isFinite(g.eW)
+                                ? "var(--color-warning)"
+                                : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
+                            const claimText = isClaiming
+                              ? "Claimed"
+                              : info.finishDate
+                                ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                : (info.text ?? "Timeline pending");
+                            return (
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
+                                    {isClaiming ? "Claimed" : "Claim date"}
+                                  </div>
+                                  {/* 22px sits outside the 9–14px band the typography
+                                      audit guards — this is numeric display, not label copy. */}
+                                  <div style={{
+                                    fontSize: "22px",
+                                    fontWeight: 900,
+                                    fontFamily: "var(--font-display)",
+                                    lineHeight: 1.1,
+                                    color: dateColor,
+                                    transition: "color 220ms ease",
+                                  }}>
+                                    {claimText}
+                                  </div>
+                                  {/* minHeight reserves the badge/PAST DUE row's space even
+                                      when neither shows, so a goal completing within the
+                                      current fiscal year (no badge) renders the same card
+                                      height as one further out (badge present) — instead of
+                                      the carousel's cards visibly varying card to card. */}
+                                  <div style={{ minHeight: "24px", marginTop: "3px" }}>
+                                    {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                    {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
+                                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
@@ -994,7 +1199,7 @@ export function HomePanel({
                               </SmBtn>
                             )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ CLAIM IT</SmBtn>
                             {delGoalId === g.id ? (
                               <>
                                 <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>

@@ -1580,6 +1580,90 @@ goal's own future weeks.
 > `computeNet` drift on the *shared* math gets caught immediately instead of silently producing a
 > wrong goal ETA.
 
+**F177 · Claim Date surface (hero + funding queue + inverted goal card)** — `claimQueue`
+`HomePanel.jsx:524–534`, hero block `:686–800`, card header (twice, see below) — **[G]**
+Added 2026-09. The goal surface leads with the **date**, not the dollar target — the
+app-side half of the marketing site's reframe ("we are not a budgeting app; the unit is
+the day you get the thing"). Three pieces: a "Next Claim Date" hero showing the soonest
+active goal's date large, a `then …` funding-queue list under it making priority order
+visible outside the reorder modal, and each goal card inverted so the Claim date is the
+headline and the target demotes to a right-hand sub-value. `handleMarkDone`'s button is
+now `✓ CLAIM IT` and its existing 900ms `celebrating` window renders a "Claimed" state
+on the card.
+
+**Presentation only — this is [G], not [L].** `claimQueue` is built entirely from
+`resolveGoalFinishInfo(g)`, the same authoritative ETA the cards already displayed
+(F18). It adds a second *view* of those dates, never a second derivation. No call to
+`computeGoalTimeline`, `estimateGoalNextYear` or any money function was added or changed.
+> **IF** a Claim Date is ever computed from anything other than `resolveGoalFinishInfo`,
+> **THEN** the hero and the card beneath it can disagree about the same goal — the exact
+> two-surfaces-one-number shape of F18's own trigger. Check: grep `finishDate` in
+> HomePanel — every consumer traces back to `resolveGoalFinishInfo`.
+> **IF** goals are empty or all completed, **THEN** the hero must not render at all
+> (§8.3's Goals row: no fabricated signal). Covered by
+> `HomePanel.test.jsx`'s "Claim Date surface" block, which asserts the hero *does*
+> render for active goals first, so the two absence assertions can't pass vacuously.
+
+**Live-verified 2026-09 against a production build** (`npm run build` + `npm run preview`,
+not the dev server — the React Compiler only runs in a real build, and §12.4's miscompilation
+class is invisible to Vitest). HomePanel painted, hero read
+"NEXT CLAIM DATE / New Gaming Computer / October 12 2026 / $3,000 to go / THEN ATM Purchase
+Nov 9 2026", no HTML-nesting warnings, no page errors. `✓ CLAIM IT` rendered the "Claimed"
+state inside the 900ms window, dropped the goal from the queue, and **survived an immediate
+reload** (eager save intact, F19's updater-capture path unchanged). The test account was
+restored via the completed fold's UNDO.
+
+That pass found **DW-24**: with the label lengthened from `✓ DONE` to `✓ CLAIM IT`, four
+`flex: 1` buttons on a 390px card left too little room and the text wrapped *inside* the
+button. Fixed by sizing buttons to content (`flex: 1 1 auto` + `whiteSpace: nowrap`) in a
+`flexWrap: wrap` row so the row wraps instead of the label.
+> **IF** any action-row label grows, **THEN** re-check it at 390px in a real browser —
+> jsdom has no layout engine and the suite cannot see this class of defect at all.
+
+⚠️ **The goal card body is duplicated verbatim between the mobile `ScrollSnapRow` branch
+and the desktop grid branch** (`HomePanel.jsx` ~`:863` and ~`:1009`). The two were
+byte-identical apart from three wrapper style properties before this change and were
+edited as a matched pair to stay that way. This is a standing D5 hazard: any future edit
+to one branch that misses the other silently gives mobile and desktop different goal
+cards. Extracting a single shared render helper is the real fix and is **not** done —
+filed as a follow-up rather than bundled into a presentation change.
+
+**F178 · Paused Claim Dates on New Job Season + the Budget → Runway rename** — 2026-09 — **[G]**
+`NewJobSeasonHomePanel` now receives `goals` **read-only** and renders a PAUSED block at the
+bottom for the goal the user was chasing when the job ended. **No date is rendered on purpose:**
+with no income there is no surplus, so no Claim Date the math can support — inventing one would
+break the same never-render-an-unsupported-date rule the rest of the surface keeps. No setter is
+threaded, so F20's readOnly shadow needs no new entry.
+
+**The Budget panel is named "Runway" in all user-visible text**; every route key, filename and
+`data-coach-ref` stays `budget`. Sites moved: `NAV_ITEMS`, `BOTTOM_NAV`, `DemoAccountTree`'s tab
+list, both panels' `PanelHero`, Home's "Runway Health" tile, `aiContext.js`'s emitted context
+line, `coachFeatureGuide.js`, `coachPrompts.js`, and `navigate_to`'s `panel` enum.
+> **IF** `navigate_to`'s panel enum changes, **THEN** `PANEL_VIEW_KEYS` must change with it — the
+> lookup is `PANEL_VIEW_KEYS[panel.toLowerCase()]`, so the enum value and the map key are one
+> unit. Renaming the enum alone silently breaks every Coach chip to that panel.
+> **IF** a surface PRINTS a view key rather than a label, **THEN** it leaks the internal name
+> through any rename. `App.jsx`'s "Viewing:" status line rendered `{currentView}` and showed a
+> stale "BUDGET" after everything else had moved; it now goes through `VIEW_LABELS`. A grep for
+> quoted strings will never find this class — only a live sweep does.
+
+**Live-swept 2026-09-04** against a production build: zero visible "Budget" across Home, Income,
+Runway, Log and Account; the Runway tab still routes to the same panel.
+
+**The paused block was then verified live in real New Job Season mode.** The shared test account
+was snapshotted (config/goals/expenses), flipped by writing `newJobSeasonMode: true` directly,
+driven, then restored by writing the captured config back — a diff confirmed config, goals and
+expenses all byte-identical afterward. Restoring via the app's own `handleBackToWork` was
+deliberately **not** used: it ends with `setWizardEntry("structure_change")`, which forces a
+pay-structure wizard and would have rewritten real account fields. Result: the block rendered
+`CLAIM DATE / PAUSED / New Gaming Computer / $3,000 target · 1 more on hold`, **no date leaked**,
+no HTML-nesting warnings, no page errors.
+
+That pass also produced **DW-25**: the Runway rename collides with New Job Season's own runway
+vocabulary. One 390px screen in that mode shows "GO TO RUNWAY" (panel), "Your Runway" (metrics
+section), "CASH RUNWAY — 66 days" (days of cash), and a "RUNWAY" nav tab — four labels, two
+meanings. Not a defect; an owner call, filed open.
+
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1594,6 +1678,8 @@ goal's own future weeks.
 | `computeNewJobSeasonRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `newJobSeasonCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24), admin Live State Inspector's New Job Season rows (§15.I, via the same `newJobSeasonDash` memo as Ask Coach — no separate call) | `newJobSeasonFlow.test.jsx`, `newJobSeasonRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
 | `weeklyAmountForBurn` (`newJobSeasonRunway.js`) — loan-aware `weeklyBurn`/`lifestyleWeeklySpend` getter, fixed 2026-08 (a tracked loan previously contributed $0 to both via `getEffectiveAmount`, which doesn't understand `loanMeta` without a synthetic `history` already regenerated elsewhere) | Any other `essentialActive`/`lifestyleActive` reduce added to this file must route through it too, not a bare `getEffectiveAmount(exp, ...)` — a loan silently drops back to $0 the moment a new consumer bypasses it | `newJobSeasonRunway.test.js`'s "loan payments count toward weeklyBurn" block; a tracked loan with no `history` array still moves the Runway/Weekly Burn tiles | D1 |
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `freedomAllowancePerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
+| The goal card header / claim copy (F177) | The **other** card branch — mobile `ScrollSnapRow` vs. desktop grid — and `HomePanel.test.jsx`'s "Claim Date surface" block | The two card bodies are duplicated verbatim; edit both or they diverge. `grep -c 'Claim date' HomePanel.jsx` must stay even | D5 |
+| `resolveGoalFinishInfo`'s return shape (`{text, finishDate, badge}`) | F177's `claimQueue` (hero + funding queue) **and** every card's date line — both read `finishDate` | Drop a goal's date and the hero must fall through to the next queued goal, not render blank | D1 |
 | `estimateGoalNextYear`'s local `weekNet()` closure (Home-only, F142) | The "goal completes next year" ETA card — no other consumer | For a not-this-year goal, compare the estimated `weeklyNet` against a manual `buildYear`/`computeNet` run one year forward | D1 |
 
 ### 8.3 Block 3 — Gate matrix

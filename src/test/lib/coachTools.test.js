@@ -348,27 +348,30 @@ describe("executeCoachTool — navigate_to", () => {
     const key = (panel) => executeCoachTool("navigate_to", { panel }, d).viewKey;
     expect(key("Home")).toBe("home");
     expect(key("Income")).toBe("income");
-    expect(key("Budget")).toBe("budget");
+    // Renamed panel, unchanged route key — the label moved, the view key did not.
+    expect(key("Runway")).toBe("budget");
     expect(key("Log")).toBe("log");
     // The one that differs: the panel users call "Account" is keyed "profile".
     expect(key("Account")).toBe("profile");
   });
 
   it("accepts the panel name case-insensitively", () => {
-    expect(executeCoachTool("navigate_to", { panel: "budget" }, baseData()).viewKey).toBe("budget");
+    expect(executeCoachTool("navigate_to", { panel: "runway" }, baseData()).viewKey).toBe("budget");
   });
 
   it("rejects a panel that doesn't exist rather than inventing a route", () => {
     const r = executeCoachTool("navigate_to", { panel: "Dashboard" }, baseData());
     expect(r.error).toContain("Unknown panel");
     expect(r.viewKey).toBeUndefined();
-    expect(r.validPanels).toContain("budget");
+    // validPanels echoes the user-facing names, which now say "runway" — the
+    // internal route key is still "budget" and deliberately not exposed here.
+    expect(r.validPanels).toContain("runway");
   });
 
   it("resolves an expense focus against real data, by label", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "gym" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "gym" }, baseData());
     expect(r.focusRef).toBe("expense:Gym");
-    expect(r.linkLabel).toBe("Budget · Gym");
+    expect(r.linkLabel).toBe("Runway · Gym");
   });
 
   it("resolves a goal focus by rank", () => {
@@ -380,11 +383,11 @@ describe("executeCoachTool — navigate_to", () => {
   it("degrades to panel-only when the focus can't be resolved, and says so", () => {
     // A chip that scrolls to nothing is worse than one that just opens the
     // panel — and the model needs to know so it doesn't promise the highlight.
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Netflix" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "Netflix" }, baseData());
     expect(r.ok).toBe(true);
     expect(r.viewKey).toBe("budget");
     expect(r.focusRef).toBeNull();
-    expect(r.linkLabel).toBe("Open Budget");
+    expect(r.linkLabel).toBe("Open Runway");
     expect(r.note).toContain("No expense matches");
   });
 
@@ -395,7 +398,7 @@ describe("executeCoachTool — navigate_to", () => {
   });
 
   it("won't focus a paused expense that isn't on screen", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Budget", focus: "Paused Thing" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "Paused Thing" }, baseData());
     expect(r.focusRef).toBeNull();
   });
 });

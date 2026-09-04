@@ -40,7 +40,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
  */
 export function NewJobSeasonHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
-  expenses, effectiveToday, includeBenefits, readOnly = false,
+  expenses, goals = [], effectiveToday, includeBenefits, readOnly = false,
   currentWeek, isAdmin, isAiAdmin, isTester, entitlement,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
@@ -48,6 +48,11 @@ export function NewJobSeasonHomePanel({
   const noop = useCallback(() => {}, []);
   const setConfig = readOnly ? noop : setConfigProp;
   const saveConfigNow = readOnly ? noop : saveConfigNowProp;
+
+  // Goals the visitor had going when the job ended. Priority order is the
+  // array's own order, same as HomePanel's — the first one is what they were
+  // actually chasing, so it's the one that gets the PAUSED treatment.
+  const pausedGoals = useMemo(() => (goals ?? []).filter((g) => !g.completed), [goals]);
 
   const [amountDraft, setAmountDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
@@ -336,6 +341,66 @@ export function NewJobSeasonHomePanel({
             />
           )}
         </>
+      )}
+
+      {/* ── Claim Dates, on hold ─────────────────────────────────────────────
+          What the visitor was chasing before the job ended, deliberately kept
+          on screen rather than hidden. Nothing here is a date: with no income
+          there is no surplus, so no Claim Date can be computed honestly — and
+          inventing one would break the same rule the rest of the surface keeps
+          (never render a date the math can't support). PAUSED is the honest
+          word for it, and it says the goal still exists rather than that it's
+          gone.
+
+          Read-only by construction: no mutation handler is threaded into this
+          panel, so there is nothing for F20's readOnly shadow to cover. */}
+      {pausedGoals.length > 0 && (
+        <div style={{ marginTop: "28px" }}>
+          <SectionHeader sub="Still yours. They start moving again the week you're earning.">
+            <SH>Claim Dates</SH>
+          </SectionHeader>
+          <div style={{
+            padding: "20px 18px",
+            borderRadius: "16px",
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-subtle)",
+          }}>
+            <div className="text-2xs" style={{
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+              color: "var(--color-text-disabled)",
+              marginBottom: "6px",
+            }}>
+              Claim date
+            </div>
+            {/* Sized outside the 9–14px band the typography audit guards — this
+                is display type, not label copy. */}
+            <div style={{
+              fontSize: "38px",
+              fontWeight: 900,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "0.08em",
+              lineHeight: 1.05,
+              color: "var(--color-text-disabled)",
+              marginBottom: "10px",
+            }}>
+              PAUSED
+            </div>
+            <div className="text-md" style={{
+              fontWeight: 700,
+              color: "var(--color-text-secondary)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {pausedGoals[0].label}
+            </div>
+            <div className="text-xs" style={{ color: "var(--color-text-disabled)", marginTop: "4px" }}>
+              ${Math.round(pausedGoals[0].target ?? 0).toLocaleString()} target
+              {pausedGoals.length > 1 ? ` · ${pausedGoals.length - 1} more on hold` : ""}
+            </div>
+          </div>
+        </div>
       )}
 
       {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (

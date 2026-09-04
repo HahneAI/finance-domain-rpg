@@ -39,7 +39,7 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Next week takehome (Home tile): $1,000 (projected average — no confirmed weeks yet)");
     expect(block).toContain("Left this week (Home tile): $600");
     expect(block).toContain("Net worth trend (Home tile — projected annual savings): $31,300");
-    expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
+    expect(block).toContain("Runway Health (Home tile): 40% spend ratio (well-managed)");
     expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far, $1,500 total target");
     expect(block).toContain("Active goals total (Home tile — unfunded target sum): $1,000");
     expect(block).toContain("Expenses: 1 active line, $400/week");
@@ -189,9 +189,9 @@ describe("buildCoachContext", () => {
     [0.3, "30% spend ratio (well-managed)"],
     [0.6, "60% spend ratio (healthy range)"],
     [0.9, "90% spend ratio (watch spend)"],
-  ])("labels Budget Health at spend ratio %s as %s", (ratio, expected) => {
+  ])("labels Runway Health at spend ratio %s as %s", (ratio, expected) => {
     const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 1000 * ratio });
-    expect(block).toContain(`Budget Health (Home tile): ${expected}`);
+    expect(block).toContain(`Runway Health (Home tile): ${expected}`);
   });
 
   it("disambiguates the goals line so 0 completed never reads as 0 goals set", () => {

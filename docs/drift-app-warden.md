@@ -1628,6 +1628,30 @@ to one branch that misses the other silently gives mobile and desktop different 
 cards. Extracting a single shared render helper is the real fix and is **not** done —
 filed as a follow-up rather than bundled into a presentation change.
 
+**F178 · Paused Claim Dates on New Job Season + the Budget → Runway rename** — 2026-09 — **[G]**
+`NewJobSeasonHomePanel` now receives `goals` **read-only** and renders a PAUSED block at the
+bottom for the goal the user was chasing when the job ended. **No date is rendered on purpose:**
+with no income there is no surplus, so no Claim Date the math can support — inventing one would
+break the same never-render-an-unsupported-date rule the rest of the surface keeps. No setter is
+threaded, so F20's readOnly shadow needs no new entry.
+
+**The Budget panel is named "Runway" in all user-visible text**; every route key, filename and
+`data-coach-ref` stays `budget`. Sites moved: `NAV_ITEMS`, `BOTTOM_NAV`, `DemoAccountTree`'s tab
+list, both panels' `PanelHero`, Home's "Runway Health" tile, `aiContext.js`'s emitted context
+line, `coachFeatureGuide.js`, `coachPrompts.js`, and `navigate_to`'s `panel` enum.
+> **IF** `navigate_to`'s panel enum changes, **THEN** `PANEL_VIEW_KEYS` must change with it — the
+> lookup is `PANEL_VIEW_KEYS[panel.toLowerCase()]`, so the enum value and the map key are one
+> unit. Renaming the enum alone silently breaks every Coach chip to that panel.
+> **IF** a surface PRINTS a view key rather than a label, **THEN** it leaks the internal name
+> through any rename. `App.jsx`'s "Viewing:" status line rendered `{currentView}` and showed a
+> stale "BUDGET" after everything else had moved; it now goes through `VIEW_LABELS`. A grep for
+> quoted strings will never find this class — only a live sweep does.
+
+**Live-swept 2026-09-04** against a production build: zero visible "Budget" across Home, Income,
+Runway, Log and Account; the Runway tab still routes to the same panel. The New Job Season paused
+block is covered by `newJobSeasonFlow.test.jsx` only — the shared test account is not in New Job
+Season mode and flipping it is a real data change, so that surface was **not** exercised live.
+
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

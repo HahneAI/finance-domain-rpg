@@ -1269,7 +1269,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
 
   return (<div>
-    <PanelHero eyebrow="Expenses & Liabilities">Budget</PanelHero>
+    <PanelHero eyebrow="Expenses & Liabilities">Runway</PanelHero>
     {/* ── Period selector — month row + quarter row + adv. edit in one glass box ── */}
     <MonthQuarterSelector
       activeMonth={activeMonth}

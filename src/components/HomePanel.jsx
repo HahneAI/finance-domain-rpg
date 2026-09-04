@@ -262,7 +262,7 @@ export function HomePanel({
       insight: pulseNetWorth,
     },
     {
-      title: "Budget Health",
+      title: "Runway Health",
       value: fmtPct(spendRatio),
       sub: `${fmt$(monthlyExpenses)}/mo expenses · ${fmt$(monthlyTakehome)}/mo take-home`,
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "teal" : "red",

@@ -124,7 +124,7 @@ async function* streamTurn(res, collected) {
  */
 export async function* chatWithCoach(messages, systemPrompt, contextBlock, model = "haiku", options = {}) {
   // onToolEvent lets the UI react to tool use as it happens rather than only to
-  // the final text: it drives the "checking your Budget…" line during a round
+  // the final text: it drives the "checking your Runway…" line during a round
   // (tool rounds are otherwise dead air) and collects navigate_to results so the
   // panel can render a real tappable chip instead of Coach describing a link in
   // prose. Fired as { phase: "start" } before a tool runs and { phase: "result" }

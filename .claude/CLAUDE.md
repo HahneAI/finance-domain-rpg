@@ -528,6 +528,19 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
 
 **Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-teal/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
 
+### Panel naming — "Runway", not "Budget"
+
+The Budget panel is called **Runway** everywhere a user can read it. Route keys, filenames
+(`BudgetPanel.jsx`), `data-coach-ref` targets and `sessionStorage` keys all still say `budget` —
+that split is deliberate, so a future rename only touches copy. Two traps, both real:
+`navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit (the lookup lowercases the enum
+value), and **any surface that prints a view key instead of a label leaks the internal name** —
+see `VIEW_LABELS` in `App.jsx`. Grep finds neither; only a live sweep does. See
+`docs/drift-app-warden.md` §8 F178.
+
+Note the collision this creates: New Job Season already uses "Cash Runway" for its
+days-of-cash-left metric, so "Runway" now means two things in that mode.
+
 ### The Claim Date (goal surface)
 
 Goals on HomePanel lead with the **date**, not the dollar target — the app-side half of

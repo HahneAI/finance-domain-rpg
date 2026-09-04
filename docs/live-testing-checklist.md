@@ -282,3 +282,63 @@ exactly that and ends with the account unchanged. Note also that a failed Playwr
 not mean no write happened.
 
 Full suite green (1859). Documented in `drift-app-warden.md` F176.
+
+### 11. Claim Date goal surface on Home ✅ (DW-24 — 2026-09-04)
+First live pass on the new Claim Date surface (`drift-app-warden.md` F177) — the goal card now
+leads with the **date** rather than the dollar target, plus a "Next Claim Date" hero and a
+`then …` funding queue above the cards. Driven against a **production build**
+(`npm run build` + `npm run preview -- --port 4173`), deliberately not the dev server: the
+React Compiler only runs in a real build, and §12.4's miscompilation class is invisible to
+Vitest. HomePanel painted normally (no blank-page crash), the hero resolved a real date
+("New Gaming Computer / October 12 2026 / $3,000 to go") with "THEN ATM Purchase Nov 9 2026"
+queued beneath it, and the console showed no HTML-nesting warnings and no page errors — the two
+blind spots CLAUDE.md calls out. `✓ CLAIM IT` was exercised end to end on a real goal: the
+"Claimed" state rendered inside the 900ms celebration window, the goal left the active queue,
+the hero correctly dropped its `then` row, and the change **survived an immediate reload**
+(eager save intact). The shared test account was restored to its original two active goals via
+the completed fold's UNDO and re-verified.
+
+Found and fixed one real defect (**DW-24**): lengthening the button label from `✓ DONE` to
+`✓ CLAIM IT` overflowed the goal card's four-across `flex: 1` action row at 390px, wrapping the
+text *inside* the button — on the single most important control of the new surface. 1867 unit
+tests were green throughout and could never have caught it; jsdom has no layout engine. Fixed by
+letting the row wrap instead of the label (`flex: 1 1 auto` + `whiteSpace: nowrap`, `✕` at
+`flex: 0 0 auto`), applied to **both** the mobile and desktop copies of the duplicated card body,
+and re-verified live: every action button 44px tall and single-line. Regression test added
+asserting the structural fix. Full suite green.
+
+### 12. Paused Claim Dates in New Job Season + the Budget → Runway rename ✅ (DW-25 open — 2026-09-04)
+Two changes in one pass, both driven against a **production build** on the real account.
+
+**Rename.** Swept all five panels at 390px: zero visible "Budget" on Home, Income, Runway, Log or
+Account, and the Runway tab still routes to the same panel (route key deliberately unchanged).
+The sweep caught two leaks a grep could not: a `Go to Budget` button whose text sat on its own
+JSX line, and `App.jsx`'s "Viewing:" status line, which printed the raw view key (`{currentView}`)
+and so still read `BUDGET` after every label had moved — now resolved through a new `VIEW_LABELS`
+map. Coach's `navigate_to` enum moved with `PANEL_VIEW_KEYS` as one unit; the existing
+navigate_to tests were updated rather than deleted, since they are what proves the chip still
+routes.
+
+**Paused Claim Dates.** Verified in real New Job Season mode, which required flipping the shared
+account. Handled by snapshotting config/goals/expenses first, flipping with a direct write, then
+restoring the captured config — a post-restore diff showed config, goals and expenses all
+byte-identical, and the employed Home panel re-rendered exactly as before. The app's own
+`handleBackToWork` was deliberately **not** used as the restore path: it ends by opening a
+pay-structure wizard, which would have rewritten real account fields. The block rendered
+`CLAIM DATE / PAUSED / New Gaming Computer / $3,000 target · 1 more on hold`, correctly showed
+**no date** (no income means no surplus means no Claim Date the math can support), and produced
+no HTML-nesting warnings or page errors.
+
+Found and then closed **DW-25**: "Runway" meant three things at once. In New Job Season the nav
+collapses to Runway + Account, so a single screen shows "GO TO RUNWAY" (the panel), "Your Runway"
+(the metrics section), "CASH RUNWAY — 66 days" (days of cash left), and a "RUNWAY" nav tab. Four
+labels, two meanings — and a third already lived inside the renamed panel itself (`inRunway`, the
+pre-first-payment saving window on a loan). Resolved by renaming again to **Upkeep**, picked from a
+shortlist screened by grepping each candidate against existing app vocabulary so the winner had
+zero prior uses. That second pass also caught two leftover classes the first sweep structurally
+could not: a *conditional* loan banner ("budget improves after payoff") that only renders for a
+loan dropping off this year, and six strings on surfaces outside the five panels (login, revive,
+upgrade card, trial explainer, setup wizard, bulk edit). Re-swept live: zero "Budget" and zero
+visible "Runway" on all five panels, Upkeep Health tile on Home, and the Upkeep tab routes.
+Full suite (1872 tests) green.
+

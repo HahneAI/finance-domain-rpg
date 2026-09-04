@@ -25,7 +25,7 @@ describe("eval fixture — the harness's own contract", () => {
     expect(block).toContain("Weekly net income: $845");
     expect(block).toContain("Weekly spend: $520");
     expect(block).toContain("Weekly surplus: $325");
-    expect(block).toContain("Budget Health (Home tile): 62% spend ratio (healthy range)");
+    expect(block).toContain("Upkeep Health (Home tile): 62% spend ratio (healthy range)");
     expect(block).toContain("Expense breakdown: Rent (Needs): ~$400/wk");
     expect(block).toContain("Today: March 9th, 2026");
   });
@@ -104,7 +104,7 @@ describe("eval fixture — tool-ready sibling account", () => {
       get_expense_detail: { label: "Groceries" },
       get_week_breakdown: { weekOffset: 0 },
       list_log_entries: {},
-      navigate_to: { panel: "Budget", focus: "Groceries" },
+      navigate_to: { panel: "Upkeep", focus: "Groceries" },
       propose_goal: { label: "Six months of runway", target: 800 },
       simulate_expense_change: { label: "Groceries", newWeeklyCost: 0 },
       simulate_new_goal: { target: 3000, insertAtRank: 1 },
@@ -120,7 +120,7 @@ describe("eval fixture — tool-ready sibling account", () => {
     expect(executeCoachTool("list_log_entries", {}, bag).totalMatching).toBe(3);
     // The focus target must resolve against this fixture's real expenses, not
     // just return ok — a chip that scrolls to nothing is the failure mode.
-    expect(executeCoachTool("navigate_to", { panel: "Budget", focus: "Groceries" }, bag).focusRef)
+    expect(executeCoachTool("navigate_to", { panel: "Upkeep", focus: "Groceries" }, bag).focusRef)
       .toBe("expense:Groceries");
   });
 

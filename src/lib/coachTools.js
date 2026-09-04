@@ -132,7 +132,7 @@ export const COACH_TOOLS = [
       properties: {
         panel: {
           type: "string",
-          enum: ["Home", "Income", "Budget", "Log", "Account"],
+          enum: ["Home", "Income", "Upkeep", "Log", "Account"],
           description: "Which of the five panels to open.",
         },
         focus: {
@@ -807,7 +807,7 @@ function toolSimulateWithoutLoggedEvent({ type, periodNumber }, data) {
 // in the tool schema to App.jsx's own viewStack keys. The mapping exists so the
 // model never has to know that the Account panel is keyed "profile" internally.
 const PANEL_VIEW_KEYS = {
-  home: "home", income: "income", budget: "budget", log: "log", account: "profile",
+  home: "home", income: "income", upkeep: "budget", log: "log", account: "profile",
 };
 
 function toolNavigateTo({ panel, focus }, data) {

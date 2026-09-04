@@ -1434,7 +1434,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
       <ScheduleCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} isEmployerDHL={isEmployerDHL} />
       <EmploymentCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
       <div className="text-xs" style={{ color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "20px" }}>
-        Saving recalculates every paycheck, projection, and budget automatically.
+        Saving recalculates every paycheck, projection, and upkeep total automatically.
       </div>
       {onOpenLifeEvents && (
         <Pressable

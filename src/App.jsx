@@ -80,10 +80,16 @@ import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome }
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
-  { key: "budget",   label: "Budget" },
+  { key: "budget",   label: "Upkeep" },
   { key: "log",      label: "Log" },
   { key: "profile",  label: "Account" },
 ];
+
+// Route key → the name users actually see. The keys are internal and stay put
+// through a rename (Budget → Upkeep kept key "budget"), so anything that PRINTS
+// a view must translate rather than render the key — the "Viewing:" status line
+// showed a stale "BUDGET" for exactly that reason.
+const VIEW_LABELS = { home: "Home", ...Object.fromEntries(NAV_ITEMS.map((n) => [n.key, n.label])) };
 
 // Bottom nav items with SVG icons — Chime-style icon+label layout
 const BOTTOM_NAV = [
@@ -107,7 +113,7 @@ const BOTTOM_NAV = [
   },
   {
     key: "budget",
-    label: "Budget",
+    label: "Upkeep",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
@@ -2269,10 +2275,14 @@ export default function App() {
   const activePanel = (
     <>
       {currentView === "home" && (config.newJobSeasonMode ? (
+        /* `goals` is threaded READ-ONLY — the panel renders paused Claim Dates
+           and never mutates one, so no setGoals/onSaveGoalsNow goes with it and
+           F20's readOnly shadow block needs no new entry. */
         <NewJobSeasonHomePanel
           config={config}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
+          goals={goals}
           expenses={expenses}
           effectiveToday={effectiveToday}
           includeBenefits={newJobSeasonIncludeBenefits}
@@ -3438,7 +3448,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {/* TODO §1 mode rebuild — triage now lives inline on Budget
+                {/* TODO §1 mode rebuild — triage now lives inline on Upkeep
                     itself (NewJobSeasonBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
@@ -3453,7 +3463,7 @@ export default function App() {
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  Go to Budget
+                  Go to Upkeep
                 </Pressable>
                 <Pressable
                   onClick={handleBackToWork}
@@ -4106,7 +4116,7 @@ export default function App() {
             </div>
           )}
           <div className="text-xs" style={{ padding: "16px 20px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-            Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
+            Viewing: <span style={{ color: "var(--color-teal)" }}>{VIEW_LABELS[currentView] ?? currentView}</span>
           </div>
         </div>
       </div>

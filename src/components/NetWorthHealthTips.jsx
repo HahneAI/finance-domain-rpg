@@ -27,7 +27,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 const TIPS = [
   {
     title: "Pick one number, not the whole month",
-    body: "Open Runway and find one Lifestyle expense you can trim or pause this month — one change that sticks beats a full overhaul that doesn't.",
+    body: "Open Upkeep and find one Lifestyle expense you can trim or pause this month — one change that sticks beats a full overhaul that doesn't.",
   },
   {
     title: "Put your easiest goal first",

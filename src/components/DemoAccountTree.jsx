@@ -47,7 +47,7 @@ const NOOP = () => {};
 const DEMO_TABS = [
   { key: "home",   label: "Home"   },
   { key: "income", label: "Income" },
-  { key: "budget", label: "Runway" },
+  { key: "budget", label: "Upkeep" },
   { key: "log",    label: "Log"    },
 ];
 

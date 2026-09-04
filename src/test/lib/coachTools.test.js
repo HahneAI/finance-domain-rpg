@@ -349,14 +349,14 @@ describe("executeCoachTool — navigate_to", () => {
     expect(key("Home")).toBe("home");
     expect(key("Income")).toBe("income");
     // Renamed panel, unchanged route key — the label moved, the view key did not.
-    expect(key("Runway")).toBe("budget");
+    expect(key("Upkeep")).toBe("budget");
     expect(key("Log")).toBe("log");
     // The one that differs: the panel users call "Account" is keyed "profile".
     expect(key("Account")).toBe("profile");
   });
 
   it("accepts the panel name case-insensitively", () => {
-    expect(executeCoachTool("navigate_to", { panel: "runway" }, baseData()).viewKey).toBe("budget");
+    expect(executeCoachTool("navigate_to", { panel: "upkeep" }, baseData()).viewKey).toBe("budget");
   });
 
   it("rejects a panel that doesn't exist rather than inventing a route", () => {
@@ -365,13 +365,13 @@ describe("executeCoachTool — navigate_to", () => {
     expect(r.viewKey).toBeUndefined();
     // validPanels echoes the user-facing names, which now say "runway" — the
     // internal route key is still "budget" and deliberately not exposed here.
-    expect(r.validPanels).toContain("runway");
+    expect(r.validPanels).toContain("upkeep");
   });
 
   it("resolves an expense focus against real data, by label", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "gym" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "gym" }, baseData());
     expect(r.focusRef).toBe("expense:Gym");
-    expect(r.linkLabel).toBe("Runway · Gym");
+    expect(r.linkLabel).toBe("Upkeep · Gym");
   });
 
   it("resolves a goal focus by rank", () => {
@@ -383,11 +383,11 @@ describe("executeCoachTool — navigate_to", () => {
   it("degrades to panel-only when the focus can't be resolved, and says so", () => {
     // A chip that scrolls to nothing is worse than one that just opens the
     // panel — and the model needs to know so it doesn't promise the highlight.
-    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "Netflix" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "Netflix" }, baseData());
     expect(r.ok).toBe(true);
     expect(r.viewKey).toBe("budget");
     expect(r.focusRef).toBeNull();
-    expect(r.linkLabel).toBe("Open Runway");
+    expect(r.linkLabel).toBe("Open Upkeep");
     expect(r.note).toContain("No expense matches");
   });
 
@@ -398,7 +398,7 @@ describe("executeCoachTool — navigate_to", () => {
   });
 
   it("won't focus a paused expense that isn't on screen", () => {
-    const r = executeCoachTool("navigate_to", { panel: "Runway", focus: "Paused Thing" }, baseData());
+    const r = executeCoachTool("navigate_to", { panel: "Upkeep", focus: "Paused Thing" }, baseData());
     expect(r.focusRef).toBeNull();
   });
 });

@@ -80,13 +80,13 @@ import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome }
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
-  { key: "budget",   label: "Runway" },
+  { key: "budget",   label: "Upkeep" },
   { key: "log",      label: "Log" },
   { key: "profile",  label: "Account" },
 ];
 
 // Route key → the name users actually see. The keys are internal and stay put
-// through a rename (Budget → Runway kept key "budget"), so anything that PRINTS
+// through a rename (Budget → Upkeep kept key "budget"), so anything that PRINTS
 // a view must translate rather than render the key — the "Viewing:" status line
 // showed a stale "BUDGET" for exactly that reason.
 const VIEW_LABELS = { home: "Home", ...Object.fromEntries(NAV_ITEMS.map((n) => [n.key, n.label])) };
@@ -113,7 +113,7 @@ const BOTTOM_NAV = [
   },
   {
     key: "budget",
-    label: "Runway",
+    label: "Upkeep",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
@@ -3448,7 +3448,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {/* TODO §1 mode rebuild — triage now lives inline on Runway
+                {/* TODO §1 mode rebuild — triage now lives inline on Upkeep
                     itself (NewJobSeasonBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
@@ -3463,7 +3463,7 @@ export default function App() {
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  Go to Runway
+                  Go to Upkeep
                 </Pressable>
                 <Pressable
                   onClick={handleBackToWork}

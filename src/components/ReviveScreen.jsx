@@ -79,7 +79,7 @@ export function ReviveScreen({ revival, checkoutReturn }) {
       ) : (
         <>
           <div className="text-base" style={{ color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
-            Pick a plan to restore your account. Your income setup, budget, goals,
+            Pick a plan to restore your account. Your income setup, upkeep, goals,
             and history come back exactly as you left them — as soon as your
             payment goes through.
           </div>

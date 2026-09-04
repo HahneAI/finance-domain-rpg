@@ -528,9 +528,9 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
 
 **Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-teal/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
 
-### Panel naming — "Runway", not "Budget"
+### Panel naming — "Upkeep", not "Budget"
 
-The Budget panel is called **Runway** everywhere a user can read it. Route keys, filenames
+The Budget panel is called **Upkeep** everywhere a user can read it. Route keys, filenames
 (`BudgetPanel.jsx`), `data-coach-ref` targets and `sessionStorage` keys all still say `budget` —
 that split is deliberate, so a future rename only touches copy. Two traps, both real:
 `navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit (the lookup lowercases the enum
@@ -538,8 +538,9 @@ value), and **any surface that prints a view key instead of a label leaks the in
 see `VIEW_LABELS` in `App.jsx`. Grep finds neither; only a live sweep does. See
 `docs/drift-app-warden.md` §8 F178.
 
-Note the collision this creates: New Job Season already uses "Cash Runway" for its
-days-of-cash-left metric, so "Runway" now means two things in that mode.
+It was briefly called "Runway", which collided with New Job Season's cash-runway metric and with
+BudgetPanel's own `inRunway` loan window (DW-25). **Screen any future panel name by grepping it
+against existing app vocabulary first** — "Runway" read fine on paper and was already taken twice.
 
 ### The Claim Date (goal surface)
 

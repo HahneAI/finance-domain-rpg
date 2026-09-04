@@ -1648,9 +1648,21 @@ line, `coachFeatureGuide.js`, `coachPrompts.js`, and `navigate_to`'s `panel` enu
 > quoted strings will never find this class — only a live sweep does.
 
 **Live-swept 2026-09-04** against a production build: zero visible "Budget" across Home, Income,
-Runway, Log and Account; the Runway tab still routes to the same panel. The New Job Season paused
-block is covered by `newJobSeasonFlow.test.jsx` only — the shared test account is not in New Job
-Season mode and flipping it is a real data change, so that surface was **not** exercised live.
+Runway, Log and Account; the Runway tab still routes to the same panel.
+
+**The paused block was then verified live in real New Job Season mode.** The shared test account
+was snapshotted (config/goals/expenses), flipped by writing `newJobSeasonMode: true` directly,
+driven, then restored by writing the captured config back — a diff confirmed config, goals and
+expenses all byte-identical afterward. Restoring via the app's own `handleBackToWork` was
+deliberately **not** used: it ends with `setWizardEntry("structure_change")`, which forces a
+pay-structure wizard and would have rewritten real account fields. Result: the block rendered
+`CLAIM DATE / PAUSED / New Gaming Computer / $3,000 target · 1 more on hold`, **no date leaked**,
+no HTML-nesting warnings, no page errors.
+
+That pass also produced **DW-25**: the Runway rename collides with New Job Season's own runway
+vocabulary. One 390px screen in that mode shows "GO TO RUNWAY" (panel), "Your Runway" (metrics
+section), "CASH RUNWAY — 66 days" (days of cash), and a "RUNWAY" nav tab — four labels, two
+meanings. Not a defect; an owner call, filed open.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 

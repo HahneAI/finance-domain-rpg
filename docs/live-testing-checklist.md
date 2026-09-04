@@ -307,3 +307,32 @@ letting the row wrap instead of the label (`flex: 1 1 auto` + `whiteSpace: nowra
 and re-verified live: every action button 44px tall and single-line. Regression test added
 asserting the structural fix. Full suite green.
 
+### 12. Paused Claim Dates in New Job Season + the Budget → Runway rename ✅ (DW-25 open — 2026-09-04)
+Two changes in one pass, both driven against a **production build** on the real account.
+
+**Rename.** Swept all five panels at 390px: zero visible "Budget" on Home, Income, Runway, Log or
+Account, and the Runway tab still routes to the same panel (route key deliberately unchanged).
+The sweep caught two leaks a grep could not: a `Go to Budget` button whose text sat on its own
+JSX line, and `App.jsx`'s "Viewing:" status line, which printed the raw view key (`{currentView}`)
+and so still read `BUDGET` after every label had moved — now resolved through a new `VIEW_LABELS`
+map. Coach's `navigate_to` enum moved with `PANEL_VIEW_KEYS` as one unit; the existing
+navigate_to tests were updated rather than deleted, since they are what proves the chip still
+routes.
+
+**Paused Claim Dates.** Verified in real New Job Season mode, which required flipping the shared
+account. Handled by snapshotting config/goals/expenses first, flipping with a direct write, then
+restoring the captured config — a post-restore diff showed config, goals and expenses all
+byte-identical, and the employed Home panel re-rendered exactly as before. The app's own
+`handleBackToWork` was deliberately **not** used as the restore path: it ends by opening a
+pay-structure wizard, which would have rewritten real account fields. The block rendered
+`CLAIM DATE / PAUSED / New Gaming Computer / $3,000 target · 1 more on hold`, correctly showed
+**no date** (no income means no surplus means no Claim Date the math can support), and produced
+no HTML-nesting warnings or page errors.
+
+Found one open item (**DW-25**): "Runway" now means two things at once. In New Job Season the nav
+collapses to Runway + Account, so a single screen shows "GO TO RUNWAY" (the panel), "Your Runway"
+(the metrics section), "CASH RUNWAY — 66 days" (days of cash left), and a "RUNWAY" nav tab. Four
+labels, two meanings. Not a code defect — the rename was requested and the collision was disclosed
+when the name was picked — but it needs an owner call, and it's copy-only either way. Full suite
+(1872 tests) green.
+

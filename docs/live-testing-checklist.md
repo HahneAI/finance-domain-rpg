@@ -342,3 +342,39 @@ upgrade card, trial explainer, setup wizard, bulk edit). Re-swept live: zero "Bu
 visible "Runway" on all five panels, Upkeep Health tile on Home, and the Upkeep tab routes.
 Full suite (1872 tests) green.
 
+### 13. Claim Date stalemate card for a negative household surplus ✅ (DW-26 — 2026-09-05)
+User-reported live bug, with a screenshot: a $600 "Car repair" goal on an account running a
+-$1/week surplus rendered "$0.01/week projected · 60000.0 weeks to fund" and a real Claim Date
+of **August 2, 3176** with a "BEYOND 5YR" badge. Root-caused to `finance.js`'s
+`computeGoalTimeline`: its `wN` fallback floors `avgSurplus` to a minimum denominator of `0.01`
+regardless of how negative the real value is, manufacturing a technically-finite (so
+`Number.isFinite`-passing) fake rate for a household that isn't clearing its own upkeep at all.
+
+Fixed at the root: `avgSurplus <= 0` now returns `wN: Infinity` instead of a floored fake rate
+(positive-surplus accounts are byte-identical to before). `HomePanel.jsx`'s
+`resolveGoalFinishInfo` treats non-finite `wN` as a new `stalemate: true` case, and both
+duplicated card branches (mobile `ScrollSnapRow` + desktop grid, per F177's standing D5 warning)
+replace the date header **and** the progress bar with one dimmed block (`opacity: 0.78`, dashed
+border) — "**Claim date — on hold**" plus a dedicated message: *"At your current income, this
+goal can't make progress toward a claim date. Look for higher pay, or adjust some upkeep costs —
+either moves the needle. A few stalled weeks is normal; just don't let it run long."* Target and
+all action buttons (EDIT/CLAIM IT/DELETE/REORDER) stay visible and functional. A stalemated goal
+is excluded from the "Next Claim Date" hero and funding queue (no fabricated signal, same rule
+F177 already applies to empty/all-completed goals).
+
+Two new `finance.test.js` unit tests (Infinity on a genuinely negative surplus; unchanged floored
+value on a tiny-but-positive surplus, as a regression guard) and four new `HomePanel.test.jsx`
+tests — all six verified to **fail against the pre-fix code** (via a temporary revert of just
+`finance.js`), then re-confirmed passing after restoring the fix. Full suite: 1878 tests green.
+
+**Live-verified against a production build** (`npm run build` + `npm run preview -- --port 4175`).
+The shared test account's normal state (two active goals, comfortably positive surplus — no
+natural stalemate to observe) meant the scenario had to be constructed: config/goals/expenses
+were snapshotted first, then one temporary $2,000/week expense was added via a direct Supabase
+REST PATCH (large enough to force both goals' `avgSurplus` negative), driven, then the captured
+`expenses` array was written back byte-for-byte — a post-restore diff confirmed config, goals
+*and* expenses all identical to the snapshot. Both goal cards rendered `CLAIM DATE — ON HOLD`
+with the full stalemate message, targets still shown ($3,000 / $2,000), zero "BEYOND" badges,
+zero four-digit years in the 3000s, no "Next Claim Date" hero, and no console errors or
+HTML-nesting warnings. `drift-app-warden.md` F179.
+

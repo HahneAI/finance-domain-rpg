@@ -1395,6 +1395,48 @@ describe('computeGoalTimeline', () => {
     expect(result[0].wN).toBeCloseTo(3, 1)
   })
 
+  // DW-26: avgSurplus <= 0 must signal "cannot progress," not a floored fake
+  // rate. Before the fix, Math.max(avgSurplus - 0.01, 0.01) clamped ANY
+  // avgSurplus at or below ~0.01 — including a deeply negative one — up to a
+  // denominator of 0.01, so a $600 goal at a -$1/week household surplus
+  // reported wN = 60000 (weeks), which HomePanel then rendered as a real,
+  // if absurd, claim date over a thousand years out.
+  it('reports wN as Infinity (not a floored fake rate) when the household runs a net-negative weekly surplus', () => {
+    const goals = [{ id: 'g1', target: 600, label: 'Stalemate' }]
+    const futureWeeks = [
+      { idx: 1, weekEnd: new Date(2026, 0, 7) },
+      { idx: 2, weekEnd: new Date(2026, 0, 14) },
+    ]
+    // $300/wk net against $301/wk expenses: -$1/wk surplus, every week.
+    const weeklyNets = [300, 300]
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [301, 301, 301, 301] }] },
+    ]
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, expenses, 0, 0)
+    expect(result[0].eW).toBeNull()
+    expect(result[0].wN).toBe(Infinity)
+    expect(Number.isFinite(result[0].wN)).toBe(false)
+  })
+
+  it('still funds normally when avgSurplus is a small but genuinely positive number (regression guard for the DW-26 fix)', () => {
+    const goals = [{ id: 'g1', target: 100, label: 'Tiny surplus' }]
+    const futureWeeks = [
+      { idx: 1, weekEnd: new Date(2026, 0, 7) },
+      { idx: 2, weekEnd: new Date(2026, 0, 14) },
+    ]
+    // $300.02/wk net against $300/wk expenses: a genuinely positive, if tiny, surplus.
+    const weeklyNets = [300.02, 300.02]
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [300, 300, 300, 300] }] },
+    ]
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, expenses, 0, 0)
+    expect(result[0].eW).toBeNull()
+    expect(Number.isFinite(result[0].wN)).toBe(true)
+    // avgSurplus (~0.02) minus the existing 0.01 shift, floored at 0.01 — same
+    // formula as before the fix for the positive-surplus branch.
+    expect(result[0].wN).toBeCloseTo(100 / 0.01, -1)
+  })
+
   it('moves goal ETA later when expenses increase by $150/week', () => {
     // Baseline: $400 net/week, $100/week expenses → $300/week surplus
     const goals = [

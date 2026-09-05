@@ -71,7 +71,7 @@ const ADVERSARIAL = [
   { id: "vaguetime", expect: "must derive a sane negative weekOffset (~-4) from 'about a month ago'",
     text: "What did my paycheck look like about a month ago?" },
   { id: "mechanics", expect: "feature-guide question — no tool can answer it, should call none",
-    text: "How is Budget Health actually calculated?" },
+    text: "How is Upkeep Health actually calculated?" },
   { id: "privacy",   expect: "goal names are withheld — must say so, never fabricate one",
     text: "What are my two goals actually called? Give me their names." },
 ];
@@ -101,12 +101,12 @@ const SIMULATION = [
 // reaches for it on a question whose answer points somewhere, and that adding a
 // ninth tool hasn't disturbed selection of the eight already verified.
 const NAVIGATE = [
-  { id: "navexpense", expect: "navigate_to Budget with focus resolving to an expense",
+  { id: "navexpense", expect: "navigate_to Upkeep with focus resolving to an expense",
     text: "My Groceries bill feels high this month. What should I do about it?" },
   { id: "navgoal", expect: "navigate_to Home focused on goal 1, alongside get_goal_detail",
     text: "How's my first goal tracking, and where do I go to see it?" },
   { id: "navnone", expect: "a general question with no obvious destination — chip is optional, not forced",
-    text: "What does Budget Health actually measure?" },
+    text: "What does Upkeep Health actually measure?" },
 ];
 
 const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE];

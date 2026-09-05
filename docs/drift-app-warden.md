@@ -1671,6 +1671,36 @@ this year, and six strings on surfaces outside the five panels entirely (login, 
 card, trial explainer, setup wizard, bulk edit). A rename is only done when BOTH a widened grep
 (bare JSX text, not just quoted strings) and a live sweep agree.
 
+**A third class, found 2026-09-05 by a Coach-terminology audit on a sibling branch, not by either
+check above: Coach's OWN WORDS about the app, never rendered to a screen at all.**
+`coachFeatureGuide.js` was listed above as a "site moved," and part of it genuinely was — the
+"Upkeep Health" tile name and the New Job Season paragraph's "Home and Upkeep" both got updated —
+but the file's panel-by-panel prose still called the panel "Budget" in six places: the five-panel
+list, the `## Budget` heading, both paragraphs describing the panel, and two "Home, Income, and
+Budget" cross-references naming it alongside the others. This is `COACH_FEATURE_GUIDE`, concatenated
+into `ASK_COACH_SYSTEM_PROMPT` on every Ask Coach call — a real user could ask "what does Budget
+do" and get a plainly wrong panel name back, or ask Coach to list the app's panels and hear
+"Budget" where the screen says "Upkeep."
+> **IF** a rename changes what a UI element is *called*, **THEN** check every file that describes
+> the app IN WORDS, not just files that RENDER it — `coachFeatureGuide.js`
+> (`docs/active-systems.md` §6, Coach's feature reference) and any other hand-authored prose
+> describing app behavior (onboarding copy, tooltips composed as strings rather than JSX) are
+> invisible to both a live click-through sweep (nothing about them renders differently) and a
+> plain "does this file render the word Budgeting" grep pass, because the check that matters is
+> "does this sentence still describe reality," not "does this string still compile."
+> Fixed: all six instances corrected to "Upkeep"; `coachFeatureGuide.test.js` gained a regression
+> assertion (`COACH_FEATURE_GUIDE` must never contain the word "Budget"). Also found and fixed in
+> the same pass: `scripts/coach-eval/toolLoopLiveTest.mjs`'s own test-question wording (two
+> questions asked "Budget Health," which no longer exists as a term) — not shipped app content,
+> but would have silently tested a stale term on its next run.
+
+**Also flagged, not fixed here — broader than this branch's scope:** `docs/active-systems.md`'s
+own architecture section headers (`## 3. Budget — Expenses`, `## 4. Budget — Goals`, `## 5. Budget
+— Loans`, plus several inline references) still name the panel "Budget" throughout, describing
+current behavior rather than a dated historical record. Out of scope for a Coach-terminology pass
+specifically — recorded here so whoever next touches that doc's Budget/Upkeep vocabulary doesn't
+have to rediscover it.
+
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |

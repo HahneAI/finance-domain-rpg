@@ -1256,6 +1256,43 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
     above. This is Phase 5's actual finish line.
 
+- [x] **Coach terminology/flow drift audit (2026-09-05), triggered by pulling down a sibling
+  branch's homepage/goals redesign (`claude/homepage-goals-redesign-l249t1`, merged
+  2026-09-04).** That branch renamed the Budget panel — first to "Runway," then, after
+  discovering that collided with New Job Season's own "Cash Runway" vocabulary AND
+  `BudgetPanel.jsx`'s own `inRunway` loan field, to **"Upkeep"** (drift-app-warden §8 F178/DW-25).
+  Also added `propose_goal` (Coach's first write-shaped tool — proposes a goal as an editable,
+  user-confirmed card) and a "Claim Date" reframe on Home (goals lead with a finish date, not the
+  dollar target).
+
+  **Found and fixed a real, live bug the rename's own sweep missed:** `coachFeatureGuide.js` —
+  concatenated into `ASK_COACH_SYSTEM_PROMPT` on every Ask Coach call — still called the panel
+  "Budget" in six places (the panel list, the section heading, both descriptive paragraphs, two
+  cross-references), despite being listed in F178 as a "site moved." A real user asking Coach to
+  name the app's panels would have heard "Budget" against a screen that says "Upkeep." Root cause
+  the rename's process didn't cover: a live click-through sweep can't catch prose that's never
+  rendered to a screen, and a plain grep for the word doesn't distinguish "still accurate" from
+  "now wrong" without reading each hit. Fixed all six instances; added a regression assertion
+  (`coachFeatureGuide.test.js`) that the guide can never contain "Budget" again. Also fixed the
+  same staleness in `scripts/coach-eval/toolLoopLiveTest.mjs`'s own test-question wording (asked
+  Coach about "Budget Health," a term that no longer exists) so its next run tests the real thing.
+
+  **Confirmed clean:** `coachPrompts.js`, `aiContext.js`'s emitted context lines ("Upkeep Health"),
+  and `coachTools.js`'s `navigate_to` panel enum (`["Home", "Income", "Upkeep", "Log", "Account"]`)
+  were all already correctly updated. Historical quoted transcripts in
+  `coach-personality-rubric.md`/`docs/coach-entry-points.md` that say "Budget" were left alone —
+  they're dated records of what Coach actually said before the rename, not live claims.
+
+  **Flagged, not fixed — out of this pass's scope:** `docs/active-systems.md`'s own architecture
+  section headers (`## 3. Budget — Expenses`, `## 4/5`, plus inline references) still describe the
+  panel as "Budget" as current behavior, not a historical record. Broader than a Coach-terminology
+  pass; recorded in drift-app-warden §8 F178 so it isn't rediscovered from scratch.
+
+  **Not yet reflected anywhere: `propose_goal` (Coach can now propose creating a goal) isn't
+  mentioned in `COACH_FEATURE_GUIDE`, and the guide's goal description doesn't use the new "Claim
+  Date" term Home now leads with.** Neither is wrong, just incomplete — worth a follow-up pass,
+  not treated as a bug the way the Budget/Upkeep leftover was.
+
 - [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
   modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
   is actually BUILT — this phase cannot start on a mode until that mode has a real

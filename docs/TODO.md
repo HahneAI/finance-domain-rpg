@@ -1247,9 +1247,15 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
     Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
-  - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
-    bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to
-    keep discussing.
+  - [x] **Fix Net Worth Trigger Amber's stacked-touch rule violation — FIXED 2026-09-06.** Was a
+    real, already-identified bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`):
+    stacked at least two figurative touches per message and named multiple issues where the
+    addendum says to point to *one* lever. Fix: the addendum now explicitly restates the
+    one-touch cap and single-lever instruction, mirroring how Red already reinforces its own
+    severity instruction instead of relying on the shared persona clause alone. Live-verified 3/3
+    identical (`claude-haiku-4-5`, `scripts/coach-eval/promptfooconfig.phase5-amber-refix.yaml`):
+    exactly one figurative touch, exactly one named lever, all three runs. Regression test added
+    in `coachPrompts.test.js`. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
   - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
     no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
   - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across

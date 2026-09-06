@@ -586,12 +586,21 @@ at all. All results below repeat-verified 3/3 identical (`claude-haiku-4-5`, rea
 data, no calibration override — see the Interaction Modes rows above for the full text).
 
 - **Green: clean.** Matches its target register and its addendum's instruction well.
-- **Amber: a real rule violation, not a judgment call — worth fixing, not just discussing.**
-  Stacks at least two figurative touches in one message ("eating," "next round," "breathing
-  room"), directly against `COACH_PERSONA_PROMPT`'s own "at most one... never stacked" rule, and
-  names multiple issues where the addendum says to point to *one* specific lever. Unlike the
-  Ask Coach length finding above, this one isn't ambiguous about what "correct" looks like — the
-  rule already exists and this output breaks it.
+- **Amber: FIXED 2026-09-06.** Was a real rule violation, not a judgment call: stacked at least
+  two figurative touches in one message ("eating," "next round," "breathing room"), directly
+  against `COACH_PERSONA_PROMPT`'s own "at most one... never stacked" rule, and named multiple
+  issues where the addendum says to point to *one* specific lever. Unlike the Ask Coach length
+  finding above, this one wasn't ambiguous about what "correct" looks like — the rule already
+  existed and this output broke it. Root cause: the shared persona clause alone wasn't holding
+  for this tier, unlike Red, which already reinforces its own severity-specific instruction
+  ("drop the corner-man phrasing entirely") rather than relying on the persona cap alone. Fix:
+  `TIER_ADDENDA.amber` (`coachPrompts.js`) now explicitly restates the one-touch cap and the
+  single-lever instruction in the addendum itself, mirroring Red's pattern. Live-verified 3/3
+  identical post-fix (`claude-haiku-4-5`, same account data as the original finding,
+  `promptfooconfig.phase5-amber-refix.yaml`): exactly one figurative touch ("go the distance")
+  and exactly one named lever (a single named expense line in the Expenses panel) across all
+  three runs. Regression test: `coachPrompts.test.js`'s "caps the amber tier at exactly one
+  figurative touch and one named lever."
 - **Red: complies with the letter, not fully the spirit — a real, more nuanced gap.** No literal
   corner-man/boxing vocabulary at all, so "drop the corner-man phrasing entirely" technically
   holds. But it reaches for a different flourish ("flying blind") the addendum's stated intent

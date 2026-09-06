@@ -125,6 +125,21 @@ describe("buildNetWorthSystemPrompt", () => {
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });
+
+  // Regression (2026-09-06, docs/TODO.md §2.L Phase 5): live-verified 3/3
+  // identical that the amber tier stacked at least two figurative touches
+  // ("eating," "next round," "breathing room") in one message and named
+  // multiple issues, violating COACH_PERSONA_PROMPT's own "at most one...
+  // never stacked" rule — the shared rule alone wasn't holding for this
+  // tier. Amber's addendum now reinforces the one-touch cap and the
+  // single-lever instruction explicitly, the same way the red tier already
+  // reinforces "drop the corner-man phrasing" rather than relying on the
+  // persona clause alone.
+  it("caps the amber tier at exactly one figurative touch and one named lever", () => {
+    const prompt = buildNetWorthSystemPrompt("amber");
+    expect(prompt).toMatch(/exactly one specific lever/i);
+    expect(prompt).toMatch(/at most one light corner-man phrase/i);
+  });
 });
 
 describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {

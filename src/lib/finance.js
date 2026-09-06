@@ -1259,7 +1259,24 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   const avgSurplus = totalSurplus / Math.max(eligibleWeeks, 1);
   return activeGoals.map((g, i) => {
     const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
-    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgSurplus - 0.01, 0.01);
+    // avgSurplus <= 0 means this household's income doesn't clear its upkeep
+    // at all — no floor should manufacture a fake tiny-positive rate here.
+    // The previous `Math.max(avgSurplus - 0.01, 0.01)` floor did exactly that:
+    // ANY avgSurplus at or below ~0.01 (including a deeply negative one, e.g.
+    // -1/week) got clamped up to a denominator of 0.01, so a $600 goal came
+    // back as "$0.01/week, 60000 weeks to fund" — technically finite, so it
+    // sailed past every `Number.isFinite` guard downstream and rendered a
+    // real (if absurd) claim date a thousand-plus years out (drift-app-warden
+    // §8 DW-26). Infinity is the honest signal instead: HomePanel's
+    // resolveGoalFinishInfo treats a non-finite wN as the ONE case that means
+    // "structurally stalemated at the current pace" and shows a dedicated
+    // message rather than a fabricated date. Positive-surplus math is
+    // byte-identical to before — only the avgSurplus <= 0 branch is new.
+    const wN = ew !== null
+      ? ew - sw
+      : avgSurplus > 0
+        ? remaining[i] / Math.max(avgSurplus - 0.01, 0.01)
+        : Infinity;
     // remainingAtEnd: amount still unfunded after the full fiscal year simulation.
     // Non-zero only when eW === null (goal never completes within futureWeeks).
     return { ...g, sW: sw, eW: ew, wN, remainingAtEnd: remaining[i] };

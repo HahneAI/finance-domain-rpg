@@ -174,4 +174,56 @@ describe('HomePanel', () => {
       expect(screen.queryByText('✓ CLAIM IT')).toBeNull()
     })
   })
+
+  // DW-26: a household running a net-negative weekly surplus must get an
+  // honest "you're stalemated" card, never a fabricated far-future date.
+  // Real futureWeeks/timelineWeekNets/expenses are required here (not the
+  // "no data" shortcut the tests above use, which defaults eW to 0) — this
+  // has to drive computeGoalTimeline's real per-week loop into eW===null
+  // with a genuinely negative avgSurplus, the one and only case that
+  // produces wN: Infinity (finance.test.js covers that unit directly;
+  // this proves HomePanel's own consumption of it end to end).
+  describe('Claim Date stalemate (negative household surplus)', () => {
+    const stalemateGoals = [{ id: 'g1', label: 'Stuck Goal', target: 600, completed: false }]
+    const futureWeeks = [
+      { idx: 1, weekEnd: new Date(2026, 0, 7) },
+      { idx: 2, weekEnd: new Date(2026, 0, 14) },
+    ]
+    // $300/wk net against $301/wk expenses: -$1/wk every week, same fixture
+    // as finance.test.js's "reports wN as Infinity" unit test.
+    const stalemateProps = {
+      ...baseProps,
+      goals: stalemateGoals,
+      futureWeeks,
+      timelineWeekNets: [300, 300],
+      expenses: [
+        { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [301, 301, 301, 301] }] },
+      ],
+    }
+
+    it('shows the dedicated stalemate message instead of a date', () => {
+      render(<HomePanel {...stalemateProps} />)
+      expect(screen.getByText(/can't make progress toward a claim date/)).toBeTruthy()
+      expect(screen.getByText('Claim date — on hold')).toBeTruthy()
+    })
+
+    it('never fabricates a far-future date or a BEYOND-horizon badge for the stalled goal', () => {
+      render(<HomePanel {...stalemateProps} />)
+      expect(screen.queryByText(/BEYOND/)).toBeNull()
+      // No four-digit year appears anywhere in the goal card region for this
+      // goal — a real regression here previously rendered "Aug 2, 3176".
+      expect(screen.queryByText(/\b3\d{3}\b/)).toBeNull()
+    })
+
+    it('still shows the goal label and its target, just demoted, alongside the stalemate message', () => {
+      render(<HomePanel {...stalemateProps} />)
+      expect(screen.getByText('Stuck Goal')).toBeTruthy()
+      expect(screen.getByText('$600')).toBeTruthy()
+    })
+
+    it('does not render this goal in the Next Claim Date hero or funding queue (no date to lead with)', () => {
+      render(<HomePanel {...stalemateProps} />)
+      expect(screen.queryByText('Next Claim Date')).toBeNull()
+    })
+  })
 })

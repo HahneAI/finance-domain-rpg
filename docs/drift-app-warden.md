@@ -1701,6 +1701,56 @@ current behavior rather than a dated historical record. Out of scope for a Coach
 specifically — recorded here so whoever next touches that doc's Budget/Upkeep vocabulary doesn't
 have to rediscover it.
 
+**F179 · Claim Date stalemate card (negative/zero household surplus)** — 2026-09 — **[L]+[G]**
+`computeGoalTimeline` (`finance.js`) + `resolveGoalFinishInfo`/card render (`HomePanel.jsx`,
+both duplicated branches, see F177's D5 warning). Reported live: a $600 goal against a
+household running **-$1/week** surplus rendered `$0.01/week projected · 60000.0 weeks to
+fund` and a real Claim Date of **August 2, 3176** with a "BEYOND 5YR" badge.
+
+**Root cause was [L], in `computeGoalTimeline`'s `wN` fallback formula**, not in HomePanel's
+presentation: `wN = remaining / Math.max(avgSurplus - 0.01, 0.01)` floors the denominator to
+`0.01` for **any** `avgSurplus` at or below ~0.01 — including a deeply negative one. A
+household that isn't clearing its own upkeep got manufactured a fake tiny-positive rate
+instead of an honest "can't fund this" signal, and the resulting `wN` (60000) is technically
+finite, so it sailed past every downstream `Number.isFinite` guard and rendered a real, if
+absurd, date.
+
+**Fix:** `avgSurplus > 0` gates the existing floored-divide formula (byte-identical for every
+account that was already computing correctly); `avgSurplus <= 0` now returns `wN: Infinity`
+— an honest, un-floored signal instead of a floored fake rate. `resolveGoalFinishInfo` treats
+a non-finite `wN` as **stalemate** (`{ text: null, finishDate: null, badge: null, stalemate:
+true }`), a stronger and more specific case than the pre-existing generic "Timeline pending"
+fallback. Both duplicated card branches replace the date header **and** the progress bar
+with one dimmed block (`opacity: 0.78`, dashed border) reading **"Claim date — on hold"** +
+`GOAL_STALEMATE_MESSAGE` (exported so any future second surface, e.g. Coach, reads the same
+copy) — the bar was deliberately dropped too, not just the date, because `sW=0, eW=null`
+would otherwise paint a literal 0%-width fill that reads as a stuck gauge next to the
+message rather than reinforcing it. The label, target and action buttons (EDIT/CLAIM IT/
+DELETE/REORDER) are unchanged and still render — a stalemated goal is still editable/
+deletable, just honestly undated. A stalemated goal is excluded from the "Next Claim Date"
+hero and funding queue (F177) for the same no-fabricated-signal reason empty/all-completed
+goals are.
+> **IF** `computeGoalTimeline`'s `wN` formula changes again, **THEN** re-run
+> `finance.test.js`'s two DW-26 tests (Infinity on negative surplus, unchanged floored value
+> on tiny-positive surplus) — both were verified to fail against the pre-fix formula.
+> **IF** `resolveGoalFinishInfo`'s non-finite-`wN` branch changes, **THEN** re-run
+> `HomePanel.test.jsx`'s "Claim Date stalemate" block — verified to fail against the
+> pre-fix `finance.js` (proven via a temporary revert of only that file).
+> **IF** a new consumer reads `goal.wN` directly (bypassing `resolveGoalFinishInfo`),
+> **THEN** it must treat non-finite the same way — `aiContext.js`/`coachTools.js` were
+> audited here and found to already gate on `Number.isFinite(g.eW)` before ever touching
+> `wN`, so they needed no change, but this is now a standing check for any future reader.
+
+**Live-verified 2026-09-05** against a production build (`npm run build` + `npm run
+preview`): the shared test account was snapshotted (config/goals/expenses), flipped by
+adding one temporary $2000/week expense via direct Supabase REST PATCH (large enough to
+force both existing goals' `avgSurplus` negative), driven, then restored by writing the
+captured `expenses` array back — a diff confirmed config, goals and expenses all
+byte-identical afterward. Both goal cards rendered `CLAIM DATE — ON HOLD` +
+`GOAL_STALEMATE_MESSAGE`, target still shown ($3,000 / $2,000), no BEYOND badge, no
+four-digit year in the 3000s, no "Next Claim Date" hero, and no console errors or
+HTML-nesting warnings.
+
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -1717,6 +1767,7 @@ have to rediscover it.
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `freedomAllowancePerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
 | The goal card header / claim copy (F177) | The **other** card branch — mobile `ScrollSnapRow` vs. desktop grid — and `HomePanel.test.jsx`'s "Claim Date surface" block | The two card bodies are duplicated verbatim; edit both or they diverge. `grep -c 'Claim date' HomePanel.jsx` must stay even | D5 |
 | `resolveGoalFinishInfo`'s return shape (`{text, finishDate, badge}`) | F177's `claimQueue` (hero + funding queue) **and** every card's date line — both read `finishDate` | Drop a goal's date and the hero must fall through to the next queued goal, not render blank | D1 |
+| `computeGoalTimeline`'s `avgSurplus`/`wN` formula (F179) | `resolveGoalFinishInfo`'s non-finite-`wN` stalemate branch, F177's `claimQueue` exclusion, `aiContext.js`/`coachTools.js`'s `Number.isFinite(g.eW)` gates | `finance.test.js`'s two DW-26 tests + `HomePanel.test.jsx`'s "Claim Date stalemate" block; a household with `avgSurplus <= 0` never renders a date, badge, or hero entry for that goal | D1 |
 | `estimateGoalNextYear`'s local `weekNet()` closure (Home-only, F142) | The "goal completes next year" ETA card — no other consumer | For a not-this-year goal, compare the estimated `weeklyNet` against a manual `buildYear`/`computeNet` run one year forward | D1 |
 
 ### 8.3 Block 3 — Gate matrix
@@ -1727,7 +1778,7 @@ have to rediscover it.
 | `readOnly` (paywall-expired) | false / true | true: all four mutation channels noop'd (F20) in both Home variants; values still render; UpgradeModal triggerable |
 | `isAdmin` / `isTester` / `isInvestor` | 8 cells | Coach card renders when `canAccessAskCoachGeneral` — admin, tester, investor (all three per `hasPrivilegedAccess`, 2026-07-25), or a real trial/paid entitlement; non-gated tiles identical across all cells |
 | Pay schedule | weekly / biweekly / salary / monthly | `perCheckFactor` 1 / 2 / 2 / ~4.33 scales every tile value + "Left This Week"→"Left This Check" label swap (`:153`) |
-| Goals | empty / active / all-completed | Empty: no goal hero, `pulseGoals` undefined (no fabricated signal); completed: absorbed via `fundedGoalSpend`, hidden behind "show completed" fold |
+| Goals | empty / active / all-completed / stalemated (`avgSurplus<=0`, F179) | Empty: no goal hero, `pulseGoals` undefined (no fabricated signal); completed: absorbed via `fundedGoalSpend`, hidden behind "show completed" fold; stalemated: dimmed "Claim date — on hold" card, excluded from hero/queue, mutation buttons still active |
 | `netWorthHealth.belowThreshold` | false / true | true (and not newJobSeasonMode): Breakthrough Tips cue renders with fiscal-week-rotated 3-of-5 tips |
 
 ### 8.4 Block 4 — Case law & quarantine

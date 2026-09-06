@@ -16,6 +16,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // stamps the same colour a hand-created goal gets, rather than a second copy of
 // the literal drifting away from this one.
 export const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
+
+// Shown on a goal card in place of a Claim date when computeGoalTimeline's
+// avgSurplus is <= 0 — the household isn't clearing its upkeep, so no date
+// the math produces would be honest (drift-app-warden §8 DW-26). One string,
+// exported so a future second surface (e.g. Coach) reads the same copy
+// rather than typing its own version that can drift from this one.
+export const GOAL_STALEMATE_MESSAGE =
+  "At your current income, this goal can't make progress toward a claim date. " +
+  "Look for higher pay, or adjust some upkeep costs — either moves the needle. " +
+  "A few stalled weeks is normal; just don't let it run long.";
 const FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
 
 const fmt$ = (n) => {
@@ -511,9 +521,16 @@ export function HomePanel({
     }
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
-    if (!Number.isFinite(duration)) return { text: "Timeline pending", finishDate: null, badge: null };
+    // A non-finite wN is, after finance.js's computeGoalTimeline fix, ONLY
+    // ever produced by avgSurplus <= 0 (see that function's own comment) — so
+    // this is never "we don't have data yet," it's "this household's income
+    // doesn't clear its upkeep, so the goal is structurally stalemated at the
+    // current pace." That's a stronger, more specific claim than generic
+    // "Timeline pending" and gets its own card treatment (`stalemate: true`,
+    // GOAL_STALEMATE_MESSAGE) rather than sharing that catch-all text.
+    if (!Number.isFinite(duration)) return { text: null, finishDate: null, badge: null, stalemate: true };
     const fallback = buildGoalFinishInfo(startOffset + duration);
-    return fallback ?? { text: "Timeline pending", finishDate: null, badge: null };
+    return fallback ?? { text: null, finishDate: null, badge: null, stalemate: true };
   };
 
   // The claim queue — every active goal that has a real date, soonest first.
@@ -923,82 +940,115 @@ export function HomePanel({
                             still on the card — it just stops being the headline.
                             Presentation only; the date is resolveGoalFinishInfo's
                             existing value (§8 F18), not a new derivation. */}
-                        <div style={{ marginBottom: "10px" }}>
-                          <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
-                          {(() => {
-                            const info = resolveGoalFinishInfo(g);
-                            const isClaiming = celebrating === g.id;
-                            const dateColor = isClaiming
-                              ? "var(--color-green)"
-                              : !Number.isFinite(g.eW)
-                                ? "var(--color-warning)"
-                                : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
-                            const claimText = isClaiming
-                              ? "Claimed"
-                              : info.finishDate
-                                ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                                : (info.text ?? "Timeline pending");
+                        {(() => {
+                          const info = resolveGoalFinishInfo(g);
+                          // Stalemate: computeGoalTimeline's avgSurplus is <= 0, so this
+                          // household's income isn't clearing its upkeep — no Claim Date
+                          // exists to show, honestly. Dimmed card, not a fake date
+                          // (drift-app-warden §8 DW-26). Replaces the whole date/target
+                          // header AND the progress bar below it — a bar would show a
+                          // literal 0%-width fill (sW=0, eW=null), which reads as a stuck
+                          // gauge next to this message rather than reinforcing it.
+                          if (info.stalemate) {
                             return (
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
-                                    {isClaiming ? "Claimed" : "Claim date"}
+                              <div style={{ marginBottom: "10px", opacity: 0.78 }}>
+                                <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                                <div style={{
+                                  padding: "14px 14px 12px",
+                                  borderRadius: "10px",
+                                  border: "1px dashed var(--color-border-subtle)",
+                                  background: "rgba(122,139,191,0.06)",
+                                }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "6px" }}>
+                                    Claim date — on hold
                                   </div>
-                                  {/* 22px sits outside the 9–14px band the typography
-                                      audit guards — this is numeric display, not label copy. */}
-                                  <div style={{
-                                    fontSize: "22px",
-                                    fontWeight: 900,
-                                    fontFamily: "var(--font-display)",
-                                    lineHeight: 1.1,
-                                    color: dateColor,
-                                    transition: "color 220ms ease",
-                                  }}>
-                                    {claimText}
+                                  <p className="text-sm" style={{ color: "var(--color-text-secondary)", margin: "0 0 10px", lineHeight: 1.55 }}>
+                                    {GOAL_STALEMATE_MESSAGE}
+                                  </p>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "8px" }}>
+                                    <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>Target</span>
+                                    <span style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-secondary)" }}>{fmt$(g.target)}</span>
                                   </div>
-                                  {/* minHeight reserves the badge/PAST DUE row's space even
-                                      when neither shows, so a goal completing within the
-                                      current fiscal year (no badge) renders the same card
-                                      height as one further out (badge present) — instead of
-                                      the carousel's cards visibly varying card to card. */}
-                                  <div style={{ minHeight: "24px", marginTop: "3px" }}>
-                                    {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                                    {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
-                                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
                                 </div>
                               </div>
                             );
-                          })()}
-                        </div>
-                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
-                          {visibleTimelineSegments.map((seg) => (
-                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
-                          ))}
-                          <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
-                        </div>
-                        <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
-                          {visibleTimelineSegments.map((seg) => (
-                            <span key={`${seg.key}-label`} style={{
-                              position: "absolute",
-                              left: `${seg.leftPct}%`,
-                              width: `${seg.widthPct}%`,
-                              textAlign: "center",
-                              fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
-                              letterSpacing: "1.1px",
-                              color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
-                              textTransform: "uppercase",
-                              lineHeight: 1.1,
-                              whiteSpace: "nowrap",
-                            }}>
-                              {seg.label}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                          }
+                          const isClaiming = celebrating === g.id;
+                          const dateColor = isClaiming
+                            ? "var(--color-green)"
+                            : !Number.isFinite(g.eW)
+                              ? "var(--color-warning)"
+                              : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
+                          const claimText = isClaiming
+                            ? "Claimed"
+                            : info.finishDate
+                              ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : (info.text ?? "Timeline pending");
+                          return (
+                            <>
+                              <div style={{ marginBottom: "10px" }}>
+                                <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
+                                      {isClaiming ? "Claimed" : "Claim date"}
+                                    </div>
+                                    {/* 22px sits outside the 9–14px band the typography
+                                        audit guards — this is numeric display, not label copy. */}
+                                    <div style={{
+                                      fontSize: "22px",
+                                      fontWeight: 900,
+                                      fontFamily: "var(--font-display)",
+                                      lineHeight: 1.1,
+                                      color: dateColor,
+                                      transition: "color 220ms ease",
+                                    }}>
+                                      {claimText}
+                                    </div>
+                                    {/* minHeight reserves the badge/PAST DUE row's space even
+                                        when neither shows, so a goal completing within the
+                                        current fiscal year (no badge) renders the same card
+                                        height as one further out (badge present) — instead of
+                                        the carousel's cards visibly varying card to card. */}
+                                    <div style={{ minHeight: "24px", marginTop: "3px" }}>
+                                      {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                      {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                                    </div>
+                                  </div>
+                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                    <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
+                                    <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
+                                {visibleTimelineSegments.map((seg) => (
+                                  <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
+                                ))}
+                                <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                              </div>
+                              <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                                {visibleTimelineSegments.map((seg) => (
+                                  <span key={`${seg.key}-label`} style={{
+                                    position: "absolute",
+                                    left: `${seg.leftPct}%`,
+                                    width: `${seg.widthPct}%`,
+                                    textAlign: "center",
+                                    fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                                    letterSpacing: "1.1px",
+                                    color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                                    textTransform: "uppercase",
+                                    lineHeight: 1.1,
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                    {seg.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                            </>
+                          );
+                        })()}
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
                             <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "8px" }}>
@@ -1110,82 +1160,115 @@ export function HomePanel({
                             still on the card — it just stops being the headline.
                             Presentation only; the date is resolveGoalFinishInfo's
                             existing value (§8 F18), not a new derivation. */}
-                        <div style={{ marginBottom: "10px" }}>
-                          <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
-                          {(() => {
-                            const info = resolveGoalFinishInfo(g);
-                            const isClaiming = celebrating === g.id;
-                            const dateColor = isClaiming
-                              ? "var(--color-green)"
-                              : !Number.isFinite(g.eW)
-                                ? "var(--color-warning)"
-                                : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
-                            const claimText = isClaiming
-                              ? "Claimed"
-                              : info.finishDate
-                                ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                                : (info.text ?? "Timeline pending");
+                        {(() => {
+                          const info = resolveGoalFinishInfo(g);
+                          // Stalemate: computeGoalTimeline's avgSurplus is <= 0, so this
+                          // household's income isn't clearing its upkeep — no Claim Date
+                          // exists to show, honestly. Dimmed card, not a fake date
+                          // (drift-app-warden §8 DW-26). Replaces the whole date/target
+                          // header AND the progress bar below it — a bar would show a
+                          // literal 0%-width fill (sW=0, eW=null), which reads as a stuck
+                          // gauge next to this message rather than reinforcing it.
+                          if (info.stalemate) {
                             return (
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
-                                    {isClaiming ? "Claimed" : "Claim date"}
+                              <div style={{ marginBottom: "10px", opacity: 0.78 }}>
+                                <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                                <div style={{
+                                  padding: "14px 14px 12px",
+                                  borderRadius: "10px",
+                                  border: "1px dashed var(--color-border-subtle)",
+                                  background: "rgba(122,139,191,0.06)",
+                                }}>
+                                  <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "6px" }}>
+                                    Claim date — on hold
                                   </div>
-                                  {/* 22px sits outside the 9–14px band the typography
-                                      audit guards — this is numeric display, not label copy. */}
-                                  <div style={{
-                                    fontSize: "22px",
-                                    fontWeight: 900,
-                                    fontFamily: "var(--font-display)",
-                                    lineHeight: 1.1,
-                                    color: dateColor,
-                                    transition: "color 220ms ease",
-                                  }}>
-                                    {claimText}
+                                  <p className="text-sm" style={{ color: "var(--color-text-secondary)", margin: "0 0 10px", lineHeight: 1.55 }}>
+                                    {GOAL_STALEMATE_MESSAGE}
+                                  </p>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "8px" }}>
+                                    <span className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>Target</span>
+                                    <span style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-secondary)" }}>{fmt$(g.target)}</span>
                                   </div>
-                                  {/* minHeight reserves the badge/PAST DUE row's space even
-                                      when neither shows, so a goal completing within the
-                                      current fiscal year (no badge) renders the same card
-                                      height as one further out (badge present) — instead of
-                                      the carousel's cards visibly varying card to card. */}
-                                  <div style={{ minHeight: "24px", marginTop: "3px" }}>
-                                    {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
-                                    {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                  <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
-                                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
                                 </div>
                               </div>
                             );
-                          })()}
-                        </div>
-                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
-                          {visibleTimelineSegments.map((seg) => (
-                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
-                          ))}
-                          <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
-                        </div>
-                        <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
-                          {visibleTimelineSegments.map((seg) => (
-                            <span key={`${seg.key}-label`} style={{
-                              position: "absolute",
-                              left: `${seg.leftPct}%`,
-                              width: `${seg.widthPct}%`,
-                              textAlign: "center",
-                              fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
-                              letterSpacing: "1.1px",
-                              color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
-                              textTransform: "uppercase",
-                              lineHeight: 1.1,
-                              whiteSpace: "nowrap",
-                            }}>
-                              {seg.label}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                          }
+                          const isClaiming = celebrating === g.id;
+                          const dateColor = isClaiming
+                            ? "var(--color-green)"
+                            : !Number.isFinite(g.eW)
+                              ? "var(--color-warning)"
+                              : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)");
+                          const claimText = isClaiming
+                            ? "Claimed"
+                            : info.finishDate
+                              ? info.finishDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : (info.text ?? "Timeline pending");
+                          return (
+                            <>
+                              <div style={{ marginBottom: "10px" }}>
+                                <div className="text-md" style={{ fontWeight: "bold", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div className="text-2xs" style={{ letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>
+                                      {isClaiming ? "Claimed" : "Claim date"}
+                                    </div>
+                                    {/* 22px sits outside the 9–14px band the typography
+                                        audit guards — this is numeric display, not label copy. */}
+                                    <div style={{
+                                      fontSize: "22px",
+                                      fontWeight: 900,
+                                      fontFamily: "var(--font-display)",
+                                      lineHeight: 1.1,
+                                      color: dateColor,
+                                      transition: "color 220ms ease",
+                                    }}>
+                                      {claimText}
+                                    </div>
+                                    {/* minHeight reserves the badge/PAST DUE row's space even
+                                        when neither shows, so a goal completing within the
+                                        current fiscal year (no badge) renders the same card
+                                        height as one further out (badge present) — instead of
+                                        the carousel's cards visibly varying card to card. */}
+                                    <div style={{ minHeight: "24px", marginTop: "3px" }}>
+                                      {!isClaiming && info.badge && <div className="text-2xs" style={{ color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", letterSpacing: "1px", display: "inline-block" }}>{info.badge}</div>}
+                                      {!isClaiming && g.dueWeek && nowIdx > g.dueWeek && <div className="text-2xs" style={{ color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginLeft: info.badge ? "4px" : 0, letterSpacing: "1px", display: "inline-block" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
+                                    </div>
+                                  </div>
+                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                    <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Target</div>
+                                    <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}><AnimatedGoalTarget target={g.target} animate={i < 2} /></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
+                                {visibleTimelineSegments.map((seg) => (
+                                  <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
+                                ))}
+                                <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                              </div>
+                              <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                                {visibleTimelineSegments.map((seg) => (
+                                  <span key={`${seg.key}-label`} style={{
+                                    position: "absolute",
+                                    left: `${seg.leftPct}%`,
+                                    width: `${seg.widthPct}%`,
+                                    textAlign: "center",
+                                    fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                                    letterSpacing: "1.1px",
+                                    color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                                    textTransform: "uppercase",
+                                    lineHeight: 1.1,
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                    {seg.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="text-2xs" style={{ display: "flex", justifyContent: "space-between", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
+                            </>
+                          );
+                        })()}
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
                             <div className="text-xs" style={{ color: "var(--color-text-secondary)", marginBottom: "8px" }}>

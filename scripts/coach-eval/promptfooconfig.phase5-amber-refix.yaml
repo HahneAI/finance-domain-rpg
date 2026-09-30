@@ -1,0 +1,27 @@
+description: >
+  Phase 5 follow-up (docs/TODO.md §2.L) — verifying the Amber tier fix
+  (2026-09-06). Original Phase 5 pass found Amber stacked at least two
+  figurative touches in one message and named multiple issues, violating
+  COACH_PERSONA_PROMPT's own "at most one... never stacked" rule.
+  TIER_ADDENDA.amber (coachPrompts.js) now explicitly reinforces the
+  one-touch cap and the single-lever instruction, the same way Red already
+  reinforces "drop the corner-man phrasing" instead of relying on the
+  shared persona clause alone. This re-samples the real, shipped prompt
+  with claude-haiku-4-5 (the locked model) 3 times to confirm the fix holds
+  under repeat — same account data as the original finding (845/770).
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/netWorthTrigger.js
+    label: net-worth-trigger
+
+tests:
+  - description: "Amber tier — thin savings cushion, post-fix verification"
+    vars:
+      tier: amber

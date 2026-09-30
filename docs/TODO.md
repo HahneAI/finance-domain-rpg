@@ -94,6 +94,74 @@ exists to hold the idea and its open questions until it's picked up for real des
 
 ---
 
+## 23. New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence *(new — scoped 2026-09-30,
+PRIORITY, not yet built, no code written)*
+
+*Seeded 2026-09-30, on explicit request, with a concrete real-world example: child support paid
+literally $500/week — a genuine Needs-category recurring obligation whose cadence is not
+optional or approximate, unlike most bills that can be fudged into a monthly-equivalent figure
+without real harm.*
+
+**The underlying math/schema gap this needs does NOT exist — this is a UI gap only.**
+`EXPENSE_CYCLE_OPTIONS` (`lib/expense.js:6-11`) already has first-class `weekly` (7 days) and
+`biweekly` (14 days) entries with correct day-math, unlike §21's quarterly gap (a genuinely
+missing cycle value) — nothing needs to be added to that list. The problem is narrower: **the job-
+loss wizard itself never exposes a way to set or correct a bill's cadence to weekly/biweekly.**
+
+**Where the gap actually is:** `NewJobSeasonEntry.jsx` (the "Lost My Job" modal — this app's
+closest thing to a job-change setup wizard, `docs/TODO.md` §1.H15/H16). Its Step 3 (the
+payment-date step, right after the Step 2 tracking checklist) assigns each still-tracked bill a
+`dueDateAnchor` via the shared `DueDatePicker` component — but it never touches that bill's
+`billingMeta.cycle`. Whatever cycle the expense happened to get when it was first created in the
+ordinary Budget panel is what New Job Season's runway math (`computeNewJobSeasonRunway`,
+`lib/newJobSeasonRunway.js`) silently keeps using. **The one existing exception proves this is
+buildable, not just a good idea**: Food (`isFoodPrimary`) already gets a hardcoded special case at
+this exact step — instead of the week-of-month/custom-date picker, it asks "what day do you
+usually grocery shop" and flips `billingMeta.cycle` to `"weekly"` automatically, specifically so
+Upcoming Bills/runway treat it as a real recurring weekly cost instead of an inherited "every 30
+days" approximation. **This section is asking to generalize that same pattern into a real,
+user-facing control for every tracked bill, not just Food.**
+
+- [ ] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
+  still-tracked non-loan, non-Food bill** (loans already carry their own real due date via
+  `loanMeta.firstPaymentDate`; Food already gets its own weekly resolution) — let the user mark a
+  bill as "pay $X weekly" or "pay $X biweekly," writing the choice to `billingMeta.cycle` (reusing
+  the exact same `EXPENSE_CYCLE_OPTIONS` values Food's special case already writes) plus the
+  confirmed per-payment amount.
+- [ ] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
+  specifically asked for weekly/biweekly, and those are also the two cadences that most
+  commonly get mis-entered as a monthly approximation when a bill was first added (a
+  once-a-month-equivalent guess is usually "close enough" for Every 30 days/Yearly bills, but
+  never close enough for something that's genuinely due every single week or every other week —
+  see the child support example, where "every30days" would misstate a real $500/week obligation).
+  Likely answer: this step only needs to offer Weekly/Biweekly as an override, not a full
+  four-option cycle editor — decide before building, don't default to building the bigger control
+  just because the values already exist.
+- [ ] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
+  shape as the other two fields already added at this step. `trackDuringNewJobSeason` and
+  `dueDateAnchor` are both additive/New-Job-Season-scoped — normal-mode Budget ignores the former
+  entirely and the latter never existed before, so neither changes anything about how a bill
+  behaves once the user goes Back to Work. **Correcting `billingMeta.cycle` is different — it's a
+  real, permanent correction to the underlying expense record**, exactly like Food's existing
+  special case already does unconditionally, meaning it changes that bill's behavior in normal
+  Budget too, not just during New Job Season. Given the nature of the example (a bill's real-world
+  payment cadence isn't a New-Job-Season-only fact, it's just a fact that was never captured
+  correctly), a permanent correction is almost certainly the right call — same as Food already
+  does — but confirm this explicitly before building, since it's a bigger behavioral change than
+  the other two Step 3 fields and worth being deliberate about rather than inheriting by default.
+- [ ] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
+  step already renders one control per tracked bill; the cadence choice should sit next to (or
+  replace, for Weekly/Biweekly bills specifically) the due-date picker for that same bill, not as
+  a separate pass over the list.
+- [ ] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
+  full checklist → due-date → activate walkthrough end to end — a cadence-override case belongs
+  in that same file, asserting the resulting expense's `billingMeta.cycle` and amount, the same
+  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`.
+
+**Status: planning only — no code, no schema changes, no component work done yet.**
+
+---
+
 ## 2. AI Layer — Coach + Contextual Intelligence
 
 *Authority Finance's AI layer is built around a single character: **Coach** — a financial wellness

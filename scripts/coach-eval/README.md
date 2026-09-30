@@ -376,12 +376,20 @@ retry-on-a-hunch.** Concretely for this file:
     one-sentence answer regardless of what's asked; score-5 worked as
     intended. Remaining: pick + repeat-verify a target per mode. Full
     writeup: `coach-personality-rubric.md`'s Axis 3 section.
+  - [x] **Net Worth Trigger Amber's stacked-touch rule violation — FIXED
+    2026-09-06.** `TIER_ADDENDA.amber` (`coachPrompts.js`) now explicitly
+    restates the one-touch cap and single-lever instruction in the addendum
+    itself, mirroring how Red already reinforces its own severity
+    instruction rather than relying on the shared persona clause alone.
+    Live-verified 3/3 identical (`claude-haiku-4-5`,
+    `promptfooconfig.phase5-amber-refix.yaml`, same account data as the
+    original finding): exactly one figurative touch ("go the distance") and
+    exactly one named lever (a single expense line), all three runs.
+    Regression test in `coachPrompts.test.js`.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
-    Warmth/formality (still undefined), fixing Net Worth Trigger Amber's
-    stacked-touch rule violation (a real, already-identified bug, not just
-    a finding), repeat-verify passes on
-    Job Hunt Chat and the tool-available rerun — then the batch decision:
-    lock one target number per mode/axis pair across all four modes.
+    Warmth/formality (still undefined), repeat-verify passes on Job Hunt
+    Chat and the tool-available rerun — then the batch decision: lock one
+    target number per mode/axis pair across all four modes.
 - [~] Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to
   remaining flat-default modes" scope). Widen live testing to Coach modes
   beyond the four that exist today, once each is actually built — blocked

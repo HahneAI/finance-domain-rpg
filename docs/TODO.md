@@ -4,6 +4,332 @@
 
 ---
 
+## 22. Weekly Cash Check-In — Second Home Hero Feature *(new — scoped 2026-09-28, TOP PRIORITY,
+not yet built, no code written)*
+
+*Seeded 2026-09-28, on explicit instruction: this is the daily-return hook Home is currently
+missing. The Claim Date hero (`docs/drift-app-warden.md` §8 F177, `resolveGoalFinishInfo()`) answers
+"am I going to make it" at the goal-timeline scale — long-horizon, doesn't move day to day. This
+feature answers the much shorter, much more urgent question a user actually opens a finance app
+to ask on a given morning: **"do I have what I need this week, right now."** Sits on Home alongside
+the Claim Date banner, not replacing it — two hero surfaces, two different time horizons, both
+worth opening the app daily for.*
+
+**Placement:** a second big hero card on Home, near (likely directly below) the existing Claim
+Date banner — exact stacking order TBD at design time, but it belongs in that same "first thing
+you see" tier, not buried with the metric tiles below it.
+
+### A. V1 — the weekly number, no new user input required
+
+- [ ] **Surface "what you need to set aside this week"** — a total dollar figure covering the
+  user's Needs-category expenses due in the current week. **Compute this from the existing
+  Needs/Lifestyle expense split and the same due-date/period-resolution math the rest of the app
+  already uses** (`getEffectiveAmountForMonth`/`getPhaseIndex` in `finance.js`/`expense.js`) —
+  do not hand-roll a third parallel "what's due" formula. See §20 below for why this is the exact
+  same underlying data problem as an already-scoped feature, not a new one.
+- [ ] **Decide the V1 fallback math** — most expenses today have no due-date field at all (that's
+  §20's own open item, still unbuilt), so V1 cannot assume real due-dated bills exist yet. Likely
+  answer: an averaged/weekly-share figure over Needs expenses only (same shape as
+  `computeRemainingSpend`'s existing averaging, scoped to Needs), explicitly labeled as an estimate
+  until §20's due-date field exists to make it a real per-bill figure. Do not silently present an
+  averaged number as if it were a confirmed "this is due this week" number — the app's existing
+  grounding rule (`docs/active-systems.md` §6) applies here same as everywhere else.
+
+### B. The Monday check-in ritual + traffic-light card
+
+- [ ] **A weekly ritual, once per week (Monday, or first app-open of the new fiscal week)**: the
+  hero card asks the user to self-confirm whether they currently have this week's needed amount
+  sitting in their bank account. **This is a self-report, not a real balance check** — the app has
+  no bank-linking/Plaid-style integration anywhere in its stack (Supabase auth/DB only, see
+  CLAUDE.md's Tech Stack table) — say so explicitly in any UI copy so a user never mistakes this
+  for an automated account read. Existing precedent to reuse/pattern-match against, not duplicate:
+  `WeekConfirmModal.jsx` (weekly schedule confirmation — same "once a week, a modal/card asks a
+  yes/no question" shape) and `TipsCommissionCheckIn.jsx` (small daily check-in card, "skinned
+  bonus-log mechanism" per its own file-structure note) — both already solve "recurring
+  self-reported check-in UI," don't reinvent that shape from scratch.
+- [ ] **Three-state card, not just pass/fail** — green (default/confirmed-sufficient): no
+  particular styling beyond the card's normal state. **Orange:** user confirms they're short on
+  the week's total needed-cash figure by a moderate amount (a real dollar range, not yet decided
+  — the user's own framing was "$20-30 here or there") — copy tone is "tighten up, don't spend
+  outside what you need this week," not alarming. **Red:** the confirmed shortfall specifically
+  puts a Needs-category bill at risk, not just general slack — a materially more urgent tier than
+  orange, both in copy and visual weight.
+- [ ] **Open design question, not yet resolved — flag before building, don't assume an answer:**
+  what exactly promotes a shortfall from orange to red? Two candidate rules, genuinely different
+  in what they require: **(a) a dollar-threshold rule** (below some cutoff = orange, above it =
+  red) — simple, needs zero due-date data, but a flat dollar cutoff doesn't actually know which
+  bill is at risk; or **(b) a real per-bill rule** — only reachable once §20's per-expense due
+  dates exist, where red specifically means "the shortfall exceeds what's left after protecting
+  this week's actual Needs bills," a real "which bill" answer instead of an amount-based guess.
+  (b) is almost certainly the better long-run answer and the one the user's own description reads
+  as pointing toward, but it's gated on §20 landing first. Reasonable path: ship (a) for V1 as an
+  honest, clearly-labeled approximation, upgrade to (b) once §20's due-date field exists — same
+  "label the estimate as an estimate" rule as §A above, don't let V1's approximation quietly pass
+  as V2's real answer.
+
+### C. V2 — real per-bill due dates (converges with §20, doesn't duplicate it)
+
+- [ ] **This is not a second due-date feature.** §20 below ("Optional Expense Due Dates — Real
+  'Left This Week' + Due-Today Alerts") already scopes exactly the per-expense due-date field this
+  card's real V2 needs. **The two features must share one `dueDate`-shaped field on the expense
+  schema, not grow two independent date concepts** — whichever of the two gets built first should
+  build the field generally enough for the other to reuse outright. Do not let this section or
+  §20 quietly diverge into parallel implementations of "when is this bill due."
+- [ ] Once real due dates exist, the weekly card's number stops being an averaged estimate and
+  becomes an actual "these specific bills, this specific amount, this specific week" figure — this
+  is also what makes §B's red-tier rule (b) above possible at all.
+
+### D. Explicitly out of scope for this entry (not decided against, just not designed here)
+
+- [ ] Any Coach involvement (a Coach-voiced version of this check-in, similar to the Net Worth
+  Trigger tiers in §2.C) — plausible future tether, not scoped here.
+- [ ] Automated bank-balance verification of any kind — would require a real banking-data
+  integration this app doesn't have; §B's self-report framing is the only version in scope.
+- [ ] Notification/reminder delivery for the Monday check-in itself (push, email, etc.) — a smaller
+  version of the same "how do we get a user's attention on a cadence" question §20.C's "due today"
+  pop-up already raises; worth solving once, not twice, if both ship.
+
+**Status: planning only — no code, no schema changes, no component work done yet.** This section
+exists to hold the idea and its open questions until it's picked up for real design/build work.
+
+---
+
+## 23. New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence *(new — scoped 2026-09-30,
+PRIORITY, not yet built, no code written)*
+
+*Seeded 2026-09-30, on explicit request, with a concrete real-world example: child support paid
+literally $500/week — a genuine Needs-category recurring obligation whose cadence is not
+optional or approximate, unlike most bills that can be fudged into a monthly-equivalent figure
+without real harm.*
+
+**The underlying math/schema gap this needs does NOT exist — this is a UI gap only.**
+`EXPENSE_CYCLE_OPTIONS` (`lib/expense.js:6-11`) already has first-class `weekly` (7 days) and
+`biweekly` (14 days) entries with correct day-math, unlike §21's quarterly gap (a genuinely
+missing cycle value) — nothing needs to be added to that list. The problem is narrower: **the job-
+loss wizard itself never exposes a way to set or correct a bill's cadence to weekly/biweekly.**
+
+**Where the gap actually is:** `NewJobSeasonEntry.jsx` (the "Lost My Job" modal — this app's
+closest thing to a job-change setup wizard, `docs/TODO.md` §1.H15/H16). Its Step 3 (the
+payment-date step, right after the Step 2 tracking checklist) assigns each still-tracked bill a
+`dueDateAnchor` via the shared `DueDatePicker` component — but it never touches that bill's
+`billingMeta.cycle`. Whatever cycle the expense happened to get when it was first created in the
+ordinary Budget panel is what New Job Season's runway math (`computeNewJobSeasonRunway`,
+`lib/newJobSeasonRunway.js`) silently keeps using. **The one existing exception proves this is
+buildable, not just a good idea**: Food (`isFoodPrimary`) already gets a hardcoded special case at
+this exact step — instead of the week-of-month/custom-date picker, it asks "what day do you
+usually grocery shop" and flips `billingMeta.cycle` to `"weekly"` automatically, specifically so
+Upcoming Bills/runway treat it as a real recurring weekly cost instead of an inherited "every 30
+days" approximation. **This section is asking to generalize that same pattern into a real,
+user-facing control for every tracked bill, not just Food.**
+
+- [ ] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
+  still-tracked non-loan, non-Food bill** (loans already carry their own real due date via
+  `loanMeta.firstPaymentDate`; Food already gets its own weekly resolution) — let the user mark a
+  bill as "pay $X weekly" or "pay $X biweekly," writing the choice to `billingMeta.cycle` (reusing
+  the exact same `EXPENSE_CYCLE_OPTIONS` values Food's special case already writes) plus the
+  confirmed per-payment amount.
+- [ ] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
+  specifically asked for weekly/biweekly, and those are also the two cadences that most
+  commonly get mis-entered as a monthly approximation when a bill was first added (a
+  once-a-month-equivalent guess is usually "close enough" for Every 30 days/Yearly bills, but
+  never close enough for something that's genuinely due every single week or every other week —
+  see the child support example, where "every30days" would misstate a real $500/week obligation).
+  Likely answer: this step only needs to offer Weekly/Biweekly as an override, not a full
+  four-option cycle editor — decide before building, don't default to building the bigger control
+  just because the values already exist.
+- [ ] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
+  shape as the other two fields already added at this step. `trackDuringNewJobSeason` and
+  `dueDateAnchor` are both additive/New-Job-Season-scoped — normal-mode Budget ignores the former
+  entirely and the latter never existed before, so neither changes anything about how a bill
+  behaves once the user goes Back to Work. **Correcting `billingMeta.cycle` is different — it's a
+  real, permanent correction to the underlying expense record**, exactly like Food's existing
+  special case already does unconditionally, meaning it changes that bill's behavior in normal
+  Budget too, not just during New Job Season. Given the nature of the example (a bill's real-world
+  payment cadence isn't a New-Job-Season-only fact, it's just a fact that was never captured
+  correctly), a permanent correction is almost certainly the right call — same as Food already
+  does — but confirm this explicitly before building, since it's a bigger behavioral change than
+  the other two Step 3 fields and worth being deliberate about rather than inheriting by default.
+- [ ] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
+  step already renders one control per tracked bill; the cadence choice should sit next to (or
+  replace, for Weekly/Biweekly bills specifically) the due-date picker for that same bill, not as
+  a separate pass over the list.
+- [ ] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
+  full checklist → due-date → activate walkthrough end to end — a cadence-override case belongs
+  in that same file, asserting the resulting expense's `billingMeta.cycle` and amount, the same
+  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`.
+
+**Status: planning only — no code, no schema changes, no component work done yet.**
+
+---
+
+## 24. BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills list AND the real
+cash-on-hand runway math) *(found 2026-09-30, from a live screenshot, PRIORITY — real-money bug,
+not just cosmetic)*
+
+*Reported with a screenshot: New Job Season's Upcoming Bills list shows every expense ever entered
+on the account, including bills the user already deleted. User's own framing: "Job loss mode needs
+to only drag in currently active bills from the date on activation. This value is accepted at the
+start of new job season mode" — referring to `newJobSeasonDate`/`effectiveToday`, both already
+real config fields this panel already receives.*
+
+**Root cause, confirmed by reading the code, not guessed:** a deleted expense in this app is never
+actually removed from the `expenses` array — per the Master Timeline / point-in-time design (§3),
+"deleting" an expense zeroes its amount forward while keeping its history, so old point-in-time
+computations still resolve correctly. `BudgetPanel.jsx` already knows how to tell a genuinely-
+deleted expense from a live one: `displayEffective(exp, ap)` (wraps the exported
+`getEffectiveAmountForMonth`) plus a local `getNextNonZeroIso()` helper (`BudgetPanel.jsx:285`) —
+together, `isRemovedThisPhase` (amount is 0 for the active phase, no future non-zero date, and real
+history exists) is what BudgetPanel.jsx:1512 uses to hide a deleted bill from its own list.
+**`NewJobSeasonBudgetPanel.jsx` never does any version of this check.** Its `trackedExpenses`
+(`NewJobSeasonBudgetPanel.jsx:84-87`) is a flat `expenses.filter(exp =>
+exp.trackDuringNewJobSeason !== false)` — since `trackDuringNewJobSeason` defaults to `true` when
+absent and deleting a bill never touches that field, every deleted-but-once-tracked expense sails
+straight through, feeds `upcomingBills` (line 109-127), and renders in the list exactly as shown in
+the screenshot.
+
+**This is not just a UI list bug — it can silently understate real runway cash.**
+`newJobSeasonRunway.js`'s `sumBillsDueSince()` (line 147) has the identical gap: it gates only on
+`isTrackedActiveEssential()` (status/category/tracked-flag — no history/deleted check at all) and
+uses `getExpenseDisplayAmount(exp)` directly, not the phase-aware effective-amount resolver.
+`computeNewJobSeasonRunway()` then does `effectiveCashOnHand = rawCashOnHand -
+sumBillsDueSince(...)` (line 237-238) — **the headline cash-on-hand/runway figure New Job Season
+Home leads with.** A deleted essential bill with a due date inside the "since you last confirmed
+cash" window gets incorrectly subtracted here, understating how much runway the user actually has.
+(`weeklyAmountForBurn()`, the OTHER half of the runway math, already routes through
+`getExactEffectiveAmountForMonth(exp, ..., phaseIdx)` — worth confirming during the fix whether
+that path already handles deleted expenses correctly via its own phase-awareness, or whether it has
+the same gap; don't assume it's clean just because it looks more sophisticated than
+`sumBillsDueSince`.)
+
+- [ ] **Fix, reusing the existing check rather than inventing a new one:** extract
+  `BudgetPanel.jsx`'s `getNextNonZeroIso`/`isRemovedThisPhase` logic into a shared exported helper
+  (`lib/expense.js`, alongside `getEffectiveAmountForMonth`) so `NewJobSeasonBudgetPanel.jsx` and
+  `newJobSeasonRunway.js` can both filter on the exact same "is this expense actually still active"
+  definition BudgetPanel already uses — not a second, independently-written version of the same
+  check (the same anti-drift lesson as F150/the coachFeatureGuide.js Budget→Upkeep leftover from
+  earlier this branch).
+- [ ] **Decide the reference date explicitly — don't default to "today" without confirming.** The
+  user's own description points at the New Job Season **activation date**
+  (`config.newJobSeasonDate`), not necessarily "today" — for an account activating retroactively,
+  a bill deleted between the activation date and today is a different case from one deleted before
+  activation. Resolve which date(s) actually matter before implementing; may need to check
+  "removed as of activation" for the initial tracked-expense set and "removed as of today" for the
+  ongoing Upcoming Bills list, rather than assuming one date answers both.
+- [ ] **Fix both call sites in the same change** — `NewJobSeasonBudgetPanel.jsx`'s
+  `trackedExpenses`/`upcomingBills` (the visible list bug) and `newJobSeasonRunway.js`'s
+  `sumBillsDueSince`/`isTrackedActiveEssential`/`isTrackedActiveLifestyle` (the real cash-math bug)
+  — fixing only the visible list would leave the more serious, invisible dollar-figure bug in
+  place.
+- [ ] **Test coverage:** a deleted-but-formerly-tracked expense fixture, asserted absent from
+  `upcomingBills` AND absent from `sumBillsDueSince`'s total — the second assertion is the one that
+  actually catches the money bug, don't stop at a UI-only test.
+
+**Status: planning only — bug confirmed and root-caused by reading the code; no fix written yet.**
+
+---
+
+## 25. New Job Season — "Mark as Paid" button on tracked bills *(new — scoped 2026-09-30,
+PRIORITY, not yet built, no code written)*
+
+*Requested alongside §26 below — the two share one underlying concept (a bill's "already handled"
+state) and should be designed together, not as two independent features that happen to look
+similar.*
+
+**Real infra already exists to build this on top of, not from scratch.**
+`NewJobSeasonBudgetPanel.jsx` already has a `newJobSeasonStatus` field on tracked expenses (values
+seen today: `"active"`, `"paused"`) with a working setter (`setStatus(id, status)`, line 143) and
+status-aware filtering/sorting already in place (`upcomingBills` excludes non-`"active"` bills
+entirely, line 113; `sortedExpenses` already reorders by needs-coverage/essential-vs-flexible,
+lines 129-137). **A `"paid"` status is a natural third value here — but it must NOT behave like
+`"paused"`.** `"paused"` means "stop counting this bill at all right now" and is fully excluded
+from `upcomingBills`; the user's ask is different — a paid bill should **stay visible in the
+Upcoming Bills list, just sorted to the bottom**, so the user can still see it was handled instead
+of it vanishing.
+
+- [ ] **Add a `"paid"` `newJobSeasonStatus` value**, set via a new "Mark as Paid" button on each
+  bill card in the Upcoming Bills UI (alongside wherever the existing pause/status controls live).
+- [ ] **Subtract the bill's amount from cash on hand on mark-as-paid** — call the existing
+  `saveCashOnHand()` path (`NewJobSeasonBudgetPanel.jsx:75-79`, already writes
+  `config.newJobSeasonCashOnHand` + `newJobSeasonCashOnHandAsOf`) with `currentCashOnHand -
+  billAmount`, not a new parallel cash-write path. **Open question to resolve before building:**
+  should this also retroactively affect `sumBillsDueSince`'s "bills due since you last confirmed"
+  math (§24 above) — i.e., does marking a bill paid effectively re-confirm cash as of today for
+  that bill, so it isn't double-subtracted later when its due date is crossed? If not handled,
+  marking a bill paid today plus that bill's own due date being crossed later could subtract its
+  amount from cash on hand twice. Decide this explicitly, don't ship it unresolved.
+- [ ] **Keep `"paid"` bills visible but reorder to the bottom of the Upcoming Bills list** — this
+  needs `upcomingBills` (line 109-127) to stop hard-excluding non-`"active"` status and instead
+  include `"paid"` bills with a sort key that always loses to every `"active"` bill, regardless of
+  due date. **Do not reuse `sortedExpenses`'s existing sort (lines 129-137) as-is** — that function
+  sorts a different list (the full tracked-expense editor, not the Upcoming Bills countdown card
+  list) for a different purpose (needs-coverage/essential priority); paid-bills-to-the-bottom is a
+  new, distinct sort rule specific to the Upcoming Bills display.
+- [ ] **Decide whether "paid" resets automatically on the bill's next cycle** — a weekly bill
+  marked paid this week should presumably return to `"active"` once its next due date arrives
+  (otherwise a recurring bill marked paid once would silently vanish to the bottom forever). Needs
+  a real rule (e.g., compare `newJobSeasonStatus`-set timestamp against the bill's current
+  `getNextDueDate()`), not left implicit.
+- [ ] **Test coverage:** mark-as-paid subtracts the right amount from cash on hand once; a paid
+  bill still renders in Upcoming Bills but sorts after every active bill; a paid weekly bill
+  returns to active once its next occurrence comes due (once the auto-reset rule above is decided).
+
+**Status: planning only — no code, no schema changes, no component work done yet.**
+
+---
+
+## 26. New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step
+*(new — scoped 2026-09-30, PRIORITY, not yet built, no code written — depends on §25's `"paid"`
+status existing)*
+
+*Requested alongside §25 — this step's whole job is to let a user mark bills as already-paid
+**during wizard activation**, using the exact same `"paid"` concept §25 adds to the ongoing
+Upcoming Bills UI, not a separate one-time flag invented just for signup. Build §25's status
+concept first, or design both together — don't build this step against a placeholder status that
+then has to be reconciled with §25 later.*
+
+**Reuse the existing week-of-month bucket boundaries, don't invent new ones.**
+`WEEK_OF_MONTH_OPTIONS` (`lib/expense.js:93-98`) already defines the app's own week-of-month
+buckets — day 1/8/15/22 (clamped to month length) for weeks 1-4 — used today by
+`resolveWeekOfMonthAnchor()` to go **from** a week pick **to** a concrete date, for the
+`DueDatePicker` step. **Nothing today does the reverse lookup** (given today's date, which week
+bucket is it in) — this needs one small new helper built on the same four cutoffs, not a
+independently-invented "what week is it" scheme that could disagree with the picker's own
+buckets.
+
+- [ ] **New helper, e.g. `resolveCurrentWeekOfMonth(referenceIso)`** (`lib/expense.js`, next to
+  `WEEK_OF_MONTH_OPTIONS`) — given today's (or the activation) date, return which of the four
+  existing week buckets it falls in, reusing the same day cutoffs `resolveWeekOfMonthAnchor`
+  already uses so the two directions can never disagree with each other.
+- [ ] **New Step 4 in `NewJobSeasonEntry.jsx`, after the existing Step 3 (due-date/cadence, see
+  §23)** — shown only when at least one of two conditions holds: **(a)** the new helper above says
+  today is the 4th week of the month, or **(b)** at least one bill in the Step 2/3 review was
+  entered or confirmed with a weekly cadence (ties directly to §23's new weekly/biweekly cadence
+  control — a weekly bill recurs often enough that "did I already pay this one" is a live question
+  regardless of what week of the month it is). Skipped entirely otherwise, same "don't show a step
+  that has nothing to ask" pattern Steps 2-3 already follow when there are no expenses to review.
+- [ ] **What the step actually asks:** list the bills due "this week" (needs its own explicit
+  definition — likely: next due date, as of the activation date, falls within the next 7 days —
+  decide and document this rather than reusing `upcomingBills`'s 35-day horizon unmodified) and let
+  the user check off any that are already paid.
+- [ ] **On Activate, checked bills get the SAME `"paid"` status §25 defines** — written directly
+  into `updatedExpenses` before `onActivate(configPatch, updatedExpenses)` fires, so a bill checked
+  off during setup lands in the Upcoming Bills list already sorted to the bottom on first render,
+  with no separate post-activation step required to reach the same state §25's button produces
+  later.
+- [ ] **Open question, same shape as one already flagged in §25:** if a bill is checked as
+  already-paid during this step, should its amount also be subtracted from the
+  `newJobSeasonCashOnHand` the user entered in Step 0 — or is the Step 0 cash-on-hand figure
+  assumed to already reflect having paid it? This needs one consistent answer shared with §25's
+  identical open question, not two independently-decided answers for what's conceptually the same
+  action.
+- [ ] **Test coverage:** the step appears when today resolves to week 4; the step appears when a
+  weekly-cadence bill was set in Step 3, even outside week 4; the step is skipped when neither
+  condition holds; checked bills land with `"paid"` status in the resulting `updatedExpenses`.
+
+**Status: planning only — no code, no schema changes, no component work done yet.**
+
+---
+
 ## 2. AI Layer — Coach + Contextual Intelligence
 
 *Authority Finance's AI layer is built around a single character: **Coach** — a financial wellness
@@ -1247,14 +1573,57 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
     Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
   - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
-  - [ ] **Fix Net Worth Trigger Amber's stacked-touch rule violation** — a real, already-identified
-    bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`), not just a finding to
-    keep discussing.
+  - [x] **Fix Net Worth Trigger Amber's stacked-touch rule violation — FIXED 2026-09-06.** Was a
+    real, already-identified bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`):
+    stacked at least two figurative touches per message and named multiple issues where the
+    addendum says to point to *one* lever. Fix: the addendum now explicitly restates the
+    one-touch cap and single-lever instruction, mirroring how Red already reinforces its own
+    severity instruction instead of relying on the shared persona clause alone. Live-verified 3/3
+    identical (`claude-haiku-4-5`, `scripts/coach-eval/promptfooconfig.phase5-amber-refix.yaml`):
+    exactly one figurative touch, exactly one named lever, all three runs. Regression test added
+    in `coachPrompts.test.js`. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
   - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
     no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
   - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
     above. This is Phase 5's actual finish line.
+
+- [x] **Coach terminology/flow drift audit (2026-09-05), triggered by pulling down a sibling
+  branch's homepage/goals redesign (`claude/homepage-goals-redesign-l249t1`, merged
+  2026-09-04).** That branch renamed the Budget panel — first to "Runway," then, after
+  discovering that collided with New Job Season's own "Cash Runway" vocabulary AND
+  `BudgetPanel.jsx`'s own `inRunway` loan field, to **"Upkeep"** (drift-app-warden §8 F178/DW-25).
+  Also added `propose_goal` (Coach's first write-shaped tool — proposes a goal as an editable,
+  user-confirmed card) and a "Claim Date" reframe on Home (goals lead with a finish date, not the
+  dollar target).
+
+  **Found and fixed a real, live bug the rename's own sweep missed:** `coachFeatureGuide.js` —
+  concatenated into `ASK_COACH_SYSTEM_PROMPT` on every Ask Coach call — still called the panel
+  "Budget" in six places (the panel list, the section heading, both descriptive paragraphs, two
+  cross-references), despite being listed in F178 as a "site moved." A real user asking Coach to
+  name the app's panels would have heard "Budget" against a screen that says "Upkeep." Root cause
+  the rename's process didn't cover: a live click-through sweep can't catch prose that's never
+  rendered to a screen, and a plain grep for the word doesn't distinguish "still accurate" from
+  "now wrong" without reading each hit. Fixed all six instances; added a regression assertion
+  (`coachFeatureGuide.test.js`) that the guide can never contain "Budget" again. Also fixed the
+  same staleness in `scripts/coach-eval/toolLoopLiveTest.mjs`'s own test-question wording (asked
+  Coach about "Budget Health," a term that no longer exists) so its next run tests the real thing.
+
+  **Confirmed clean:** `coachPrompts.js`, `aiContext.js`'s emitted context lines ("Upkeep Health"),
+  and `coachTools.js`'s `navigate_to` panel enum (`["Home", "Income", "Upkeep", "Log", "Account"]`)
+  were all already correctly updated. Historical quoted transcripts in
+  `coach-personality-rubric.md`/`docs/coach-entry-points.md` that say "Budget" were left alone —
+  they're dated records of what Coach actually said before the rename, not live claims.
+
+  **Flagged, not fixed — out of this pass's scope:** `docs/active-systems.md`'s own architecture
+  section headers (`## 3. Budget — Expenses`, `## 4/5`, plus inline references) still describe the
+  panel as "Budget" as current behavior, not a historical record. Broader than a Coach-terminology
+  pass; recorded in drift-app-warden §8 F178 so it isn't rediscovered from scratch.
+
+  **Not yet reflected anywhere: `propose_goal` (Coach can now propose creating a goal) isn't
+  mentioned in `COACH_FEATURE_GUIDE`, and the guide's goal description doesn't use the new "Claim
+  Date" term Home now leads with.** Neither is wrong, just incomplete — worth a follow-up pass,
+  not treated as a bug the way the Budget/Upkeep leftover was.
 
 - [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
   modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
@@ -3091,6 +3460,32 @@ here as a second currency the app helps the user stop hemorrhaging.*
   then — "you left yourself a letter when this began, 14 months ago. Ready?" — one tap opens
   it; the letter is theirs to keep, screenshot, or seal into the Chronicle.
   *Tether: a `sealed_until_complete` text field.*
+- [ ] **Visualize the Goal** — added 2026-09-03. Same goal-creation-time, personal-artifact shape
+  as Heirloom Letters above, opposite restraint: this one leans all the way into generative AI
+  instead of avoiding it. The user provides a photo of themselves and a reference image/photo of
+  the goal item (a truck, a destination, a piece of gear, a house) — AI generates a single image
+  of the two together, the moment of already having it, not a literal photo-edit collage. Lives
+  on the goal card itself (a small "Visualize" action alongside the existing goal-detail
+  affordances) so it's discoverable the same way every other goal action is, not buried in a
+  separate flow — findable without a hunt.
+  - **Not free to build the way Heirloom Letters is.** Every other AI surface in this app
+    (`docs/TODO.md` §2, `lib/claude.js`) calls Anthropic's TEXT API only — this needs an actual
+    image-generation model call, a genuinely new third-party dependency this app has never taken
+    on before (Anthropic doesn't offer this natively in this app's current integration; would need
+    a separate provider/endpoint, its own cost-per-call profile, and its own review before adding
+    a vendor). Don't assume this reuses `api/coach.js` as-is — likely its own serverless route
+    (mind the 12/12 Vercel Hobby-plan function cap noted at the top of this file), or folded into
+    an existing route's dispatch pattern the way `api/seed.js`/`api/admin-beta-hub.js` already do.
+  - **A real privacy/consent question, not a formality.** A photo of the user's own face is a
+    meaningfully more sensitive upload than anything else this app currently collects (financial
+    data, a paystub photo for OCR) — needs its own explicit opt-in copy, a clear no-training-on
+    this data guarantee, and a real deletion path, mirroring the consent rigor already called out
+    for the paystub-photo OCR idea elsewhere in this file, not assumed to inherit it silently.
+  - **Tether: none yet — this is the one Horizon Tier idea with no existing infra to lean on.**
+    Every other F-tier item reuses data or a mechanism this app already has; this is the first
+    one that would need real new infrastructure (image storage, an image-gen vendor integration,
+    its own moderation/consent review) before a line of feature code gets written. Flagged here
+    so a future scoping pass starts from that honestly, not discovers it partway through.
 
 #### F4. Honesty rails for the whole horizon tier
 

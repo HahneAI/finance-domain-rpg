@@ -11,8 +11,8 @@
 | 1 | 24 | BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills + runway math) | 0 | 4 $ |
 | 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 0 | 5 $ |
 | 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
-| 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 5 | 0 |
-| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 9 | 0 |
+| 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 0 | 5 $ |
+| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 6 | 3 $ |
 | 1 | 22 | Weekly Cash Check-In — Second Home Hero Feature | 10 | 0 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
@@ -212,7 +212,7 @@ buckets.
 ---
 
 ## 23. New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence *(new — scoped 2026-09-30,
-PRIORITY, not yet built, no code written)*
+PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review)*
 
 *Seeded 2026-09-30, on explicit request, with a concrete real-world example: child support paid
 literally $500/week — a genuine Needs-category recurring obligation whose cadence is not
@@ -239,13 +239,13 @@ Upcoming Bills/runway treat it as a real recurring weekly cost instead of an inh
 days" approximation. **This section is asking to generalize that same pattern into a real,
 user-facing control for every tracked bill, not just Food.**
 
-- [ ] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
+- [$] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
   still-tracked non-loan, non-Food bill** (loans already carry their own real due date via
   `loanMeta.firstPaymentDate`; Food already gets its own weekly resolution) — let the user mark a
   bill as "pay $X weekly" or "pay $X biweekly," writing the choice to `billingMeta.cycle` (reusing
   the exact same `EXPENSE_CYCLE_OPTIONS` values Food's special case already writes) plus the
-  confirmed per-payment amount.
-- [ ] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
+  confirmed per-payment amount. *(shotgun 2026-10-01 #2)*
+- [$] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
   specifically asked for weekly/biweekly, and those are also the two cadences that most
   commonly get mis-entered as a monthly approximation when a bill was first added (a
   once-a-month-equivalent guess is usually "close enough" for Every 30 days/Yearly bills, but
@@ -253,8 +253,8 @@ user-facing control for every tracked bill, not just Food.**
   see the child support example, where "every30days" would misstate a real $500/week obligation).
   Likely answer: this step only needs to offer Weekly/Biweekly as an override, not a full
   four-option cycle editor — decide before building, don't default to building the bigger control
-  just because the values already exist.
-- [ ] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
+  just because the values already exist. *(shotgun 2026-10-01 #2)*
+- [$] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
   shape as the other two fields already added at this step. `trackDuringNewJobSeason` and
   `dueDateAnchor` are both additive/New-Job-Season-scoped — normal-mode Budget ignores the former
   entirely and the latter never existed before, so neither changes anything about how a bill
@@ -265,23 +265,23 @@ user-facing control for every tracked bill, not just Food.**
   payment cadence isn't a New-Job-Season-only fact, it's just a fact that was never captured
   correctly), a permanent correction is almost certainly the right call — same as Food already
   does — but confirm this explicitly before building, since it's a bigger behavioral change than
-  the other two Step 3 fields and worth being deliberate about rather than inheriting by default.
-- [ ] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
+  the other two Step 3 fields and worth being deliberate about rather than inheriting by default. *(shotgun 2026-10-01 #2)*
+- [$] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
   step already renders one control per tracked bill; the cadence choice should sit next to (or
   replace, for Weekly/Biweekly bills specifically) the due-date picker for that same bill, not as
-  a separate pass over the list.
-- [ ] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
+  a separate pass over the list. *(shotgun 2026-10-01 #2)*
+- [$] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
   full checklist → due-date → activate walkthrough end to end — a cadence-override case belongs
   in that same file, asserting the resulting expense's `billingMeta.cycle` and amount, the same
-  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`.
+  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`. *(shotgun 2026-10-01 #2)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in Shotgun run #2 (`[$]` = awaiting review) — see `docs/shotgun-coding.md`.**
 
 ---
 
 ## 20. Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts
 
-*Seeded 2026-08-24, not yet started. Grew out of a live-testing session that traced exactly what
+*Seeded 2026-08-24, §A + §B1 built 2026-10-01 in Shotgun run #2 (`[$]`, awaiting review); §B2–D still open. Grew out of a live-testing session that traced exactly what
 "Left This Week" computes today (`HomePanel.jsx`/`BudgetPanel.jsx`, `finalizedWeekNet −
 avgWeeklySpend`) — see `docs/drift-app-warden.md` §8 F16 and §10 F150. That figure blends a real
 single-week income number with an **averaged** spend number (`computeRemainingSpend()`'s
@@ -295,23 +295,23 @@ alongside it once the data exists to compute one, not replacing what's there.
 
 ### A. Optional per-expense due date field
 
-- [ ] **Add an optional `dueDate`-shaped field to the expense schema** (exact shape TBD at
+- [$] **Add an optional `dueDate`-shaped field to the expense schema** (exact shape TBD at
   implementation time — a fixed day-of-month for recurring bills is probably closer to how bills
   actually work than a single ISO date, but decide against `expense.js`'s existing
   `billingMeta`/`history`/`monthlyOverrides` shape rather than bolting on a fourth, disconnected
   field). **Must be optional** — consistent with the app's existing "most things like this are
   optional" posture (mirrors Freedom Allowance, benefits enrollment, tips/commission opt-in, all
   of which default to off/unset rather than forcing an answer). No existing expense should require
-  a migration or a forced prompt to keep working exactly as it does today.
-- [ ] **Where it's entered** — likely the expense edit sheet (`BudgetPanel.jsx`'s per-expense
+  a migration or a forced prompt to keep working exactly as it does today. *(shotgun 2026-10-01 #2)*
+- [$] **Where it's entered** — likely the expense edit sheet (`BudgetPanel.jsx`'s per-expense
   sheet, same place `SAVE SCOPE` lives today), as a clearly-optional field a user can skip.
   Decide whether it's asked anywhere in Setup Wizard/`SetupWizardAdlib.jsx` at all, or left purely
   as a Budget-panel-only enhancement — leaning toward the latter given the optional framing (no
-  need to add a wizard step for something users can ignore entirely).
+  need to add a wizard step for something users can ignore entirely). *(shotgun 2026-10-01 #2)*
 
 ### B. A real "this week's actual" figure, once due dates exist
 
-- [ ] **Decide the partial-coverage rule** — because due dates are optional, most accounts will
+- [$] **Decide the partial-coverage rule** — because due dates are optional, most accounts will
   have *some* expenses with a due date and some without, for a long time (possibly forever). Decide
   how the "actual this week" figure handles that: options include (a) only ever compute/show it
   once every currently-active expense has a due date (strict, but may never trigger for most
@@ -319,7 +319,7 @@ alongside it once the data exists to compute one, not replacing what's there.
   everything else" (a hybrid — needs its own careful math writeup so it doesn't quietly become a
   third parallel formula alongside `leftThisWeek`/`avgWeeklySpend`), or (c) something else. This is
   the central design decision the rest of §B depends on — do not start building against an assumed
-  answer.
+  answer. *(shotgun 2026-10-01 #2)*
 - [ ] **Surface both figures together** — once B's math is decided, show the existing averaged
   "Left This Week" alongside the new actual-this-week figure (same card, a secondary line, a toggle
   — exact layout TBD), not as a replacement. The averaged figure remains the default/primary

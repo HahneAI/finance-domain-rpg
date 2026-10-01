@@ -310,6 +310,19 @@ export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cy
   return { ...expense, monthlyOverrides: overrides };
 }
 
+// Permanent cadence correction (TODO §23, shotgun 2026-10-01): a bill that was
+// entered as a monthly approximation but is really due every week / two weeks
+// (child support at $500/wk). Unlike the additive New-Job-Season-only fields,
+// this rewrites the expense itself — billingMeta (what getNextDueDate reads)
+// AND monthlyOverrides from `fromMonthKey` forward (what every cost reader
+// resolves first), via the same applyMonthEditForward Budget's "Month+ Onward"
+// save uses. Months the user already customized are preserved, not flattened.
+export function applyCadenceCorrection(expense, { cycle, amount, fromMonthKey, effectiveFrom }) {
+  const perPaycheck = perPaycheckFromCycle(amount, cycle);
+  const withOverrides = applyMonthEditForward(expense, fromMonthKey, perPaycheck, amount, cycle);
+  return { ...withOverrides, billingMeta: { ...(expense.billingMeta ?? {}), amount, cycle, effectiveFrom } };
+}
+
 // ─── Quarter-scoped override helpers ─────────────────────────────────────────
 // These power the "Q[n]+ Onward" and "All Qtrs" save buttons. Unlike
 // applyMonthEditForward, they OVERWRITE any finer overrides already in range

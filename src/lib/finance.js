@@ -1,6 +1,6 @@
 import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
-import { exactWeeklyCost } from "./expense.js";
+import { exactWeeklyCost, getNextDueDate } from "./expense.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
@@ -1000,6 +1000,56 @@ export function resolveBudgetHealthMonthBoundary({
   const crossedMonth = previousMonthKey !== null && previousMonthKey !== monthKey;
   const shouldReevaluate = dayOfMonth === 1 && (previousMonthKey === null || crossedMonth);
   return { monthKey, dayOfMonth, crossedMonth, shouldReevaluate };
+}
+
+// ── "This week's actual" spend — TODO §20.B1 (shotgun 2026-10-01) ─────────────
+// PARTIAL-COVERAGE RULE (decided): hybrid. A bill with a due date contributes
+// what really falls due inside [weekStartIso, weekEndIso] (its per-payment
+// amount × occurrences); a bill without one contributes its AVERAGED weekly
+// share — the exact figure computeRemainingSpend uses (getExactEffectiveAmountForMonth),
+// so the undated half can never disagree with `avgWeeklySpend`. Loans always
+// have a payment date, so they always count as dated. Returns null until at
+// least one non-loan expense has a due date — before that this figure would
+// just restate the average and shouldn't be shown (Home keeps leading with
+// the averaged "Left This Week" either way). Pure; nothing consumes it in UI
+// yet (§20.B2 is the surfacing task).
+export function computeThisWeekActualSpend(expenses, weekStartIso, weekEndIso) {
+  if (!weekStartIso || !weekEndIso) return null;
+  const monthKey = weekEndIso.slice(0, 7);
+  const phaseIdx = getPhaseIndex(new Date(`${weekEndIso}T12:00:00`));
+  const windowStart = new Date(`${weekStartIso}T00:00:00`);
+  const windowEnd = new Date(`${weekEndIso}T23:59:59`);
+  let datedTotal = 0, undatedTotal = 0, datedCount = 0, undatedCount = 0, userDated = 0;
+  for (const exp of expenses ?? []) {
+    const weeklyAvg = getExactEffectiveAmountForMonth(exp, monthKey, phaseIdx);
+    if (!(weeklyAvg > 0)) continue; // not an active cost this month
+    const isLoan = exp.type === "loan";
+    let perPayment = 0;
+    if (isLoan) {
+      perPayment = exp.loanMeta?.paymentAmount ?? 0;
+    } else {
+      const ov = exp.monthlyOverrides?.[monthKey];
+      perPayment = ov?.amount ?? exp.billingMeta?.amount ?? 0;
+
+    }
+    const hasDate = (isLoan || exp.dueDateAnchor) && perPayment > 0 && getNextDueDate(exp, windowStart) != null;
+    if (!hasDate) { undatedTotal += weeklyAvg; undatedCount++; continue; }
+    let occ = 0;
+    const cursor = new Date(windowStart);
+    for (let i = 0; i < 10; i++) {
+      const due = getNextDueDate(exp, cursor);
+      if (!due || due > windowEnd) break;
+      occ++;
+      cursor.setTime(due.getTime());
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    datedTotal += perPayment * occ;
+    datedCount++;
+    if (!isLoan) userDated++;
+  }
+  if (userDated === 0) return null;
+  const n = datedCount + undatedCount;
+  return { total: datedTotal + undatedTotal, datedTotal, undatedTotal, datedCount, undatedCount, coverage: n ? datedCount / n : 0 };
 }
 
 export function computeRemainingSpend(expenses, futureWeeks, options = {}) {

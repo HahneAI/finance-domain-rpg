@@ -11,6 +11,7 @@ import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, Panel
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
 import { BulkEditPage } from "./BulkEditPage.jsx";
+import { ExpenseDueDateField } from "./ExpenseDueDateField.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -2445,6 +2446,18 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                   })()}
                 </div>
               </div>
+              {sheetExpLive.type !== "loan" && !readOnly && (
+                <ExpenseDueDateField
+                  expense={sheetExpLive}
+                  referenceIso={TODAY_ISO}
+                  onSave={(anchor) => applyExpenseUpdate(prev => prev.map(e => {
+                    if (e.id !== sheetExpLive.id) return e;
+                    if (anchor) return { ...e, dueDateAnchor: anchor };
+                    const { dueDateAnchor: _drop, ...rest } = e;
+                    return rest;
+                  }))}
+                />
+              )}
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
               {/* Actions */}
               {sheetDeleteConfirm ? (

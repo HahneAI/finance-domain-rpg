@@ -8,9 +8,9 @@
 
 | Tier | § | Item | Open | Done |
 |---|---|---|---|---|
-| 1 | 24 | BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills + runway math) | 4 | 0 |
-| 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 5 | 0 |
-| 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 6 | 0 |
+| 1 | 24 | BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills + runway math) | 0 | 4 $ |
+| 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 0 | 5 $ |
+| 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
 | 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 5 | 0 |
 | 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 9 | 0 |
 | 1 | 22 | Weekly Cash Check-In — Second Home Hero Feature | 10 | 0 |
@@ -82,35 +82,35 @@ that path already handles deleted expenses correctly via its own phase-awareness
 the same gap; don't assume it's clean just because it looks more sophisticated than
 `sumBillsDueSince`.)
 
-- [ ] **Fix, reusing the existing check rather than inventing a new one:** extract
+- [$] **Fix, reusing the existing check rather than inventing a new one:** extract
   `BudgetPanel.jsx`'s `getNextNonZeroIso`/`isRemovedThisPhase` logic into a shared exported helper
   (`lib/expense.js`, alongside `getEffectiveAmountForMonth`) so `NewJobSeasonBudgetPanel.jsx` and
   `newJobSeasonRunway.js` can both filter on the exact same "is this expense actually still active"
   definition BudgetPanel already uses — not a second, independently-written version of the same
   check (the same anti-drift lesson as F150/the coachFeatureGuide.js Budget→Upkeep leftover from
-  earlier this branch).
-- [ ] **Decide the reference date explicitly — don't default to "today" without confirming.** The
+  earlier this branch). *(shotgun 2026-10-01)*
+- [$] **Decide the reference date explicitly — don't default to "today" without confirming.** The
   user's own description points at the New Job Season **activation date**
   (`config.newJobSeasonDate`), not necessarily "today" — for an account activating retroactively,
   a bill deleted between the activation date and today is a different case from one deleted before
   activation. Resolve which date(s) actually matter before implementing; may need to check
   "removed as of activation" for the initial tracked-expense set and "removed as of today" for the
-  ongoing Upcoming Bills list, rather than assuming one date answers both.
-- [ ] **Fix both call sites in the same change** — `NewJobSeasonBudgetPanel.jsx`'s
+  ongoing Upcoming Bills list, rather than assuming one date answers both. *(shotgun 2026-10-01)*
+- [$] **Fix both call sites in the same change** — `NewJobSeasonBudgetPanel.jsx`'s
   `trackedExpenses`/`upcomingBills` (the visible list bug) and `newJobSeasonRunway.js`'s
   `sumBillsDueSince`/`isTrackedActiveEssential`/`isTrackedActiveLifestyle` (the real cash-math bug)
   — fixing only the visible list would leave the more serious, invisible dollar-figure bug in
-  place.
-- [ ] **Test coverage:** a deleted-but-formerly-tracked expense fixture, asserted absent from
+  place. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** a deleted-but-formerly-tracked expense fixture, asserted absent from
   `upcomingBills` AND absent from `sumBillsDueSince`'s total — the second assertion is the one that
-  actually catches the money bug, don't stop at a UI-only test.
+  actually catches the money bug, don't stop at a UI-only test. *(shotgun 2026-10-01)*
 
-**Status: planning only — bug confirmed and root-caused by reading the code; no fix written yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 
 ## 25. New Job Season — "Mark as Paid" button on tracked bills *(new — scoped 2026-09-30,
-PRIORITY, not yet built, no code written)*
+PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review)*
 
 *Requested alongside §26 below — the two share one underlying concept (a bill's "already handled"
 state) and should be designed together, not as two independent features that happen to look
@@ -127,9 +127,9 @@ from `upcomingBills`; the user's ask is different — a paid bill should **stay 
 Upcoming Bills list, just sorted to the bottom**, so the user can still see it was handled instead
 of it vanishing.
 
-- [ ] **Add a `"paid"` `newJobSeasonStatus` value**, set via a new "Mark as Paid" button on each
-  bill card in the Upcoming Bills UI (alongside wherever the existing pause/status controls live).
-- [ ] **Subtract the bill's amount from cash on hand on mark-as-paid** — call the existing
+- [$] **Add a `"paid"` `newJobSeasonStatus` value**, set via a new "Mark as Paid" button on each
+  bill card in the Upcoming Bills UI (alongside wherever the existing pause/status controls live). *(shotgun 2026-10-01)*
+- [$] **Subtract the bill's amount from cash on hand on mark-as-paid** — call the existing
   `saveCashOnHand()` path (`NewJobSeasonBudgetPanel.jsx:75-79`, already writes
   `config.newJobSeasonCashOnHand` + `newJobSeasonCashOnHandAsOf`) with `currentCashOnHand -
   billAmount`, not a new parallel cash-write path. **Open question to resolve before building:**
@@ -137,29 +137,29 @@ of it vanishing.
   math (§24 above) — i.e., does marking a bill paid effectively re-confirm cash as of today for
   that bill, so it isn't double-subtracted later when its due date is crossed? If not handled,
   marking a bill paid today plus that bill's own due date being crossed later could subtract its
-  amount from cash on hand twice. Decide this explicitly, don't ship it unresolved.
-- [ ] **Keep `"paid"` bills visible but reorder to the bottom of the Upcoming Bills list** — this
+  amount from cash on hand twice. Decide this explicitly, don't ship it unresolved. *(shotgun 2026-10-01)*
+- [$] **Keep `"paid"` bills visible but reorder to the bottom of the Upcoming Bills list** — this
   needs `upcomingBills` (line 109-127) to stop hard-excluding non-`"active"` status and instead
   include `"paid"` bills with a sort key that always loses to every `"active"` bill, regardless of
   due date. **Do not reuse `sortedExpenses`'s existing sort (lines 129-137) as-is** — that function
   sorts a different list (the full tracked-expense editor, not the Upcoming Bills countdown card
   list) for a different purpose (needs-coverage/essential priority); paid-bills-to-the-bottom is a
-  new, distinct sort rule specific to the Upcoming Bills display.
-- [ ] **Decide whether "paid" resets automatically on the bill's next cycle** — a weekly bill
+  new, distinct sort rule specific to the Upcoming Bills display. *(shotgun 2026-10-01)*
+- [$] **Decide whether "paid" resets automatically on the bill's next cycle** — a weekly bill
   marked paid this week should presumably return to `"active"` once its next due date arrives
   (otherwise a recurring bill marked paid once would silently vanish to the bottom forever). Needs
   a real rule (e.g., compare `newJobSeasonStatus`-set timestamp against the bill's current
-  `getNextDueDate()`), not left implicit.
-- [ ] **Test coverage:** mark-as-paid subtracts the right amount from cash on hand once; a paid
+  `getNextDueDate()`), not left implicit. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** mark-as-paid subtracts the right amount from cash on hand once; a paid
   bill still renders in Upcoming Bills but sorts after every active bill; a paid weekly bill
-  returns to active once its next occurrence comes due (once the auto-reset rule above is decided).
+  returns to active once its next occurrence comes due (once the auto-reset rule above is decided). *(shotgun 2026-10-01)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 
 ## 26. New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step
-*(new — scoped 2026-09-30, PRIORITY, not yet built, no code written — depends on §25's `"paid"`
+*(new — scoped 2026-09-30, PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review — depended on §25's `"paid"`
 status existing)*
 
 *Requested alongside §25 — this step's whole job is to let a user mark bills as already-paid
@@ -177,37 +177,37 @@ bucket is it in) — this needs one small new helper built on the same four cuto
 independently-invented "what week is it" scheme that could disagree with the picker's own
 buckets.
 
-- [ ] **New helper, e.g. `resolveCurrentWeekOfMonth(referenceIso)`** (`lib/expense.js`, next to
+- [$] **New helper, e.g. `resolveCurrentWeekOfMonth(referenceIso)`** (`lib/expense.js`, next to
   `WEEK_OF_MONTH_OPTIONS`) — given today's (or the activation) date, return which of the four
   existing week buckets it falls in, reusing the same day cutoffs `resolveWeekOfMonthAnchor`
-  already uses so the two directions can never disagree with each other.
-- [ ] **New Step 4 in `NewJobSeasonEntry.jsx`, after the existing Step 3 (due-date/cadence, see
+  already uses so the two directions can never disagree with each other. *(shotgun 2026-10-01)*
+- [$] **New Step 4 in `NewJobSeasonEntry.jsx`, after the existing Step 3 (due-date/cadence, see
   §23)** — shown only when at least one of two conditions holds: **(a)** the new helper above says
   today is the 4th week of the month, or **(b)** at least one bill in the Step 2/3 review was
   entered or confirmed with a weekly cadence (ties directly to §23's new weekly/biweekly cadence
   control — a weekly bill recurs often enough that "did I already pay this one" is a live question
   regardless of what week of the month it is). Skipped entirely otherwise, same "don't show a step
-  that has nothing to ask" pattern Steps 2-3 already follow when there are no expenses to review.
-- [ ] **What the step actually asks:** list the bills due "this week" (needs its own explicit
+  that has nothing to ask" pattern Steps 2-3 already follow when there are no expenses to review. *(shotgun 2026-10-01)*
+- [$] **What the step actually asks:** list the bills due "this week" (needs its own explicit
   definition — likely: next due date, as of the activation date, falls within the next 7 days —
   decide and document this rather than reusing `upcomingBills`'s 35-day horizon unmodified) and let
-  the user check off any that are already paid.
-- [ ] **On Activate, checked bills get the SAME `"paid"` status §25 defines** — written directly
+  the user check off any that are already paid. *(shotgun 2026-10-01)*
+- [$] **On Activate, checked bills get the SAME `"paid"` status §25 defines** — written directly
   into `updatedExpenses` before `onActivate(configPatch, updatedExpenses)` fires, so a bill checked
   off during setup lands in the Upcoming Bills list already sorted to the bottom on first render,
   with no separate post-activation step required to reach the same state §25's button produces
-  later.
-- [ ] **Open question, same shape as one already flagged in §25:** if a bill is checked as
+  later. *(shotgun 2026-10-01)*
+- [$] **Open question, same shape as one already flagged in §25:** if a bill is checked as
   already-paid during this step, should its amount also be subtracted from the
   `newJobSeasonCashOnHand` the user entered in Step 0 — or is the Step 0 cash-on-hand figure
   assumed to already reflect having paid it? This needs one consistent answer shared with §25's
   identical open question, not two independently-decided answers for what's conceptually the same
-  action.
-- [ ] **Test coverage:** the step appears when today resolves to week 4; the step appears when a
+  action. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** the step appears when today resolves to week 4; the step appears when a
   weekly-cadence bill was set in Step 3, even outside week 4; the step is skipped when neither
-  condition holds; checked bills land with `"paid"` status in the resulting `updatedExpenses`.
+  condition holds; checked bills land with `"paid"` status in the resulting `updatedExpenses`. *(shotgun 2026-10-01)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 

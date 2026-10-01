@@ -106,6 +106,18 @@ export function resolveWeekOfMonthAnchor(weekValue, referenceIso) {
   return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// Reverse of resolveWeekOfMonthAnchor: which of WEEK_OF_MONTH_OPTIONS' four
+// buckets a date falls in, using the SAME day cutoffs (1/8/15/22) so the two
+// directions can never disagree (TODO §26). Returns "week1".."week4", or null
+// for a missing/malformed date.
+export function resolveCurrentWeekOfMonth(referenceIso) {
+  const day = parseInt(String(referenceIso ?? "").slice(8, 10), 10);
+  if (!Number.isFinite(day) || day < 1) return null;
+  let hit = WEEK_OF_MONTH_OPTIONS[0];
+  for (const opt of WEEK_OF_MONTH_OPTIONS) if (day >= opt.day) hit = opt;
+  return hit.value;
+}
+
 // Resolves a DueDatePicker `value` ({ mode: "week"|"custom", week?, date? })
 // into a concrete ISO anchor date, or null if incomplete.
 export function resolveDueDateAnchor(value, referenceIso) {

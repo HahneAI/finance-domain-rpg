@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
-import { resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix } from "../lib/expense.js";
+import { resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix, getNextDueDate, normalizeCycle, resolveCurrentWeekOfMonth } from "../lib/expense.js";
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount, resolveNextWeekdayOnOrAfter } from "../lib/newJobSeasonRunway.js";
-import { toLocalIso } from "../lib/finance.js";
+import { toLocalIso, isExpenseRemoved } from "../lib/finance.js";
 
 // Canonical day ordering — matches WeekConfirmModal/LogPanel's DayPicker so
 // day-name strings stay consistent app-wide. DOW = JS Date.getDay() value.
@@ -73,8 +73,12 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * App.jsx merges configPatch into config and, when present, replaces
  * expenses with updatedExpenses.
  */
-export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], config = null }) {
+export function NewJobSeasonEntry({ open, onClose, onActivate, expenses: allExpenses = [], config = null }) {
   const today = new Date().toISOString().slice(0, 10);
+  // Deleted bills are zeroed-forward, not removed from the array (TODO §24) —
+  // never offer them for tracking. `allExpenses` is kept for confirm() so
+  // they pass through to the saved array untouched.
+  const expenses = allExpenses.filter(e => !isExpenseRemoved(e, today));
   const [date, setDate] = useState(today);
   // Mandatory — the runway calc's seed cash figure. "" = unanswered (blocks
   // Next); any finite number >= 0, including 0, is a valid answer.
@@ -100,6 +104,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   // "what day do you usually shop" pick instead. JS getDay() value (0-6) or
   // null before answered.
   const [foodShoppingDow, setFoodShoppingDow] = useState(null);
+  // TODO §26 step 4 — ids of bills the user says they already paid this week.
+  const [paidIds, setPaidIds] = useState(() => new Set());
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
@@ -117,6 +123,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     setTrackedIds(new Set(expenses.map(e => e.id)));
     setDueDateChoices({});
     setFoodShoppingDow(null);
+    setPaidIds(new Set());
     setAttempted(false);
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -188,15 +195,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     unemploymentWaitingWeek: hasUnemployment ? waitingWeek : false,
   });
 
-  const confirm = () => {
-    if (!hasExpenses) {
-      if (!step0Valid || !pendingCheckValid) return;
-      onActivate(buildConfigPatch());
-      onClose();
-      return;
-    }
-    if (!dueDatesValid) { setAttempted(true); return; }
-    const updatedExpenses = expenses.map(exp => {
+  const buildUpdatedExpenses = () => allExpenses.map(exp => {
+      if (isExpenseRemoved(exp, today)) return exp;
       if (!trackedIds.has(exp.id)) return { ...exp, trackDuringNewJobSeason: false };
       if (exp.type === "loan") {
         // Attach the loan's own known payment date rather than asking again.
@@ -210,6 +210,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         // the cycle change, getNextDueDate would still advance the anchor by
         // the old every30days cycle and the bill would look "due" only once
         // a month again, the exact framing this flow exists to fix.
+        if (foodShoppingDow == null) return { ...exp, trackDuringNewJobSeason: true }; // step-4 preview before step 3 is answered
         const anchor = toLocalIso(resolveNextWeekdayOnOrAfter(foodShoppingDow, today));
         return {
           ...exp,
@@ -221,6 +222,56 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
       return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
     });
+
+  // ── TODO §26 step 4: "Already paid this week?" ───────────────────────────
+  // Bills whose next due date (from the activation date, using the anchors
+  // picked in step 3) lands within 7 days — an explicit window, not
+  // Upcoming Bills' 35-day horizon.
+  const getPaidStepCandidates = () => {
+    const ref = new Date(`${date}T12:00:00`);
+    return buildUpdatedExpenses()
+      .filter(e => trackedIds.has(e.id) && !isExpenseRemoved(e, today))
+      .map(e => {
+        const due = getNextDueDate(e, ref);
+        if (!due) return null;
+        const days = Math.ceil((due - ref) / 86400000);
+        return days >= 0 && days <= 6 ? { exp: e, dueIso: toLocalIso(due), days } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.days - b.days);
+  };
+  // Shown only when it's the 4th week of the month OR a kept bill recurs weekly
+  // (Food flips to weekly in step 3) — and only if something is actually due.
+  const hasWeeklyBill = keptPickableExpenses.some(e => e.isFoodPrimary || normalizeCycle(e.billingMeta?.cycle) === "weekly");
+  const paidStepWanted = resolveCurrentWeekOfMonth(date) === "week4" || hasWeeklyBill;
+  const paidCandidates = (paidStepWanted && hasExpenses) ? getPaidStepCandidates() : [];
+  const showPaidStep = paidCandidates.length > 0;
+  const togglePaid = (id) => setPaidIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // Checked bills get the SAME "paid" state §25's button writes. Shared answer
+  // to the cash question: Step 0's balance is assumed to already reflect a bill
+  // the user says they paid, so cash is NOT reduced — and the occurrence is
+  // flagged so the decay never subtracts it when its date is crossed.
+  const applyPaidThisWeek = (list) => {
+    if (!showPaidStep || paidIds.size === 0) return list;
+    const dueById = new Map(paidCandidates.map(c => [c.exp.id, c.dueIso]));
+    return list.map(e => (paidIds.has(e.id) && dueById.has(e.id))
+      ? { ...e, newJobSeasonStatus: "paid", newJobSeasonPaidDueDate: dueById.get(e.id), newJobSeasonPaidSkipDecay: true }
+      : e);
+  };
+
+  const confirm = () => {
+    if (!hasExpenses) {
+      if (!step0Valid || !pendingCheckValid) return;
+      onActivate(buildConfigPatch());
+      onClose();
+      return;
+    }
+    if (!dueDatesValid) { setAttempted(true); return; }
+    const updatedExpenses = applyPaidThisWeek(buildUpdatedExpenses());
     onActivate(buildConfigPatch(), updatedExpenses);
     onClose();
   };
@@ -240,16 +291,18 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       return;
     }
     if (step === 2) {
-      if (keptPickableExpenses.length === 0) { confirm(); return; }
+      if (keptPickableExpenses.length === 0) { if (showPaidStep) setStep(4); else confirm(); return; }
       setStep(3);
       return;
     }
+    if (step === 3 && showPaidStep) { setStep(4); return; }
     confirm();
   };
 
   const nextLabel = step === 0 ? "Next"
     : step === 1 ? (hasExpenses ? "Next" : "Activate")
-    : step === 2 ? (keptPickableExpenses.length > 0 ? "Next" : "Activate")
+    : step === 2 ? ((keptPickableExpenses.length > 0 || showPaidStep) ? "Next" : "Activate")
+    : step === 3 ? (showPaidStep ? "Next" : "Activate")
     : "Activate";
   const nextDisabled = step === 0 ? !step0Valid : step === 1 ? !pendingCheckValid : step === 3 ? !dueDatesValid : false;
   // A native `disabled` button never dispatches onClick at all, so a click on
@@ -299,13 +352,14 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
-            Life Event{hasExpenses ? ` · Step ${step + 1} of ${keptPickableExpenses.length > 0 ? 4 : 3}` : ""}
+            Life Event{hasExpenses ? ` · Step ${step + 1} of ${2 + (keptPickableExpenses.length > 0 ? 1 : 0) + 1 + (showPaidStep ? 1 : 0)}` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
             {step === 0 && "Start Your New Job Season"}
             {step === 1 && "Any paycheck still coming?"}
             {step === 2 && "Which bills do you want to track?"}
             {step === 3 && "When are these due?"}
+            {step === 4 && "Already paid this week?"}
           </div>
         </div>
 
@@ -691,6 +745,41 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
               </div>
             </>
           )}
+
+          {step === 4 && (
+            <>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+                These are due in the next 7 days. Check any you've already paid — they'll show
+                as paid in Upcoming Bills, and your cash on hand is assumed to already reflect them.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {paidCandidates.map(({ exp, dueIso }) => {
+                  const checked = paidIds.has(exp.id);
+                  const amount = getExpenseDisplayAmount(exp);
+                  return (
+                    <label key={exp.id} style={{
+                      display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px",
+                      background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)",
+                      borderRadius: "10px", cursor: "pointer", opacity: checked ? 0.7 : 1,
+                    }}>
+                      <input
+                        type="checkbox" checked={checked} onChange={() => togglePaid(exp.id)}
+                        aria-label={`Already paid ${exp.label ?? "bill"}`}
+                        style={{ accentColor: "var(--color-accent-primary)", width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
+                      />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</div>
+                        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                          Due {new Date(`${dueIso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {amount > 0 ? ` · $${Number(amount).toLocaleString()}/${getExpenseDisplaySuffix(exp)}` : ""}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         <div style={{
@@ -700,7 +789,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         }}>
           {step > 0 && (
             <Pressable
-              onClick={() => setStep(s => s - 1)}
+              onClick={() => setStep(s => (s === 4 && keptPickableExpenses.length === 0 ? 2 : s - 1))}
               className="text-xs" style={{
                 background: "var(--color-bg-raised)",
                 color: "var(--color-text-secondary)",

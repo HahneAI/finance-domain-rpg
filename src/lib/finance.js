@@ -913,6 +913,34 @@ export function getEffectiveAmountForMonth(expense, monthKey, phaseIdx) {
   return getEffectiveAmount(expense, new Date(`${monthKey}-15`), phaseIdx);
 }
 
+// ISO "YYYY-MM" key of the next month after todayIso's month (same year) whose
+// effective amount is non-zero, respecting monthlyOverrides. null if every
+// remaining month is zero. Moved here from BudgetPanel.jsx (TODO §24, shotgun
+// 2026-10-01) so NJS panels/runway share the exact "deleted vs. scheduled-
+// for-later" definition BudgetPanel uses — never a second copy of it.
+export function getNextNonZeroIso(expense, phaseIdx, todayIso) {
+  const year = todayIso.slice(0, 4);
+  const currentMon = parseInt(todayIso.slice(5, 7), 10);
+  for (let m = currentMon + 1; m <= 12; m++) {
+    const key = `${year}-${String(m).padStart(2, "0")}`;
+    if (getEffectiveAmountForMonth(expense, key, phaseIdx) > 0) return key;
+  }
+  return null;
+}
+
+// True for an expense the user deleted: this app never removes it from the
+// array (point-in-time design, TODO §3) — it zeroes the amount forward and
+// keeps history. Same test BudgetPanel's `isRemovedThisPhase` applies to hide
+// a bill: zero this month, nothing non-zero later in the year, real history
+// on file. Loans resolve via loanMeta (not history[]) and are never flagged.
+export function isExpenseRemoved(expense, todayIso) {
+  if (!expense || expense.type === "loan" || !todayIso) return false;
+  if (!(expense.history?.length)) return false;
+  const phaseIdx = getPhaseIndex(new Date(`${todayIso}T12:00:00`));
+  if (getEffectiveAmountForMonth(expense, todayIso.slice(0, 7), phaseIdx) !== 0) return false;
+  return getNextNonZeroIso(expense, phaseIdx, todayIso) === null;
+}
+
 // Exact ("penny-true") counterpart to getEffectiveAmountForMonth — used only
 // by backend totals (computeRemainingSpend, computeGoalTimeline, the budget
 // breakdown's Annual/Weekly/Monthly columns), never by front-facing bill

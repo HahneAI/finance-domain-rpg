@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, phaseIdxForMonth, computeNetBreakdown, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
+import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, getNextNonZeroIso, phaseIdxForMonth, computeNetBreakdown, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -280,16 +280,6 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const currentEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, currentMonthKey, phaseIdx);
   const quarterEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, Q_REP_MONTH_KEYS[phaseIdx], phaseIdx);
 
-  // Returns the ISO "YYYY-MM" key of the next future month where the effective amount
-  // is non-zero, respecting monthlyOverrides. Returns null if all remaining months are zero.
-  const getNextNonZeroIso = (exp, phaseIdx, todayIso) => {
-    const currentMon = parseInt(todayIso.slice(5, 7), 10);
-    for (let m = currentMon + 1; m <= 12; m++) {
-      const key = `2026-${String(m).padStart(2, "0")}`;
-      if (getEffectiveAmountForMonth(exp, key, phaseIdx) > 0) return key;
-    }
-    return null;
-  };
   // Annual cost for the breakdown tab — a "total year summary" (product
   // decision, 2026-08-31), so this must reconcile exactly against what was
   // actually entered, not the front-facing bill cards' 48-week-year mental-

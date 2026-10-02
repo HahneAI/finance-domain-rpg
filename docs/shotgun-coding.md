@@ -97,6 +97,42 @@ End each run with a **footer of at most 3 lines**: `Skipped:` (task + reason, or
 
 <!-- NEW ENTRIES GO HERE, NEWEST FIRST -->
 
+## Run — 2026-10-02 18:34 UTC  ·  branch: claude/shotgun-journal-format  ·  scope: 6 of 22 open Tier-1 tasks (§20.B2, B3, B4, C1, C2, D)
+
+### §20.B2–B4 Second "with this week's bills" figure (one source)
+1. Built: a sub-line "With this week's bills: $X" under Home's and Budget's Left-This-Week card, shown only when due-dated bills exist.
+2. Chose: compute it once in `App.jsx` (`thisWeekActual`) and pass the result down; weekly-pay accounts only; the averaged figure stays the headline.
+3. Other options: compute inside each panel (the old F150 mistake) / replace the averaged figure.
+4. Built off: `computeThisWeekActualSpend` (run #2) — its undated half is the same averaged number `avgWeeklySpend` uses; F150's single-source fix was already in, so B4 was verification plus keeping the new figure single-sourced.
+5. Trade-off: biweekly/monthly users see nothing yet — their check spans more than the 7-day window, so showing it would understate spend.
+- [ ] Test: weekly-pay account, give one bill a due date → Home's Left-This-Week card gains the "With this week's bills" line.
+- [ ] Test: Budget's card shows the identical number as Home's.
+- [ ] Test: remove all due dates → the line disappears; on a biweekly account it never appears.
+
+### §20.C Bills due today (definition + card)
+1. Built: `getBillsDueOn` in `finance.js` and a dismissible amber "Due today · $total" card at the top of Home.
+2. Chose: "due" = a bill with a due date whose next due date is exactly today, not deleted, and not marked Paid for that occurrence; shows once per day (dismiss stored per date).
+3. Other options: a native push notification (separate PWA scope) / a time-of-day trigger.
+4. Built off: `getNextDueDate`'s cycle math and `isExpenseRemoved`/the New Job Season "paid" fields — no new date matching.
+5. Loans count automatically; the card hides when nothing is due and survives blocked localStorage.
+- [ ] Test: set a bill's due date to today → the card appears on Home with the bill and total.
+- [ ] Test: tap "Got it" → it stays gone for the rest of the day and returns tomorrow.
+- [ ] Test: a bill due tomorrow, or one with no due date, does not appear.
+
+### §20.D Export due dates to a calendar (.ics)
+1. Built: an "Add N due dates to calendar (.ics)" button at the bottom of Budget that downloads a recurring all-day event per dated bill and loan.
+2. Chose: one-way file export (works with Apple/Google/phone calendars) with the app's own recurrence — weekly/biweekly exact, the monthly bucket as a 30-day interval — ending Dec 31.
+3. Other options: a calendar API integration (needs OAuth) / "monthly on the 15th" (would drift from the app's dates).
+4. Built off: the same dated-bill population as the due-today card, reading `getNextDueDate` so the calendar agrees with the app.
+5. Trade-off: not a live sync — re-export after changing a due date; events end at year-end.
+- [ ] Test: with at least one dated bill, tap the button → a `.ics` file downloads; import it into your calendar.
+- [ ] Test: the imported event's first date and amount match "Next due" in the bill's sheet.
+- [ ] Test: with no dated bills the button isn't shown.
+
+Skipped: none (§22 Weekly Cash Check-In and §21 Quarterly are next in build order).
+Verification: 1923 tests pass, 1 suite fails to load (`budgetCheckBreakdown`, needs `VITE_SUPABASE_URL`); `vite build` green; lint at baseline (5); 17 new tests.
+Drift entries consulted: T2 Home, T4 Budget Panel, Spine A fiscal math, F150 (verified already fixed; kept single-sourced).
+
 ## Run — 2026-10-01 14:49 UTC  ·  branch: claude/shotgun-coding-doc-cleanup  ·  scope: 8 of 30 open Tier-1 tasks (§23 ×5, §20 ×3)
 
 ### §23 Per-bill weekly/biweekly cadence (New Job Season wizard)

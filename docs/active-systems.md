@@ -120,7 +120,7 @@ per-entry breakdown (`calcEventImpact` surfaced).
   then `handleWizardComplete()` (eager save, configHistory tag, food seed).
 - **Key behaviors:** blank-by-default (`BLANK_PAY_FIELDS`); number-gated reveals fire on blur
   (`useCommitTracking`); per-word typed reveal; `attempted`-driven required-field feedback.
-- Full architecture: `CLAUDE.md` SetupWizard section; gate matrix: `drift-app-warden.md` §7.3.
+- Full implementation reference: `setup-wizard-reference.md`; gate matrix: `drift-app-warden.md` §7.3.
 
 ## 10. Life Events & New Job Season
 
@@ -172,8 +172,8 @@ Home → 3 tips rotated by fiscal week + a future `aiTip` slot. Suppressed in NJ
 Flow shell live; Pulse overlay (`--color-signal-*`, `InsightRow` — never fabricate signals) Phase 2.
 Liquid Glass `purpose` whitelist: `nav`, `pulse`, `modal`, `log-summary`, `phase-btn` (never on primary
 MetricCards/tables/buttons). Two-font system (Titillium Web display / Rajdhani body; mono = read-only
-data). Body text uses `.text-2xs…md` classes, enforced by `textUtilityClassAudit.test.js`. Rules and
-tokens: `CLAUDE.md`.
+data). Body text uses `.text-2xs…md` classes, enforced by `textUtilityClassAudit.test.js`. Rules:
+`CLAUDE.md`; token values: `design-system-source-of-truth.md`.
 
 ## 16. Swipeable Stacks
 

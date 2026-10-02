@@ -47,6 +47,25 @@ next most mergeable group (same shape, different Stripe action).
 **Three-tier pipeline:** `claude/*` feature branches → `Version-control` (integration) → `master` (production). Push to feature branches; user merges to Version-control, then to master. For systematic cross-file updates (e.g. section numbering), use placeholder-based two-pass replacement (`§15` → `__SECTION_15__` → `§1`) to prevent regex overlap when replacing multiple references simultaneously.
 
 ---
+## Commands
+```bash
+npm run dev         # Vite dev server (needs VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+npm run build       # vite build — the only check that exercises the React Compiler (see Testing)
+npm run lint        # eslint .
+npm run test:run    # Vitest single pass — use this to verify changes
+```
+
+## Doc map — if you're touching X, read Y first
+| Touching | Read |
+|---|---|
+| Anything in a mapped area (wizard, 5 panels, auth, paywall, fiscal math, persistence, entitlements, AI, design system, admin) | `docs/drift-app-warden.md` — that section's trigger map |
+| How a live system works | `docs/active-systems.md` (Coach/AI context: §6/§24 grounding rule first) |
+| Setup wizard | warden §7 (gate matrix §7.3); `active-systems.md` §9 |
+| Design tokens / typography | `docs/design-system-source-of-truth.md`, warden §22 |
+| Migrations / schema | `database/migrations/README.md` |
+| Backlog / shipped log | `docs/TODO.md` / `docs/past-TODO-tasks.md` |
+| Account ground truth | `docs/account-reference.json` |
+
 
 ## File Structure
 ```
@@ -61,8 +80,8 @@ src/
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── TipsCommissionCheckIn.jsx — small daily check-in card (tips/commission opt-in, skinned bonus-log mechanism)
-│   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
-│   ├── SetupWizardAdlib.jsx — REAL production wizard for first-run onboarding + lost_job/commission_job re-entry, "fill-in-the-blank" style (see §SetupWizard below)
+│   ├── SetupWizard.jsx      — multi-step onboarding (see Setup Wizard section below)
+│   ├── SetupWizardAdlib.jsx — REAL production wizard for first-run onboarding + lost_job/commission_job re-entry, "fill-in-the-blank" style (see Setup Wizard section below)
 │   ├── LoginScreen.jsx      — auth shell
 │   ├── BetaHomebase.jsx     — tracked-beta-tester-only page (real nav-stack view, not a modal — see App.jsx's `navigate("betaHomebase")`): rubric score, feature checklist, suggestion feed, changelog recap
 │   ├── ProductivityHub.jsx  — "Money Moves": base-user counterpart to BetaHomebase (every non-tracked-tester user), same page treatment, same checklist/tips/feedback flow minus scoring; reuses BetaHomebase's exported section components
@@ -85,410 +104,29 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
-## SetupWizard (`src/components/SetupWizard.jsx`)
+## Setup Wizard
+**`SetupWizardAdlib.jsx` is the only mounted wizard** — a cascading "fill-in-the-blank" flow: 4 employed pages
+(Intake, Schedule+Tax, Deductions, Wrap Up) + 3 native jobless pages. `App.jsx` mounts it whenever
+`wizardEntry !== null` (`false` = first-run; a life-event string = re-entry). `SetupWizard.jsx` is **no longer
+mounted** — retained only as the export home of `LIFE_EVENTS` / `DIFF_FIELDS` / `StructureChangeDiff`.
+**Read `docs/drift-app-warden.md` §7 (trigger map + §7.3 gate matrix) before any change here.**
+Full implementation reference: `docs/setup-wizard-reference.md`; overview: `docs/active-systems.md` §9.
 
-Multi-step onboarding (~2500 lines). Controlled steps with conditional routing based on `lifeEvent` (null/structure_change/lost_job/changed_jobs/commission_job). Covers pay structure, schedule, deductions, tax rates, and wrap-up. Full drift map: `docs/drift-app-warden.md` §7 — consult before changes. See source file for step definitions, helper components, state management, and DHL employer preset overrides.
+- **One save path:** every finish runs `finalizeWizardConfig()` (`src/lib/wizardComplete.js`) → `onComplete()` →
+  `handleWizardComplete()` (eager save, configHistory tag, food seed). Never add a second normalizer.
+- **`lifeEvent`** = `null | structure_change | lost_job | changed_jobs | commission_job`. `structure_change`
+  is the only menu entry; the other three are reached via the wizard's internal `LifeEventPivot`. Re-entry
+  pre-fills from config; first-run is **blank-by-default** (`BLANK_PAY_FIELDS` — a new asked field must be
+  added there, and a cleared `InlineSelect` must resolve to `null`, not a falsy default).
+- **Required-field parity:** each page's `isXValid()` is a line-for-line mirror of the real `STEP_DEFS`
+  `isValid` — change both or neither (warden §7 F7).
+- **Number-gated reveals fire on blur, not per keystroke** (`InlineNumber onCommit` + `useCommitTracking`) — F162.
+- **DHL:** `dhlSite` `"PLANT"` | `"WAREHOUSE"` (absent = Plant, no migration); `getDhlPlannedDayIndexes()` /
+  `getDhlPlannedPattern()` in `finance.js` are the single day-pattern source (`active-systems.md` §11).
+- **New wizard-asked field → four-site procedure** incl. `HISTORY_SENSITIVE_FIELDS` (`src/lib/configHistory.js`)
+  — two gaps were already found there (F136).
+- **Block-level children inside a sentence `<p>` throw only a console warning** (F137) — watch test output.
 
-**DHL Site — Plant vs Warehouse (`dhlSite`).** DHL now has two schedule shapes, chosen in Step 1
-right after "Do you work for DHL? Yes": **Plant** (`dhlSite: "PLANT"`) is the original rotating
-Team A/B short/long-week alternation — unchanged. **Warehouse** (`dhlSite: "WAREHOUSE"`) is a
-fixed schedule with no rotation at all — a Mon–Thu team and a Wed–Sat team (`dhlTeam: "MT" | "WS"`,
-`DHL_PRESET.warehouseTeams`), each working the *same 4 days every single week*, plus a real
-user-selectable shift-length question (10 or 12 hours, not hardcoded) alongside the existing
-night/morning-shift question. Same bucket/PTO numbers, weekend differential, and night
-differential dollar amounts as Plant. `dhlSite !== "WAREHOUSE"` is the Plant fallback — every
-existing DHL account (no `dhlSite` key in its stored config at all) needs **no migration**, it
-just keeps behaving exactly as before. `finance.js`'s `getDhlPlannedDayIndexes()`/
-`getDhlPlannedPattern()` are the single shared source of the day-pattern for `buildYear()`,
-`projectedGross()`, and `calcEventImpact()` alike — a Warehouse branch there is enough to make all
-three correct, no per-caller duplication. `buildYear()` additionally forces `isHighWeek: false`
-for Warehouse weeks (financially inert — `PaystubCalc` already guarantees `fedRateHigh ===
-fedRateLow` whenever `scheduleIsVariable` is false, which Warehouse always sets). Site-gated UI:
-Step 1 (site/team/shift-length questions, custom-rotation question hidden for Warehouse), Step 2
-(Short/Long Week pills hidden for Warehouse — nothing else to ask beyond the start date), Step 4
-("Load DHL Preset" hidden for Warehouse — those rates are Plant-specific), and `ProfilePanel.jsx`'s
-T5 Employment card (DHL Team editor + Schedule Override, same field/second-editor pattern per
-`docs/drift-app-warden.md` §7). See that doc's DHL_PRESET/`dhlSite` trigger-map rows before
-touching any of this again.
-
-`initialStepId` (optional prop, default `null`) opens the wizard on a specific `STEP_DEFS` id
-instead of always step 0. Originally added so `SetupWizardAdlib.jsx` could hand off into the real
-wizard's jobless mini-flow (id 10) after its own pilot pages were answered; that hand-off no
-longer exists (drift-app-warden §7 F141 — the jobless mini-flow is now three native
-`SetupWizardAdlib` pages, `SetupWizard.jsx` is no longer mounted anywhere), so nothing in the app
-passes a non-`null` value today. Left in place as generically useful, not removed — a prop with no
-current caller, not dead code that needs deleting.
-
-**`SetupWizardAdlib.jsx` — the REAL production first-run onboarding wizard.** A
-"fill-in-the-blank" reimagining of the entire first-run, employed-signup flow — all six real
-`SetupWizard.jsx` steps — as four cascading mad-libs pages with inline `<select>`/`<input>`
-blanks, instead of stacked form fields or a page-per-step flow. Page 1 (`IntakePage`) merges
-Welcome + Pay Structure into one continuous sentence; page 2 (`ScheduleTaxPage`) merges Schedule
-and Tax Rates onto one page, each under its own small subheader (drift-app-warden §7 F161,
-2026-08-27 — both sections were consistently too short on their own, leaving ~650px of empty
-viewport below the content on a real device for the thinnest accounts; the merge's combined gate,
-`isScheduleTaxValid = isScheduleValid && isTaxRatesValid`, requires both sections' required fields
-before Next enables, and Tax Rates now comes before Deductions in answer order since nothing in
-Tax Rates reads a deduction field); page 3 (`DeductionsPage`) covers Deductions as its own page
-(with a Skip button, mirroring real `STEP_DEFS id 3`'s `skippable: true`); page 4 (`WrapUpPage`)
-covers Wrap Up as its own page — all in the same cascading style. `SchedulePage`/`TaxRatesPage`
-still exist as their own components (unchanged internally, still each with their own
-`isScheduleValid`/`isTaxRatesValid`) — `ScheduleTaxPage` just composes the two.
-
-**Scope: the ENTIRE first-run flow (employed and jobless) plus all four life-event re-entry
-strings (2026-08-11, docs/TODO.md §19.2/§19.3, now fully closed).** `App.jsx` mounts
-`SetupWizardAdlib` whenever `wizardEntry !== null` — `wizardEntry === false` (first-run,
-`lifeEvent={null}`, covering both the employed and jobless paths natively) or `wizardEntry` is a
-life-event string (`lifeEvent={wizardEntry}`). `wizardEntry === "structure_change"` is the **only
-real entry point** for any life-event re-entry — `LifeEventMenu.jsx`'s three tiles are "Pay
-Structure Changed" (→ `structure_change`), "Quit My Job" (→ the unrelated `NewJobSeasonEntry`
-modal), and "Rate Update" (→ the unrelated `RateUpdateModal`); there is no menu tile for
-`lost_job`/`changed_jobs`/`commission_job` at all. Those three are reachable only through
-`SetupWizardAdlib`'s own internal life-event pivot (`IntakePage`'s `LifeEventPivot`, see below)
-once a `structure_change` wizard is already open — mirrors real `SetupWizard.jsx`'s own `Step0`
-picker, which was always meant to provide this pivot but, until F140, had nowhere reachable to
-pivot *to*. **`SetupWizard.jsx` is no longer mounted anywhere in the app** (drift-app-warden §7
-F141) — the jobless mini-flow (unemployed at first-run — first-run only, never a life-event path)
-that used to hand off into it at `STEP_DEFS` id 10 is now three native `SetupWizardAdlib` pages
-(`JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`, ported line-for-line from real
-`StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp`), so every path — first-run employed,
-first-run jobless, and all four life-event strings — now completes inside this one component with
-no hand-off to a second component on any path. `SetupWizard.jsx` itself is retained unchanged,
-purely as the source components those three pages were ported from and as `LIFE_EVENTS`/
-`DIFF_FIELDS`/`StructureChangeDiff`'s shared export home (see the gate matrix in
-`docs/drift-app-warden.md` §7.3 for the definitive per-path map).
-
-**`lifeEvent` prop** (default `null`) mirrors `SetupWizard.jsx`'s own contract:
-`null` | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"` — the prop
-itself never changes after mount; it's the wizard's original entry point, used only for
-`formData`'s pre-fill-vs-blank init and the jobless-mini-flow gates, both invariant across an
-internal pivot. A non-`null` value changes three things from first-run behavior: (1) `formData`
-initializes as `{ ...config }` — pre-filled from the real account config, matching real
-`SetupWizard.jsx`'s own re-entry init (including its `firstActiveIdx` recompute from `startDate`
-on open) — instead of `{ ...config, ...BLANK_PAY_FIELDS }`, which stays first-run-only; (2) the
-employment-status question (`IntakePage`'s opening clause, `isIntakeValid`'s first check) is
-skipped entirely — `isEmployed` is forced `true` so every pay-structure clause renders
-immediately, mirroring real `STEP_DEFS` id 0's own `ev !== null` unconditional-valid shape; a
-per-path intro clause replaces the employment-status blank (`"Let's rebuild your pay for the new
-job."` for `lost_job`, `"Let's add your commission job to your pay structure."` for
-`commission_job`, `"Let's set up your pay for the new job."` for `changed_jobs` — all three new
-copy in a matching tone, since none has bespoke Step0 copy on the real wizard to port verbatim;
-`structure_change` renders nothing here — its own bespoke intro copy is rendered separately by
-`LifeEventPivot`, below); (3) `computeActivePages()` excludes Wrap Up for `lost_job`/
-`commission_job` specifically — both commit through `finalizeWizardConfig()` at the end of Tax
-Rates instead (real `STEP_DEFS` id 7's `showIf` excludes both paths too); `structure_change`/
-`changed_jobs` both keep Wrap Up (computeActivePages' default branch). The jobless single-page
-shortcut and hand-off (`onHandoff`) are both explicitly gated on `lifeEvent === null` — a
-life-event account can carry a stale `startedUnemployed: true` from a prior first-run jobless
-answer without that meaning anything on any re-entry path, since none of the four ask or touch
-that field. `commission_job` additionally reveals a Commission Income clause in `IntakePage`
-(mirrors real Step1's field, `SetupWizard.jsx:782–809`, exactly — applies to both DHL and base
-users, gated on `payStructureComplete`; writes the pre-existing `commissionMonthly` field). All
-four re-entry paths are cancelable (`App.jsx` passes a real `onCancel`, unlike first-run's
-uncancelable `undefined`). See `docs/drift-app-warden.md` §7 F139/F140 for the full implementation
-writeup.
-
-**`LifeEventPivot` — the internal life-event pivot picker (2026-08-11, drift-app-warden §7
-F140).** `SetupWizardAdlib` holds its own local `[curLifeEvent, setCurLifeEvent]` state, seeded
-from the `lifeEvent` prop (mirrors real `SetupWizard.jsx`'s local `[lifeEvent, setLifeEvent]`
-state, seeded from its own `initialLifeEvent` prop). Every downstream gate/page reacts to
-`curLifeEvent`, not the immutable `lifeEvent` prop — `computeActivePages(formData,
-curLifeEvent)`, `current.isValid(formData, curLifeEvent)`, the `<current.Component
-lifeEvent={curLifeEvent} .../>` render prop, and `IntakePage`'s Commission Income gate all key off
-it. `LifeEventPivot` (rendered at the very top of `IntakePage`, before its cascading pay-structure
-sentence) is only shown when `onLifeEventChange` is passed down at all, which only happens when
-the *original* entry was `"structure_change"` (`onLifeEventChange={lifeEvent === "structure_change"
-? setCurLifeEvent : null}`) — direct entry as `lost_job`/`commission_job` (still supported,
-though nothing sets `wizardEntry` to those directly today) shows no pivot block, matching last
-round's behavior exactly. Two branches, both ported from real `SetupWizard.jsx`'s `Step0`
-(~line 40–178): while `curLifeEvent === "structure_change"` (not yet pivoted), it shows the real
-Step0 `structure_change` intro copy verbatim ("Update your pay structure." + the pre-filled/
-goals-stay-put explanation + start-date guidance) plus the "What changed?" picker beneath it
-(`LIFE_EVENTS.filter(ev => ev.value !== "structure_change")`, exported from `SetupWizard.jsx`
-alongside `DIFF_FIELDS` and `StructureChangeDiff` rather than duplicated — drift-app-warden §7
-F7's "must never diverge" rule); once pivoted, only the generic picker remains, with the active
-selection highlighted, same as real Step0's own "else" branch. **One deliberate deviation from a
-line-for-line Step0 port:** real Step0 returns early for `structure_change` with no picker
-rendered at all — the picker only exists on a separate "step" reached once `lifeEvent` has already
-changed away from `structure_change` by some other means, which the real wizard never actually
-provides (making that whole branch dead code there too). Ad-lib has no separate step to show the
-intro on first, so `LifeEventPivot` shows the intro **and** the picker together while still on
-`structure_change`, or the pivot would have no reachable entry point at all — see the session
-report's judgment-call note. `hasCommission`'s local `useState` lazy initializer only evaluates
-once at mount (when `curLifeEvent` was still `"structure_change"`); a `useEffect` re-syncs it on
-every `curLifeEvent` change so pivoting into `commission_job` after mount still shows the
-Commission field's correct initial toggle state.
-
-**`structure_change`'s Wrap Up diff — `StructureChangeDiff` (2026-08-11, F140).** `WrapUpPage`
-gained `lifeEvent`/`originalConfig` props. `SetupWizardAdlib` captures a frozen baseline
-(`useState(() => config)` at mount, mirrors real `SetupWizard.jsx`'s `useMemo(() => config, [])`)
-and threads it down; `WrapUpPage` renders the shared `StructureChangeDiff` component (imported
-from `SetupWizard.jsx`, not duplicated) gated on `curLifeEvent === "structure_change"` — the same
-gate real `StepWrapUp` uses. The jobless-started "no prior pay structure to diff" guard
-(`originalConfig?.startedUnemployed === true` → a dedicated first-time message instead of a
-misleading diff against `DEFAULT_CONFIG` placeholders) comes along for free since it's the exact
-same component. `changed_jobs` reaches Wrap Up too (full page set, same as first-run/
-`structure_change`) but never shows this diff — correct per the gate matrix, needed zero extra
-code since the render gate is already specific to `curLifeEvent === "structure_change"`.
-
-**Investor first-run** (`isInvestor` prop, threaded from `App.jsx` as `config.isInvestor`)
-mirrors `SetupWizard.jsx`'s investor handling field-for-field: `IntakePage`'s Welcome clause reads
-`formData.investorName`, the "who do you work for" DHL/someone-else question is skipped entirely
-(investors are always base users — the page goes straight to the "I get paid…" pay-schedule
-clause), and `formData`'s init override forces `employerPreset: null` with
-`otThreshold`/`maxWeeklyHours` seeded from the investor's existing config. Investor first-run also
-keeps a Cancel button (returns to account 1), matching `SetupWizard.jsx`'s own investor exception
-to the uncancelable-first-run rule.
-
-**Save path.** Reuses the exact same config fields and DHL-preset defaults as real
-Step0/Step1/Step2/Step3/Step4/StepWrapUp (see `pickTeamPatch()` mirroring Step1's `pickTeam()`) so
-there's zero drift between the two experiences on the fields they share. On an employed finish,
-`formData` is run through `finalizeWizardConfig()` (`src/lib/wizardComplete.js`) — the same shared
-normalizer `SetupWizard.jsx`'s `handleComplete()` calls (DHL enforced overrides, Freedom Allowance
-normalize, `taxedWeeks` derivation, `accountCreatedIdx` stamp, `setupComplete: true` — see
-`docs/drift-app-warden.md` §7 F5/F13/F128) — then handed to the `onComplete(finalConfig)` prop,
-which `App.jsx` wires straight to `handleWizardComplete()`, the same function every real
-`SetupWizard` completion uses (eager save via `savePersistedStateNow`, configHistory tagging,
-food-seed logic). Cancel (`onCancel`, only present for investor first-run) has zero save side
-effects, matching the real wizard's uncancelable-first-run rule for everyone else.
-
-- **Seven real pages total, each internally cascading — four employed + three native jobless**
-  (was eight/five before Schedule and Tax Rates merged into one page, drift-app-warden §7 F161,
-  2026-08-27). `PAGES = [{Component: IntakePage}, {id: "scheduleTax", Component: ScheduleTaxPage},
-  {Component: DeductionsPage}, {Component: WrapUpPage}, {Component: JoblessBenefitsPage},
-  {Component: JoblessDetailsPage}, {Component: JoblessWrapUpPage}]`, navigated with a page-level
-  Next/Back via `StepSlide` (same slide transition the real wizard uses) — but *within* each page,
-  clauses still cascade in as plain `formData`-gated conditionals (`isEmployed && (…)`,
-  `formData.startDate && (…)`, etc.) that mount the instant their prerequisite answer is given, no
-  click required. `computeActivePages(formData, lifeEvent)` picks which subset is active:
-  first-run jobless (`lifeEvent === null && startedUnemployed === true`) gets Intake plus the
-  three jobless pages only (`[PAGES[0], joblessBenefits, joblessDetails, joblessWrapUp]`), same as
-  the real wizard's `isFirstRunJobless` gate skipping STEP_DEFS id 2/3/4/7 in favor of id 10/11/12
-  — but natively now, not via a hand-off (F141), and unaffected by the F161 merge since this path
-  never reaches Schedule/Deductions/Tax Rates at all. Everyone else gets the four employed pages
-  (Intake, Schedule+Tax, Deductions, Wrap Up), minus Wrap Up for `lost_job`/`commission_job`
-  (§19.2's gate matrix — now 3 pages for those two paths, down from 4). `JOBLESS_PAGE_IDS` factors
-  the three jobless page ids out so `computeActivePages` never repeats the literal list.
-  Back is hidden on page 1 (`pageIdx > 0`) and reappears on pages 2–4, returning to the prior page
-  with its answers intact — this Back is a real page-level navigation, distinct from undoing an
-  earlier answer within the current page (just re-picking that blank directly). The outer
-  page-count/resume machinery (`activePages`, `pageIdx`, the header's "N of M" progress display,
-  resume-at-last-page via `resumeFormData`) is written generically against `PAGES.length` — adding
-  a page requires no changes there, only a new `PAGES` entry and its `isXValid`/`Component` pair.
-- **A cascading clause gated on an `InlineNumber` field's value reveals only once that field is
-  blurred, not on every keystroke (2026-08-27, drift-app-warden §7 F162).** A partial value
-  (typing the "4" of "40") would otherwise satisfy a `> 0` check and reveal the next question
-  mid-keystroke — a real reported UX complaint. `InlineNumber` gained an `onCommit` prop (fires on
-  blur — works identically on mobile, whether Done/Next on the virtual keyboard or tapping
-  elsewhere triggers it); each page with a numeric-gated reveal calls `useCommitTracking(seedFn)`
-  (defined right after `InlineNumber`/`InlineDate`) to track which fields have been blurred at
-  least once, seeded from any already-valid value present at mount so a pre-filled/resumed field
-  never forces an artificial blur-wait. The gate becomes
-  `{committed.has("field") && (formData.field ?? 0) > 0 && (<NextClause/>)}`. `InlineSelect`/
-  `InlineDate` never needed this — both only fire `onChange` on a genuinely committed value.
-  Applied to `SchedulePage`'s `maxWeeklyHours` and `IntakePage`'s `payStructureComplete` (which
-  folds `annualSalary`/`baseRate`/`shiftHours` commit-tracking into one shared derivation gating
-  four downstream clauses, rather than repeating the check at each call site) — every other
-  `InlineNumber` field in the file was audited and found to have no downstream reveal gated on its
-  own value, so it was left as plain `formData`-only. See `docs/drift-app-warden.md` §7 F162 for
-  the full field-by-field audit.
-- **Each newly-revealed clause rolls in with a typed reveal, not an instant appear.** `TypedText`
-  runs the clause's static wording through the `adlibType` stepped `clip-path` keyframe
-  (`index.css`) — a "crisp" blocky reveal, not a smooth wipe — combined with the existing
-  `fadeSlideUp` fade+lift in the same `animation` shorthand, so the clause both rolls onto the page
-  and types itself out at once. `FadeIn` then fades the blank in at `delay = typeDuration(precedingText)`,
-  so the select/input appears right as its introducing text finishes typing. All `TypedText` within
-  the same clause use `delay=0` (they mount together the instant the clause becomes eligible, so
-  they can type in parallel — no cumulative per-segment delay bookkeeping needed).
-- **Blank by default, not prefilled from the account's existing config.** `formData` starts as
-  `{ ...config, ...BLANK_PAY_FIELDS }` — `BLANK_PAY_FIELDS` nulls every field either page asks
-  about, both the original Welcome/Pay Structure set (`startedUnemployed`, `employerPreset`,
-  `dhlSite`, `dhlTeam`, `dhlNightShift`, `nightDiffRate`, `userPaySchedule`, `annualSalary`,
-  `baseRate`, `shiftHours`, `otThreshold`, `otMultiplier`, `payPeriodEndDay`, `scheduleIsVariable`,
-  `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`, `diffRate`, `startingWeekIsLong`) and the
-  Schedule additions (`startDate`, `firstActiveIdx`, `maxWeeklyHours`, `hoursUnderstood`,
-  `biweeklyPayWeekParity`). Without this, an investor re-entering first-run whose config already
-  has some of these answered would land on a page fully pre-filled and instantly proceed-eligible —
-  silently skipping `isIntakeValid()`/`isScheduleValid()`'s required-field gating (already correct,
-  mirrors STEP_DEFS id 0/1/2) since it never had a blank state to gate from. Every `InlineSelect`
-  reselecting its blank `(select)` option must resolve to `null` (not a falsy default), or clearing
-  back to blank would misreport as a real answer — see the explicit `v === "" ? null : …` branches
-  in both pages' `onChange` handlers. Note that a DHL user's `startingWeekIsLong`/`payPeriodEndDay`
-  legitimately stop being blank partway through page 1 (Team selection seeds them via
-  `pickTeamPatch()`), which is intentional — it mirrors the real wizard's own Step1→Step2 default
-  seeding, and `SchedulePage`'s Short/Long-Week select is deliberately not gated in
-  `isScheduleValid()` for the same reason the real Step2 doesn't require it for DHL users.
-- **DHL Site (Warehouse vs Plant) mirrors the real Step1 exactly, same fields/functions.** Once DHL
-  is chosen, `IntakePage` asks "Which DHL site do you work at?" before any team question, then
-  branches: Plant keeps the original Team A/B clause unchanged (`pickTeamPatch()`); Warehouse asks
-  a Mon–Thu/Wed–Sat team blank (`pickWarehouseTeamPatch()`, options built from
-  `DHL_PRESET.warehouseTeams`) followed by a real shift-length blank (10/12 hours, writes
-  `shiftHours` directly — the only place on this page a select writes a number). The shared
-  "working the [shift], paid [schedule]" clause that follows is gated on `dhlTeamReady`, which
-  additionally requires `shiftHours` for Warehouse (Plant only needs `dhlTeam`) — mirrors
-  `isIntakeValid()`'s own gate exactly, which mirrors STEP_DEFS id 1's `!d.dhlSite`/`!d.dhlTeam`
-  checks. `SchedulePage`'s Short/Long-Week clause is hidden entirely for Warehouse (`dhlSite !==
-  "WAREHOUSE"`), matching Step2's DHL branch. Local `pickSite()` (site pick) and
-  `pickWarehouseTeamPatch()` (team pick) mirror the real wizard's own `pickSite()`/
-  `pickWarehouseTeam()` field-for-field.
-- **`IntakePage`'s trailing clauses (Tips/Commission opt-in, base-user OT Threshold, DHL Weekend
-  Differential) all share one `payStructureComplete` gate** — added 2026-08-10, mirroring the
-  point in real Step1 where the core rate/hours questions are answered and Advanced Pay Rules/OT
-  Threshold/tips opt-in become relevant. Tips/Commission (any employer) asks "On top of that, I
-  [don't earn tips or commission / earn tips / earn commission]," with a commission-only-position
-  follow-up; `tipsOrCommissionEnabledAt` stamping is handled by the shared `finalizeWizardConfig()`
-  (see below), not this page. Base-user Overtime Threshold offers 40h/48h/Custom/Exempt (DHL keeps
-  its fixed 40h/1.5× override from `setEmployer`, so this clause only renders for base users). DHL
-  Weekend Differential is now an editable `InlineNumber` pre-filled with the `DHL_PRESET` default,
-  instead of the previous hardcoded, uneditable value. None of the three gate `isIntakeValid`. See
-  `docs/drift-app-warden.md` §7 F130.
-- **`AdvancedPayRulesCard` (base users) and `DhlRotationCard` (DHL Plant only) — collapsible
-  cards below the sentence, not inline mad-libs prose** — added 2026-08-10, mirroring real
-  Step1's `AdvancedPayRules` component and its inline DHL-rotation `Field` block field-for-field,
-  reshaped into this file's card+`InlineChip` idiom (real `Pill`/`Field` have no equivalent here).
-  `AdvancedPayRulesCard` renders after the OT Threshold clause once `payStructureComplete`: OT
-  multiplier (1.5×/2×), night differential enable+rate, weekend differential. `DhlRotationCard`
-  renders after the DHL weekend-differential clause once `dhlTeamReady && isEmployerPlant`:
-  Standard-vs-Custom toggle, then long/short-week hour blanks (draft-string state, mirrors real
-  Step1's `longHoursDraft`/`shortHoursDraft`) once Custom is picked. Adding these fields exposed
-  two pre-existing gaps in `isIntakeValid` (present since before this round, just latent because
-  the fields weren't reachable yet) — now fixed: `customWeeklyHours`/`customWeeklyHoursLong`/
-  `customWeeklyHoursShort` required-when-custom checks, and the base-user custom-OT-threshold-
-  must-be-positive-once-entered check — both line-for-line mirrors of real STEP_DEFS id 1.
-  `finalizeWizardConfig()` (`wizardComplete.js`) also gained an `otMultiplier ?? 1.5` default,
-  since `BLANK_PAY_FIELDS` nulls it for base users until the card is opened (real `SetupWizard.jsx`
-  never blanks it). See `docs/drift-app-warden.md` §7 F133.
-- **`attempted`-driven required-field feedback + accessible names (2026-08-10).** `InlineSelect`/
-  `InlineNumber`/`InlineDate` gained an `error` prop (solid `--color-deduction` border +
-  `aria-invalid` + a new `RequiredNote` "↑ Required" tail) mirroring real `errBorder()`/`Field`,
-  wired via `attempted && <the same condition that page's own isXValid checks>` on every required
-  control. `InlineSelect`/`InlineNumber` also gained a contextual `ariaLabel` prop (threaded per
-  call site); `InlineChip` gained `aria-pressed`/`aria-label`. The Next/Finish button's
-  `disabled={!canProceed}` stayed unchanged — `handleNext`'s `setAttempted(true)` branch mirrors
-  `SetupWizard.jsx`'s own `handleNext` exactly, including that function's own reachability quirk
-  (a native `<button disabled>` blocks click dispatch in both wizards). See
-  `docs/drift-app-warden.md` §7 F132.
-- **`TaxRatesPage` gained the two real Step4 fallback paths (2026-08-10).** "Use Estimate for
-  Now" (`handleEstimate()`, 10%/12% federal flat + state flat/midpoint/0 via `STATE_TAX_TABLE`,
-  `taxRatesEstimated: true`) sits next to "Apply These Rates" inside the paystub reveal, always
-  available. The DHL Missouri preset button (`loadDHLPreset()`, `DHL_PRESET.defaults`' rates)
-  renders above the calculator once filing status + state are answered, same gate as real Step4
-  (`isEmployerDHL && dhlSite !== "WAREHOUSE" && !hasRates && userState === "MO"`). Both are
-  straight function copies of the real wizard's own. See `docs/drift-app-warden.md` §7 F134.
-- **`WrapUpPage` gained the real Wrap Up's Tax-Exempt Week Projections opt-in (2026-08-10).**
-  Renders below the buffer sentence: static disclosure copy + a "coming soon" placeholder once
-  `formData.taxExemptOptIn === true`, both exact copies of real `StepWrapUp`'s components
-  (nothing to ground live — the feature is a placeholder on both wizards). Doesn't gate
-  `isWrapUpValid`. See `docs/drift-app-warden.md` §7 F135.
-- **`DeductionsPage` gained Benefits Start Date, Other Recurring Deductions, Attendance Policy
-  Details, and PTO (2026-08-10) — closes out §19.1.A's last Deductions gaps.** Benefits Start
-  Date is an inline `InlineDate` clause. The other three are block-level cards below the
-  sentence (don't fit one-blank mad-libs prose): `OtherDeductionsList` (add/edit/remove row
-  list), `AttendanceDetailsCard` and `PtoDetailsCard` (collapsible, default-expanded if already
-  answered, mirrors real `DetailsDisclosure`). None gate `isDeductionsValid`. Fixed two
-  pre-existing `HISTORY_SENSITIVE_FIELDS` gaps found in the process (`attendanceUnit`/
-  `attendanceCurrentBalance`/`ptoCurrentBalance` were missing even for the real wizard). See
-  `docs/drift-app-warden.md` §7 F136.
-- **`TypedText` types per word, not per clause (2026-08-10 fix).** A clause used to render as one
-  `display:inline-block; white-space:pre` span — an atomic box that can't wrap internally, so a
-  long real clause overflowed horizontally on narrow viewports. Now chunks into per-word
-  `inline-block` spans joined by ordinary breakable spaces in a normal-flow wrapper, so the browser
-  wraps between words like plain text while each word still steps in via the same `adlibType`
-  clip-path keyframe, staggered left-to-right. `typeDuration(text)` still describes a clause's
-  total duration. `Inline*` controls gained `max-width: 100%`; `BLANK_FONT` uses
-  `clamp(18px, 4.2vw, 26px)`; `prefers-reduced-motion` is handled via `.adlib-typed-word`/
-  `.adlib-fade-in` (`index.css`). `SetupWizardAdlib.test.jsx` gained a `byText()` helper (matches
-  recursive `textContent`) since a word-chunked clause is no longer one continuous text node. See
-  `docs/drift-app-warden.md` §7 F129.
-- **Deductions page mirrors real Step3, with a new `InlineChip` control for the one multi-select
-  field.** `isDeductionsValid()` is a line-for-line mirror of `STEP_DEFS id 3`: base users must
-  answer the attendance-tracking question, DHL users have no required field at all (zero-interaction
-  valid), and any selected benefit must have its dollar amount (or, for `k401`, both rate and
-  enrollment date) filled in. A single "Right now, I have/don't have benefits…" gate reveals a row
-  of `InlineChip` toggles — one per `BENEFIT_OPTIONS` entry — since a native `<select>` blank can't
-  represent an independently-toggleable multi-select inside the sentence-flow metaphor; each
-  selected chip then reveals its own inline "`<Benefit>` costs $___ a week" (or, for the `k401`
-  type, "I put ___% into 401k, starting ___") clause directly beneath the chip row, matching
-  `BenefitCard`'s real fields exactly (`k401Rate`/`k401MatchRate` stored as decimals, displayed
-  ×100 as a whole-number percentage — same `+(rate * 100).toFixed(2)` / `/ 100` conversion as
-  `Step3`). Deselecting a chip zeroes its field(s) the same way real `Step3`'s benefit toggle does,
-  so re-selecting starts blank again rather than resurrecting a stale amount. `attendanceBucketEnabled`
-  is asked only for base users (`isBaseUser = formData.employerPreset !== "DHL"`), gated on the
-  benefits question having been answered either way (`benefitsGate !== null`) — DHL users skip it
-  entirely, mirroring `Step3`'s own `!isEmployerDHL` gate. Scoped out of this page (mirrors none of
-  `isDeductionsValid`, so omitting them can't break required-field parity): `benefitsStartDate`, the
-  dynamic `otherDeductions` list, and the attendance sub-fields (unit/thresholds/balance/increment)
-  — same "v1 scope" precedent as Warehouse's custom-hours question being left off page 1.
-  `InlineDate`'s `label` prop (added this round) lets the same component render both "Start date"
-  and "401k enrollment date" with distinct accessible names.
-- **Tax Rates page is a deliberately narrower sentence than the real Step4** — by explicit
-  instruction, not an oversight: just "I officially file `[filing status]`, living in the state of
-  `[state]`." (`filingStatus` + `userState`, the same two fields `isTaxRatesValid()` mirrors from
-  `STEP_DEFS id 4`'s `isValid` — `d.fedRateLow > 0 && d.userState != null`), with a single
-  "Recalculate Using Paystub" button as the last thing to fade in, once both selectors are answered
-  (`formData.filingStatus && formData.userState`). Real Step4's second path to a valid rate — "Use
-  Estimate for Now" — and its DHL Missouri preset button are both intentionally left off this page;
-  only the paystub path is ad-libbed. Clicking the button reveals a small paystub calculator (one
-  box for a fixed schedule, two — "Shorter"/"Longer Week Paystub" — for `scheduleIsVariable`, same
-  as real `PaystubCalc`) with its own plain labeled number inputs (`CalcField`, not sentence blanks
-  like `InlineNumber` — this is a utility calculator, not mad-libs prose) for gross pay and
-  fed/state withheld; `dr()` (withheld ÷ gross, mirrors `PaystubCalc`'s own helper exactly) derives
-  the rate live under each box, and "Apply These Rates" (shown once the first box's fed rate is
-  computable) writes `fedRateLow`/`stateRateLow`/`fedRateHigh`/`stateRateHigh`/
-  `taxRatesEstimated: false` and collapses the calculator — satisfying `isTaxRatesValid` the same
-  way the real wizard's paystub path does. State Withheld is hidden for a no-income-tax state
-  (`STATE_TAX_TABLE[userState]?.model === "NONE"`), matching real Step4/`PaystubCalc`'s `isNoTax`
-  gate.
-- **Wrap Up page has no required fields at all** — `isWrapUpValid()` mirrors `STEP_DEFS id 7`'s
-  `isValid: () => true` exactly, matching real Wrap Up's own nature as a live summary, not a form.
-  Renders the same authoritative `estimateWeeklyNet(formData)` breakdown (Gross Pay, Federal/State
-  Tax, FICA, 401(k), Benefits, Other Deduct., Net, all scaled to the pay schedule's per-check basis
-  via `PAYCHECKS_PER_YEAR`) real `StepWrapUp` shows — never a parallel approximation, per
-  `docs/active-systems.md` §6's grounding rule. Paycheck Buffer is the one interactive piece,
-  ad-libbed as an inline sentence ("I `[want/don't want]` a paycheck buffer of $`[amount]` per
-  check") writing the same `freedomAllowanceEnabled`/`freedomAllowance` fields as real Step7 (`?? true`
-  default display, matching — not writing — until touched, and the same $200 cap real `BUFFER_MAX`
-  enforces). The Tax-Exempt Week Projections opt-in gate is scoped out (v1 — it doesn't gate
-  `isValid` either, on this page or the real one, so omitting it can't break required-field
-  parity), as is the `structure_change`-only diff section (this component has no life-event re-entry
-  concept at all — it's first-run only).
-- **Native jobless mini-flow — `JoblessBenefitsPage`/`JoblessDetailsPage`/`JoblessWrapUpPage`
-  (2026-08-11, drift-app-warden §7 F141) — the last remaining hand-off path removed.** Line-for-line
-  ports of real `StepJoblessBenefits`/`StepJoblessDetails`/`StepJoblessWrapUp` (`STEP_DEFS` ids
-  10/11/12) into this file's cascading mad-libs idiom, with `isJoblessBenefitsValid`/
-  `isJoblessDetailsValid`/`isJoblessWrapUpValid` as line-for-line mirrors of those steps'
-  `isValid`. `JoblessBenefitsPage`: "I `[am/am not]` getting unemployment benefits," then — if
-  "am" — "My weekly benefit is $`[amount]` for `[N]` weeks, `[with/without]` a waiting week"
-  (weekly/duration required once "am" is chosen, waiting-week optional, defaults to `true` same
-  as the real Pill). `JoblessDetailsPage`: a required "I lost my job on `[date]`" clause plus an
-  optional "My prior rate was $`[rate]` an hour" clause computing `targetIncomeAnnual = rate * 40 *
-  52` — draft-string input, commit-only-on-parse, same as the real page's own `priorRateDraft`
-  local state. `JoblessWrapUpPage`: a read-only recap card (job loss date, unemployment benefits,
-  target income goal if set — reuses `WrapUpPage`'s own `calcBoxStyle` treatment rather than new
-  CSS) plus closing copy referencing the shared Finish Setup button; `isJoblessWrapUpValid` is
-  trivially `() => true`, same as the real page's live-summary nature. The employment-status
-  `InlineSelect` on `IntakePage` (`"Are you currently unemployed?"`) now seeds
-  `newJobSeasonMode`/`newJobSeasonDate`/`startDate`/`firstActiveIdx` the moment "unemployed" is
-  chosen — a line-for-line mirror of real `Step0`'s pill handler that this file's Intake page had
-  never actually needed until the jobless pages became reachable natively (previously these fields
-  were seeded by the real wizard's own `Step0`, which the old hand-off skipped past entirely by
-  jumping straight to id 10 — this was a latent, never-triggered gap in the ad-lib path, caught and
-  fixed while adding native completion test coverage for this round). Finish on `JoblessWrapUpPage`
-  runs through the exact same shared `finish()` → `finalizeWizardConfig()` → `onComplete()` path
-  every other last page in this file already uses — no jobless-specific branch needed, and
-  `finalizeWizardConfig()`'s `buildYear()` call already tolerates a config with no pay structure at
-  all (drift-app-warden §7 F5's standing invariant, reconfirmed here). **The `onHandoff`
-  prop/mechanism, `App.jsx`'s `adlibHandoff`/`adlibResumeData` state, and the `wizardExiting`
-  fold-lift-delay state it rode along with are all removed** — nothing calls `onHandoff` with a
-  real `initialStepId` anymore (confirmed via full-repo grep before deleting), so `SetupWizard.jsx`
-  is no longer mounted by `App.jsx` at all. `closeWizardWithAnimation()` now just calls
-  `setWizardEntry(null)` synchronously — the 180ms staged exit it used to run existed only to let
-  real `SetupWizard.jsx`'s `isExiting` prop fade the card out, and `SetupWizardAdlib` was never
-  wired to any exit-animation prop of its own, so the delay had nothing left to wait for.
-  `resumeFormData`/`onBackBeforeStart` stay as generic mid-wizard-resume machinery on both
-  components (still exercised by `SetupWizardAdlib.test.jsx`'s employed-resume case) even though no
-  current caller feeds them — a prop with no caller today, not dead code needing deletion, per the
-  same reasoning `initialStepId` gets above.
 
 ---
 
@@ -530,33 +168,18 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
 
 ### Panel naming — "Upkeep", not "Budget"
 
-The Budget panel is called **Upkeep** everywhere a user can read it. Route keys, filenames
-(`BudgetPanel.jsx`), `data-coach-ref` targets and `sessionStorage` keys all still say `budget` —
-that split is deliberate, so a future rename only touches copy. Two traps, both real:
-`navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit (the lookup lowercases the enum
-value), and **any surface that prints a view key instead of a label leaks the internal name** —
-see `VIEW_LABELS` in `App.jsx`. Grep finds neither; only a live sweep does. See
-`docs/drift-app-warden.md` §8 F178.
-
-It was briefly called "Runway", which collided with New Job Season's cash-runway metric and with
-BudgetPanel's own `inRunway` loan window (DW-25). **Screen any future panel name by grepping it
-against existing app vocabulary first** — "Runway" read fine on paper and was already taken twice.
+The Budget panel is **Upkeep** everywhere a user can read it; route keys, `BudgetPanel.jsx`,
+`data-coach-ref` targets and `sessionStorage` keys still say `budget` (deliberate — a rename touches copy
+only). Any surface that prints a view key instead of a label leaks the internal name (`VIEW_LABELS` in
+`App.jsx`); `navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit. Screen any future panel name by
+grepping it against existing vocabulary first ("Runway" was already taken twice). Warden §8 F178.
 
 ### The Claim Date (goal surface)
 
-Goals on HomePanel lead with the **date**, not the dollar target — the app-side half of
-the marketing site's reframe: every budgeting app measures in dollars-per-category,
-backward; Authority measures in dates, forward. "Claim Date" is real product language,
-not a marketing term: the card labels the date `CLAIM DATE`, the completion action reads
-`✓ CLAIM IT`, and a "Next Claim Date" hero plus a `then …` funding queue sit above the
-cards so goal priority order is visible without opening the reorder modal.
-
-**It is presentation only.** Every date traces back to `resolveGoalFinishInfo()` — the
-same authoritative ETA the cards already showed. Never compute a Claim Date from anything
-else, or the hero and the card beneath it can disagree about the same goal. See
-`docs/drift-app-warden.md` §8 F177 before touching it, including the standing warning that
-the goal card body is **duplicated verbatim** between the mobile and desktop branches and
-must be edited as a pair.
+HomePanel goals lead with the **date**, not the dollar target (`CLAIM DATE` label, `✓ CLAIM IT` action,
+"Next Claim Date" hero + `then …` queue). **Presentation only:** every date traces to
+`resolveGoalFinishInfo()` — never compute one from anything else. The goal card body is **duplicated verbatim**
+between the mobile and desktop branches; edit as a pair. Warden §8 F177.
 
 ### Numeric Input Standard
 **Never coerce on `onChange`.** Use string draft state (`field ?? ""`); only `parseFloat` at commit (blur/save). For required fields, pass `attempted` bool — show red label + border + `↑ Required` when `attempted && fieldEmpty`. Reference implementation: `Field` + `errBorder` in SetupWizard.
@@ -569,76 +192,28 @@ must be edited as a pair.
 ---
 
 ## UI Design System — Color Tokens (`src/index.css` `@theme`)
-**Never use raw hex for accent, green, or red. Always reference tokens.**
+**Never use raw hex for accent, green, or red. Always reference tokens.** Source of truth for values:
+`src/index.css` `@theme` (extracted + file:line cited in `docs/design-system-source-of-truth.md` §1).
 
-| Token | Value | Role |
-|-------|-------|------|
-| `--color-bg-base` | `#05100c` | App shell background |
-| `--color-bg-surface` | `#112c1f` | Card background |
-| `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
-| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header gradient |
-| `--color-teal` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
-| `--color-green` | `#22c55e` | Income values, positive status |
-| `--color-red` | `#ef4444` | Spend, negative, risk |
-| `--color-deduction` | `#f4a4a4` | Soft deduction rows — same H=0° hue as `--color-red`, lightness ~80%; not harsh on dark. Candidate to replace `--color-red` in low-emphasis negative contexts. |
-| `--color-warning` | `#f59e0b` | Warning / attention |
-| `--color-text-primary` | `#e6f4ef` | Body text |
-| `--color-text-secondary` | `#7fa39a` | Labels, sublabels |
-| `--color-text-disabled` | `#4a645c` | Inactive / disabled |
-| `--color-border-subtle` | `#1f3b31` | Card borders |
-| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
-| `--font-display` | `'Titillium Web'` | All headings (h1–h6), page/section titles, hero/headline text, large numeric emphasis on metric cards |
-| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips), and ALL form inputs/selects/textareas |
-| `--font-mono` | `'JetBrains Mono'` | Read-only numeric/data display only — data table cells, computed-value readouts (tabular-figure alignment). No longer used on any form field. |
+- Surfaces: `--color-bg-base` / `-surface` / `-raised` / `-gradient` · Borders: `--color-border-subtle` / `-accent`
+- Accent/CTA: `--color-teal` (= `--color-accent-primary`) · Positive/income: `--color-green` · Negative/risk: `--color-red`
+- Soft deduction rows: `--color-deduction` (same hue as red, ~80% lightness) · Attention: `--color-warning`
+- Text: `--color-text-primary` / `-secondary` / `-disabled`
+- Status: `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
+- **Pulse tokens** (`--color-signal-*`) are Phase 2, reserved for the AI insight overlay — never on Flow elements.
 
-**Typography — two-font system (adopted 2026-08-09).** Titillium Web (400/600/700/900) is the
-display/headline font; Rajdhani (400/500/600/700) is the body/interactive font. Both load via
-Google Fonts `<link>` in `index.html` (same pattern as the pre-existing JetBrains Mono load).
-Never hardcode a font-family — always reference `var(--font-display)` / `var(--font-sans)` /
-`var(--font-mono)`. **2026-08-10:** all inputs/selects/textareas (global CSS rule, shared `iS`
-style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--font-mono` to
-`--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
-readouts), never form fields.
+**Fonts — never hardcode a family; use `var(--font-display)` / `var(--font-sans)` / `var(--font-mono)`.**
+Display (Titillium Web) = headings, hero text, large numeric emphasis. Sans (Rajdhani) = everything else,
+incl. ALL buttons/tabs/chips and ALL form inputs. Mono (JetBrains Mono) = read-only data display only,
+**never a form field**. Headings: hero 900 / `0.04em` / `1.15`; secondary 800 / `0.02em` / `1.15`; not for
+numeric emphasis. Detail: `docs/design-system-source-of-truth.md` §2, warden §22.
 
-**Header weight/spacing (2026-08-10, ported from the main site).** Heavy weight + negative
-letter-spacing + tight line-height reads as cramped. Two tiers, both in `src/index.css` and
-`ui.jsx`'s `PanelHero`/`SectionHeader`: hero/primary headings are `font-weight: 900`,
-`letter-spacing: 0.04em`, `line-height: 1.15`; secondary page headers are `font-weight: 800`,
-`letter-spacing: 0.02em`, `line-height: 1.15`. Letter-spacing is em-based so it scales with
-font-size. `.heading-xl`/`.heading-lg` utility classes added to `src/index.css` for parity with
-the site (unused here — A:Fin headers are inline styles or the `PanelHero`/`SectionHeader`
-components, not a class system). Does **not** apply to numeric emphasis (MetricCard values,
-dollar totals) — those are data display, not headline text, and kept their existing styling.
-See `docs/authority-design-system`'s Typography section for the full file list touched.
+**Body-text scale.** Non-numeric text MUST use `.text-2xs` 11px · `.text-xs` 12 · `.text-sm` 13 · `.text-base` 14 ·
+`.text-md` 15 — never a raw inline `fontSize` for label/body copy. Enforced by
+`src/test/lib/textUtilityClassAudit.test.js` (exact per-file raw-literal counts; a new literal fails
+`npm run test:run`). **Never wrap the `.text-*` block in `@layer`** — they collide by name with Tailwind v4
+defaults and win only because they are unlayered; see the warning comment above that block in `src/index.css`.
 
-**Body-text size scale (2026-08-10, fully rolled out; bumped +1px again 2026-08-11).**
-Non-numeric text (labels, sublabels, descriptions, list summaries) MUST use one of
-`src/index.css`'s five `text-*` classes instead of a hardcoded inline `fontSize` — never write
-`style={{ fontSize: "12px", ... }}` for label/body copy again: `.text-2xs` 11px, `.text-xs` 12px,
-`.text-sm` 13px, `.text-base` 14px, `.text-md` 15px. The 8 shared JS style objects listed below
-were bumped the same +1px to stay in sync. Numeric emphasis (MetricCard values, dollar totals,
-computed readouts) is out of scope and
-keeps its own per-component sizing. Every file under `src/components/` + `App.jsx` is converted
-as of 2026-08-10 — the only raw literals left are `ui.jsx`'s `Card.size` (numeric, always
-exempt), 3 dynamically-scaled template-literal sizes, and 8 shared JS style objects
-(`labelStyle`/`inputStyle`/`linkStyle`, same DRY treatment as `lS` — see
-`docs/ux-animations-tasks.md`'s audit map for the exact list). **Enforced by
-`src/test/lib/textUtilityClassAudit.test.js`** — a static-analysis test asserting an exact
-allowed raw-`fontSize` count per file (0 for nearly everything); a PR that adds a new raw
-`fontSize: "9px"`–`"14px"` literal anywhere else fails `npm run test:run` immediately, naming
-the offending file. **`.text-xs`/`.text-sm`/`.text-base` collide by name with Tailwind v4's own
-default text-size utilities** (Tailwind auto-generates a matching utility for any scanned
-class name) — our rule wins on `font-size` only because it's unlayered CSS (unlayered always
-beats `@layer`-wrapped rules per the CSS Cascade Layers spec) and explicitly sets
-`line-height: normal` to avoid inheriting Tailwind's colliding line-height token. **Never wrap
-the `.text-*` block in `@layer` of any kind** — see the warning comment directly above it in
-`src/index.css` before touching that block.
-
-**Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
-
-**Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.
-
----
 
 ## Persistence — Eager Save Pattern
 **Every new Save/Confirm/Add/Delete action must call an eager save, not rely solely on the debounce.** `App.jsx` also runs a background debounced autosave (800ms after any `config`/`expenses`/`goals`/`logs`/`weekConfirmations` change) — that's fine for continuous edits (typing, live sliders), but a discrete "I'm done with this action" gesture that only relies on it can lose the change if the tab gets backgrounded/reclaimed before the debounce fires (mobile Safari does this aggressively). This caused real data loss in production (setup wizard, weekly check-ins, tax-plan toggles, goals/expenses/log entries) before every action below was audited and fixed — don't reintroduce the gap in new code.
@@ -753,109 +328,37 @@ no-destructive-migration/no-live-money rules in the protocol doc.
   **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
   handling since it calls Anthropic directly and real money is on the line.
 
-**Schema bookmarks:** `database/migrations/0NN_BOOKMARK_schema_snapshot_<date>.sql` files are
-periodic full-schema recaps, not real migrations — never assign one the actual next migration
-number in sequence expecting it to run. They exist purely so a session can read one file instead
-of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
-make them impossible to mistake for a pending migration. Latest bookmark:
-`038_BOOKMARK_schema_snapshot_2026-08-06.sql` — table/column defs for migrations through 035 were
-verified 2026-08-06 against a live Supabase schema export; 036 and 037 were added to the same file
-on 2026-08-07 per Anthony's confirmation that both had been run against production (attributed in
-the file as owner confirmation, not a fresh export reconciliation — see its header for the exact
-distinction). Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
-025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
-`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
-(beta_activity_events eligibility trigger), 032 (`changelog_entries` — the admin-managed
-"What's New" table, `api/admin-changelog.js`), 033 (`consent_records` — Terms of Service /
-Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 034
-(beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
-link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
-chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
-Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123), 039 (`base_content_items` +
-`base_checklist_completions` + `base_feedback_events` — Money Moves, the base-user counterpart
-to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route via a new
-`entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
-F125), 040 (`employer_preset` column on `beta_content_items`/`base_content_items` +
-`get_user_employer_preset(uid)` — lets admin-authored content target a single employer preset,
-e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`), 041
-(`resume_profile` storage columns — `storage_path`/`original_filename`/`mime_type`/
-`file_size_bytes` — plus the app's first Supabase Storage bucket, `resumes`, private with
-own-folder RLS; §2.E1 v2, drift-app-warden §21 F124) exist —
-**the next real migration is 047** (042–046 exist: `is_ai_admin`, AI-admin coach cap, `deletion_requested_at`, auth-FK cascades, `auth_purge_pending`). Verify against the folder before numbering;
-this note has now gone stale five times
-(drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
-again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
-parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).
-
-**✅ 036 and 037 have now been run against production** — 2026-08-06's export reconciliation for
-the 038 bookmark had found them missing live (`resume_profile` absent, `coach_chats.chat_type`
-still lacking `resume_review`, and `beta_content_items`/`beta_checklist_completions`/`beta_scores`
-all absent), but Anthony confirmed on 2026-08-07 that both have since been applied. Résumé Review
-(§18.E1) and the Beta Tester Homebase should now be functional in production. The 038 bookmark's
-table section has been extended to include both migrations' schema (reconstructed from the
-migration files, not re-verified against a fresh export — see the bookmark's own header). Next
-bookmark, if a fresh live export is pasted, should re-verify 036/037 the same way 001-035 were
-originally verified.
+**Migrations:** next real migration is **047** (042–046 exist) — always verify against
+`database/migrations/` before numbering; this note has gone stale five times. `0NN_BOOKMARK_*` files
+(latest `038_BOOKMARK_schema_snapshot_2026-08-06.sql`) are schema snapshots, **never** a pending
+migration. Per-migration history, and the 036/037 production-confirmation note:
+`database/migrations/README.md`. Serverless cap + migration pointer: `docs/active-systems.md` §27.
 
 ---
 
-## Plugin Index (claude.ai account plugins)
+## Plugins
+Account-level plugins (agent-protocols, product-management, design, pwa2play) load in every session —
+index in `docs/plugin-index.md`. Staged repo plugins: `/skill-menu`. **Rule:** a plugin skill that proposes
+a change to a Drift-Warden-mapped area still requires the drift check above before the change counts as done.
 
-These are enabled on Anthony's claude.ai account and load in every session — no per-project
-install. They **supplement** the project-specific skills above (`authority-finance-live-test`,
-`authority-finance-coach-live-test`) and the Drift App Warden mandate; they never replace either.
-Invoke skills as `/<plugin>:<skill>`. The account lists plugins by opaque ID, so the names below
-are the skill namespaces.
+**Adopting a staged or third-party skill / command / agent — MANDATORY 5-step check.** Run it whenever you
+enable one (`node scripts/plugin-toggle.mjs enable <plugin>`) or are asked to adapt one; do not enable and walk
+away. The enabled copies are plain in-repo markdown, so edit them in place (the toggle script only adds/removes
+`.disabled`; verified it never restores upstream text).
+1. **Read it for generic assumptions that clash with this file** — TS/style defaults (`function` keyword, Props
+   types, "avoid try/catch"), auto-commit/push, anything that skips the drift check or the eager-save rule.
+2. **Add the hard rules that apply** — eager-save handlers stay synchronous, keep `"use no memo"`, never inline
+   the single-source finance functions, design tokens + `.text-*` scale, 12-function `api/` cap, naming
+   conventions (see `.claude/agents/code-simplifier-code-simplifier.md` for a worked example).
+3. **Make anything that writes or runs on its own request-only** — remove "autonomous/proactive" wording; no
+   commits or pushes unless asked.
+4. **Run it once on a small, low-risk target** and check its report before trusting it near `HomePanel` /
+   `App.jsx` / anything Drift-Warden-mapped.
+5. **Commit it on its own `claude/*` branch.**
 
-### Engineering — `agent-protocols`
-SDLC protocols, spec → ship. Slash commands: `/agent-protocols:spec` · `:plan` · `:build` ·
-`:test` · `:review` · `:code-simplify` · `:ship`.
-Agents: `code-reviewer` (5-axis review), `security-auditor`, `test-engineer`,
-`accessibility-specialist`, `performance-engineer`, `release-engineer`, `spec-analyst`,
-`documentation-specialist`.
-Skills worth knowing here: `debugging-and-error-recovery`, `security-and-hardening`
-(Supabase RLS / `api/` service-role routes), `frontend-ui-engineering`,
-`performance-optimization`, `documentation-and-adrs`, `git-workflow-and-versioning`,
-`incident-response-and-postmortems`.
-
-| When | Reach for |
-|------|-----------|
-| New feature, scope unclear | `:spec` → `:plan` |
-| Pre-merge review of a PR | `:review` / `agent-protocols:code-reviewer` |
-| Touching `api/`, RLS, tier flags, Stripe | `security-auditor` + `security-and-hardening` |
-| Production regression | `debugging-and-error-recovery` |
-| Pre-release | `:ship` |
-
-### Product — `product-management`
-`write-spec` (feature specs/PRDs) · `roadmap-update` · `sprint-planning` ·
-`stakeholder-update` · `metrics-review` · `synthesize-research` · `competitive-brief` ·
-`product-brainstorming` (also `/product-management:brainstorm`).
-Feeds `docs/TODO.md` — finished specs go there as numbered § items, per existing convention.
-Note: ClickUp/Pendo connectors need authorizing in claude.ai before their tools work.
-
-### Design — `design`
-`design-critique` · `accessibility-review` (WCAG 2.1 AA) · `design-handoff` · `design-system` ·
-`ux-copy` · `user-research` · `research-synthesis`.
-**Must respect the project design system** (Color Tokens, two-font system, `.text-*` scale,
-animation rules above) — treat plugin output as suggestions, never reintroduce raw hex or
-hardcoded font sizes (`textUtilityClassAudit.test.js` will fail). Use `design-system` audits
-against `docs/authority-design-system`. Figma/Asana/Linear/Intercom connectors need
-authorizing in claude.ai.
-
-### PWA / Play Store — `pwa2play`
-`/pwa2play:package` (PWA → signed Play-ready Android bundle) · `:update` (rebuild a TWA for a
-new release) · `:check` (read target API / version code / package id from a built `.apk`) ·
-`pwa2play:pwa2play` (overview). The app is a PWA via `vite-plugin-pwa`, hosted on Vercel — run
-`:package` against the deployed URL, not the dev server. Never commit signing keystores or
-passwords.
-
-### Other plugins enabled on the account (not project-relevant by default)
-`finance` (accounting workflows — corporate close/audit, **not** personal-finance app logic),
-`data` (SQL/viz/dashboards — usable against Supabase exports), `marketing`, `sales`,
-`human-resources`, `datarobot-agent-skills`, `adaptive-agent`, `cowork-plugin-management`.
-
-**Rule:** a plugin skill that proposes a change to a Drift-Warden-mapped area still requires the
-drift check above before the change counts as done.
+Limits: plugin MCP servers and hooks are never auto-enabled by the toggle script (hand-wire + credentials);
+check `/skill-menu` readiness notes first — some plugins are flagged deferred. Re-importing a plugin from
+upstream can overwrite an adapted copy; the git diff shows it, revert it.
 
 ---
 

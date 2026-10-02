@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "legalzoom": {
+      "type": "http",
+      "url": "https://www.legalzoom.com/mcp/claude/v1",
+      "description": "LegalZoom MCP server for attorney consultations and legal services"
+    }
+  }
+}

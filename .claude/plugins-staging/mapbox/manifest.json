@@ -1,0 +1,38 @@
+{
+    "plugin":  "mapbox",
+    "sourceName":  "mapbox",
+    "version":  "1.0.0",
+    "skills":  [
+                   "mapbox-mapbox-android-patterns",
+                   "mapbox-mapbox-cartography",
+                   "mapbox-mapbox-data-visualization-patterns",
+                   "mapbox-mapbox-flutter-patterns",
+                   "mapbox-mapbox-geospatial-operations",
+                   "mapbox-mapbox-google-maps-migration",
+                   "mapbox-mapbox-ios-patterns",
+                   "mapbox-mapbox-location-grounding",
+                   "mapbox-mapbox-maplibre-migration",
+                   "mapbox-mapbox-mcp-devkit-patterns",
+                   "mapbox-mapbox-mcp-runtime-patterns",
+                   "mapbox-mapbox-navigation-patterns",
+                   "mapbox-mapbox-search-integration",
+                   "mapbox-mapbox-search-patterns",
+                   "mapbox-mapbox-store-locator-patterns",
+                   "mapbox-mapbox-style-patterns",
+                   "mapbox-mapbox-style-quality",
+                   "mapbox-mapbox-token-security",
+                   "mapbox-mapbox-web-integration-patterns",
+                   "mapbox-mapbox-web-performance-patterns"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  true,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

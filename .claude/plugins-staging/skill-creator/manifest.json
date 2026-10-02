@@ -1,0 +1,19 @@
+{
+    "plugin":  "skill-creator",
+    "sourceName":  "skill-creator",
+    "version":  "ab024cdcfa7c",
+    "skills":  [
+                   "skill-creator-skill-creator"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

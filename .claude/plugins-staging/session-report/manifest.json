@@ -1,0 +1,19 @@
+{
+    "plugin":  "session-report",
+    "sourceName":  "session-report",
+    "version":  "ab024cdcfa7c",
+    "skills":  [
+                   "session-report-session-report"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

@@ -1,0 +1,48 @@
+{
+    "plugin":  "confidence",
+    "sourceName":  "confidence",
+    "version":  "0.9.0",
+    "skills":  [
+                   "confidence-analyze-project",
+                   "confidence-explore-metric",
+                   "confidence-instrument-events",
+                   "confidence-migrate-eppo",
+                   "confidence-migrate-optimizely",
+                   "confidence-migrate-posthog",
+                   "confidence-migrate-statsig",
+                   "confidence-onboard-confidence",
+                   "confidence-onboard-confidence-dry-run",
+                   "confidence-setup-warehouse",
+                   "confidence-setup-warehouse-bigquery",
+                   "confidence-setup-warehouse-databricks",
+                   "confidence-setup-warehouse-redshift",
+                   "confidence-setup-warehouse-snowflake"
+               ],
+    "commands":  [
+                     "confidence/analyze-project.md",
+                     "confidence/explore-metric.md",
+                     "confidence/instrument-events.md",
+                     "confidence/migrate-eppo.md",
+                     "confidence/migrate-optimizely-adjust-access.md",
+                     "confidence/migrate-optimizely-adjust-code.md",
+                     "confidence/migrate-optimizely-adjust-flags.md",
+                     "confidence/migrate-optimizely-execute-access.md",
+                     "confidence/migrate-optimizely-execute-code.md",
+                     "confidence/migrate-optimizely-execute-flags.md",
+                     "confidence/migrate-optimizely-plan-access.md",
+                     "confidence/migrate-optimizely-plan-code.md",
+                     "confidence/migrate-optimizely-plan-flags.md",
+                     "confidence/migrate-optimizely.md",
+                     "confidence/migrate-posthog.md",
+                     "confidence/migrate-statsig.md",
+                     "confidence/onboard-confidence.md"
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  true,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

@@ -1,0 +1,19 @@
+{
+    "plugin":  "frontend-design",
+    "sourceName":  "frontend-design",
+    "version":  "ab024cdcfa7c",
+    "skills":  [
+                   "frontend-design-frontend-design"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

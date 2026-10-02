@@ -712,6 +712,27 @@ miscompilation invisible to the entire test suite — §12.4).
 
 ---
 
+## Shotgun Coding Protocol — vocabulary every AI model must know
+
+**"Shotgun coding"** is Anthony's named speed-scaffold protocol. When he says *"it's time to do some
+shotgun coding"*, this session builds **25% of the open Tier 1 items** in `docs/TODO.md` (rounded up,
+in the Priority Index's build order), with the AI making every design decision itself — no clarifying
+questions. **Full protocol, guardrails, and the decision journal: `docs/shotgun-coding.md` — read it
+before starting a run.**
+
+| Mark in `docs/TODO.md` | Meaning |
+|---|---|
+| `- [ ]` | Open |
+| `- [x]` | Done and human-verified |
+| `- [$]` | **Built in a shotgun run** — code + passing tests, but Anthony hasn't reviewed/tested it yet. Never flip `$`→`x` yourself. |
+
+Each run adds a timestamped entry to the journal in `docs/shotgun-coding.md`, one note per task (≤3
+lines: what was built, how it was set up, how to test it, alternatives, what it built off). Shotgun
+mode skips questions, **not** the Drift Warden check, eager-save rule, 12-function Vercel cap, or the
+no-destructive-migration/no-live-money rules in the protocol doc.
+
+---
+
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read
@@ -719,7 +740,8 @@ miscompilation invisible to the entire test suite — §12.4).
   same authoritative function the UI itself uses, e.g. `computeGoalTimeline()`,
   `getEffectiveAmountForMonth()` — never a parallel approximation) that live testing had to
   rediscover through several real bugs. Skipping it reintroduces those bugs.
-- `docs/TODO.md` — prioritized backlog (open items only)
+- `docs/TODO.md` — prioritized backlog, grouped in 4 tiers with a Priority Index (open items; closed subsections are archived to `past-TODO-tasks.md`)
+- `docs/shotgun-coding.md` — the Shotgun Coding protocol + its decision journal (see section above)
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth
 - `docs/live-testing-checklist.md` — the live-testing punch list. Say "live test the app," "run
@@ -758,7 +780,7 @@ e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tes
 (`resume_profile` storage columns — `storage_path`/`original_filename`/`mime_type`/
 `file_size_bytes` — plus the app's first Supabase Storage bucket, `resumes`, private with
 own-folder RLS; §2.E1 v2, drift-app-warden §21 F124) exist —
-**the next real migration is 042.** Verify against the folder before numbering;
+**the next real migration is 047** (042–046 exist: `is_ai_admin`, AI-admin coach cap, `deletion_requested_at`, auth-FK cascades, `auth_purge_pending`). Verify against the folder before numbering;
 this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
@@ -773,6 +795,66 @@ table section has been extended to include both migrations' schema (reconstructe
 migration files, not re-verified against a fresh export — see the bookmark's own header). Next
 bookmark, if a fresh live export is pasted, should re-verify 036/037 the same way 001-035 were
 originally verified.
+
+---
+
+## Plugin Index (claude.ai account plugins)
+
+These are enabled on Anthony's claude.ai account and load in every session — no per-project
+install. They **supplement** the project-specific skills above (`authority-finance-live-test`,
+`authority-finance-coach-live-test`) and the Drift App Warden mandate; they never replace either.
+Invoke skills as `/<plugin>:<skill>`. The account lists plugins by opaque ID, so the names below
+are the skill namespaces.
+
+### Engineering — `agent-protocols`
+SDLC protocols, spec → ship. Slash commands: `/agent-protocols:spec` · `:plan` · `:build` ·
+`:test` · `:review` · `:code-simplify` · `:ship`.
+Agents: `code-reviewer` (5-axis review), `security-auditor`, `test-engineer`,
+`accessibility-specialist`, `performance-engineer`, `release-engineer`, `spec-analyst`,
+`documentation-specialist`.
+Skills worth knowing here: `debugging-and-error-recovery`, `security-and-hardening`
+(Supabase RLS / `api/` service-role routes), `frontend-ui-engineering`,
+`performance-optimization`, `documentation-and-adrs`, `git-workflow-and-versioning`,
+`incident-response-and-postmortems`.
+
+| When | Reach for |
+|------|-----------|
+| New feature, scope unclear | `:spec` → `:plan` |
+| Pre-merge review of a PR | `:review` / `agent-protocols:code-reviewer` |
+| Touching `api/`, RLS, tier flags, Stripe | `security-auditor` + `security-and-hardening` |
+| Production regression | `debugging-and-error-recovery` |
+| Pre-release | `:ship` |
+
+### Product — `product-management`
+`write-spec` (feature specs/PRDs) · `roadmap-update` · `sprint-planning` ·
+`stakeholder-update` · `metrics-review` · `synthesize-research` · `competitive-brief` ·
+`product-brainstorming` (also `/product-management:brainstorm`).
+Feeds `docs/TODO.md` — finished specs go there as numbered § items, per existing convention.
+Note: ClickUp/Pendo connectors need authorizing in claude.ai before their tools work.
+
+### Design — `design`
+`design-critique` · `accessibility-review` (WCAG 2.1 AA) · `design-handoff` · `design-system` ·
+`ux-copy` · `user-research` · `research-synthesis`.
+**Must respect the project design system** (Color Tokens, two-font system, `.text-*` scale,
+animation rules above) — treat plugin output as suggestions, never reintroduce raw hex or
+hardcoded font sizes (`textUtilityClassAudit.test.js` will fail). Use `design-system` audits
+against `docs/authority-design-system`. Figma/Asana/Linear/Intercom connectors need
+authorizing in claude.ai.
+
+### PWA / Play Store — `pwa2play`
+`/pwa2play:package` (PWA → signed Play-ready Android bundle) · `:update` (rebuild a TWA for a
+new release) · `:check` (read target API / version code / package id from a built `.apk`) ·
+`pwa2play:pwa2play` (overview). The app is a PWA via `vite-plugin-pwa`, hosted on Vercel — run
+`:package` against the deployed URL, not the dev server. Never commit signing keystores or
+passwords.
+
+### Other plugins enabled on the account (not project-relevant by default)
+`finance` (accounting workflows — corporate close/audit, **not** personal-finance app logic),
+`data` (SQL/viz/dashboards — usable against Supabase exports), `marketing`, `sales`,
+`human-resources`, `datarobot-agent-skills`, `adaptive-agent`, `cowork-plugin-management`.
+
+**Rule:** a plugin skill that proposes a change to a Drift-Warden-mapped area still requires the
+drift check above before the change counts as done.
 
 ---
 

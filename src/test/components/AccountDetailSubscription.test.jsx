@@ -56,9 +56,14 @@ describe('AccountDetail — Subscription card status', () => {
   })
 
   it('shows "Canceled" with the access-continues date while still within the paid period', () => {
-    renderAccount({ status: 'canceled', currentPeriodEnd: '2026-09-15T00:00:00.000Z', stripeCustomerId: 'cus_1' })
+    // Relative, not a hardcoded ISO date: "still within the paid period" is the
+    // whole premise of this case, and a fixed date silently stops testing it the
+    // day it passes (this test was red for exactly that reason once already).
+    const periodEnd = new Date(Date.now() + 5 * 86400000)
+    renderAccount({ status: 'canceled', currentPeriodEnd: periodEnd.toISOString(), stripeCustomerId: 'cus_1' })
     expect(screen.getByText('Canceled')).toBeInTheDocument()
-    expect(screen.getByText(/Access continues through Sep 15, 2026/)).toBeInTheDocument()
+    const expected = periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    expect(screen.getByText(`Access continues through ${expected}.`)).toBeInTheDocument()
   })
 
   it('shows "N/A" for an account with no trial window seeded (investor/demo)', () => {

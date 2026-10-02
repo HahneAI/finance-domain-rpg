@@ -52,11 +52,27 @@ reference copies to wire up by hand if wanted.
 Skipped: **code-modernization** (7.9 MB, over the ~5 MB cap). Not requested: nvidia-skills, slack,
 project-artifact.
 
+## Readiness verdicts (staging audit, 2026-10-02)
+
+Result of a read-only audit of the three partially staged plugins. Everything else is fully staged
+(skills, commands and agents are complete; only MCP/hooks are reference-only, as for every plugin).
+
+| Plugin | Verdict | Notes |
+|--------|---------|-------|
+| figma | **Complete enough to test** | All 14 skills the plugin loads are staged (`workflow-skills/` and `skills-figquery/` are not declared by `plugin.json`). The Figma MCP server is staged only as `mcp.json.disabled` and needs OAuth, so wire it by hand. **Before enabling more than one figma skill:** its skills link to `../figma-use/` by the original folder name. Either rename those links or copy `figma-use` under its original name. |
+| vercel | **Complete enough to test** | Skills, commands and agents are self-contained. Its hooks (skill injection + telemetry) and the MCP server stay reference-only, so you test the *content*, not the plugin's runtime behavior. |
+| claude-security | **Defer** | Copying `scripts/`, `workflows/` and `hooks/` would not be enough. (1) Its files use `${CLAUDE_PLUGIN_ROOT}`, which as far as we know is only defined for installed plugins, not project-level `.claude/skills` (unverified). (2) Its orchestrator names tools `Workflow(claude-security:scan)` and `Agent(claude-security:scan-researcher, …)`; the staged agents are named `scan-researcher` etc. without the namespace, so those references would not resolve. (3) Its own description says to run it as the main agent with `claude --agent claude-security:claude-security`. For now use the built-in `/security-review` skill. Revisit only if a real install is needed. |
+
+Suggested test order: fully staged, no-credential plugins first (`frontend-design`, `code-simplifier`,
+`skill-creator`, `plugin-dev`, `session-report`), then `vercel` and `figma`, then the MCP/credential
+plugins. Leave `claude-security` last.
+
 ## Caveats
 
 1. **Only skills/commands/agents are staged — not each plugin's other files.** Plugins whose skills call
    scripts or workflows at the plugin root will not fully work from here. Known case: `claude-security`
-   (its `workflows/`, `scripts/` and `hooks.py|sh` are not staged; its `hooks.json.disabled` references them).
+   (its `workflows/`, `scripts/` and `hooks.py|sh` are not staged; its `hooks.json.disabled` references them) — see
+   *Readiness verdicts*: deferred.
    `vercel`'s hooks reference ~40 `.mjs` files that are not staged. `data`'s hooks reference
    `skills/*/scripts/…`, which *are* staged inside the skill folders but under renamed paths.
 2. **Partial skill sets** where `plugin.json` declares no extra roots: `figma` stages `skills/` only (14 of its 30
@@ -70,8 +86,7 @@ project-artifact.
    namespace in some sessions. Enabling a staged copy adds a second, project-level copy.
    `plugin-toggle.mjs enable` only warns about collisions with project-level (`.claude/skills`) and user-level
    (`~/.claude/skills`) skills, not plugin-namespaced ones.
-5. **`npm run lint`:** `eslint .` has no ignore for `.claude/`, and ~11 `.js`/`.jsx` fixture files live inside
-   staged skills (mostly `confidence-*` test-fixtures). Add `.claude/**` to `globalIgnores` in
-   `eslint.config.js` if lint starts failing on them.
+5. **`npm run lint`:** `.claude/**` is now in `globalIgnores` in `eslint.config.js`, so the ~24 staged `.js`/`.jsx`/`.mjs`
+   files (mostly `confidence-*` test fixtures) don't count toward lint. (Without it lint went from 5 to 61 problems.)
 6. **Long folder names:** `<plugin>-<skill>` is used literally, so Twilio/Stripe/Mapbox folders repeat the
    plugin name (e.g. `twilio-developer-kit-twilio-…`). Longest staged path is ~133 characters.

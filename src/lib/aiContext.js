@@ -2,7 +2,7 @@ import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, comput
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
-import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome, isNjsBillActive } from "./newJobSeasonRunway.js";
 
 // Pairs a fiscal week index with its real calendar date — full month name,
 // never abbreviated — and the period number in the unit this account's pay
@@ -125,7 +125,7 @@ export function buildCoachContext({
   const activeGoals = goals.filter((g) => !g.completed);
   const totalActiveGoalsTarget = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   const totalGoalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
-  const activeExpenses = expenses.filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
+  const activeExpenses = expenses.filter(isNjsBillActive);
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const weeksLeft = weekNumber != null ? Math.max(TOTAL_FISCAL_WEEKS - weekNumber, 0) : null;
   const mostRecentLog = logs.length

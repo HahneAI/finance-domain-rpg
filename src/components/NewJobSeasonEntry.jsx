@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
-import { resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix } from "../lib/expense.js";
+import { resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix, getNextDueDate, normalizeCycle, resolveCurrentWeekOfMonth, applyCadenceCorrection } from "../lib/expense.js";
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount, resolveNextWeekdayOnOrAfter } from "../lib/newJobSeasonRunway.js";
-import { toLocalIso } from "../lib/finance.js";
+import { toLocalIso, isExpenseRemoved } from "../lib/finance.js";
 
 // Canonical day ordering — matches WeekConfirmModal/LogPanel's DayPicker so
 // day-name strings stay consistent app-wide. DOW = JS Date.getDay() value.
@@ -73,8 +73,12 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * App.jsx merges configPatch into config and, when present, replaces
  * expenses with updatedExpenses.
  */
-export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], config = null }) {
+export function NewJobSeasonEntry({ open, onClose, onActivate, expenses: allExpenses = [], config = null }) {
   const today = new Date().toISOString().slice(0, 10);
+  // Deleted bills are zeroed-forward, not removed from the array (TODO §24) —
+  // never offer them for tracking. `allExpenses` is kept for confirm() so
+  // they pass through to the saved array untouched.
+  const expenses = allExpenses.filter(e => !isExpenseRemoved(e, today));
   const [date, setDate] = useState(today);
   // Mandatory — the runway calc's seed cash figure. "" = unanswered (blocks
   // Next); any finite number >= 0, including 0, is a valid answer.
@@ -100,6 +104,11 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
   // "what day do you usually shop" pick instead. JS getDay() value (0-6) or
   // null before answered.
   const [foodShoppingDow, setFoodShoppingDow] = useState(null);
+  // TODO §26 step 4 — ids of bills the user says they already paid this week.
+  const [paidIds, setPaidIds] = useState(() => new Set());
+  // TODO §23 — per-bill cadence override: { [expId]: { cycle: "weekly"|"biweekly", amount: "500", dow: 0-6|null } }.
+  // Absent = keep the bill as entered and use the DueDatePicker.
+  const [cadenceChoices, setCadenceChoices] = useState({});
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
@@ -117,6 +126,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     setTrackedIds(new Set(expenses.map(e => e.id)));
     setDueDateChoices({});
     setFoodShoppingDow(null);
+    setPaidIds(new Set());
+    setCadenceChoices({});
     setAttempted(false);
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -165,6 +176,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     // Food special case (TODO §1) — answered via foodShoppingDow, not the
     // generic DueDatePicker choices map.
     if (e.isFoodPrimary) return foodShoppingDow !== null;
+    const cad = cadenceChoices[e.id];
+    if (cad) return (parseFloat(cad.amount) || 0) > 0 && cad.dow != null;
     const v = dueDateChoices[e.id];
     return v?.mode === "custom" ? !!v.date : v?.mode === "week" ? !!v.week : false;
   });
@@ -188,15 +201,8 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
     unemploymentWaitingWeek: hasUnemployment ? waitingWeek : false,
   });
 
-  const confirm = () => {
-    if (!hasExpenses) {
-      if (!step0Valid || !pendingCheckValid) return;
-      onActivate(buildConfigPatch());
-      onClose();
-      return;
-    }
-    if (!dueDatesValid) { setAttempted(true); return; }
-    const updatedExpenses = expenses.map(exp => {
+  const buildUpdatedExpenses = () => allExpenses.map(exp => {
+      if (isExpenseRemoved(exp, today)) return exp;
       if (!trackedIds.has(exp.id)) return { ...exp, trackDuringNewJobSeason: false };
       if (exp.type === "loan") {
         // Attach the loan's own known payment date rather than asking again.
@@ -210,6 +216,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         // the cycle change, getNextDueDate would still advance the anchor by
         // the old every30days cycle and the bill would look "due" only once
         // a month again, the exact framing this flow exists to fix.
+        if (foodShoppingDow == null) return { ...exp, trackDuringNewJobSeason: true }; // step-4 preview before step 3 is answered
         const anchor = toLocalIso(resolveNextWeekdayOnOrAfter(foodShoppingDow, today));
         return {
           ...exp,
@@ -218,9 +225,70 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
           billingMeta: { ...exp.billingMeta, cycle: "weekly" },
         };
       }
+      const cad = cadenceChoices[exp.id];
+      if (cad) {
+        // TODO §23: permanent weekly/biweekly correction + first-payment weekday as the anchor.
+        const cadAnchor = resolveNextWeekdayOnOrAfter(cad.dow, today);
+        if (cadAnchor && (parseFloat(cad.amount) || 0) > 0) {
+          const corrected = applyCadenceCorrection(exp, {
+            cycle: cad.cycle, amount: parseFloat(cad.amount), fromMonthKey: today.slice(0, 7), effectiveFrom: today,
+          });
+          return { ...corrected, trackDuringNewJobSeason: true, dueDateAnchor: toLocalIso(cadAnchor) };
+        }
+      }
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
       return { ...exp, trackDuringNewJobSeason: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
     });
+
+  // ── TODO §26 step 4: "Already paid this week?" ───────────────────────────
+  // Bills whose next due date (from the activation date, using the anchors
+  // picked in step 3) lands within 7 days — an explicit window, not
+  // Upcoming Bills' 35-day horizon.
+  const getPaidStepCandidates = () => {
+    const ref = new Date(`${date}T12:00:00`);
+    return buildUpdatedExpenses()
+      .filter(e => trackedIds.has(e.id) && !isExpenseRemoved(e, today))
+      .map(e => {
+        const due = getNextDueDate(e, ref);
+        if (!due) return null;
+        const days = Math.ceil((due - ref) / 86400000);
+        return days >= 0 && days <= 6 ? { exp: e, dueIso: toLocalIso(due), days } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.days - b.days);
+  };
+  // Shown only when it's the 4th week of the month OR a kept bill recurs weekly
+  // (Food flips to weekly in step 3) — and only if something is actually due.
+  const hasWeeklyBill = keptPickableExpenses.some(e => e.isFoodPrimary || (cadenceChoices[e.id]?.cycle ?? normalizeCycle(e.billingMeta?.cycle)) === "weekly");
+  const paidStepWanted = resolveCurrentWeekOfMonth(date) === "week4" || hasWeeklyBill;
+  const paidCandidates = (paidStepWanted && hasExpenses) ? getPaidStepCandidates() : [];
+  const showPaidStep = paidCandidates.length > 0;
+  const togglePaid = (id) => setPaidIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // Checked bills get the SAME "paid" state §25's button writes. Shared answer
+  // to the cash question: Step 0's balance is assumed to already reflect a bill
+  // the user says they paid, so cash is NOT reduced — and the occurrence is
+  // flagged so the decay never subtracts it when its date is crossed.
+  const applyPaidThisWeek = (list) => {
+    if (!showPaidStep || paidIds.size === 0) return list;
+    const dueById = new Map(paidCandidates.map(c => [c.exp.id, c.dueIso]));
+    return list.map(e => (paidIds.has(e.id) && dueById.has(e.id))
+      ? { ...e, newJobSeasonStatus: "paid", newJobSeasonPaidDueDate: dueById.get(e.id), newJobSeasonPaidSkipDecay: true }
+      : e);
+  };
+
+  const confirm = () => {
+    if (!hasExpenses) {
+      if (!step0Valid || !pendingCheckValid) return;
+      onActivate(buildConfigPatch());
+      onClose();
+      return;
+    }
+    if (!dueDatesValid) { setAttempted(true); return; }
+    const updatedExpenses = applyPaidThisWeek(buildUpdatedExpenses());
     onActivate(buildConfigPatch(), updatedExpenses);
     onClose();
   };
@@ -240,16 +308,18 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       return;
     }
     if (step === 2) {
-      if (keptPickableExpenses.length === 0) { confirm(); return; }
+      if (keptPickableExpenses.length === 0) { if (showPaidStep) setStep(4); else confirm(); return; }
       setStep(3);
       return;
     }
+    if (step === 3 && showPaidStep) { setStep(4); return; }
     confirm();
   };
 
   const nextLabel = step === 0 ? "Next"
     : step === 1 ? (hasExpenses ? "Next" : "Activate")
-    : step === 2 ? (keptPickableExpenses.length > 0 ? "Next" : "Activate")
+    : step === 2 ? ((keptPickableExpenses.length > 0 || showPaidStep) ? "Next" : "Activate")
+    : step === 3 ? (showPaidStep ? "Next" : "Activate")
     : "Activate";
   const nextDisabled = step === 0 ? !step0Valid : step === 1 ? !pendingCheckValid : step === 3 ? !dueDatesValid : false;
   // A native `disabled` button never dispatches onClick at all, so a click on
@@ -299,13 +369,14 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div className="text-2xs" style={{ letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
-            Life Event{hasExpenses ? ` · Step ${step + 1} of ${keptPickableExpenses.length > 0 ? 4 : 3}` : ""}
+            Life Event{hasExpenses ? ` · Step ${step + 1} of ${2 + (keptPickableExpenses.length > 0 ? 1 : 0) + 1 + (showPaidStep ? 1 : 0)}` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
             {step === 0 && "Start Your New Job Season"}
             {step === 1 && "Any paycheck still coming?"}
             {step === 2 && "Which bills do you want to track?"}
             {step === 3 && "When are these due?"}
+            {step === 4 && "Already paid this week?"}
           </div>
         </div>
 
@@ -680,14 +751,113 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
                         )}
                       </>
                     ) : (
-                      <DueDatePicker
-                        value={dueDateChoices[exp.id] ?? null}
-                        onChange={(v) => setDueDateChoices(prev => ({ ...prev, [exp.id]: v }))}
-                        attempted={attempted}
-                      />
+                      <>
+                        {/* TODO §23 — Weekly/Biweekly override only (not a full cycle editor). */}
+                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                          {[{ v: null, label: "Monthly / as entered" }, { v: "weekly", label: "Weekly" }, { v: "biweekly", label: "Biweekly" }].map(opt => {
+                            const active = (cadenceChoices[exp.id]?.cycle ?? null) === opt.v
+                            return (
+                              <Pressable key={opt.label} aria-label={`${exp.label ?? "Bill"} cadence ${opt.label}`}
+                                onClick={() => setCadenceChoices(prev => {
+                                  const next = { ...prev }
+                                  if (opt.v == null) delete next[exp.id]
+                                  else next[exp.id] = { cycle: opt.v, amount: prev[exp.id]?.amount ?? "", dow: prev[exp.id]?.dow ?? null }
+                                  return next
+                                })}
+                                className="text-xs" style={{
+                                  padding: "6px 10px", borderRadius: "6px", letterSpacing: "1px",
+                                  textTransform: "uppercase", cursor: "pointer", fontWeight: active ? "bold" : "normal",
+                                  border: `1px solid ${active ? "rgba(0,200,150,0.5)" : "var(--color-border-subtle)"}`,
+                                  background: active ? "rgba(0,200,150,0.13)" : "var(--color-bg-surface)",
+                                  color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
+                                }}>
+                                {opt.label}
+                              </Pressable>
+                            )
+                          })}
+                        </div>
+                        {cadenceChoices[exp.id] ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <div className="text-xs" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                              This corrects the bill itself (also in your normal Budget, from this month on).
+                            </div>
+                            <input
+                              type="number" min="0" step="0.01" inputMode="decimal"
+                              aria-label={`${exp.label ?? "Bill"} amount per payment`}
+                              placeholder={`$ per ${cadenceChoices[exp.id].cycle === "weekly" ? "week" : "2 weeks"}`}
+                              value={cadenceChoices[exp.id].amount}
+                              onChange={(e) => setCadenceChoices(prev => ({ ...prev, [exp.id]: { ...prev[exp.id], amount: e.target.value } }))}
+                              style={inputStyle}
+                            />
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {DAY_NAMES.map(day => {
+                                const dow = DAY_TO_DOW[day]
+                                const active = cadenceChoices[exp.id].dow === dow
+                                return (
+                                  <Pressable key={day} aria-label={`${exp.label ?? "Bill"} paid ${day}`}
+                                    onClick={() => setCadenceChoices(prev => ({ ...prev, [exp.id]: { ...prev[exp.id], dow } }))}
+                                    className="text-xs" style={{
+                                      padding: "6px 10px", borderRadius: "6px", letterSpacing: "1px",
+                                      textTransform: "uppercase", cursor: "pointer", fontWeight: active ? "bold" : "normal",
+                                      border: `1px solid ${active ? "rgba(0,200,150,0.5)" : "var(--color-border-subtle)"}`,
+                                      background: active ? "rgba(0,200,150,0.13)" : "var(--color-bg-surface)",
+                                      color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
+                                    }}>
+                                    {day}
+                                  </Pressable>
+                                )
+                              })}
+                            </div>
+                            {attempted && !((parseFloat(cadenceChoices[exp.id].amount) || 0) > 0 && cadenceChoices[exp.id].dow != null) && (
+                              <div className="text-xs" style={{ color: "var(--color-deduction)" }}>↑ Enter the amount and which day it's paid</div>
+                            )}
+                          </div>
+                        ) : (
+                          <DueDatePicker
+                            value={dueDateChoices[exp.id] ?? null}
+                            onChange={(v) => setDueDateChoices(prev => ({ ...prev, [exp.id]: v }))}
+                            attempted={attempted}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                 ))}
+              </div>
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <p className="text-base" style={{ margin: 0, lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+                These are due in the next 7 days. Check any you've already paid — they'll show
+                as paid in Upcoming Bills, and your cash on hand is assumed to already reflect them.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {paidCandidates.map(({ exp, dueIso }) => {
+                  const checked = paidIds.has(exp.id);
+                  const amount = getExpenseDisplayAmount(exp);
+                  return (
+                    <label key={exp.id} style={{
+                      display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px",
+                      background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)",
+                      borderRadius: "10px", cursor: "pointer", opacity: checked ? 0.7 : 1,
+                    }}>
+                      <input
+                        type="checkbox" checked={checked} onChange={() => togglePaid(exp.id)}
+                        aria-label={`Already paid ${exp.label ?? "bill"}`}
+                        style={{ accentColor: "var(--color-accent-primary)", width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
+                      />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="text-base" style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</div>
+                        <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                          Due {new Date(`${dueIso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {amount > 0 ? ` · $${Number(amount).toLocaleString()}/${getExpenseDisplaySuffix(exp)}` : ""}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </>
           )}
@@ -700,7 +870,7 @@ export function NewJobSeasonEntry({ open, onClose, onActivate, expenses = [], co
         }}>
           {step > 0 && (
             <Pressable
-              onClick={() => setStep(s => s - 1)}
+              onClick={() => setStep(s => (s === 4 && keptPickableExpenses.length === 0 ? 2 : s - 1))}
               className="text-xs" style={{
                 background: "var(--color-bg-raised)",
                 color: "var(--color-text-secondary)",

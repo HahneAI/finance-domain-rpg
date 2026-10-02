@@ -1,4 +1,4 @@
-import { getExactEffectiveAmountForMonth, getPhaseIndex, loanWeeklyAmount, toLocalIso } from "./finance.js";
+import { getExactEffectiveAmountForMonth, getPhaseIndex, isExpenseRemoved, loanWeeklyAmount, toLocalIso } from "./finance.js";
 import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 
 // TODO §1 mode rebuild — New Job Season Home and Budget are now two separate
@@ -104,17 +104,35 @@ export function estimatePendingCheckAmount(workedDaysCount, cfg) {
 // (weeklyBurn's essentialActive, lifestyleWeeklySpend's lifestyleActive, and
 // now this) before being pulled out here; a future change to what counts as
 // "essential" only needs to happen once.
-function isTrackedActiveEssential(exp) {
-  const status = exp.newJobSeasonStatus ?? "active";
-  const flexible = exp.category === "Lifestyle";
-  const tracked = exp.trackDuringNewJobSeason !== false;
-  return status === "active" && !flexible && tracked;
+// "paid" (TODO §25) is a display/ordering state on a bill that is still live —
+// it keeps counting toward burn, projections and Coach context, unlike
+// "paused"/"cancelled". Every consumer that used to test `status === "active"`
+// goes through this instead.
+export function isNjsBillActive(exp) {
+  const status = exp?.newJobSeasonStatus ?? "active";
+  return status === "active" || status === "paid";
 }
-function isTrackedActiveLifestyle(exp) {
-  const status = exp.newJobSeasonStatus ?? "active";
+
+// A paid bill returns to normal once the due date it was paid for is behind us
+// (TODO §25 auto-reset). Derived, never written back — no cleanup pass needed.
+export function isPaidForCurrentCycle(exp, todayIso) {
+  if (exp?.newJobSeasonStatus !== "paid") return false;
+  const paidFor = exp.newJobSeasonPaidDueDate;
+  return !paidFor || !todayIso || todayIso <= paidFor;
+}
+
+// todayIso (TODO §24): deleted expenses are zeroed-forward, not removed from
+// the array, so "tracked + active" alone still matched them. Reference date is
+// the runway's own "today" — a bill deleted at any point before it is gone.
+function isTrackedActiveEssential(exp, todayIso) {
   const flexible = exp.category === "Lifestyle";
   const tracked = exp.trackDuringNewJobSeason !== false;
-  return status === "active" && flexible && tracked;
+  return isNjsBillActive(exp) && !flexible && tracked && !isExpenseRemoved(exp, todayIso);
+}
+function isTrackedActiveLifestyle(exp, todayIso) {
+  const flexible = exp.category === "Lifestyle";
+  const tracked = exp.trackDuringNewJobSeason !== false;
+  return isNjsBillActive(exp) && flexible && tracked && !isExpenseRemoved(exp, todayIso);
 }
 
 // getExactEffectiveAmountForMonth reads expense.history/monthlyOverrides — a
@@ -149,7 +167,7 @@ export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateIncl
   const through = new Date(throughDateInclusiveIso + "T12:00:00");
   let total = 0;
   for (const exp of expenses ?? []) {
-    if (!isTrackedActiveEssential(exp)) continue;
+    if (!isTrackedActiveEssential(exp, throughDateInclusiveIso)) continue;
     const amount = getExpenseDisplayAmount(exp);
     if (amount <= 0) continue;
     const cursor = new Date(fromDateExclusiveIso + "T12:00:00");
@@ -158,7 +176,13 @@ export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateIncl
     for (let i = 0; i < 366; i++) {
       const due = getNextDueDate(exp, cursor);
       if (!due || due > through) break;
-      total += amount;
+      // TODO §25/§26: an occurrence marked paid whose cash was already taken
+      // out of (or never owed from) the cash-on-hand figure must not be
+      // subtracted again when its due date is crossed.
+      const dueIso = toLocalIso(due);
+      const skip = exp.newJobSeasonStatus === "paid" && exp.newJobSeasonPaidSkipDecay === true
+        && exp.newJobSeasonPaidDueDate === dueIso;
+      if (!skip) total += amount;
       cursor.setTime(due.getTime());
       cursor.setDate(cursor.getDate() + 1);
     }
@@ -190,7 +214,7 @@ export function computeNewJobSeasonRunway({ config, expenses, effectiveToday, ex
   // stay untouched for normal-mode Budget, just not part of this math.
   // Lifestyle rows still drag on burn when active, but are excluded here so
   // the runway focuses on survival spend.
-  const essentialActive = (expenses ?? []).filter(isTrackedActiveEssential);
+  const essentialActive = (expenses ?? []).filter(exp => isTrackedActiveEssential(exp, effectiveToday));
   const weeklyBurn = essentialActive.reduce(
     (sum, exp) => sum + weeklyAmountForBurn(exp, todayDate, phaseIdx),
     0,
@@ -201,7 +225,7 @@ export function computeNewJobSeasonRunway({ config, expenses, effectiveToday, ex
   // survival spend"), but a user who keeps them checked is still actually
   // paying for them — surfaced separately so the runway UI can caption it
   // instead of letting the headline number silently omit real spend.
-  const lifestyleActive = (expenses ?? []).filter(isTrackedActiveLifestyle);
+  const lifestyleActive = (expenses ?? []).filter(exp => isTrackedActiveLifestyle(exp, effectiveToday));
   const lifestyleWeeklySpend = lifestyleActive.reduce(
     (sum, exp) => sum + weeklyAmountForBurn(exp, todayDate, phaseIdx),
     0,
@@ -312,4 +336,36 @@ export function resolvePrimaryRunwayDays(dash, config, includeBenefits = true) {
   const hasBenefits = Boolean(config?.unemploymentEnabled) && dash.projectedUnemploymentTotal > 0;
   const primary = (hasBenefits && includeBenefits) ? dash.withBenefits : dash.withoutBenefits;
   return Number.isFinite(primary.days) ? primary.days : null;
+}
+
+/**
+ * "Mark as Paid" (TODO §25) — pure planner so the panel stays thin and the cash
+ * rules are testable. `dueIso` is the occurrence being paid (always on/after
+ * today, from getNextDueDate). If that occurrence was already subtracted by the
+ * timeline decay (cashAsOf < dueIso <= today) cash is left alone; otherwise the
+ * amount comes off *effective* cash and the decay clock is rebased to today by
+ * the caller (same `saveCashOnHand` path), and the occurrence is flagged so the
+ * decay skips it when its date is crossed — one subtraction, ever.
+ */
+export function planMarkBillPaid({ expense, dueIso, effectiveToday, cashAsOf, effectiveCashOnHand }) {
+  const amount = getExpenseDisplayAmount(expense);
+  const alreadyCounted = Boolean(cashAsOf) && dueIso > cashAsOf && dueIso <= effectiveToday;
+  const subtract = !alreadyCounted && amount > 0;
+  return {
+    expensePatch: {
+      newJobSeasonStatus: "paid",
+      newJobSeasonPaidDueDate: dueIso,
+      newJobSeasonPaidSkipDecay: subtract,
+    },
+    nextCashOnHand: subtract ? Math.max(0, effectiveCashOnHand - amount) : null,
+  };
+}
+
+/** Reverse of planMarkBillPaid — credits cash back only if mark-paid took it out. */
+export function planUnmarkBillPaid({ expense, effectiveCashOnHand }) {
+  const amount = getExpenseDisplayAmount(expense);
+  return {
+    expensePatch: { newJobSeasonStatus: "active", newJobSeasonPaidDueDate: null, newJobSeasonPaidSkipDecay: false },
+    nextCashOnHand: expense?.newJobSeasonPaidSkipDecay === true ? effectiveCashOnHand + amount : null,
+  };
 }

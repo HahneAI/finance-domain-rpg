@@ -47,6 +47,7 @@ import {
   weekNumToPaycheckNum,
 } from "./fiscalWeek.js";
 import { getNextDueDate, getExpenseDisplayAmount, getExpenseDisplaySuffix, normalizeCycle } from "./expense.js";
+import { isNjsBillActive } from "./newJobSeasonRunway.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 
 // ── Tool schemas ────────────────────────────────────────────────────────
@@ -409,7 +410,7 @@ function toolGetExpenseDetail({ label }, data) {
   const needle = String(label ?? "").trim().toLowerCase();
   if (!needle) return { error: "A label is required." };
 
-  const active = expenses.filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
+  const active = expenses.filter(isNjsBillActive);
   const exp = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
     ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
   if (!exp) {
@@ -603,7 +604,7 @@ function toolListLogEntries({ type = null, limit = 10 }, data) {
 function toolSimulateExpenseChange({ label, newWeeklyCost }, data) {
   const needle = String(label ?? "").trim().toLowerCase();
   const expenses = data.expenses ?? [];
-  const active = expenses.filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
+  const active = expenses.filter(isNjsBillActive);
   const target = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
     ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
   if (!target) {
@@ -837,7 +838,7 @@ function toolNavigateTo({ panel, focus }, data) {
         focusNote = `There is no goal ${rank} — the panel will open without highlighting anything.`;
       }
     } else {
-      const active = (data.expenses ?? []).filter((e) => (e.newJobSeasonStatus ?? "active") === "active");
+      const active = (data.expenses ?? []).filter(isNjsBillActive);
       const needle = raw.toLowerCase();
       const hit = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
         ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));

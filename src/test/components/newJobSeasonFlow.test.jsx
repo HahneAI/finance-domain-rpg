@@ -413,7 +413,11 @@ describe('NewJobSeasonEntry', () => {
     expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Shop Wed' }))
-    expect(screen.getByRole('button', { name: 'Activate' })).not.toBeDisabled()
+    // Food is now a weekly bill with a due date inside 7 days, so TODO §26's
+    // "Already paid this week?" step follows before Activate.
+    expect(screen.getByRole('button', { name: 'Next' })).not.toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Already paid this week?')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
 
     const [, updatedExpenses] = onActivate.mock.calls[0]

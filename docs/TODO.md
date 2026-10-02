@@ -8,11 +8,11 @@
 
 | Tier | § | Item | Open | Done |
 |---|---|---|---|---|
-| 1 | 24 | BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills + runway math) | 4 | 0 |
-| 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 5 | 0 |
-| 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 6 | 0 |
-| 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 5 | 0 |
-| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 9 | 0 |
+| 1 | 24 | BUG — Deleted/inactive expenses leak into New Job Season (Upcoming Bills + runway math) | 0 | 4 $ |
+| 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 0 | 5 $ |
+| 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
+| 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 0 | 5 $ |
+| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 6 | 3 $ |
 | 1 | 22 | Weekly Cash Check-In — Second Home Hero Feature | 10 | 0 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
@@ -82,35 +82,35 @@ that path already handles deleted expenses correctly via its own phase-awareness
 the same gap; don't assume it's clean just because it looks more sophisticated than
 `sumBillsDueSince`.)
 
-- [ ] **Fix, reusing the existing check rather than inventing a new one:** extract
+- [$] **Fix, reusing the existing check rather than inventing a new one:** extract
   `BudgetPanel.jsx`'s `getNextNonZeroIso`/`isRemovedThisPhase` logic into a shared exported helper
   (`lib/expense.js`, alongside `getEffectiveAmountForMonth`) so `NewJobSeasonBudgetPanel.jsx` and
   `newJobSeasonRunway.js` can both filter on the exact same "is this expense actually still active"
   definition BudgetPanel already uses — not a second, independently-written version of the same
   check (the same anti-drift lesson as F150/the coachFeatureGuide.js Budget→Upkeep leftover from
-  earlier this branch).
-- [ ] **Decide the reference date explicitly — don't default to "today" without confirming.** The
+  earlier this branch). *(shotgun 2026-10-01)*
+- [$] **Decide the reference date explicitly — don't default to "today" without confirming.** The
   user's own description points at the New Job Season **activation date**
   (`config.newJobSeasonDate`), not necessarily "today" — for an account activating retroactively,
   a bill deleted between the activation date and today is a different case from one deleted before
   activation. Resolve which date(s) actually matter before implementing; may need to check
   "removed as of activation" for the initial tracked-expense set and "removed as of today" for the
-  ongoing Upcoming Bills list, rather than assuming one date answers both.
-- [ ] **Fix both call sites in the same change** — `NewJobSeasonBudgetPanel.jsx`'s
+  ongoing Upcoming Bills list, rather than assuming one date answers both. *(shotgun 2026-10-01)*
+- [$] **Fix both call sites in the same change** — `NewJobSeasonBudgetPanel.jsx`'s
   `trackedExpenses`/`upcomingBills` (the visible list bug) and `newJobSeasonRunway.js`'s
   `sumBillsDueSince`/`isTrackedActiveEssential`/`isTrackedActiveLifestyle` (the real cash-math bug)
   — fixing only the visible list would leave the more serious, invisible dollar-figure bug in
-  place.
-- [ ] **Test coverage:** a deleted-but-formerly-tracked expense fixture, asserted absent from
+  place. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** a deleted-but-formerly-tracked expense fixture, asserted absent from
   `upcomingBills` AND absent from `sumBillsDueSince`'s total — the second assertion is the one that
-  actually catches the money bug, don't stop at a UI-only test.
+  actually catches the money bug, don't stop at a UI-only test. *(shotgun 2026-10-01)*
 
-**Status: planning only — bug confirmed and root-caused by reading the code; no fix written yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 
 ## 25. New Job Season — "Mark as Paid" button on tracked bills *(new — scoped 2026-09-30,
-PRIORITY, not yet built, no code written)*
+PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review)*
 
 *Requested alongside §26 below — the two share one underlying concept (a bill's "already handled"
 state) and should be designed together, not as two independent features that happen to look
@@ -127,9 +127,9 @@ from `upcomingBills`; the user's ask is different — a paid bill should **stay 
 Upcoming Bills list, just sorted to the bottom**, so the user can still see it was handled instead
 of it vanishing.
 
-- [ ] **Add a `"paid"` `newJobSeasonStatus` value**, set via a new "Mark as Paid" button on each
-  bill card in the Upcoming Bills UI (alongside wherever the existing pause/status controls live).
-- [ ] **Subtract the bill's amount from cash on hand on mark-as-paid** — call the existing
+- [$] **Add a `"paid"` `newJobSeasonStatus` value**, set via a new "Mark as Paid" button on each
+  bill card in the Upcoming Bills UI (alongside wherever the existing pause/status controls live). *(shotgun 2026-10-01)*
+- [$] **Subtract the bill's amount from cash on hand on mark-as-paid** — call the existing
   `saveCashOnHand()` path (`NewJobSeasonBudgetPanel.jsx:75-79`, already writes
   `config.newJobSeasonCashOnHand` + `newJobSeasonCashOnHandAsOf`) with `currentCashOnHand -
   billAmount`, not a new parallel cash-write path. **Open question to resolve before building:**
@@ -137,29 +137,29 @@ of it vanishing.
   math (§24 above) — i.e., does marking a bill paid effectively re-confirm cash as of today for
   that bill, so it isn't double-subtracted later when its due date is crossed? If not handled,
   marking a bill paid today plus that bill's own due date being crossed later could subtract its
-  amount from cash on hand twice. Decide this explicitly, don't ship it unresolved.
-- [ ] **Keep `"paid"` bills visible but reorder to the bottom of the Upcoming Bills list** — this
+  amount from cash on hand twice. Decide this explicitly, don't ship it unresolved. *(shotgun 2026-10-01)*
+- [$] **Keep `"paid"` bills visible but reorder to the bottom of the Upcoming Bills list** — this
   needs `upcomingBills` (line 109-127) to stop hard-excluding non-`"active"` status and instead
   include `"paid"` bills with a sort key that always loses to every `"active"` bill, regardless of
   due date. **Do not reuse `sortedExpenses`'s existing sort (lines 129-137) as-is** — that function
   sorts a different list (the full tracked-expense editor, not the Upcoming Bills countdown card
   list) for a different purpose (needs-coverage/essential priority); paid-bills-to-the-bottom is a
-  new, distinct sort rule specific to the Upcoming Bills display.
-- [ ] **Decide whether "paid" resets automatically on the bill's next cycle** — a weekly bill
+  new, distinct sort rule specific to the Upcoming Bills display. *(shotgun 2026-10-01)*
+- [$] **Decide whether "paid" resets automatically on the bill's next cycle** — a weekly bill
   marked paid this week should presumably return to `"active"` once its next due date arrives
   (otherwise a recurring bill marked paid once would silently vanish to the bottom forever). Needs
   a real rule (e.g., compare `newJobSeasonStatus`-set timestamp against the bill's current
-  `getNextDueDate()`), not left implicit.
-- [ ] **Test coverage:** mark-as-paid subtracts the right amount from cash on hand once; a paid
+  `getNextDueDate()`), not left implicit. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** mark-as-paid subtracts the right amount from cash on hand once; a paid
   bill still renders in Upcoming Bills but sorts after every active bill; a paid weekly bill
-  returns to active once its next occurrence comes due (once the auto-reset rule above is decided).
+  returns to active once its next occurrence comes due (once the auto-reset rule above is decided). *(shotgun 2026-10-01)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 
 ## 26. New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step
-*(new — scoped 2026-09-30, PRIORITY, not yet built, no code written — depends on §25's `"paid"`
+*(new — scoped 2026-09-30, PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review — depended on §25's `"paid"`
 status existing)*
 
 *Requested alongside §25 — this step's whole job is to let a user mark bills as already-paid
@@ -177,42 +177,42 @@ bucket is it in) — this needs one small new helper built on the same four cuto
 independently-invented "what week is it" scheme that could disagree with the picker's own
 buckets.
 
-- [ ] **New helper, e.g. `resolveCurrentWeekOfMonth(referenceIso)`** (`lib/expense.js`, next to
+- [$] **New helper, e.g. `resolveCurrentWeekOfMonth(referenceIso)`** (`lib/expense.js`, next to
   `WEEK_OF_MONTH_OPTIONS`) — given today's (or the activation) date, return which of the four
   existing week buckets it falls in, reusing the same day cutoffs `resolveWeekOfMonthAnchor`
-  already uses so the two directions can never disagree with each other.
-- [ ] **New Step 4 in `NewJobSeasonEntry.jsx`, after the existing Step 3 (due-date/cadence, see
+  already uses so the two directions can never disagree with each other. *(shotgun 2026-10-01)*
+- [$] **New Step 4 in `NewJobSeasonEntry.jsx`, after the existing Step 3 (due-date/cadence, see
   §23)** — shown only when at least one of two conditions holds: **(a)** the new helper above says
   today is the 4th week of the month, or **(b)** at least one bill in the Step 2/3 review was
   entered or confirmed with a weekly cadence (ties directly to §23's new weekly/biweekly cadence
   control — a weekly bill recurs often enough that "did I already pay this one" is a live question
   regardless of what week of the month it is). Skipped entirely otherwise, same "don't show a step
-  that has nothing to ask" pattern Steps 2-3 already follow when there are no expenses to review.
-- [ ] **What the step actually asks:** list the bills due "this week" (needs its own explicit
+  that has nothing to ask" pattern Steps 2-3 already follow when there are no expenses to review. *(shotgun 2026-10-01)*
+- [$] **What the step actually asks:** list the bills due "this week" (needs its own explicit
   definition — likely: next due date, as of the activation date, falls within the next 7 days —
   decide and document this rather than reusing `upcomingBills`'s 35-day horizon unmodified) and let
-  the user check off any that are already paid.
-- [ ] **On Activate, checked bills get the SAME `"paid"` status §25 defines** — written directly
+  the user check off any that are already paid. *(shotgun 2026-10-01)*
+- [$] **On Activate, checked bills get the SAME `"paid"` status §25 defines** — written directly
   into `updatedExpenses` before `onActivate(configPatch, updatedExpenses)` fires, so a bill checked
   off during setup lands in the Upcoming Bills list already sorted to the bottom on first render,
   with no separate post-activation step required to reach the same state §25's button produces
-  later.
-- [ ] **Open question, same shape as one already flagged in §25:** if a bill is checked as
+  later. *(shotgun 2026-10-01)*
+- [$] **Open question, same shape as one already flagged in §25:** if a bill is checked as
   already-paid during this step, should its amount also be subtracted from the
   `newJobSeasonCashOnHand` the user entered in Step 0 — or is the Step 0 cash-on-hand figure
   assumed to already reflect having paid it? This needs one consistent answer shared with §25's
   identical open question, not two independently-decided answers for what's conceptually the same
-  action.
-- [ ] **Test coverage:** the step appears when today resolves to week 4; the step appears when a
+  action. *(shotgun 2026-10-01)*
+- [$] **Test coverage:** the step appears when today resolves to week 4; the step appears when a
   weekly-cadence bill was set in Step 3, even outside week 4; the step is skipped when neither
-  condition holds; checked bills land with `"paid"` status in the resulting `updatedExpenses`.
+  condition holds; checked bills land with `"paid"` status in the resulting `updatedExpenses`. *(shotgun 2026-10-01)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in a Shotgun Coding run (`[$]` = awaiting Anthony's review/test) — see the run entry in `docs/shotgun-coding.md`.**
 
 ---
 
 ## 23. New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence *(new — scoped 2026-09-30,
-PRIORITY, not yet built, no code written)*
+PRIORITY — BUILT 2026-10-01 via Shotgun Coding, `[$]` awaiting review)*
 
 *Seeded 2026-09-30, on explicit request, with a concrete real-world example: child support paid
 literally $500/week — a genuine Needs-category recurring obligation whose cadence is not
@@ -239,13 +239,13 @@ Upcoming Bills/runway treat it as a real recurring weekly cost instead of an inh
 days" approximation. **This section is asking to generalize that same pattern into a real,
 user-facing control for every tracked bill, not just Food.**
 
-- [ ] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
+- [$] **Add a cadence choice to Step 3, alongside the existing due-date picker, for every
   still-tracked non-loan, non-Food bill** (loans already carry their own real due date via
   `loanMeta.firstPaymentDate`; Food already gets its own weekly resolution) — let the user mark a
   bill as "pay $X weekly" or "pay $X biweekly," writing the choice to `billingMeta.cycle` (reusing
   the exact same `EXPENSE_CYCLE_OPTIONS` values Food's special case already writes) plus the
-  confirmed per-payment amount.
-- [ ] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
+  confirmed per-payment amount. *(shotgun 2026-10-01 #2)*
+- [$] **Open scope question — how much of `EXPENSE_CYCLE_OPTIONS` to expose here:** the user
   specifically asked for weekly/biweekly, and those are also the two cadences that most
   commonly get mis-entered as a monthly approximation when a bill was first added (a
   once-a-month-equivalent guess is usually "close enough" for Every 30 days/Yearly bills, but
@@ -253,8 +253,8 @@ user-facing control for every tracked bill, not just Food.**
   see the child support example, where "every30days" would misstate a real $500/week obligation).
   Likely answer: this step only needs to offer Weekly/Biweekly as an override, not a full
   four-option cycle editor — decide before building, don't default to building the bigger control
-  just because the values already exist.
-- [ ] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
+  just because the values already exist. *(shotgun 2026-10-01 #2)*
+- [$] **Real design tension worth flagging explicitly, not glossing over:** this is NOT the same
   shape as the other two fields already added at this step. `trackDuringNewJobSeason` and
   `dueDateAnchor` are both additive/New-Job-Season-scoped — normal-mode Budget ignores the former
   entirely and the latter never existed before, so neither changes anything about how a bill
@@ -265,23 +265,23 @@ user-facing control for every tracked bill, not just Food.**
   payment cadence isn't a New-Job-Season-only fact, it's just a fact that was never captured
   correctly), a permanent correction is almost certainly the right call — same as Food already
   does — but confirm this explicitly before building, since it's a bigger behavioral change than
-  the other two Step 3 fields and worth being deliberate about rather than inheriting by default.
-- [ ] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
+  the other two Step 3 fields and worth being deliberate about rather than inheriting by default. *(shotgun 2026-10-01 #2)*
+- [$] **Reuse the existing `DueDatePicker`-adjacent UI pattern, don't invent a new one** — this
   step already renders one control per tracked bill; the cadence choice should sit next to (or
   replace, for Weekly/Biweekly bills specifically) the due-date picker for that same bill, not as
-  a separate pass over the list.
-- [ ] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
+  a separate pass over the list. *(shotgun 2026-10-01 #2)*
+- [$] **Test coverage to extend, not duplicate:** `newJobSeasonFlow.test.jsx` already covers the
   full checklist → due-date → activate walkthrough end to end — a cadence-override case belongs
   in that same file, asserting the resulting expense's `billingMeta.cycle` and amount, the same
-  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`.
+  way the existing tests assert `trackDuringNewJobSeason`/`dueDateAnchor`. *(shotgun 2026-10-01 #2)*
 
-**Status: planning only — no code, no schema changes, no component work done yet.**
+**Status: BUILT 2026-10-01 in Shotgun run #2 (`[$]` = awaiting review) — see `docs/shotgun-coding.md`.**
 
 ---
 
 ## 20. Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts
 
-*Seeded 2026-08-24, not yet started. Grew out of a live-testing session that traced exactly what
+*Seeded 2026-08-24, §A + §B1 built 2026-10-01 in Shotgun run #2 (`[$]`, awaiting review); §B2–D still open. Grew out of a live-testing session that traced exactly what
 "Left This Week" computes today (`HomePanel.jsx`/`BudgetPanel.jsx`, `finalizedWeekNet −
 avgWeeklySpend`) — see `docs/drift-app-warden.md` §8 F16 and §10 F150. That figure blends a real
 single-week income number with an **averaged** spend number (`computeRemainingSpend()`'s
@@ -295,23 +295,23 @@ alongside it once the data exists to compute one, not replacing what's there.
 
 ### A. Optional per-expense due date field
 
-- [ ] **Add an optional `dueDate`-shaped field to the expense schema** (exact shape TBD at
+- [$] **Add an optional `dueDate`-shaped field to the expense schema** (exact shape TBD at
   implementation time — a fixed day-of-month for recurring bills is probably closer to how bills
   actually work than a single ISO date, but decide against `expense.js`'s existing
   `billingMeta`/`history`/`monthlyOverrides` shape rather than bolting on a fourth, disconnected
   field). **Must be optional** — consistent with the app's existing "most things like this are
   optional" posture (mirrors Freedom Allowance, benefits enrollment, tips/commission opt-in, all
   of which default to off/unset rather than forcing an answer). No existing expense should require
-  a migration or a forced prompt to keep working exactly as it does today.
-- [ ] **Where it's entered** — likely the expense edit sheet (`BudgetPanel.jsx`'s per-expense
+  a migration or a forced prompt to keep working exactly as it does today. *(shotgun 2026-10-01 #2)*
+- [$] **Where it's entered** — likely the expense edit sheet (`BudgetPanel.jsx`'s per-expense
   sheet, same place `SAVE SCOPE` lives today), as a clearly-optional field a user can skip.
   Decide whether it's asked anywhere in Setup Wizard/`SetupWizardAdlib.jsx` at all, or left purely
   as a Budget-panel-only enhancement — leaning toward the latter given the optional framing (no
-  need to add a wizard step for something users can ignore entirely).
+  need to add a wizard step for something users can ignore entirely). *(shotgun 2026-10-01 #2)*
 
 ### B. A real "this week's actual" figure, once due dates exist
 
-- [ ] **Decide the partial-coverage rule** — because due dates are optional, most accounts will
+- [$] **Decide the partial-coverage rule** — because due dates are optional, most accounts will
   have *some* expenses with a due date and some without, for a long time (possibly forever). Decide
   how the "actual this week" figure handles that: options include (a) only ever compute/show it
   once every currently-active expense has a due date (strict, but may never trigger for most
@@ -319,7 +319,7 @@ alongside it once the data exists to compute one, not replacing what's there.
   everything else" (a hybrid — needs its own careful math writeup so it doesn't quietly become a
   third parallel formula alongside `leftThisWeek`/`avgWeeklySpend`), or (c) something else. This is
   the central design decision the rest of §B depends on — do not start building against an assumed
-  answer.
+  answer. *(shotgun 2026-10-01 #2)*
 - [ ] **Surface both figures together** — once B's math is decided, show the existing averaged
   "Left This Week" alongside the new actual-this-week figure (same card, a secondary line, a toggle
   — exact layout TBD), not as a replacement. The averaged figure remains the default/primary

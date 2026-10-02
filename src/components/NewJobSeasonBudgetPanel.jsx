@@ -4,7 +4,8 @@ import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
 import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount, getExpenseDisplaySuffix } from "../lib/expense.js";
-import { computeNewJobSeasonRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
+import { isExpenseRemoved, toLocalIso } from "../lib/finance.js";
+import { computeNewJobSeasonRunway, firstUnemploymentPaymentDate, sumJobHuntIncome, isNjsBillActive, isPaidForCurrentCycle, planMarkBillPaid, planUnmarkBillPaid } from "../lib/newJobSeasonRunway.js";
 
 const STATUS_OPTIONS = [
   { v: "active",    label: "Active",    color: "var(--color-green)" },
@@ -81,9 +82,13 @@ export function NewJobSeasonBudgetPanel({
   // Only expenses the user chose to track during New Job Season (TODO §1
   // expense review step) show up anywhere on this panel — untracked ones
   // stay untouched for normal-mode Budget, just invisible here.
+  // Deleted bills (zeroed-forward, still in the array — TODO §24) are dropped
+  // here so they reach neither the Upcoming Bills list nor the triage editor.
   const trackedExpenses = useMemo(
-    () => (expenses ?? []).filter(exp => exp.trackDuringNewJobSeason !== false),
-    [expenses],
+    () => (expenses ?? []).filter(exp => (
+      exp.trackDuringNewJobSeason !== false && !isExpenseRemoved(exp, effectiveToday)
+    )),
+    [expenses, effectiveToday],
   );
 
   const todayDate = useMemo(
@@ -99,7 +104,7 @@ export function NewJobSeasonBudgetPanel({
     const ids = new Set();
     if (!firstPaymentDate || !todayDate) return ids;
     trackedExpenses.forEach(exp => {
-      if ((exp.newJobSeasonStatus ?? "active") !== "active") return;
+      if ((exp.newJobSeasonStatus ?? "active") !== "active") return; // paid bills don't need coverage
       const due = getNextDueDate(exp, todayDate);
       if (due && due < firstPaymentDate) ids.add(exp.id);
     });
@@ -110,21 +115,24 @@ export function NewJobSeasonBudgetPanel({
     if (!todayDate) return [];
     const horizonDays = 35;
     return trackedExpenses
-      .filter(exp => (exp.newJobSeasonStatus ?? "active") === "active")
+      .filter(isNjsBillActive)
       .map(exp => {
         const nextDue = getNextDueDate(exp, todayDate);
         if (!nextDue) return null;
         const days = Math.ceil((nextDue - todayDate) / 86400000);
         if (days > horizonDays) return null;
+        // "Paid" stays visible but sinks to the bottom (TODO §25); a stale
+        // paid flag (its due date already passed) reads as a normal bill.
+        const paid = isPaidForCurrentCycle(exp, effectiveToday);
         return {
           id: exp.id, label: exp.label ?? "Untitled", amount: getExpenseDisplayAmount(exp),
-          dueDate: nextDue, daysUntil: Math.max(0, days),
-          needsCoverage: firstPaymentDate ? nextDue < firstPaymentDate : false,
+          dueDate: nextDue, dueIso: toLocalIso(nextDue), daysUntil: Math.max(0, days), paid,
+          needsCoverage: !paid && firstPaymentDate ? nextDue < firstPaymentDate : false,
         };
       })
       .filter(Boolean)
-      .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [trackedExpenses, firstPaymentDate, todayDate]);
+      .sort((a, b) => (a.paid === b.paid ? a.daysUntil - b.daysUntil : a.paid ? 1 : -1));
+  }, [trackedExpenses, firstPaymentDate, todayDate, effectiveToday]);
 
   const sortedExpenses = useMemo(() => {
     return [...trackedExpenses].sort((a, b) => {
@@ -137,15 +145,36 @@ export function NewJobSeasonBudgetPanel({
   }, [trackedExpenses, needsCoverageIds]);
 
   const flexibleActiveCount = trackedExpenses.filter(exp => (
-    isFlexibleCategory(exp.category) && (exp.newJobSeasonStatus ?? "active") === "active"
+    isFlexibleCategory(exp.category) && isNjsBillActive(exp)
   )).length;
 
+  // "Mark as Paid" (TODO §25): flips the bill's status AND takes its amount out
+  // of cash on hand through the same saveCashOnHand path (never a parallel cash
+  // write). Both writes are eager and computed up front — see planMarkBillPaid
+  // for the double-subtraction rules.
+  const markPaid = (bill) => {
+    const exp = (expenses ?? []).find(e => e.id === bill.id);
+    if (!exp || !dash) return;
+    const plan = planMarkBillPaid({
+      expense: exp, dueIso: bill.dueIso, effectiveToday,
+      cashAsOf: dash.cashAsOf, effectiveCashOnHand: dash.effectiveCashOnHand,
+    });
+    if (plan.nextCashOnHand != null) saveCashOnHand(plan.nextCashOnHand);
+    applyExpenseUpdate(prev => prev.map(e => e.id === bill.id ? { ...e, ...plan.expensePatch } : e));
+  };
+  const unmarkPaid = (bill) => {
+    const exp = (expenses ?? []).find(e => e.id === bill.id);
+    if (!exp || !dash) return;
+    const plan = planUnmarkBillPaid({ expense: exp, effectiveCashOnHand: dash.effectiveCashOnHand });
+    if (plan.nextCashOnHand != null) saveCashOnHand(plan.nextCashOnHand);
+    applyExpenseUpdate(prev => prev.map(e => e.id === bill.id ? { ...e, ...plan.expensePatch } : e));
+  };
   const setStatus = (id, status) => applyExpenseUpdate(prev => prev.map(e => e.id === id ? { ...e, newJobSeasonStatus: status } : e));
   const toggleAutoReactivate = (id) => applyExpenseUpdate(prev => prev.map(e => (
     e.id === id ? { ...e, autoReactivateOnIncome: !(e.autoReactivateOnIncome ?? true) } : e
   )));
   const pauseAllFlexible = () => applyExpenseUpdate(prev => prev.map(e => (
-    isFlexibleCategory(e.category) && (e.newJobSeasonStatus ?? "active") === "active" ? { ...e, newJobSeasonStatus: "paused" } : e
+    isFlexibleCategory(e.category) && isNjsBillActive(e) ? { ...e, newJobSeasonStatus: "paused" } : e
   )));
   const removeExpense = (id) => applyExpenseUpdate(prev => prev.filter(e => e.id !== id));
 
@@ -275,7 +304,8 @@ export function NewJobSeasonBudgetPanel({
               return (
                 <div key={bill.id} style={{
                   display: "flex", alignItems: "center", gap: "12px", padding: "10px 12px",
-                  background: "var(--color-bg-raised)", border: `1px solid ${tierColor}`, borderRadius: "10px",
+                  background: "var(--color-bg-raised)", border: `1px solid ${bill.paid ? "var(--color-border-subtle)" : tierColor}`, borderRadius: "10px",
+                  opacity: bill.paid ? 0.6 : 1,
                 }}>
                   <div style={{ flex: "0 0 auto", minWidth: "48px", textAlign: "center", color: tierColor }}>
                     <div style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>{bill.daysUntil}</div>
@@ -288,8 +318,26 @@ export function NewJobSeasonBudgetPanel({
                       {bill.needsCoverage && <span style={{ color: "var(--color-deduction)", fontWeight: 700 }}> · Needs Coverage</span>}
                     </div>
                   </div>
-                  <div className="text-md" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    ${Math.round(bill.amount).toLocaleString()}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+                    <div className="text-md" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-primary)", textDecoration: bill.paid ? "line-through" : "none" }}>
+                      ${Math.round(bill.amount).toLocaleString()}
+                    </div>
+                    {!readOnly && (
+                      <Pressable
+                        onClick={() => (bill.paid ? unmarkPaid(bill) : markPaid(bill))}
+                        aria-label={bill.paid ? `Undo paid for ${bill.label}` : `Mark ${bill.label} as paid`}
+                        className="text-2xs"
+                        style={{
+                          padding: "4px 10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700,
+                          background: bill.paid ? "var(--color-bg-surface)" : "rgba(0,200,150,0.10)",
+                          color: bill.paid ? "var(--color-text-secondary)" : "var(--color-teal)",
+                          border: `1px solid ${bill.paid ? "var(--color-border-subtle)" : "rgba(0,200,150,0.32)"}`,
+                          borderRadius: "8px", cursor: "pointer",
+                        }}
+                      >
+                        {bill.paid ? "✓ Paid · Undo" : "Mark Paid"}
+                      </Pressable>
+                    )}
                   </div>
                 </div>
               );
@@ -425,7 +473,7 @@ export function NewJobSeasonBudgetPanel({
                 {!readOnly && (
                   <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
                     {STATUS_OPTIONS.map(opt => {
-                      const active = status === opt.v;
+                      const active = (status === "paid" ? "active" : status) === opt.v;
                       return (
                         <Pressable
                           key={opt.v}
@@ -446,7 +494,7 @@ export function NewJobSeasonBudgetPanel({
                   </div>
                 )}
 
-                {!readOnly && status !== "active" && (
+                {!readOnly && status !== "active" && status !== "paid" && (
                   <label className="text-xs" style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
                     <input
                       type="checkbox" checked={autoReactivate} onChange={() => toggleAutoReactivate(exp.id)}

@@ -12,7 +12,7 @@
 | 1 | 25 | New Job Season — "Mark as Paid" button on tracked bills | 0 | 5 $ |
 | 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
 | 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 0 | 5 $ |
-| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 6 | 3 $ |
+| 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 0 | 9 $ |
 | 1 | 22 | Weekly Cash Check-In — Second Home Hero Feature | 10 | 0 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
@@ -281,7 +281,7 @@ user-facing control for every tracked bill, not just Food.**
 
 ## 20. Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts
 
-*Seeded 2026-08-24, §A + §B1 built 2026-10-01 in Shotgun run #2 (`[$]`, awaiting review); §B2–D still open. Grew out of a live-testing session that traced exactly what
+*Seeded 2026-08-24, **ALL built** via Shotgun runs #2 (§A, §B1, 2026-10-01) and #3 (§B2–D, 2026-10-02) — `[$]`, awaiting review. Grew out of a live-testing session that traced exactly what
 "Left This Week" computes today (`HomePanel.jsx`/`BudgetPanel.jsx`, `finalizedWeekNet −
 avgWeeklySpend`) — see `docs/drift-app-warden.md` §8 F16 and §10 F150. That figure blends a real
 single-week income number with an **averaged** spend number (`computeRemainingSpend()`'s
@@ -320,39 +320,39 @@ alongside it once the data exists to compute one, not replacing what's there.
   third parallel formula alongside `leftThisWeek`/`avgWeeklySpend`), or (c) something else. This is
   the central design decision the rest of §B depends on — do not start building against an assumed
   answer. *(shotgun 2026-10-01 #2)*
-- [ ] **Surface both figures together** — once B's math is decided, show the existing averaged
+- [$] **Surface both figures together** — once B's math is decided, show the existing averaged
   "Left This Week" alongside the new actual-this-week figure (same card, a secondary line, a toggle
   — exact layout TBD), not as a replacement. The averaged figure remains the default/primary
-  number Home leads with.
-- [ ] **Feed the real math functions, not a new parallel one** — whatever resolves "is this expense
+  number Home leads with. *(shotgun 2026-10-02 #3)*
+- [$] **Feed the real math functions, not a new parallel one** — whatever resolves "is this expense
   due this week" must live in `finance.js`/`expense.js` alongside `computeRemainingSpend`/
   `getEffectiveAmountForMonth`, not as Home/Budget-panel-local logic — both panels need the same
-  answer (see F150 — don't add a *third* place this kind of figure gets independently derived).
-- [ ] **F150 cleanup rides along** — while touching this math, also resolve F150 (BudgetPanel
+  answer (see F150 — don't add a *third* place this kind of figure gets independently derived). *(shotgun 2026-10-02 #3)*
+- [$] **F150 cleanup rides along** — while touching this math, also resolve F150 (BudgetPanel
   independently re-deriving `avgWeeklySpend`/`leftThisWeek` instead of reading `App.jsx`'s already-
   computed value) so the new actual-this-week figure has one source of truth from the start instead
-  of inheriting the existing duplication.
+  of inheriting the existing duplication. *(shotgun 2026-10-02 #3)*
 
 ### C. "Due today" pop-up
 
-- [ ] **Small notification/pop-up surfacing bills due today** — only meaningful once at least one
+- [$] **Small notification/pop-up surfacing bills due today** — only meaningful once at least one
   expense has a due date set (§A). Decide trigger conditions (app open, a specific time of day,
   once per day max) and where it renders (a dismissible card similar to existing Home banners, not
   a native push notification for v1 — PWA push is a separate, larger scope question if wanted
-  later).
-- [ ] **Decide what counts as "due today"** — a single due-date expense is straightforward; a
+  later). *(shotgun 2026-10-02 #3)*
+- [$] **Decide what counts as "due today"** — a single due-date expense is straightforward; a
   recurring monthly bill's "due today" needs the same day-of-month → real-calendar-date resolution
   the rest of the expense system already does via `getEffectiveAmountForMonth`/`getPhaseIndex` —
-  reuse that resolution path, don't hand-roll a new date match.
+  reuse that resolution path, don't hand-roll a new date match. *(shotgun 2026-10-02 #3)*
 
 ### D. Stretch — external calendar sync
 
-- [ ] **Long-scope, not gated on A–C landing first but doesn't make sense before they do**: sync
+- [$] **Long-scope, not gated on A–C landing first but doesn't make sense before they do**: sync
   due-dated bills to the user's phone/Apple/Google calendar (likely one-way, app → calendar, via
   each platform's calendar API/`.ics` export — exact mechanism TBD). Treat as its own future
   brainstorm-and-scope pass, not something to design in this section — flagged here so the due-date
   field (§A) is built with an eye toward "this needs to export cleanly later" rather than a shape
-  that would need reworking to support it.
+  that would need reworking to support it. *(shotgun 2026-10-02 #3)*
 
 ---
 

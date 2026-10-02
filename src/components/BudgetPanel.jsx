@@ -12,6 +12,7 @@ import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
 import { BulkEditPage } from "./BulkEditPage.jsx";
 import { ExpenseDueDateField } from "./ExpenseDueDateField.jsx";
+import { buildBillsIcs, downloadBillsIcs } from "../lib/billsIcs.js";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -77,7 +78,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, thisWeekActualSpend = null, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -398,6 +399,8 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     return keys;
   }, [expenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+  // TODO §20.B2: same second figure Home shows — computed once in App.jsx, read here (F150).
+  const actualLeftThisWeek = thisWeekActualSpend != null ? finalizedWeekNet - thisWeekActualSpend : null;
 
   // When viewing a future quarter or month, surface the projected first-check surplus
   // for that period instead of the current-week baseline.
@@ -1320,6 +1323,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           />
         ) : (
           <Card label={`Left ${thisCheckLabel}`} labelTooltip="A strategic average" exactMark val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+            sub={actualLeftThisWeek != null ? `With this week's bills: ${f2(actualLeftThisWeek * perCheckFactor)}` : undefined}
             insight={weeklyIncome > 0 ? (() => {
               const nextCheck = futureWeekNets?.[0] ?? null;
               const lastCheck = prevWeekNet ?? weeklyIncome;
@@ -1776,6 +1780,25 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
           Bulk Edit — {displayMonthFull}
         </Pressable>
       )}
+      {/* TODO §20.D (shotgun run #3): one-way export of due-dated bills to a phone/Apple/Google calendar. */}
+      {(() => {
+        const { ics, count } = buildBillsIcs(expenses, TODAY_ISO);
+        if (!count) return null;
+        return (
+          <Pressable
+            onClick={() => downloadBillsIcs(ics)}
+            aria-label="Add due dates to calendar"
+            className="text-xs" style={{
+              background: "transparent", color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)", borderRadius: "6px",
+              padding: "10px", width: "100%", marginTop: "8px",
+              letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+            }}
+          >
+            Add {count} due date{count === 1 ? "" : "s"} to calendar (.ics)
+          </Pressable>
+        );
+      })()}
     </div>}
 
     {/* BREAKDOWN — cashflow summary at top, then annual projection table */}

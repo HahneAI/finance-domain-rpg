@@ -1002,6 +1002,41 @@ export function resolveBudgetHealthMonthBoundary({
   return { monthKey, dayOfMonth, crossedMonth, shouldReevaluate };
 }
 
+// The amount one payment of this expense costs: a loan's payment, else the month's
+// override amount, else the bill's entered amount (per-cycle, NOT a weekly share).
+// Shared by computeThisWeekActualSpend and getBillsDueOn so "what a due bill costs"
+// has one definition.
+export function resolvePerPaymentAmount(exp, monthKey) {
+  if (exp?.type === "loan") return exp.loanMeta?.paymentAmount ?? 0;
+  const ov = exp?.monthlyOverrides?.[monthKey];
+  return ov?.amount ?? exp?.billingMeta?.amount ?? 0;
+}
+
+// ── "Due today" (TODO §20.C, shotgun run #3) ──────────────────────────────────
+// DECIDED definition of "due on a date": an expense that has a real due date (a
+// `dueDateAnchor`, or a loan's payment date), is not deleted as of that date, is
+// not marked paid for exactly that occurrence (New Job Season "Mark as Paid"), and
+// whose next due date on/after the day lands on it. Reuses getNextDueDate's cycle
+// math — no new date matching. Pass already-projectable expenses (paused/cancelled
+// New Job Season bills filtered out) so the caller owns that policy once.
+export function getBillsDueOn(expenses, isoDate) {
+  if (!isoDate) return [];
+  const dayStart = new Date(`${isoDate}T00:00:00`);
+  const monthKey = isoDate.slice(0, 7);
+  const out = [];
+  for (const exp of expenses ?? []) {
+    if (exp.type !== "loan" && !exp.dueDateAnchor) continue;
+    if (isExpenseRemoved(exp, isoDate)) continue;
+    const due = getNextDueDate(exp, dayStart);
+    if (!due || toLocalIso(due) !== isoDate) continue;
+    if (exp.newJobSeasonStatus === "paid" && exp.newJobSeasonPaidDueDate === isoDate) continue;
+    const amount = resolvePerPaymentAmount(exp, monthKey);
+    if (!(amount > 0)) continue;
+    out.push({ id: exp.id, label: exp.label ?? "Untitled", amount, isLoan: exp.type === "loan" });
+  }
+  return out.sort((a, b) => b.amount - a.amount);
+}
+
 // ── "This week's actual" spend — TODO §20.B1 (shotgun 2026-10-01) ─────────────
 // PARTIAL-COVERAGE RULE (decided): hybrid. A bill with a due date contributes
 // what really falls due inside [weekStartIso, weekEndIso] (its per-payment
@@ -1024,14 +1059,7 @@ export function computeThisWeekActualSpend(expenses, weekStartIso, weekEndIso) {
     const weeklyAvg = getExactEffectiveAmountForMonth(exp, monthKey, phaseIdx);
     if (!(weeklyAvg > 0)) continue; // not an active cost this month
     const isLoan = exp.type === "loan";
-    let perPayment = 0;
-    if (isLoan) {
-      perPayment = exp.loanMeta?.paymentAmount ?? 0;
-    } else {
-      const ov = exp.monthlyOverrides?.[monthKey];
-      perPayment = ov?.amount ?? exp.billingMeta?.amount ?? 0;
-
-    }
+    const perPayment = resolvePerPaymentAmount(exp, monthKey);
     const hasDate = (isLoan || exp.dueDateAnchor) && perPayment > 0 && getNextDueDate(exp, windowStart) != null;
     if (!hasDate) { undatedTotal += weeklyAvg; undatedCount++; continue; }
     let occ = 0;

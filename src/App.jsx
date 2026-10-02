@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES, FISCAL_YEAR_START } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet, computeThisWeekActualSpend, getBillsDueOn } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
@@ -1975,6 +1975,15 @@ export default function App() {
   // ── Week-by-week remaining spend using history-aware amounts ──
   const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
+  // TODO §20.B/C (shotgun run #3): derived ONCE here and passed to Home and Budget, so neither
+  // panel re-derives it (the F150 lesson). Weekly-pay accounts only: for biweekly/monthly the
+  // "check" spans more than the 7-day window this figure covers, so it would understate spend.
+  const thisWeekActual = useMemo(() => {
+    if (!currentWeek || (config.userPaySchedule ?? "weekly") !== "weekly") return null;
+    return computeThisWeekActualSpend(projectableExpenses, toLocalIso(currentWeek.weekStart), toLocalIso(currentWeek.weekEnd));
+  }, [currentWeek, projectableExpenses, config.userPaySchedule]);
+  const billsDueToday = useMemo(() => getBillsDueOn(projectableExpenses, effectiveToday), [projectableExpenses, effectiveToday]);
+
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // Real runway for Ask Coach (drift-app-warden §8 quarantine-2 fix) — was
@@ -2318,6 +2327,8 @@ export default function App() {
           fiscalWeekInfo={currentWeekNumber}
           today={effectiveToday}
           fundedGoalSpend={fundedGoalSpend}
+          thisWeekActualSpend={thisWeekActual?.total ?? null}
+          billsDueToday={billsDueToday}
           isAdmin={isAdmin}
           isAiAdmin={isAiAdmin}
           isTester={isTester}
@@ -2364,6 +2375,7 @@ export default function App() {
           avgWeeklySpend={remainingSpend.avgWeeklySpend}
           currentWeek={currentWeek}
           fiscalWeekInfo={currentWeekNumber}
+          thisWeekActualSpend={thisWeekActual?.total ?? null}
           today={effectiveToday}
           userPaySchedule={config.userPaySchedule ?? "weekly"}
           fundedGoalSpend={fundedGoalSpend}

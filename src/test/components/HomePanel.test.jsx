@@ -39,6 +39,24 @@ describe('HomePanel', () => {
     expect(tile).toHaveTextContent(/\$\d+/)
   })
 
+  // TODO §20.B2/§20.C (shotgun run #3): the second "with this week's bills" figure and the Due Today card.
+  it('shows the "with this week\'s bills" line only when App.jsx supplies an actual-spend figure', () => {
+    const props = { ...baseProps, remainingSpend: { avgWeeklySpend: 200 }, prevWeekNet: 950 }
+    const { unmount } = render(<HomePanel {...props} />)
+    expect(screen.queryByText(/With this week's bills/)).toBeNull()
+    unmount()
+    render(<HomePanel {...props} thisWeekActualSpend={1250} />)
+    expect(screen.getByText(/With this week's bills: -?\$300|With this week's bills: \(?\$300/)).toBeTruthy()
+  })
+
+  it('renders the Due Today card for bills App.jsx found due today, and nothing otherwise', () => {
+    const { unmount } = render(<HomePanel {...baseProps} />)
+    expect(screen.queryByLabelText('Bills due today')).toBeNull()
+    unmount()
+    render(<HomePanel {...baseProps} billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]} />)
+    expect(screen.getByLabelText('Bills due today')).toBeTruthy()
+  })
+
   it('does not show a sign-out action on Home', () => {
     render(<HomePanel {...baseProps} />)
     expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull()

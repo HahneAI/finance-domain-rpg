@@ -1,3 +1,4 @@
+import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, getGoalProjectionHorizonDate, GOAL_PROJECTION_HORIZON_YEARS, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
@@ -82,6 +83,8 @@ export function HomePanel({
   currentWeek,
   today,
   fundedGoalSpend = 0,
+  thisWeekActualSpend = null,
+  billsDueToday = [],
   isAdmin = false,
   isAiAdmin = false,
   isTester = false,
@@ -119,6 +122,8 @@ export function HomePanel({
   const monthlyTakehome = (adjustedTakeHome ?? 0) / 12;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+  // TODO §20.B2: the second, real figure — shown only when App.jsx found due-dated bills (never replaces the average).
+  const actualLeftThisWeek = thisWeekActualSpend != null ? finalizedWeekNet - thisWeekActualSpend : null;
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   // Outlook window: Jan 1 → Dec 31 of the fiscal year, clamped forward to the
   // job's start date when it falls inside the year (never extended backward
@@ -1688,9 +1693,10 @@ export function HomePanel({
         </div>
       </div>
 
+      <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
+          <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} sub={actualLeftThisWeek != null ? `With this week's bills: ${fmt$(actualLeftThisWeek * perCheckFactor)}` : undefined} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
           <MetricCard
             label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}

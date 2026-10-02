@@ -47,6 +47,25 @@ next most mergeable group (same shape, different Stripe action).
 **Three-tier pipeline:** `claude/*` feature branches → `Version-control` (integration) → `master` (production). Push to feature branches; user merges to Version-control, then to master. For systematic cross-file updates (e.g. section numbering), use placeholder-based two-pass replacement (`§15` → `__SECTION_15__` → `§1`) to prevent regex overlap when replacing multiple references simultaneously.
 
 ---
+## Commands
+```bash
+npm run dev         # Vite dev server (needs VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+npm run build       # vite build — the only check that exercises the React Compiler (see Testing)
+npm run lint        # eslint .
+npm run test:run    # Vitest single pass — use this to verify changes
+```
+
+## Doc map — if you're touching X, read Y first
+| Touching | Read |
+|---|---|
+| Anything in a mapped area (wizard, 5 panels, auth, paywall, fiscal math, persistence, entitlements, AI, design system, admin) | `docs/drift-app-warden.md` — that section's trigger map |
+| How a live system works | `docs/active-systems.md` (Coach/AI context: §6/§24 grounding rule first) |
+| Setup wizard | warden §7 (gate matrix §7.3); `active-systems.md` §9 |
+| Design tokens / typography | `docs/design-system-source-of-truth.md`, warden §22 |
+| Migrations / schema | `database/migrations/README.md` |
+| Backlog / shipped log | `docs/TODO.md` / `docs/past-TODO-tasks.md` |
+| Account ground truth | `docs/account-reference.json` |
+
 
 ## File Structure
 ```
@@ -530,33 +549,18 @@ effects, matching the real wizard's uncancelable-first-run rule for everyone els
 
 ### Panel naming — "Upkeep", not "Budget"
 
-The Budget panel is called **Upkeep** everywhere a user can read it. Route keys, filenames
-(`BudgetPanel.jsx`), `data-coach-ref` targets and `sessionStorage` keys all still say `budget` —
-that split is deliberate, so a future rename only touches copy. Two traps, both real:
-`navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit (the lookup lowercases the enum
-value), and **any surface that prints a view key instead of a label leaks the internal name** —
-see `VIEW_LABELS` in `App.jsx`. Grep finds neither; only a live sweep does. See
-`docs/drift-app-warden.md` §8 F178.
-
-It was briefly called "Runway", which collided with New Job Season's cash-runway metric and with
-BudgetPanel's own `inRunway` loan window (DW-25). **Screen any future panel name by grepping it
-against existing app vocabulary first** — "Runway" read fine on paper and was already taken twice.
+The Budget panel is **Upkeep** everywhere a user can read it; route keys, `BudgetPanel.jsx`,
+`data-coach-ref` targets and `sessionStorage` keys still say `budget` (deliberate — a rename touches copy
+only). Any surface that prints a view key instead of a label leaks the internal name (`VIEW_LABELS` in
+`App.jsx`); `navigate_to`'s `panel` enum and `PANEL_VIEW_KEYS` are one unit. Screen any future panel name by
+grepping it against existing vocabulary first ("Runway" was already taken twice). Warden §8 F178.
 
 ### The Claim Date (goal surface)
 
-Goals on HomePanel lead with the **date**, not the dollar target — the app-side half of
-the marketing site's reframe: every budgeting app measures in dollars-per-category,
-backward; Authority measures in dates, forward. "Claim Date" is real product language,
-not a marketing term: the card labels the date `CLAIM DATE`, the completion action reads
-`✓ CLAIM IT`, and a "Next Claim Date" hero plus a `then …` funding queue sit above the
-cards so goal priority order is visible without opening the reorder modal.
-
-**It is presentation only.** Every date traces back to `resolveGoalFinishInfo()` — the
-same authoritative ETA the cards already showed. Never compute a Claim Date from anything
-else, or the hero and the card beneath it can disagree about the same goal. See
-`docs/drift-app-warden.md` §8 F177 before touching it, including the standing warning that
-the goal card body is **duplicated verbatim** between the mobile and desktop branches and
-must be edited as a pair.
+HomePanel goals lead with the **date**, not the dollar target (`CLAIM DATE` label, `✓ CLAIM IT` action,
+"Next Claim Date" hero + `then …` queue). **Presentation only:** every date traces to
+`resolveGoalFinishInfo()` — never compute one from anything else. The goal card body is **duplicated verbatim**
+between the mobile and desktop branches; edit as a pair. Warden §8 F177.
 
 ### Numeric Input Standard
 **Never coerce on `onChange`.** Use string draft state (`field ?? ""`); only `parseFloat` at commit (blur/save). For required fields, pass `attempted` bool — show red label + border + `↑ Required` when `attempted && fieldEmpty`. Reference implementation: `Field` + `errBorder` in SetupWizard.
@@ -569,76 +573,28 @@ must be edited as a pair.
 ---
 
 ## UI Design System — Color Tokens (`src/index.css` `@theme`)
-**Never use raw hex for accent, green, or red. Always reference tokens.**
+**Never use raw hex for accent, green, or red. Always reference tokens.** Source of truth for values:
+`src/index.css` `@theme` (extracted + file:line cited in `docs/design-system-source-of-truth.md` §1).
 
-| Token | Value | Role |
-|-------|-------|------|
-| `--color-bg-base` | `#05100c` | App shell background |
-| `--color-bg-surface` | `#112c1f` | Card background |
-| `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
-| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header gradient |
-| `--color-teal` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
-| `--color-green` | `#22c55e` | Income values, positive status |
-| `--color-red` | `#ef4444` | Spend, negative, risk |
-| `--color-deduction` | `#f4a4a4` | Soft deduction rows — same H=0° hue as `--color-red`, lightness ~80%; not harsh on dark. Candidate to replace `--color-red` in low-emphasis negative contexts. |
-| `--color-warning` | `#f59e0b` | Warning / attention |
-| `--color-text-primary` | `#e6f4ef` | Body text |
-| `--color-text-secondary` | `#7fa39a` | Labels, sublabels |
-| `--color-text-disabled` | `#4a645c` | Inactive / disabled |
-| `--color-border-subtle` | `#1f3b31` | Card borders |
-| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
-| `--font-display` | `'Titillium Web'` | All headings (h1–h6), page/section titles, hero/headline text, large numeric emphasis on metric cards |
-| `--font-sans` | `'Rajdhani'` | Everything else — body copy, nav links, labels, ALL interactive components (buttons, links-as-buttons, tabs, toggles, badges, chips), and ALL form inputs/selects/textareas |
-| `--font-mono` | `'JetBrains Mono'` | Read-only numeric/data display only — data table cells, computed-value readouts (tabular-figure alignment). No longer used on any form field. |
+- Surfaces: `--color-bg-base` / `-surface` / `-raised` / `-gradient` · Borders: `--color-border-subtle` / `-accent`
+- Accent/CTA: `--color-teal` (= `--color-accent-primary`) · Positive/income: `--color-green` · Negative/risk: `--color-red`
+- Soft deduction rows: `--color-deduction` (same hue as red, ~80% lightness) · Attention: `--color-warning`
+- Text: `--color-text-primary` / `-secondary` / `-disabled`
+- Status: `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
+- **Pulse tokens** (`--color-signal-*`) are Phase 2, reserved for the AI insight overlay — never on Flow elements.
 
-**Typography — two-font system (adopted 2026-08-09).** Titillium Web (400/600/700/900) is the
-display/headline font; Rajdhani (400/500/600/700) is the body/interactive font. Both load via
-Google Fonts `<link>` in `index.html` (same pattern as the pre-existing JetBrains Mono load).
-Never hardcode a font-family — always reference `var(--font-display)` / `var(--font-sans)` /
-`var(--font-mono)`. **2026-08-10:** all inputs/selects/textareas (global CSS rule, shared `iS`
-style in `ui.jsx`, and every component-local `inputStyle` object) moved from `--font-mono` to
-`--font-sans` — mono is now reserved for read-only data display (data tables, computed-value
-readouts), never form fields.
+**Fonts — never hardcode a family; use `var(--font-display)` / `var(--font-sans)` / `var(--font-mono)`.**
+Display (Titillium Web) = headings, hero text, large numeric emphasis. Sans (Rajdhani) = everything else,
+incl. ALL buttons/tabs/chips and ALL form inputs. Mono (JetBrains Mono) = read-only data display only,
+**never a form field**. Headings: hero 900 / `0.04em` / `1.15`; secondary 800 / `0.02em` / `1.15`; not for
+numeric emphasis. Detail: `docs/design-system-source-of-truth.md` §2, warden §22.
 
-**Header weight/spacing (2026-08-10, ported from the main site).** Heavy weight + negative
-letter-spacing + tight line-height reads as cramped. Two tiers, both in `src/index.css` and
-`ui.jsx`'s `PanelHero`/`SectionHeader`: hero/primary headings are `font-weight: 900`,
-`letter-spacing: 0.04em`, `line-height: 1.15`; secondary page headers are `font-weight: 800`,
-`letter-spacing: 0.02em`, `line-height: 1.15`. Letter-spacing is em-based so it scales with
-font-size. `.heading-xl`/`.heading-lg` utility classes added to `src/index.css` for parity with
-the site (unused here — A:Fin headers are inline styles or the `PanelHero`/`SectionHeader`
-components, not a class system). Does **not** apply to numeric emphasis (MetricCard values,
-dollar totals) — those are data display, not headline text, and kept their existing styling.
-See `docs/authority-design-system`'s Typography section for the full file list touched.
+**Body-text scale.** Non-numeric text MUST use `.text-2xs` 11px · `.text-xs` 12 · `.text-sm` 13 · `.text-base` 14 ·
+`.text-md` 15 — never a raw inline `fontSize` for label/body copy. Enforced by
+`src/test/lib/textUtilityClassAudit.test.js` (exact per-file raw-literal counts; a new literal fails
+`npm run test:run`). **Never wrap the `.text-*` block in `@layer`** — they collide by name with Tailwind v4
+defaults and win only because they are unlayered; see the warning comment above that block in `src/index.css`.
 
-**Body-text size scale (2026-08-10, fully rolled out; bumped +1px again 2026-08-11).**
-Non-numeric text (labels, sublabels, descriptions, list summaries) MUST use one of
-`src/index.css`'s five `text-*` classes instead of a hardcoded inline `fontSize` — never write
-`style={{ fontSize: "12px", ... }}` for label/body copy again: `.text-2xs` 11px, `.text-xs` 12px,
-`.text-sm` 13px, `.text-base` 14px, `.text-md` 15px. The 8 shared JS style objects listed below
-were bumped the same +1px to stay in sync. Numeric emphasis (MetricCard values, dollar totals,
-computed readouts) is out of scope and
-keeps its own per-component sizing. Every file under `src/components/` + `App.jsx` is converted
-as of 2026-08-10 — the only raw literals left are `ui.jsx`'s `Card.size` (numeric, always
-exempt), 3 dynamically-scaled template-literal sizes, and 8 shared JS style objects
-(`labelStyle`/`inputStyle`/`linkStyle`, same DRY treatment as `lS` — see
-`docs/ux-animations-tasks.md`'s audit map for the exact list). **Enforced by
-`src/test/lib/textUtilityClassAudit.test.js`** — a static-analysis test asserting an exact
-allowed raw-`fontSize` count per file (0 for nearly everything); a PR that adds a new raw
-`fontSize: "9px"`–`"14px"` literal anywhere else fails `npm run test:run` immediately, naming
-the offending file. **`.text-xs`/`.text-sm`/`.text-base` collide by name with Tailwind v4's own
-default text-size utilities** (Tailwind auto-generates a matching utility for any scanned
-class name) — our rule wins on `font-size` only because it's unlayered CSS (unlayered always
-beats `@layer`-wrapped rules per the CSS Cascade Layers spec) and explicitly sets
-`line-height: normal` to avoid inheriting Tailwind's colliding line-height token. **Never wrap
-the `.text-*` block in `@layer` of any kind** — see the warning comment directly above it in
-`src/index.css` before touching that block.
-
-**Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
-
-**Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.
-
----
 
 ## Persistence — Eager Save Pattern
 **Every new Save/Confirm/Add/Delete action must call an eager save, not rely solely on the debounce.** `App.jsx` also runs a background debounced autosave (800ms after any `config`/`expenses`/`goals`/`logs`/`weekConfirmations` change) — that's fine for continuous edits (typing, live sliders), but a discrete "I'm done with this action" gesture that only relies on it can lose the change if the tab gets backgrounded/reclaimed before the debounce fires (mobile Safari does this aggressively). This caused real data loss in production (setup wizard, weekly check-ins, tax-plan toggles, goals/expenses/log entries) before every action below was audited and fixed — don't reintroduce the gap in new code.
@@ -753,109 +709,18 @@ no-destructive-migration/no-live-money rules in the protocol doc.
   **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
   handling since it calls Anthropic directly and real money is on the line.
 
-**Schema bookmarks:** `database/migrations/0NN_BOOKMARK_schema_snapshot_<date>.sql` files are
-periodic full-schema recaps, not real migrations — never assign one the actual next migration
-number in sequence expecting it to run. They exist purely so a session can read one file instead
-of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
-make them impossible to mistake for a pending migration. Latest bookmark:
-`038_BOOKMARK_schema_snapshot_2026-08-06.sql` — table/column defs for migrations through 035 were
-verified 2026-08-06 against a live Supabase schema export; 036 and 037 were added to the same file
-on 2026-08-07 per Anthony's confirmation that both had been run against production (attributed in
-the file as owner confirmation, not a fresh export reconciliation — see its header for the exact
-distinction). Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
-025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
-`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
-(beta_activity_events eligibility trigger), 032 (`changelog_entries` — the admin-managed
-"What's New" table, `api/admin-changelog.js`), 033 (`consent_records` — Terms of Service /
-Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate), 034
-(beta_seat_cap — hard 40-seat cap enforced at the DB level), 035 (beta_codes_channel — lets one
-link/QR code auto-assign from a named pool), 036 (resume_profile + coach_chats `resume_review`
-chat_type), 037 (`beta_content_items` + `beta_checklist_completions` + `beta_scores` — the Beta
-Homebase, `api/admin-beta-hub.js`, drift-app-warden §20 F123), 039 (`base_content_items` +
-`base_checklist_completions` + `base_feedback_events` — Money Moves, the base-user counterpart
-to the Beta Homebase, isolated tables reusing `api/admin-beta-hub.js`'s route via a new
-`entity: "base_content"` branch instead of a new serverless function, drift-app-warden §20
-F125), 040 (`employer_preset` column on `beta_content_items`/`base_content_items` +
-`get_user_employer_preset(uid)` — lets admin-authored content target a single employer preset,
-e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tester`), 041
-(`resume_profile` storage columns — `storage_path`/`original_filename`/`mime_type`/
-`file_size_bytes` — plus the app's first Supabase Storage bucket, `resumes`, private with
-own-folder RLS; §2.E1 v2, drift-app-warden §21 F124) exist —
-**the next real migration is 047** (042–046 exist: `is_ai_admin`, AI-admin coach cap, `deletion_requested_at`, auth-FK cascades, `auth_purge_pending`). Verify against the folder before numbering;
-this note has now gone stale five times
-(drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
-again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a
-parallel branch — resolved by renumbering the resume_profile migration to 036 on merge).
-
-**✅ 036 and 037 have now been run against production** — 2026-08-06's export reconciliation for
-the 038 bookmark had found them missing live (`resume_profile` absent, `coach_chats.chat_type`
-still lacking `resume_review`, and `beta_content_items`/`beta_checklist_completions`/`beta_scores`
-all absent), but Anthony confirmed on 2026-08-07 that both have since been applied. Résumé Review
-(§18.E1) and the Beta Tester Homebase should now be functional in production. The 038 bookmark's
-table section has been extended to include both migrations' schema (reconstructed from the
-migration files, not re-verified against a fresh export — see the bookmark's own header). Next
-bookmark, if a fresh live export is pasted, should re-verify 036/037 the same way 001-035 were
-originally verified.
+**Migrations:** next real migration is **047** (042–046 exist) — always verify against
+`database/migrations/` before numbering; this note has gone stale five times. `0NN_BOOKMARK_*` files
+(latest `038_BOOKMARK_schema_snapshot_2026-08-06.sql`) are schema snapshots, **never** a pending
+migration. Per-migration history, and the 036/037 production-confirmation note:
+`database/migrations/README.md`. Serverless cap + migration pointer: `docs/active-systems.md` §27.
 
 ---
 
-## Plugin Index (claude.ai account plugins)
-
-These are enabled on Anthony's claude.ai account and load in every session — no per-project
-install. They **supplement** the project-specific skills above (`authority-finance-live-test`,
-`authority-finance-coach-live-test`) and the Drift App Warden mandate; they never replace either.
-Invoke skills as `/<plugin>:<skill>`. The account lists plugins by opaque ID, so the names below
-are the skill namespaces.
-
-### Engineering — `agent-protocols`
-SDLC protocols, spec → ship. Slash commands: `/agent-protocols:spec` · `:plan` · `:build` ·
-`:test` · `:review` · `:code-simplify` · `:ship`.
-Agents: `code-reviewer` (5-axis review), `security-auditor`, `test-engineer`,
-`accessibility-specialist`, `performance-engineer`, `release-engineer`, `spec-analyst`,
-`documentation-specialist`.
-Skills worth knowing here: `debugging-and-error-recovery`, `security-and-hardening`
-(Supabase RLS / `api/` service-role routes), `frontend-ui-engineering`,
-`performance-optimization`, `documentation-and-adrs`, `git-workflow-and-versioning`,
-`incident-response-and-postmortems`.
-
-| When | Reach for |
-|------|-----------|
-| New feature, scope unclear | `:spec` → `:plan` |
-| Pre-merge review of a PR | `:review` / `agent-protocols:code-reviewer` |
-| Touching `api/`, RLS, tier flags, Stripe | `security-auditor` + `security-and-hardening` |
-| Production regression | `debugging-and-error-recovery` |
-| Pre-release | `:ship` |
-
-### Product — `product-management`
-`write-spec` (feature specs/PRDs) · `roadmap-update` · `sprint-planning` ·
-`stakeholder-update` · `metrics-review` · `synthesize-research` · `competitive-brief` ·
-`product-brainstorming` (also `/product-management:brainstorm`).
-Feeds `docs/TODO.md` — finished specs go there as numbered § items, per existing convention.
-Note: ClickUp/Pendo connectors need authorizing in claude.ai before their tools work.
-
-### Design — `design`
-`design-critique` · `accessibility-review` (WCAG 2.1 AA) · `design-handoff` · `design-system` ·
-`ux-copy` · `user-research` · `research-synthesis`.
-**Must respect the project design system** (Color Tokens, two-font system, `.text-*` scale,
-animation rules above) — treat plugin output as suggestions, never reintroduce raw hex or
-hardcoded font sizes (`textUtilityClassAudit.test.js` will fail). Use `design-system` audits
-against `docs/authority-design-system`. Figma/Asana/Linear/Intercom connectors need
-authorizing in claude.ai.
-
-### PWA / Play Store — `pwa2play`
-`/pwa2play:package` (PWA → signed Play-ready Android bundle) · `:update` (rebuild a TWA for a
-new release) · `:check` (read target API / version code / package id from a built `.apk`) ·
-`pwa2play:pwa2play` (overview). The app is a PWA via `vite-plugin-pwa`, hosted on Vercel — run
-`:package` against the deployed URL, not the dev server. Never commit signing keystores or
-passwords.
-
-### Other plugins enabled on the account (not project-relevant by default)
-`finance` (accounting workflows — corporate close/audit, **not** personal-finance app logic),
-`data` (SQL/viz/dashboards — usable against Supabase exports), `marketing`, `sales`,
-`human-resources`, `datarobot-agent-skills`, `adaptive-agent`, `cowork-plugin-management`.
-
-**Rule:** a plugin skill that proposes a change to a Drift-Warden-mapped area still requires the
-drift check above before the change counts as done.
+## Plugins
+Account-level plugins (agent-protocols, product-management, design, pwa2play) load in every session —
+index in `docs/plugin-index.md`. Staged repo plugins: `/skill-menu`. **Rule:** a plugin skill that proposes
+a change to a Drift-Warden-mapped area still requires the drift check above before the change counts as done.
 
 ---
 

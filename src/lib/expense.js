@@ -106,6 +106,18 @@ export function resolveWeekOfMonthAnchor(weekValue, referenceIso) {
   return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// Reverse of resolveWeekOfMonthAnchor: which of WEEK_OF_MONTH_OPTIONS' four
+// buckets a date falls in, using the SAME day cutoffs (1/8/15/22) so the two
+// directions can never disagree (TODO §26). Returns "week1".."week4", or null
+// for a missing/malformed date.
+export function resolveCurrentWeekOfMonth(referenceIso) {
+  const day = parseInt(String(referenceIso ?? "").slice(8, 10), 10);
+  if (!Number.isFinite(day) || day < 1) return null;
+  let hit = WEEK_OF_MONTH_OPTIONS[0];
+  for (const opt of WEEK_OF_MONTH_OPTIONS) if (day >= opt.day) hit = opt;
+  return hit.value;
+}
+
 // Resolves a DueDatePicker `value` ({ mode: "week"|"custom", week?, date? })
 // into a concrete ISO anchor date, or null if incomplete.
 export function resolveDueDateAnchor(value, referenceIso) {
@@ -296,6 +308,19 @@ export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cy
   }
   overrides[monthKey] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   return { ...expense, monthlyOverrides: overrides };
+}
+
+// Permanent cadence correction (TODO §23, shotgun 2026-10-01): a bill that was
+// entered as a monthly approximation but is really due every week / two weeks
+// (child support at $500/wk). Unlike the additive New-Job-Season-only fields,
+// this rewrites the expense itself — billingMeta (what getNextDueDate reads)
+// AND monthlyOverrides from `fromMonthKey` forward (what every cost reader
+// resolves first), via the same applyMonthEditForward Budget's "Month+ Onward"
+// save uses. Months the user already customized are preserved, not flattened.
+export function applyCadenceCorrection(expense, { cycle, amount, fromMonthKey, effectiveFrom }) {
+  const perPaycheck = perPaycheckFromCycle(amount, cycle);
+  const withOverrides = applyMonthEditForward(expense, fromMonthKey, perPaycheck, amount, cycle);
+  return { ...withOverrides, billingMeta: { ...(expense.billingMeta ?? {}), amount, cycle, effectiveFrom } };
 }
 
 // ─── Quarter-scoped override helpers ─────────────────────────────────────────

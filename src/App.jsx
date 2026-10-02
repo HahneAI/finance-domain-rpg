@@ -49,7 +49,7 @@ import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { focusCoachTarget } from "./lib/coachFocus.js";
 import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
-import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/newJobSeasonRunway.js";
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome, isNjsBillActive } from "./lib/newJobSeasonRunway.js";
 
 // Website/flyer-QR-code signup funnel — a link shaped like
 // "https://<app>/?beta=<code>" lands a NEW visitor here, often before they've
@@ -1969,7 +1969,7 @@ export default function App() {
   // need no migration.
   const projectableExpenses = useMemo(() => {
     if (!config.newJobSeasonMode) return expenses;
-    return expenses.filter(exp => (exp.newJobSeasonStatus ?? "active") === "active");
+    return expenses.filter(isNjsBillActive);
   }, [expenses, config.newJobSeasonMode]);
 
   // ── Week-by-week remaining spend using history-aware amounts ──

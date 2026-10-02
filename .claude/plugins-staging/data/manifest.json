@@ -1,0 +1,52 @@
+{
+    "plugin":  "data",
+    "sourceName":  "astronomer-data",
+    "version":  "0.1.0",
+    "skills":  [
+                   "data-airflow",
+                   "data-airflow-hitl",
+                   "data-airflow-plugins",
+                   "data-airflow-state-store",
+                   "data-analyzing-data",
+                   "data-annotating-task-lineage",
+                   "data-authoring-dags",
+                   "data-authoring-go-sdk-tasks",
+                   "data-authoring-java-sdk-tasks",
+                   "data-authoring-language-sdk-tasks",
+                   "data-blueprint",
+                   "data-checking-freshness",
+                   "data-configuring-airflow-language-sdks",
+                   "data-cosmos-dbt-core",
+                   "data-cosmos-dbt-fusion",
+                   "data-creating-openlineage-extractors",
+                   "data-dag-factory",
+                   "data-debugging-dags",
+                   "data-delegating-to-otto",
+                   "data-deploying-airflow",
+                   "data-deploying-go-sdk-bundles",
+                   "data-deploying-java-sdk-bundles",
+                   "data-managing-astro-deployments",
+                   "data-managing-astro-local-env",
+                   "data-migrating-ai-sdk-to-common-ai",
+                   "data-migrating-airflow-2-to-3",
+                   "data-migrating-dagster-to-airflow",
+                   "data-profiling-tables",
+                   "data-setting-up-astro-project",
+                   "data-testing-dags",
+                   "data-tracing-downstream-lineage",
+                   "data-tracing-upstream-lineage",
+                   "data-troubleshooting-astro-deployments",
+                   "data-warehouse-init"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  false,
+    "hooks":  true,
+    "notes":  [
+
+              ]
+}

@@ -1,0 +1,60 @@
+{
+    "plugin":  "vercel",
+    "sourceName":  "vercel",
+    "version":  "0.50.0",
+    "skills":  [
+                   "vercel-access-protected-vercel-deployment",
+                   "vercel-ai-gateway",
+                   "vercel-ai-sdk",
+                   "vercel-auth",
+                   "vercel-bootstrap",
+                   "vercel-build-agents",
+                   "vercel-cdn-caching",
+                   "vercel-chat-sdk",
+                   "vercel-create-a-backend",
+                   "vercel-custom-metrics",
+                   "vercel-deployments-cicd",
+                   "vercel-env-vars",
+                   "vercel-eve",
+                   "vercel-flags-sdk",
+                   "vercel-knowledge-update",
+                   "vercel-marketplace",
+                   "vercel-microfrontends",
+                   "vercel-next-cache-components",
+                   "vercel-next-forge",
+                   "vercel-next-upgrade",
+                   "vercel-nextjs",
+                   "vercel-queues",
+                   "vercel-react-best-practices",
+                   "vercel-routing-middleware",
+                   "vercel-runtime-cache",
+                   "vercel-shadcn",
+                   "vercel-turbopack",
+                   "vercel-vercel-agent",
+                   "vercel-vercel-cli",
+                   "vercel-vercel-connect",
+                   "vercel-vercel-firewall",
+                   "vercel-vercel-functions",
+                   "vercel-vercel-sandbox",
+                   "vercel-vercel-services",
+                   "vercel-vercel-storage",
+                   "vercel-verification",
+                   "vercel-workflow"
+               ],
+    "commands":  [
+                     "vercel/bootstrap.md",
+                     "vercel/deploy.md",
+                     "vercel/env.md",
+                     "vercel/status.md"
+                 ],
+    "agents":  [
+                   "vercel-ai-architect.md",
+                   "vercel-deployment-expert.md",
+                   "vercel-performance-optimizer.md"
+               ],
+    "mcp":  true,
+    "hooks":  true,
+    "notes":  [
+
+              ]
+}

@@ -1,0 +1,19 @@
+{
+    "plugin":  "legalzoom",
+    "sourceName":  "legalzoom",
+    "version":  "1.0.0",
+    "skills":  [
+                   "legalzoom-attorney-assist"
+               ],
+    "commands":  [
+                     "legalzoom/review-contract.md"
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  true,
+    "hooks":  false,
+    "notes":  [
+                  "no LICENSE file in source"
+              ]
+}

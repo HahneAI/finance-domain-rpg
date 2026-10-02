@@ -341,6 +341,25 @@ Account-level plugins (agent-protocols, product-management, design, pwa2play) lo
 index in `docs/plugin-index.md`. Staged repo plugins: `/skill-menu`. **Rule:** a plugin skill that proposes
 a change to a Drift-Warden-mapped area still requires the drift check above before the change counts as done.
 
+**Adopting a staged or third-party skill / command / agent — MANDATORY 5-step check.** Run it whenever you
+enable one (`node scripts/plugin-toggle.mjs enable <plugin>`) or are asked to adapt one; do not enable and walk
+away. The enabled copies are plain in-repo markdown, so edit them in place (the toggle script only adds/removes
+`.disabled`; verified it never restores upstream text).
+1. **Read it for generic assumptions that clash with this file** — TS/style defaults (`function` keyword, Props
+   types, "avoid try/catch"), auto-commit/push, anything that skips the drift check or the eager-save rule.
+2. **Add the hard rules that apply** — eager-save handlers stay synchronous, keep `"use no memo"`, never inline
+   the single-source finance functions, design tokens + `.text-*` scale, 12-function `api/` cap, naming
+   conventions (see `.claude/agents/code-simplifier-code-simplifier.md` for a worked example).
+3. **Make anything that writes or runs on its own request-only** — remove "autonomous/proactive" wording; no
+   commits or pushes unless asked.
+4. **Run it once on a small, low-risk target** and check its report before trusting it near `HomePanel` /
+   `App.jsx` / anything Drift-Warden-mapped.
+5. **Commit it on its own `claude/*` branch.**
+
+Limits: plugin MCP servers and hooks are never auto-enabled by the toggle script (hand-wire + credentials);
+check `/skill-menu` readiness notes first — some plugins are flagged deferred. Re-importing a plugin from
+upstream can overwrite an adapted copy; the git diff shows it, revert it.
+
 ---
 
 ## Account Reference (`docs/account-reference.json`)

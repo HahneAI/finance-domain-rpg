@@ -741,6 +741,7 @@ no-destructive-migration/no-live-money rules in the protocol doc.
   `getEffectiveAmountForMonth()` — never a parallel approximation) that live testing had to
   rediscover through several real bugs. Skipping it reintroduces those bugs.
 - `docs/TODO.md` — prioritized backlog, grouped in 4 tiers with a Priority Index (open items; closed subsections are archived to `past-TODO-tasks.md`)
+- `/skill-menu` (skill, `.claude/skills/skill-menu/`) — chat display of which staged plugins are enabled vs disabled (`scripts/plugin-toggle.mjs`, `.claude/plugins-staging/README.md`)
 - `docs/shotgun-coding.md` — the Shotgun Coding protocol + its decision journal (see section above)
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth

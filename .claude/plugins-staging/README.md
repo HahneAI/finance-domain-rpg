@@ -9,6 +9,7 @@ staged so a cloud session can load them **one at a time**. **Nothing here is act
 
 ```bash
 node scripts/plugin-toggle.mjs list
+node scripts/plugin-toggle.mjs menu [plugin]   # markdown overview; the /skill-menu skill runs this
 node scripts/plugin-toggle.mjs enable <plugin>
 node scripts/plugin-toggle.mjs disable <plugin>
 ```

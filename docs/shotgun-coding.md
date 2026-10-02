@@ -69,12 +69,27 @@ One entry per run, newest at the top of the log. Heading = when the protocol was
 ## Run — YYYY-MM-DD HH:MM TZ  ·  branch: claude/...  ·  scope: K of N Tier-1 tasks
 ```
 
-One decision per task, **max 3 lines** (a large full-category feature may run longer):
+**One decision block per shipped feature. Hard cap: 5 lines of prose, plus a 3–4 item test checklist
+(the checklist does not count toward the 5). No exception for big features — if it won't fit, the
+decision was too big to log in one block; split it into two.** Each prose line is one sentence.
 
-> I coded **[task]** and chose to set it up as **[x]**. You can test it by **[x]**.
-> Other options were **[x]** or **[x]**. It built off **[y]** by making **[x]** interact with **[system/feature y]** by **[x]**.
+```
+### §N <short task title>
+1. Built: <what you coded>.
+2. Chose: <how you set it up — the decision>. 
+3. Other options: <x> / <y>.
+4. Built off: <system/feature y> by making <x> interact with it by <how>.
+5. (optional) Trade-off or risk worth remembering.
+- [ ] Test: <step Anthony can do in the app, with the expected result>
+- [ ] Test: ...
+- [ ] Test: ...            (3–4 checklist items; tick them off as you verify)
+```
 
-End each entry with: `Skipped:` (task + reason, or "none") and `Test first:` (the one thing to try first).
+Lines 1–4 are the original "I coded X and chose Y / other options / built off Z" note, split so each
+fits on one line. Checklist items are real click-through steps (or one command), not "tests pass".
+
+End each run with a **footer of at most 3 lines**: `Skipped:` (task + reason, or "none") ·
+`Verification:` (suite/build/lint result in one line) · `Drift entries consulted:`.
 
 ---
 
@@ -84,35 +99,74 @@ End each entry with: `Skipped:` (task + reason, or "none") and `Test first:` (th
 
 ## Run — 2026-10-01 14:49 UTC  ·  branch: claude/shotgun-coding-doc-cleanup  ·  scope: 8 of 30 open Tier-1 tasks (§23 ×5, §20 ×3)
 
-**§23 per-bill weekly/biweekly cadence** — I coded a cadence row on each bill in the NJS wizard's due-date step and chose three pills, "Monthly / as entered" (default), Weekly, Biweekly — not a full four-cycle editor. Choosing Weekly/Biweekly replaces the week-of-month picker with an amount-per-payment box plus a "paid on" weekday (reusing Food's weekday-pill pattern); the weekday becomes the `dueDateAnchor`. You can test it by running Quit My Job with a $1,000/mo bill, picking Weekly, entering $500 and Friday, then checking Budget: it now reads $500/week. Other options were a full cycle dropdown, or storing the cadence only for New Job Season. It built off `applyMonthEditForward` (Budget's own "Month+ Onward") via new `applyCadenceCorrection`, so the permanent correction flows through `billingMeta` and `monthlyOverrides` and every cost reader sees it; months you'd already customized are preserved, and a weekly bill feeds the §26 "paid this week" step.
-- Decision on the open design tension: **permanent** (like Food already is), not NJS-scoped — a payment cadence is a real-world fact. Biweekly anchors on the *next* chosen weekday, so "which alternate week" is the user's first payment; if that's wrong they can edit the date later.
+### §23 Per-bill weekly/biweekly cadence (New Job Season wizard)
+1. Built: a cadence row on each bill in the wizard's due-date step; Weekly/Biweekly swap the date picker for an amount-per-payment box plus a "paid on" weekday.
+2. Chose: three pills only (Monthly/as entered, Weekly, Biweekly) and a **permanent** correction to the bill, not New-Job-Season-only.
+3. Other options: a full four-cycle dropdown / storing the cadence only for the wizard.
+4. Built off: Budget's "Month+ Onward" save (`applyMonthEditForward`) via new `applyCadenceCorrection`, so every cost reader sees the new weekly amount; weekly bills also feed the "already paid" step.
+5. Trade-off: biweekly anchors on the next chosen weekday, so which alternate week is "week 1" is the user's first payment.
+- [ ] Test: Quit My Job with a $1,000/mo bill → pick Weekly, $500, Friday → Activate; Budget shows $500/week.
+- [ ] Test: pick Weekly, then switch back to "Monthly / as entered" → the normal date picker returns and the bill is unchanged.
+- [ ] Test: Weekly with no amount or no day → Activate stays disabled and shows the required hint.
 
-**§20.A optional due date** — I coded an optional "Due date" row in Budget's expense detail sheet (`ExpenseDueDateField`: Set / Change / Clear, same `DueDatePicker` as NJS) and chose to **reuse the existing `dueDateAnchor` field** instead of a new schema field — it's already optional, already read by `getNextDueDate`, so there is no migration and undated expenses behave exactly as before. You can test it by opening any bill's sheet → Set → "3rd week of month" → Save; Clear removes it. Other options were a day-of-month field, or a new `dueDate` object inside `billingMeta`. It built off the NJS flow by making normal Budget and NJS share one anchor, so a date set in either shows in the other. Loans and read-only accounts don't show it; not asked in the setup wizard (leaning in the TODO).
+### §20.A Optional per-expense due date
+1. Built: an optional "Due date" row (Set / Change / Clear) in Budget's bill detail sheet.
+2. Chose: reuse the existing `dueDateAnchor` field — no new schema, no migration; undated bills behave exactly as before.
+3. Other options: a day-of-month field / a new `dueDate` object inside `billingMeta`.
+4. Built off: the New Job Season due-date picker, so a date set in either place shows in both (`getNextDueDate` reads it).
+5. Loans and read-only accounts don't show the row; not asked in the setup wizard.
+- [ ] Test: open a bill's sheet → Set → "3rd week of month" → Save; the row reads "Next due …".
+- [ ] Test: Clear removes it and the bill goes back to undated.
+- [ ] Test: the date also appears on that bill in New Job Season Upcoming Bills.
 
-**§20.B1 partial-coverage rule** — I coded `computeThisWeekActualSpend` in `finance.js` and chose the **hybrid**: dated bills contribute what really falls due in the week (payment × occurrences), undated bills contribute their averaged weekly share via `getExactEffectiveAmountForMonth` — the same figure `computeRemainingSpend` uses, so it can't become a third formula. It returns `null` until at least one non-loan bill has a date (loans always count as dated). Other options were strict "only when every bill is dated" (never triggers for most users) or hiding the undated half. **Nothing in the UI calls it yet** (that's §20.B2, still open) — so you can only test it through its unit tests today.
+### §20.B1 "This week's actual" spend rule (math only)
+1. Built: `computeThisWeekActualSpend` in `finance.js`; nothing in the UI calls it yet (that is §20.B2).
+2. Chose: hybrid — dated bills count what truly falls due that week, undated bills count their averaged weekly share.
+3. Other options: show it only when every bill is dated (rarely triggers) / ignore undated bills.
+4. Built off: `getExactEffectiveAmountForMonth`, the same figure `computeRemainingSpend` uses, so it can't become a third formula.
+5. Returns `null` until at least one non-loan bill has a due date; loans always count as dated.
+- [ ] Test: unit tests only for now — `njsCadenceAndDueDates.test.jsx` ("hybrid rule" block) passes.
+- [ ] Test: with no bill dated, the function returns `null` (the "returns null" unit test).
+- [ ] Test (when B2 lands): set a date on one bill; the actual figure appears and differs from the averaged one.
 
-Skipped: none. Not done by design: B2 (surface both figures) / B3 / B4 / C / D, and no migration.
-Test first: **a weekly bill in the NJS wizard** (step 3 pills → Budget shows the corrected amount), then set a due date from a bill's sheet.
-Verification: `npm run test:run` → 1909 pass / 1 fail + 1 suite-load fail, both pre-existing (same two as run #1). `vite build` green. 12 new tests in `njsCadenceAndDueDates.test.jsx`. Lint: 3 errors, identical to before my changes. Drift entries consulted: T4 Budget Panel (expense schema/cycle), T2/NJS surface, Spine A fiscal math, F150 (avgWeeklySpend duplication — not touched); new row added to the cross-system table. Not live-clicked (no Supabase creds here).
+Skipped: none (B2–D and any migration are out of scope by design).
+Verification: 1909 tests pass / 1 fail + 1 suite-load fail (both pre-existing); `vite build` green; lint at baseline.
+Drift entries consulted: T4 Budget Panel, NJS surface, Spine A fiscal math, F150 (untouched).
 
 ## Run — 2026-10-01 13:53 UTC  ·  branch: claude/shotgun-coding-doc-cleanup  ·  scope: 12 of 45 Tier-1 tasks required → 15 delivered (§24 ×4, §25 ×5, §26 ×6)
 
-*Overshoot, on purpose: the 12th task landed mid-§26, and its last three bullets (activate-writes-paid, the cash open-question, tests) were already done by the step itself — leaving them `[ ]` would have misreported the code.*
+*Overshoot on purpose: §26's last three bullets were already done by the step itself, so leaving them `[ ]` would have misreported the code.*
 
-**§24 deleted bills leak into New Job Season** — I coded the fix and chose to hoist BudgetPanel's `getNextNonZeroIso` + "removed this phase" test into `finance.js` as `isExpenseRemoved(exp, todayIso)` (not `expense.js` — it would create the import cycle expense.js documents). Test it by deleting a bill in normal Budget, entering New Job Season: it's gone from Upcoming Bills and cash no longer drops by it. Other options: copy the check into each file, or add a `deleted` flag on the expense. Built off BudgetPanel's own hide-logic (now imports the shared fn) by feeding `isExpenseRemoved` into `NewJobSeasonBudgetPanel.trackedExpenses`, `sumBillsDueSince`, and the essential/lifestyle predicates.
-- Reference date = the runway's own "today", not `newJobSeasonDate`: a bill deleted any time before today is gone. Trade-off: a bill deleted mid-window stops decaying cash from that point backward too. `NewJobSeasonEntry` also hides deleted bills in step 2 and passes them through untouched on Activate (they must stay in the array — history).
-- `weeklyAmountForBurn` was already clean (month-aware → $0 for deleted); only `essentialCount` and the decay sum were wrong.
+### §24 Deleted bills leaking into New Job Season
+1. Built: deleted bills no longer reach Upcoming Bills, the tracked-bills list, cash-on-hand decay, or the bill count.
+2. Chose: one shared `isExpenseRemoved(exp, today)` in `finance.js`, judged "as of today" (not the activation date).
+3. Other options: copy BudgetPanel's check into each file / add a `deleted` flag on the expense.
+4. Built off: BudgetPanel's own "removed this phase" test, now imported from `finance.js`; the wizard also hides deleted bills but passes them through untouched on Activate.
+5. Trade-off: a bill deleted mid-window stops decaying cash from that point backward too.
+- [ ] Test: delete a bill in normal Budget, then enter New Job Season → it is absent from Upcoming Bills and tracked bills.
+- [ ] Test: cash on hand no longer drops by the deleted bill when its old due date passes.
+- [ ] Test: Quit My Job step 2 doesn't offer the deleted bill.
 
-**§25 Mark as Paid** — I coded a "Mark Paid / ✓ Paid · Undo" button on each Upcoming Bill and chose `newJobSeasonStatus: "paid"` + `newJobSeasonPaidDueDate` + `newJobSeasonPaidSkipDecay`. Test it by tapping Mark Paid on a bill due in a few days: cash on hand drops by its amount, the card dims and sinks to the bottom; Undo restores both. Other options: a separate `paid` boolean (rejected — §26 specs the same status), or storing a paid timestamp.
-- Cash goes through the existing `saveCashOnHand` (effective cash − amount, decay clock rebased to today). Double-subtraction rule: if that occurrence was already counted by the decay (`cashAsOf < due ≤ today`) cash is untouched; otherwise the occurrence is flagged so `sumBillsDueSince` skips it when its date arrives.
-- Auto-reset is *derived* (`isPaidForCurrentCycle`: today ≤ paid-for due date) — nothing written back, no cleanup pass. "Paid" counts as live everywhere via `isNjsBillActive` (burn, `projectableExpenses`, Coach context/tools) — unlike paused/cancelled.
+### §25 Mark as Paid
+1. Built: a "Mark Paid / ✓ Paid · Undo" button on each Upcoming Bill; paid bills dim and sink to the bottom.
+2. Chose: `newJobSeasonStatus: "paid"` plus `…PaidDueDate` and `…PaidSkipDecay`; the paid state resets itself after the due date (derived, never written back).
+3. Other options: a separate `paid` boolean / a stored paid timestamp.
+4. Built off: the Cash On Hand save path — marking paid takes the amount out of effective cash once, and the flag stops the decay subtracting it again.
+5. "Paid" counts as a live bill everywhere (`isNjsBillActive`: burn, projections, Coach), unlike paused/cancelled.
+- [ ] Test: tap Mark Paid on a bill due this week → cash drops by its amount once; the card dims and sinks.
+- [ ] Test: tap Undo → cash comes back and the bill returns to its place.
+- [ ] Test: next day, the bill is back to normal; its due date passing doesn't subtract it a second time.
 
-**§26 week-of-month + "Already paid this week?" step** — I coded `resolveCurrentWeekOfMonth` (same 1/8/15/22 cutoffs, round-trip tested against `resolveWeekOfMonthAnchor`) and a new Step 4 in `NewJobSeasonEntry`. Test it by activating on the 22nd–31st, or with any weekly bill (Food counts once you pick a shopping day): after "When are these due?" you get the checklist; checked bills arrive already `paid`. Other options: show it always, or reuse Upcoming Bills' 35-day horizon (rejected — "this week" = next due within 7 days).
-- Shown only if (week 4 **or** a kept bill is weekly) **and** something is actually due in 7 days. Open question settled once for §25+§26: Step 0 cash is assumed to already reflect a bill the user says they paid, so cash is not reduced; the occurrence is flagged to skip the decay. Condition (b) keys off `billingMeta.cycle === "weekly"` + Food, so §23's cadence control plugs in with no change.
-- Existing Food-flow test updated: Food→weekly now triggers the step, so Activate is one click later (intended).
+### §26 Week-of-month detection + "Already paid this week?" step
+1. Built: `resolveCurrentWeekOfMonth` and a new step 4 in the Quit My Job wizard listing bills due in the next 7 days.
+2. Chose: show it only if it's week 4 **or** a kept bill is weekly, and something is actually due; checked bills arrive already `paid`.
+3. Other options: always show it / reuse Upcoming Bills' 35-day horizon.
+4. Built off: the picker's own 1/8/15/22 cutoffs (round-trip tested) and §25's paid state; Step 0 cash is assumed to already reflect paid bills, so it isn't reduced.
+5. The Food-flow test changed: Food→weekly now triggers the step, so Activate is one click later (intended).
+- [ ] Test: activate on the 22nd–31st (or with a weekly bill) → the step appears; check a bill → it lands as Paid.
+- [ ] Test: activate on the 3rd with only monthly bills → no extra step.
+- [ ] Test: nothing due in 7 days → step skipped even in week 4.
 
-Skipped: none. Not done by design: no Supabase migration (all fields live in the existing expenses JSON).
-Test first: **Mark Paid on a bill due this week** (cash + sort), then re-open Upcoming Bills the next day and confirm it returned to normal.
-Verification: `npm run test:run` → 1896 pass / 1 fail + 1 suite-load fail, both pre-existing and unrelated (`AccountDetailSubscription` hardcodes a now-past Sep-15-2026 date; `budgetCheckBreakdown` needs `VITE_SUPABASE_URL`). `vite build` green. 21 new tests in `njsDeletedAndPaidBills.test.jsx`. Drift entries consulted: T4 Budget Panel, T2 Home (NJS surface), Spine A fiscal math, F144 resolver family; new row added to the §1 cross-system table. Not live-clicked in a browser — no Supabase creds in this environment.
-
-
+Skipped: none (no Supabase migration needed).
+Verification: 1896 tests pass / 1 fail + 1 suite-load fail (pre-existing); `vite build` green; 21 new tests.
+Drift entries consulted: T4 Budget Panel, T2 Home (NJS surface), Spine A fiscal math, F144.

@@ -305,7 +305,8 @@ Each run adds a timestamped entry to the journal in `docs/shotgun-coding.md`: on
 lines of prose** (built / chose / other options / built off / optional trade-off) **plus a 3–4 item test checklist**
 (the checklist doesn't count toward the 5), and a ≤3-line footer. Shotgun mode skips questions, **not** the Drift
 Warden check, eager-save rule, 12-function Vercel cap, or the no-destructive-migration/no-live-money rules in
-the protocol doc.
+the protocol doc. Automated live tests add a single `> 🧪 Live test …` comment under a checklist item (✅/⚠️/❌ + evidence) and
+never tick the box — only Anthony does.
 
 ---
 

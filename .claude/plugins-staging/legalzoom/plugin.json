@@ -1,0 +1,12 @@
+{
+  "name": "legalzoom",
+  "description": "LegalZoom Plugin - AI-powered business legal assistance with contract review and attorney consultation",
+  "version": "1.0.0",
+  "author": {
+    "name": "LegalZoom",
+    "email": "engineering@legalzoom.com"
+  },
+  "homepage": "https://github.com/legalzoom/claude-plugins",
+  "repository": "https://github.com/legalzoom/claude-plugins",
+  "license": "PROPRIETARY"
+}

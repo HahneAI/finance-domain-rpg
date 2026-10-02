@@ -1,0 +1,27 @@
+{
+    "plugin":  "claude-security",
+    "sourceName":  "claude-security",
+    "version":  "0.12.0",
+    "skills":  [
+                   "claude-security-claude-security"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+                   "claude-security-claude-security.md",
+                   "claude-security-explore.md",
+                   "claude-security-patch-generator.md",
+                   "claude-security-patch-verifier.md",
+                   "claude-security-scan-inventory.md",
+                   "claude-security-scan-loader.md",
+                   "claude-security-scan-redactor.md",
+                   "claude-security-scan-researcher.md",
+                   "claude-security-scan-verifier.md"
+               ],
+    "mcp":  false,
+    "hooks":  true,
+    "notes":  [
+
+              ]
+}

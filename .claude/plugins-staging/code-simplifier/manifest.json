@@ -1,0 +1,19 @@
+{
+    "plugin":  "code-simplifier",
+    "sourceName":  "code-simplifier",
+    "version":  "1.0.0",
+    "skills":  [
+
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+                   "code-simplifier-code-simplifier.md"
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

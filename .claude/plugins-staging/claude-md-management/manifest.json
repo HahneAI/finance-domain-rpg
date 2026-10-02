@@ -1,0 +1,19 @@
+{
+    "plugin":  "claude-md-management",
+    "sourceName":  "claude-md-management",
+    "version":  "1.0.0",
+    "skills":  [
+                   "claude-md-management-claude-md-improver"
+               ],
+    "commands":  [
+                     "claude-md-management/revise-claude-md.md"
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

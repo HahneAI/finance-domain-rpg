@@ -1,0 +1,27 @@
+{
+    "plugin":  "plugin-dev",
+    "sourceName":  "plugin-dev",
+    "version":  "ab024cdcfa7c",
+    "skills":  [
+                   "plugin-dev-agent-development",
+                   "plugin-dev-command-development",
+                   "plugin-dev-hook-development",
+                   "plugin-dev-mcp-integration",
+                   "plugin-dev-plugin-settings",
+                   "plugin-dev-plugin-structure",
+                   "plugin-dev-skill-development"
+               ],
+    "commands":  [
+                     "plugin-dev/create-plugin.md"
+                 ],
+    "agents":  [
+                   "plugin-dev-agent-creator.md",
+                   "plugin-dev-plugin-validator.md",
+                   "plugin-dev-skill-reviewer.md"
+               ],
+    "mcp":  false,
+    "hooks":  false,
+    "notes":  [
+
+              ]
+}

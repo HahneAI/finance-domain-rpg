@@ -1,0 +1,32 @@
+{
+    "plugin":  "figma",
+    "sourceName":  "figma",
+    "version":  "2.2.120",
+    "skills":  [
+                   "figma-figma-code-connect",
+                   "figma-figma-create-new-file",
+                   "figma-figma-design-to-code",
+                   "figma-figma-generate-design",
+                   "figma-figma-generate-diagram",
+                   "figma-figma-generate-library",
+                   "figma-figma-generative-plugins",
+                   "figma-figma-implement-motion",
+                   "figma-figma-shaders",
+                   "figma-figma-swiftui",
+                   "figma-figma-use",
+                   "figma-figma-use-figjam",
+                   "figma-figma-use-motion",
+                   "figma-figma-use-slides"
+               ],
+    "commands":  [
+
+                 ],
+    "agents":  [
+
+               ],
+    "mcp":  true,
+    "hooks":  false,
+    "notes":  [
+                  "no LICENSE file in source"
+              ]
+}

@@ -1,0 +1,29 @@
+{
+    "plugin":  "stripe",
+    "sourceName":  "stripe",
+    "version":  "0.10.3",
+    "skills":  [
+                   "stripe-connect-recommend",
+                   "stripe-connect-required-verification-information",
+                   "stripe-metronome",
+                   "stripe-stripe-apps",
+                   "stripe-stripe-best-practices",
+                   "stripe-stripe-directory",
+                   "stripe-stripe-docs",
+                   "stripe-stripe-pay",
+                   "stripe-stripe-projects",
+                   "stripe-upgrade-stripe"
+               ],
+    "commands":  [
+                     "stripe/explain-error.md",
+                     "stripe/test-cards.md"
+                 ],
+    "agents":  [
+                   "stripe-company-researcher.md"
+               ],
+    "mcp":  true,
+    "hooks":  true,
+    "notes":  [
+                  "no LICENSE file in source"
+              ]
+}

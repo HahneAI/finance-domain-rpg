@@ -135,6 +135,7 @@ try {
     const card = page.getByRole("region", { name: "Cash on hand", exact: true });
     const alert = card.getByRole("alert");
     check("§22.B red names the at-risk bill due before payday", (await vis(alert)) && /Test Rent \(\$900\) is due Oct 1, before your next paycheck/.test(await alert.innerText()));
+    check("§22.B red shows the shortfall before payday, not 'to spare'", /\$300 short before payday/.test(await card.innerText()) && !/to spare/.test(await card.innerText()));
     eq("§22.B no page errors", realErrors(app), []); await app.close();
   }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }

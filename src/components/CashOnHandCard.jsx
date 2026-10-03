@@ -105,7 +105,9 @@ export function CashOnHandCard({ cash, checkWord = "week", onSetBalance, onOpenL
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", gap: "12px" }}>
         <span className="text-sm" style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
         <span className="text-sm" style={{ color: st.color, fontWeight: 700 }}>
-          {cash.gap >= 0 ? `${fmt(cash.gap)} to spare` : `${fmt(-cash.gap)} short`}
+          {cash.atRiskBill
+            ? `${fmt(cash.dueBeforePayday - cash.cashOnHand)} short before payday`
+            : cash.gap >= 0 ? `${fmt(cash.gap)} to spare` : `${fmt(-cash.gap)} short`}
         </span>
       </div>
       {cash.atRiskBill && (

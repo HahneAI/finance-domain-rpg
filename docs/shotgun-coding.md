@@ -144,7 +144,7 @@ devices cannot be tested.
 - [ ] Test: with no dated bills the button isn't shown.
   > 🧪 *Live test 2026-10-02:* ✅ verified — button hidden with no dated bills and hidden again after Clear.
 
-Skipped: none (§22 Weekly Cash Check-In and §21 Quarterly are next in build order).
+Skipped: none (§22 Cash on Hand + Pay-Period Check-In and §21 Quarterly are next in build order).
 Verification: 1923 tests pass, 1 suite fails to load (`budgetCheckBreakdown`, needs `VITE_SUPABASE_URL`); `vite build` green; lint at baseline (5); 17 new tests.
 Drift entries consulted: T2 Home, T4 Budget Panel, Spine A fiscal math, F150 (verified already fixed; kept single-sourced).
 

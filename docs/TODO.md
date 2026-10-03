@@ -13,7 +13,7 @@
 | 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
 | 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 0 | 5 $ |
 | 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 0 | 9 $ |
-| 1 | 22 | Weekly Cash Check-In — Second Home Hero Feature | 10 | 0 |
+| 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 20 | 0 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
@@ -35,7 +35,7 @@
 | 3 | 19 | Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment | 6 | 40 |
 | 4 | 8 | Fable Five Creative Brainstorming — Tasks & Features | 57 | 0 |
 
-**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Weekly Cash Check-In; its V2 needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites.
+**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites.
 
 ---
 
@@ -356,93 +356,104 @@ alongside it once the data exists to compute one, not replacing what's there.
 
 ---
 
-## 22. Weekly Cash Check-In — Second Home Hero Feature *(new — scoped 2026-09-28, TOP PRIORITY,
-not yet built, no code written)*
+## 22. Cash on Hand + Pay-Period Check-In — Home Hero Feature *(rescoped 2026-10-03: §22 Weekly Cash
+Check-In merged with the New Job Season cash-runway; TOP PRIORITY, not yet built, no code written)*
 
-*Seeded 2026-09-28, on explicit instruction: this is the daily-return hook Home is currently
-missing. The Claim Date hero (`docs/drift-app-warden.md` §8 F177, `resolveGoalFinishInfo()`) answers
-"am I going to make it" at the goal-timeline scale — long-horizon, doesn't move day to day. This
-feature answers the much shorter, much more urgent question a user actually opens a finance app
-to ask on a given morning: **"do I have what I need this week, right now."** Sits on Home alongside
-the Claim Date banner, not replacing it — two hero surfaces, two different time horizons, both
-worth opening the app daily for.*
+*Seeded 2026-09-28 as "Weekly Cash Check-In"; merged 2026-10-03 (user directive) with the New Job
+Season (NJS) cash-on-hand/runway mechanics so they are one feature, not two. This is the
+daily-return hook Home is missing: the Claim Date hero (`docs/drift-app-warden.md` §8 F177,
+`resolveGoalFinishInfo()`) answers "am I going to make it" long-horizon; this answers **"do I have
+what I need set aside for this pay period, right now."** A second hero card on Home, directly
+below the Claim Date banner. Employed users get NJS's cash-on-hand / runway machinery, with the
+manual cash entry replaced by a take-home-driven balance corrected at each pay-period check-in.*
 
-**Placement:** a second big hero card on Home, near (likely directly below) the existing Claim
-Date banner — exact stacking order TBD at design time, but it belongs in that same "first thing
-you see" tier, not buried with the metric tiles below it.
+**Design decisions locked 2026-10-03 (do not re-litigate; build to these):**
+1. **Cash on hand is an anchored running balance, not "take-home = cash."** Take-home is what
+   arrives on payday, not what the user holds. User sets a starting balance once (re-anchorable any
+   time — same shape as NJS's `newJobSeasonCashOnHand` + `...AsOf`); each payday credits take-home;
+   bills due and logged spending decay it (reuse NJS's `sumBillsDueSince` pattern, don't fork it).
+   Untracked spending/savings make any pure-computed balance drift — the check-in below is the correction.
+2. **"Set aside" = the per-check Needs figure Upkeep already shows** (`BudgetPanel.jsx`, weekly share ×
+   `perCheckFactor = 52 / checksPerYear`: 1 weekly, 2 biweekly/salary, ~4.33 monthly). Mirror that
+   per-schedule logic; **do not write a third "what's due" formula** — extract/reuse what Upkeep
+   already computes, and use real due-dated bills (§20, `getBillsDueOn`/`computeThisWeekActualSpend`)
+   where they exist. Needs only (Lifestyle excluded), consistent with NJS `weeklyBurn`.
+3. **Freedom Allowance is counted** in cash on hand (never hidden — this is a "do I have it" figure),
+   shown as its own line ("includes $X freedom allowance") so the card can't read healthy by silently
+   including money the user earmarked to spend.
+4. **Runway is two numbers, not one.** Primary (employed): *cash on hand vs. this pay period's
+   set-aside*. Secondary line: the NJS-style "if paychecks stopped" runway (cash ÷ burn). Never present
+   a resetting countdown as the headline for someone who is paid every period.
+5. **Estimates are labeled as estimates** (`docs/active-systems.md` §6 grounding rule): a payday credit
+   from projected net is "estimated" until the check-in confirms it. No bank linking exists
+   (self-report only) — UI copy must say so.
 
-### A. V1 — the weekly number, no new user input required
+**Placement:** second hero card on Home under the Claim Date banner; shell-tier "first thing you see."
 
-- [ ] **Surface "what you need to set aside this week"** — a total dollar figure covering the
-  user's Needs-category expenses due in the current week. **Compute this from the existing
-  Needs/Lifestyle expense split and the same due-date/period-resolution math the rest of the app
-  already uses** (`getEffectiveAmountForMonth`/`getPhaseIndex` in `finance.js`/`expense.js`) —
-  do not hand-roll a third parallel "what's due" formula. See §20 below for why this is the exact
-  same underlying data problem as an already-scoped feature, not a new one.
-- [ ] **Decide the V1 fallback math** — most expenses today have no due-date field at all (that's
-  §20's own open item, still unbuilt), so V1 cannot assume real due-dated bills exist yet. Likely
-  answer: an averaged/weekly-share figure over Needs expenses only (same shape as
-  `computeRemainingSpend`'s existing averaging, scoped to Needs), explicitly labeled as an estimate
-  until §20's due-date field exists to make it a real per-bill figure. Do not silently present an
-  averaged number as if it were a confirmed "this is due this week" number — the app's existing
-  grounding rule (`docs/active-systems.md` §6) applies here same as everywhere else.
+### A. Cash-on-hand engine (import from NJS, don't duplicate)
 
-### B. The Monday check-in ritual + traffic-light card
+- [ ] **Extract/generalize the NJS cash math into a shared pure lib** — `computeNewJobSeasonRunway`,
+  `sumBillsDueSince`, timeline-aware cash decay (`lib/newJobSeasonRunway.js`) become callable for
+  employed users too (new thin wrapper or parameterized entry point; NJS output must stay
+  byte-identical — NJS tests are the regression net). Single source of truth: Coach/AI context, Home
+  card and NJS all read the same function (drift-warden: this is a mapped LEDGER item; cross-check
+  every call site incl. `coachTriggers.estimateRunwayDays`, `App.jsx` `coachRunwayDays`).
+- [ ] **New persisted fields** (four-site procedure incl. `HISTORY_SENSITIVE_FIELDS` in
+  `lib/configHistory.js`; eager-save via `saveConfigNow`): employed cash anchor + as-of date, and a
+  per-period credit ledger. Decide the ledger's storage shape in design (config array vs. log events).
+- [ ] **One-time starting-balance prompt** for employed users (re-anchor available later from the card).
+  Required-field pattern + numeric-input rules (string draft, parse at commit).
+- [ ] **Payday auto-credit:** on each pay date, credit the confirmed net (from the check-in /
+  `weekConfirmations`) when it exists, projected net (`finance.js`) otherwise, flagged "estimated."
+  Must survive missed app-opens (credit by date, not by an in-session event). Weekly, biweekly,
+  salary, monthly pay schedules all covered.
+- [ ] **Include Freedom Allowance in the balance** and expose it as a separate returned field for the
+  card's "includes $X" line. Confirm it does not leak into `computeNet`/`spendableNets` double-counting
+  (`finance.js` ~1133–1188 already subtracts it from spendable income).
 
-- [ ] **A weekly ritual, once per week (Monday, or first app-open of the new fiscal week)**: the
-  hero card asks the user to self-confirm whether they currently have this week's needed amount
-  sitting in their bank account. **This is a self-report, not a real balance check** — the app has
-  no bank-linking/Plaid-style integration anywhere in its stack (Supabase auth/DB only, see
-  CLAUDE.md's Tech Stack table) — say so explicitly in any UI copy so a user never mistakes this
-  for an automated account read. Existing precedent to reuse/pattern-match against, not duplicate:
-  `WeekConfirmModal.jsx` (weekly schedule confirmation — same "once a week, a modal/card asks a
-  yes/no question" shape) and `TipsCommissionCheckIn.jsx` (small daily check-in card, "skinned
-  bonus-log mechanism" per its own file-structure note) — both already solve "recurring
-  self-reported check-in UI," don't reinvent that shape from scratch.
-- [ ] **Three-state card, not just pass/fail** — green (default/confirmed-sufficient): no
-  particular styling beyond the card's normal state. **Orange:** user confirms they're short on
-  the week's total needed-cash figure by a moderate amount (a real dollar range, not yet decided
-  — the user's own framing was "$20-30 here or there") — copy tone is "tighten up, don't spend
-  outside what you need this week," not alarming. **Red:** the confirmed shortfall specifically
-  puts a Needs-category bill at risk, not just general slack — a materially more urgent tier than
-  orange, both in copy and visual weight.
-- [ ] **Open design question, not yet resolved — flag before building, don't assume an answer:**
-  what exactly promotes a shortfall from orange to red? Two candidate rules, genuinely different
-  in what they require: **(a) a dollar-threshold rule** (below some cutoff = orange, above it =
-  red) — simple, needs zero due-date data, but a flat dollar cutoff doesn't actually know which
-  bill is at risk; or **(b) a real per-bill rule** — only reachable once §20's per-expense due
-  dates exist, where red specifically means "the shortfall exceeds what's left after protecting
-  this week's actual Needs bills," a real "which bill" answer instead of an amount-based guess.
-  (b) is almost certainly the better long-run answer and the one the user's own description reads
-  as pointing toward, but it's gated on §20 landing first. Reasonable path: ship (a) for V1 as an
-  honest, clearly-labeled approximation, upgrade to (b) once §20's due-date field exists — same
-  "label the estimate as an estimate" rule as §A above, don't let V1's approximation quietly pass
-  as V2's real answer.
+### B. The Home card
 
-### C. V2 — real per-bill due dates (converges with §20, doesn't duplicate it)
+- [ ] Hero card: cash on hand, this period's set-aside (per Upkeep's per-check figure), and the gap/
+  surplus between them; secondary "if paychecks stopped" runway line. Pay-schedule-aware wording
+  (week / paycheck / month — reuse `checkWord`/`checkUnit` vocabulary from `BudgetPanel.jsx`).
+- [ ] **Three-state traffic light** — green (covered), orange (short by a moderate amount, "tighten
+  up"), red (shortfall puts a Needs bill at risk). **Open design question — resolve before building
+  the red tier:** (a) dollar-threshold rule (V1, labeled approximation) vs. (b) per-bill rule using
+  §20 due dates ("shortfall exceeds what's left after protecting this period's due Needs bills").
+  Ship (a) honestly labeled if needed; (b) is the target. Don't let (a) pass as (b).
+- [ ] `readOnly` (paywall-expired) gate + eager-save shadowing on any new callback; tokens + `.text-*` scale only;
+  update `docs/drift-app-warden.md` (Home panel + fiscal-math + AI-context rows) in the same PR.
 
-- [ ] **This is not a second due-date feature.** §20 below ("Optional Expense Due Dates — Real
-  'Left This Week' + Due-Today Alerts") already scopes exactly the per-expense due-date field this
-  card's real V2 needs. **The two features must share one `dueDate`-shaped field on the expense
-  schema, not grow two independent date concepts** — whichever of the two gets built first should
-  build the field generally enough for the other to reuse outright. Do not let this section or
-  §20 quietly diverge into parallel implementations of "when is this bill due."
-- [ ] Once real due dates exist, the weekly card's number stops being an averaged estimate and
-  becomes an actual "these specific bills, this specific amount, this specific week" figure — this
-  is also what makes §B's red-tier rule (b) above possible at all.
+### C. Pay-period check-in: the cash-correction step (the user's key mechanism)
 
-### D. Explicitly out of scope for this entry (not decided against, just not designed here)
+- [ ] **Add a final step to the existing pay-period check-in** (`WeekConfirmModal.jsx` — weekly for
+  weekly pay, the paycheck check-in for biweekly/salary (two-week flow), the monthly check-in for monthly
+  pay): after the user logs their days, ask **"How much of this check is actually in your bank account?"**
+  pre-filled with the app's assumed net for that period. User edits it to the real figure; that value is
+  what's added to cash on hand (replacing the estimate and clearing the "estimated" flag).
+- [ ] The step must be optional/skippable without corrupting the balance (skip = keep the estimate),
+  and must work through the biweekly two-week intercept (`isBiweeklyTwoWeek`, `priorWeek`) and re-open
+  via `handleReopenLastCheckIn` (editing a past check-in re-derives the credit, no double-count).
+- [ ] Eager-save on confirm (`saveConfigNow`/weekConfirmations path — same synchronous-value rule).
+- [ ] Self-report copy: say plainly this is the user's own number, not a bank read.
 
-- [ ] Any Coach involvement (a Coach-voiced version of this check-in, similar to the Net Worth
-  Trigger tiers in §2.C) — plausible future tether, not scoped here.
-- [ ] Automated bank-balance verification of any kind — would require a real banking-data
-  integration this app doesn't have; §B's self-report framing is the only version in scope.
-- [ ] Notification/reminder delivery for the Monday check-in itself (push, email, etc.) — a smaller
-  version of the same "how do we get a user's attention on a cadence" question §20.C's "due today"
-  pop-up already raises; worth solving once, not twice, if both ship.
+### D. Consumers that must not drift
 
-**Status: planning only — no code, no schema changes, no component work done yet.** This section
-exists to hold the idea and its open questions until it's picked up for real design/build work.
+- [ ] Coach/AI context (`lib/aiContext.js`, `lib/coachTools.js`) — employed cash/runway must resolve
+  through the shared function (grounding rule §6/§24), never a parallel approximation.
+- [ ] `Account/Admin` surfaces that print cash/runway for NJS (`NewJobSeasonDashboard`, Config View) —
+  confirm they still read the same engine after extraction.
+- [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
+- [ ] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
+
+### E. Explicitly out of scope for this entry
+
+- [ ] Coach-voiced version of the check-in (tether to §2.C tiers) — plausible later.
+- [ ] Automated bank-balance verification — needs a banking-data integration the app doesn't have.
+- [ ] Push/email reminders for the check-in — solve once with §20.C's due-today alerts if both ship.
+- [ ] Savings-balance-based runway (a separate input the app doesn't collect).
+
+**Status: scoped and design-locked, no code or schema changes done yet.**
 
 ---
 

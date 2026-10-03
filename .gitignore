@@ -34,4 +34,5 @@ agent-and-skill-overview.md
 # docs/coach-personality-rubric.md instead, not committed JSON blobs.
 .promptfoo/
 scripts/coach-eval/results/*
-!scripts/coach-eval/results/.gitkeeptmp-live-test/
+!scripts/coach-eval/results/.gitkeep
+tmp-live-test/

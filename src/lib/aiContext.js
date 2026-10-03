@@ -80,6 +80,9 @@ export function buildCoachContext({
   currentWeek = null,
   today = null,
   runwayDays = null,
+  // TODO §22 — App.jsx's computeCashOnHand() result, passed through as-is
+  // (grounding rule: never re-derived here). null = not set up / NJS mode.
+  cashOnHand = null,
   logs = [],
   futureWeeks = [],
   timelineWeekNets = [],
@@ -251,6 +254,19 @@ export function buildCoachContext({
         .join("; ");
       lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
     }
+  }
+
+  if (cashOnHand) {
+    const c = cashOnHand;
+    const statusText = c.status === "green" ? `covered with ${fmt$(c.gap)} to spare`
+      : `${fmt$(-c.gap)} short (${c.status === "orange" ? "tighten-up range" : "at risk"})`;
+    lines.push(`Cash on hand (user's own self-reported balance carried forward — an estimate, not a bank read): ${fmt$(c.cashOnHand)}`
+      + ` — started at ${fmt$(c.anchor)} on ${c.asOf}, +${fmt$(c.creditsTotal)} paychecks since`
+      + `${c.pendingCount > 0 ? ` (${fmt$(c.pendingTotal)} of it estimated, ${c.pendingCount} check-in${c.pendingCount === 1 ? "" : "s"} unfinished)` : ""}`
+      + `, −${fmt$(c.billsDueSince)} Needs bills since; includes ${fmt$(c.freedomAllowanceIncluded)} freedom allowance`);
+    lines.push(`This pay period's Needs set-aside: ${fmt$(c.setAside)} → ${statusText}`
+      + `${c.atRiskBill ? `; at-risk bill: ${c.atRiskBill.label} ${fmt$(c.atRiskBill.amount)} due ${c.atRiskBill.dueIso}, before next payday ${c.nextPaydayIso}` : ""}`
+      + `${c.ifStoppedWeeks != null ? `; if paychecks stopped, ~${c.ifStoppedWeeks.toFixed(1)} weeks of Needs covered` : ""}`);
   }
 
   if (config?.newJobSeasonMode) {

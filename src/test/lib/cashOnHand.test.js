@@ -62,13 +62,29 @@ describe("computeCashOnHand (TODO §22)", () => {
     expect(r.cashOnHand).toBe(3100 - 800);
   });
 
-  it("traffic light: green when covered, orange within max($50, 10%) short, red beyond", () => {
-    const expenses = [bill({ id: "rent", amount: 1000, cycle: "weekly", anchor: "2026-12-01" })]; // $1000/wk set-aside, nothing due yet
+  it("traffic light: green when covered, orange within max($200, 20%) short, red beyond", () => {
+    const expenses = [bill({ id: "rent", amount: 2000, cycle: "weekly", anchor: "2026-12-01" })]; // $2000/wk set-aside, nothing due before payday
     const at = (anchor) => computeCashOnHand(base({ cashOnHandAnchor: anchor, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses }));
-    expect(at(1000).status).toBe("green");
-    expect(at(901).status).toBe("orange");
-    expect(at(899).status).toBe("red");
-    expect(at(1000).ifStoppedWeeks).toBe(1);
+    expect(at(2000).status).toBe("green");
+    expect(at(1600).status).toBe("orange"); // 20% of 2000 = 400 > 200
+    expect(at(1599).status).toBe("red");
+    expect(at(2000).ifStoppedWeeks).toBe(1);
+    const small = [bill({ id: "rent", amount: 500, cycle: "weekly", anchor: "2026-12-01" })]; // 20% = 100 → $200 floor wins
+    const s = (anchor) => computeCashOnHand(base({ cashOnHandAnchor: anchor, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses: small })).status;
+    expect(s(300)).toBe("orange");
+    expect(s(299)).toBe("red");
+  });
+
+  it("red names the Needs bill due before the next payday that cash can't cover (rule b)", () => {
+    // today 10/1, next payday 10/5 (week 13). Phone due 10/2, Rent due 10/3.
+    const expenses = [bill({ id: "phone", amount: 100, anchor: "2026-10-02" }), bill({ id: "rent", amount: 900, anchor: "2026-10-03" })];
+    const r = computeCashOnHand(base({ cashOnHandAnchor: 1500, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses }));
+    expect(r.nextPaydayIso).toBe("2026-10-05");
+    expect(r.dueBeforePayday).toBe(1000);
+    expect(r.atRiskBill).toBeNull();
+    const short = computeCashOnHand(base({ cashOnHandAnchor: 600, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses }));
+    expect(short.status).toBe("red");
+    expect(short.atRiskBill).toMatchObject({ id: "rent", dueIso: "2026-10-03", amount: 900 });
   });
 });
 

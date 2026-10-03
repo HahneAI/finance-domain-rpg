@@ -103,6 +103,40 @@ try {
     eq("§22 no page errors", [...realErrors(app), ...realErrors(app2)], []); await app2.close();
     void card2;
   }
+  // ── §22.C check-in's last step ("how much landed") → correction saved → ledger shows it
+  {
+    const row = rowWith([], { cashOnHandAnchor: 500, cashOnHandAnchorAsOf: iso(addDays(now, -21)), accountCreatedIdx: 0 });
+    row.week_confirmations = {};
+    const app = await open({ row }); const { page } = app;
+    await page.getByLabel("View pending paycheck credits").click(); await settle(page, 1500);
+    await page.getByLabel("Finish check-in").click(); await settle(page, 1200);
+    // DHL weeks may require picking schedule-extension (OT) day(s) before Confirm enables.
+    const confirmBtn = page.getByRole("button", { name: /^Confirm Week$/ });
+    for (let i = 0; i < 4 && !(await confirmBtn.isEnabled().catch(() => false)); i++) {
+      await page.getByRole("button", { name: /^\+ (Mon|Tue|Wed|Thu|Fri|Sat|Sun)/ }).first().click(); await settle(page, 300);
+    }
+    await confirmBtn.click(); await settle(page, 1500);
+    const step = page.getByRole("dialog", { name: "Paycheck landed" });
+    const prefill = await step.locator("input").inputValue().catch(() => null);
+    check("§22.C check-in ends on the 'how much landed' step, pre-filled with the estimate", (await vis(step)) && Number(prefill) > 0, prefill);
+    await step.locator("input").fill("777"); await page.getByLabel("Save paycheck amount").click(); await settle(page, 1500);
+    const corr = app.lastSave()?.config?.cashOnHandCreditCorrections ?? {};
+    check("§22.C saving eager-saves the correction for that pay week", Object.values(corr).includes(777), corr);
+    await dismissModals(page); await nav(page, "log"); await settle(page, 800);
+    const ledger = await page.getByRole("region", { name: "Paycheck credits", exact: true }).innerText();
+    check("§22.C ledger shows the corrected credit as confirmed, your number", /\+\$777/.test(ledger) && /your number/.test(ledger) && /Confirmed/i.test(ledger));
+    eq("§22.C no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §22.B red tier (rule b): a Needs bill due before the next payday that cash can't cover
+  {
+    const wed = new Date("2026-09-30T12:00:00"); // DHL preset pays through Sunday → next credit Mon 10/5
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900, anchor: "2026-10-01" })], { cashOnHandAnchor: 600, cashOnHandAnchorAsOf: "2026-09-30" });
+    const app = await open({ row, fixedTime: wed }); const { page } = app;
+    const card = page.getByRole("region", { name: "Cash on hand", exact: true });
+    const alert = card.getByRole("alert");
+    check("§22.B red names the at-risk bill due before payday", (await vis(alert)) && /Test Rent \(\$900\) is due Oct 1, before your next paycheck/.test(await alert.innerText()));
+    eq("§22.B no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

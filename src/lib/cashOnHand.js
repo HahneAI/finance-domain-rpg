@@ -12,7 +12,7 @@
 // separately so the card can show it as its own line.
 import { PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getExactEffectiveAmountForMonth, getPhaseIndex, isExpenseRemoved, toLocalIso } from "./finance.js";
-import { sumBillOccurrencesSince } from "./newJobSeasonRunway.js";
+import { listBillOccurrencesSince, sumBillOccurrencesSince } from "./newJobSeasonRunway.js";
 
 // A paycheck is credited the day after its pay period closes — the same moment
 // the pay-period check-in becomes due (App.jsx isPayPeriodPast, base-user rule),
@@ -56,6 +56,9 @@ export function computeNeedsSetAsidePerCheck(expenses, todayIso, userPaySchedule
     .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, monthKey, phaseIdx), 0);
   return { weeklyNeeds: weekly, perCheck: weekly * perCheckFactor, perCheckFactor, checksPerYear };
 }
+
+export const ORANGE_BAND_MIN = 200;
+export const ORANGE_BAND_PCT = 0.2;
 
 // Every live (not deleted/zeroed-forward) Needs bill or loan counts against cash.
 function isLiveNeedsBill(exp, todayIso) {
@@ -106,10 +109,30 @@ export function computeCashOnHand({ config, expenses, allWeeks, weekNetLookup, w
 
   const setAside = computeNeedsSetAsidePerCheck(expenses, effectiveToday, sched);
   const gap = cashOnHand - setAside.perCheck;
-  // V1 traffic light (TODO §22.B option (a), labeled an estimate in the UI):
-  // short by up to max($50, 10% of set-aside) = orange "tighten up"; more = red.
-  const orangeBand = Math.max(50, setAside.perCheck * 0.1);
-  const status = gap >= 0 ? "green" : (-gap <= orangeBand ? "orange" : "red");
+  // Traffic light (TODO §22.B; thresholds set by Anthony 2026-10-03):
+  //   green  — cash covers this period's Needs set-aside.
+  //   orange — short by up to max($200, 20% of the set-aside): "tighten up".
+  //   red    — short by more than that band, OR (rule (b), per-bill) a specific
+  //            Needs bill due before the next payday can't be covered by the
+  //            cash on hand, walking upcoming bills in due-date order.
+  const orangeBand = Math.max(ORANGE_BAND_MIN, setAside.perCheck * ORANGE_BAND_PCT);
+  const nextPaydayIso = (allWeeks ?? [])
+    .filter(w => w.active && w.isPayWeek)
+    .map(resolvePaycheckCreditIso)
+    .filter(d => d > effectiveToday)
+    .sort()[0] ?? null;
+  const dayBefore = (iso) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() - 1); return toLocalIso(d); };
+  const upcomingBills = nextPaydayIso
+    ? listBillOccurrencesSince(expenses, effectiveToday, dayBefore(nextPaydayIso), isLiveNeedsBill)
+      .sort((a, b) => (a.dueIso < b.dueIso ? -1 : a.dueIso > b.dueIso ? 1 : 0))
+    : [];
+  let running = cashOnHand;
+  let atRiskBill = null;
+  for (const o of upcomingBills) {
+    running -= o.amount;
+    if (running < 0) { atRiskBill = { id: o.expense.id, label: o.expense.label, dueIso: o.dueIso, amount: o.amount }; break; }
+  }
+  const status = atRiskBill ? "red" : gap >= 0 ? "green" : (-gap <= orangeBand ? "orange" : "red");
 
   // Secondary "if paychecks stopped" line — NJS-style cash ÷ Needs burn.
   const ifStoppedWeeks = setAside.weeklyNeeds > 0 ? Math.max(0, cashOnHand) / setAside.weeklyNeeds : null;
@@ -128,6 +151,10 @@ export function computeCashOnHand({ config, expenses, allWeeks, weekNetLookup, w
     weeklyNeeds: setAside.weeklyNeeds,
     gap,
     status,
+    orangeBand,
+    atRiskBill,
+    nextPaydayIso,
+    dueBeforePayday: upcomingBills.reduce((t, o) => t + o.amount, 0),
     ifStoppedWeeks,
   };
 }

@@ -14,7 +14,8 @@ import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
-import { computeCashOnHand } from "./lib/cashOnHand.js";
+import { computeCashOnHand, resolvePaycheckCreditIso } from "./lib/cashOnHand.js";
+import { PaycheckLandedStep } from "./components/PaycheckLandedStep.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
@@ -1671,6 +1672,9 @@ export default function App() {
   // confirmDismissed: session-only flag; set when user clicks "Skip for now".
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
   const [confirmDismissed, setConfirmDismissed] = useState(false);
+  // TODO §22.C — pay week whose "how much actually landed" step is open (the
+  // check-in's final step; null = closed). Session-only; skipping keeps the estimate.
+  const [cashStepWeekIdx, setCashStepWeekIdx] = useState(null);
 
   // ── Pay weeks eligible for the confirm modal ──
   // Closed-pay-period pay weeks from account creation onward. isPayWeek is set in
@@ -1959,6 +1963,7 @@ export default function App() {
   const cashOnHand = useMemo(() => computeCashOnHand({
     config, expenses, allWeeks, weekNetLookup, weekConfirmations, effectiveToday,
   }), [config, expenses, allWeeks, weekNetLookup, weekConfirmations, effectiveToday]);
+  const cashStepCredit = cashStepWeekIdx != null ? (cashOnHand?.credits.find(c => c.weekIdx === cashStepWeekIdx) ?? null) : null;
 
   const futureWeekNetsRaw = useMemo(
     () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - freedomAllowancePerWeek)),
@@ -4499,7 +4504,7 @@ export default function App() {
           until all past weeks are confirmed. Badge click also clears it if user dismissed.
           onDismiss: session-only skip — badge persists and re-opens modal on next click.
       */}
-      {confirmTriggerWeek && !confirmDismissed && (
+      {confirmTriggerWeek && !confirmDismissed && !cashStepCredit && (
         <WeekConfirmModal
           key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
@@ -4563,10 +4568,34 @@ export default function App() {
             // backgrounded/reclaimed mobile tab before it fires meant the
             // confirmation was silently lost and the modal popped right back up.
             savePersistedStateNow({ weekConfirmations: next, logs: newLogs });
+            // TODO §22.C — the check-in's last step, only when this pay week's
+            // credit is in the Cash on Hand ledger (balance set, credit after it).
+            if (!config.newJobSeasonMode && config.cashOnHandAnchor != null && config.cashOnHandAnchorAsOf
+              && resolvePaycheckCreditIso(confirmTriggerWeek) > config.cashOnHandAnchorAsOf
+              && resolvePaycheckCreditIso(confirmTriggerWeek) <= effectiveToday) {
+              setCashStepWeekIdx(confirmTriggerWeek.idx);
+            }
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />
       )}
+      {cashStepCredit && (() => {
+        return (
+          <PaycheckLandedStep
+            key={cashStepWeekIdx}
+            credit={cashStepCredit}
+            onSkip={() => setCashStepWeekIdx(null)}
+            onSave={(amount) => {
+              if (!isExpiredReadOnly) {
+                const next = { ...config, cashOnHandCreditCorrections: { ...(config.cashOnHandCreditCorrections ?? {}), [cashStepWeekIdx]: amount } };
+                setConfig(next);
+                saveConfigNow(next);
+              }
+              setCashStepWeekIdx(null);
+            }}
+          />
+        );
+      })()}
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
 
@@ -4597,6 +4626,7 @@ export default function App() {
           prevWeekNet={prevWeekNet}
           allWeeks={allWeeks}
           runwayDays={coachRunwayDays}
+          cashOnHand={cashOnHand}
         />
       )}
 

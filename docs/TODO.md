@@ -398,12 +398,19 @@ user to finish their check-in from the 🔔 bell, plus a "Finish check-in" butto
 check-in modal the bell does. Storage decided: credits are **derived** (pay weeks × `weekNetLookup`),
 not stored; only the user's corrections persist (`config.cashOnHandCreditCorrections`, keyed by pay-week idx).
 
-**Build log 2026-10-03 (directed build, not a shotgun run — unchecked until Anthony verifies):** §A engine
-(`lib/cashOnHand.js`, shared `sumBillOccurrencesSince`), §B Home card (`CashOnHandCard.jsx`, V1 dollar-band
-traffic light), the Log ledger, and the card→Log→check-in flow are built and covered by
-`src/test/lib/cashOnHand.test.js` + `npm run live-test` (§22 scenario). **Not built yet:** §C's
-"how much actually landed" check-in step (the engine already reads `cashOnHandCreditCorrections`, so §C
-only has to write it), §D consumers (Coach context, account-reference), red-tier rule (b).
+**Build log 2026-10-03 (directed builds, not shotgun runs — unchecked until Anthony verifies):**
+- Build 1: §A engine (`lib/cashOnHand.js`, shared occurrence walk), §B Home card (`CashOnHandCard.jsx`), the
+  Log ledger, and the card→Log→check-in flow.
+- Build 2: **thresholds set by Anthony** — orange = short by up to max($200, 20% of the period's Needs
+  set-aside), red = short by more (`ORANGE_BAND_MIN`/`ORANGE_BAND_PCT`); **red rule (b)** — red also fires
+  when a specific live Needs bill due before the next payday can't be covered, and the card names it
+  (`atRiskBill`, via `listBillOccurrencesSince`); **§C "how much landed" step** (`PaycheckLandedStep.jsx`)
+  opens after a check-in is confirmed, pre-filled with the credit's post-log estimate, Save →
+  `cashOnHandCreditCorrections[idx]` (eager), Keep estimate = skip; **Coach context** — `buildCoachContext`
+  gets the engine result verbatim (`cashOnHand` prop via AskCoachPanel).
+- Tests: `src/test/lib/cashOnHand.test.js`, `aiContext.test.js` (Cash on Hand block), `npm run live-test`
+  §22/§22.B/§22.C scenarios. **Still open:** `docs/account-reference.json` expectations; Coach on
+  `CoachNetWorthCard` (single-shot, not wired).
 
 ### A. Cash-on-hand engine (import from NJS, don't duplicate)
 
@@ -436,6 +443,8 @@ only has to write it), §D consumers (Coach context, account-reference), red-tie
   the red tier:** (a) dollar-threshold rule (V1, labeled approximation) vs. (b) per-bill rule using
   §20 due dates ("shortfall exceeds what's left after protecting this period's due Needs bills").
   Ship (a) honestly labeled if needed; (b) is the target. Don't let (a) pass as (b).
+  **Resolved 2026-10-03:** both — (a) with Anthony's thresholds (orange ≤ max($200, 20%) short) and (b)
+  per-bill red, which wins whenever it fires.
 - [ ] `readOnly` (paywall-expired) gate + eager-save shadowing on any new callback; tokens + `.text-*` scale only;
   update `docs/drift-app-warden.md` (Home panel + fiscal-math + AI-context rows) in the same PR.
 

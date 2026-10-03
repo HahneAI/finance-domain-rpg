@@ -115,6 +115,7 @@ export function AskCoachPanel({
   currentWeek,
   today,
   runwayDays = null,
+  cashOnHand = null,
   logs = [],
   futureWeeks = [],
   timelineWeekNets = [],
@@ -304,7 +305,7 @@ export function AskCoachPanel({
     setSending(true);
     try {
       const contextBlock = buildCoachContext({
-        config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays, logs,
+        config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays, cashOnHand, logs,
         futureWeeks, timelineWeekNets, futureWeekNets, logNetLost, logNetGained, futureEventDeductions, prevWeekNet, allWeeks,
         // This panel sends ASK_COACH_TOOLS below, so the per-expense and
         // per-goal detail lines shrink to an index — the tools serve that depth

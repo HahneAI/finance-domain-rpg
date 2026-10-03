@@ -8,7 +8,7 @@ const fmt = (n) => `${n < 0 ? "-" : ""}$${Math.abs(Math.round(n)).toLocaleString
 const STATUS = {
   green: { color: "var(--color-green)", label: "Covered" },
   orange: { color: "var(--color-warning)", label: "Tighten up" },
-  red: { color: "var(--color-red)", label: "A Needs bill is at risk" },
+  red: { color: "var(--color-red)", label: "Short — protect your Needs" },
 };
 
 function BalanceEditor({ initial, onSave, onCancel, prompt }) {
@@ -108,6 +108,11 @@ export function CashOnHandCard({ cash, checkWord = "week", onSetBalance, onOpenL
           {cash.gap >= 0 ? `${fmt(cash.gap)} to spare` : `${fmt(-cash.gap)} short`}
         </span>
       </div>
+      {cash.atRiskBill && (
+        <div role="alert" className="text-xs" style={{ marginTop: "8px", padding: "8px 10px", borderRadius: "10px", color: "var(--color-text-primary)", background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-red)" }}>
+          {cash.atRiskBill.label} ({fmt(cash.atRiskBill.amount)}) is due {new Date(cash.atRiskBill.dueIso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}, before your next paycheck — your cash on hand won&apos;t cover it.
+        </div>
+      )}
 
       {cash.pendingCount > 0 && (
         <Pressable onClick={onOpenLedger} aria-label="View pending paycheck credits" className="text-xs"

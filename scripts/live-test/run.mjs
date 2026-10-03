@@ -79,6 +79,30 @@ try {
     check("§24 NJS Upcoming hides deleted, shows live; deleted passes through untouched", !t.includes("Doomed Gym") && t.includes("Child Support") && !!sv.expenses.find((e) => e.id === "t_gym") && sv.expenses.find((e) => e.id === "t_gym").trackDuringNewJobSeason === undefined);
     eq("§24 no page errors", realErrors(app), []); await app.close();
   }
+  // ── §22 Cash on Hand card → Paycheck Credits ledger in Log
+  {
+    const app = await open({ row: rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 1000, anchor: iso(addDays(now, 3)) })]) });
+    const { page } = app; const card = page.getByRole("region", { name: "Cash on hand", exact: true });
+    check("§22 card shows the starting-balance prompt for a new user", (await vis(card)) && /What's in your bank account right now/.test(await card.innerText()));
+    await card.locator("input").fill("1,200"); await page.getByLabel("Save cash on hand").click(); await settle(page, 1200);
+    const cfg = app.lastSave()?.config;
+    check("§22 saving the balance eager-saves anchor + as-of today", cfg?.cashOnHandAnchor === 1200 && cfg?.cashOnHandAnchorAsOf === T, cfg && { a: cfg.cashOnHandAnchor, d: cfg.cashOnHandAnchorAsOf });
+    check("§22 card shows $1,200 and a Needs set-aside line", /\$1,200/.test(await card.innerText()) && /Set aside this week \(Needs\)/.test(await card.innerText()));
+    await app.close();
+    // Anchor 3 weeks back, no check-ins → pending estimated credits; card links to the Log ledger.
+    const row = rowWith([], { cashOnHandAnchor: 500, cashOnHandAnchorAsOf: iso(addDays(now, -21)), accountCreatedIdx: 0 }); // idx 0 = no auto-confirmed weeks → credits pending
+    row.week_confirmations = {};
+    const app2 = await open({ row }); const p2 = app2.page; const card2 = p2.getByRole("region", { name: "Cash on hand", exact: true });
+    const chip = p2.getByLabel("View pending paycheck credits");
+    check("§22 pending paycheck credits surface on the card", (await vis(chip)) && /estimated paycheck credit/.test(await chip.innerText()));
+    await chip.click(); await settle(p2, 1500);
+    const ledger = p2.getByRole("region", { name: "Paycheck credits", exact: true });
+    const rows = await p2.getByTestId("paycheck-credit-row").count();
+    check("§22 chip opens the Log panel's Paycheck Credits ledger with rows + check-in copy", (await vis(ledger)) && rows >= 2 && /Finish your check-in/.test(await ledger.innerText()), rows);
+    check("§22 Finish check-in button present", await vis(p2.getByLabel("Finish check-in")));
+    eq("§22 no page errors", [...realErrors(app), ...realErrors(app2)], []); await app2.close();
+    void card2;
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

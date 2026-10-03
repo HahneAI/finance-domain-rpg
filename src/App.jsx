@@ -14,6 +14,7 @@ import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
+import { computeCashOnHand } from "./lib/cashOnHand.js";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
@@ -1953,6 +1954,12 @@ export default function App() {
     return result;
   }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, freedomAllowancePerWeek, eventImpact.weeklyNetAdjustments]);
 
+  // TODO §22 — employed Cash on Hand (lib/cashOnHand.js). Computed ONCE here and
+  // handed to Home (card) and Log (Paycheck Credits ledger) so neither re-derives it.
+  const cashOnHand = useMemo(() => computeCashOnHand({
+    config, expenses, allWeeks, weekNetLookup, weekConfirmations, effectiveToday,
+  }), [config, expenses, allWeeks, weekNetLookup, weekConfirmations, effectiveToday]);
+
   const futureWeekNetsRaw = useMemo(
     () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - freedomAllowancePerWeek)),
     [futureWeeks, weekNetLookup, config, taxDerived, showExtra, freedomAllowancePerWeek]
@@ -2305,6 +2312,11 @@ export default function App() {
       ) : (
         <HomePanel
           navigate={navigate}
+          cashOnHand={cashOnHand}
+          onOpenCashLedger={() => {
+            navigate("log");
+            setTimeout(() => document.getElementById("paycheck-credits")?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+          }}
           onLocalSignOut={handleLocalSignOut}
           weeklyIncome={weeklyIncome}
           adjustedTakeHome={logTotals.adjustedTakeHome}
@@ -2394,6 +2406,7 @@ export default function App() {
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
+        cashOnHand={cashOnHand} onOpenCheckIn={() => setConfirmDismissed(false)}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}

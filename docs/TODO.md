@@ -390,6 +390,21 @@ manual cash entry replaced by a take-home-driven balance corrected at each pay-p
 
 **Placement:** second hero card on Home under the Claim Date banner; shell-tier "first thing you see."
 
+**Paycheck credit ledger flow (locked 2026-10-03, user directive):** every paycheck added to cash on hand
+is a **credit**, shown as an *estimate* until that pay period's check-in is finished. The ledger lives in
+the **Log panel** ("Paycheck Credits", `PaycheckCreditsLedger.jsx`). Clicking the card's pending-credit
+line (or "View paycheck credits") opens Log scrolled to the ledger; pending rows carry copy telling the
+user to finish their check-in from the 🔔 bell, plus a "Finish check-in" button that opens the same
+check-in modal the bell does. Storage decided: credits are **derived** (pay weeks × `weekNetLookup`),
+not stored; only the user's corrections persist (`config.cashOnHandCreditCorrections`, keyed by pay-week idx).
+
+**Build log 2026-10-03 (directed build, not a shotgun run — unchecked until Anthony verifies):** §A engine
+(`lib/cashOnHand.js`, shared `sumBillOccurrencesSince`), §B Home card (`CashOnHandCard.jsx`, V1 dollar-band
+traffic light), the Log ledger, and the card→Log→check-in flow are built and covered by
+`src/test/lib/cashOnHand.test.js` + `npm run live-test` (§22 scenario). **Not built yet:** §C's
+"how much actually landed" check-in step (the engine already reads `cashOnHandCreditCorrections`, so §C
+only has to write it), §D consumers (Coach context, account-reference), red-tier rule (b).
+
 ### A. Cash-on-hand engine (import from NJS, don't duplicate)
 
 - [ ] **Extract/generalize the NJS cash math into a shared pure lib** — `computeNewJobSeasonRunway`,

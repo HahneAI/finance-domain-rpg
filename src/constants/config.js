@@ -142,6 +142,14 @@ export const DEFAULT_CONFIG = {
   // null = never explicitly stamped (pre-§1.H17 accounts) — falls back to
   // newJobSeasonDate.
   newJobSeasonCashOnHandAsOf: null,  // "YYYY-MM-DD"
+  // Employed Cash on Hand (TODO §22, lib/cashOnHand.js). The user's own bank
+  // balance as of `cashOnHandAnchorAsOf` (self-reported, never a bank read);
+  // paychecks since then are credited and Needs bills debited automatically.
+  // null = not set yet (Home card shows the setup prompt). Corrections are the
+  // pay-period check-in's "what actually landed" figure, keyed by pay-week idx.
+  cashOnHandAnchor: null,
+  cashOnHandAnchorAsOf: null,         // "YYYY-MM-DD"
+  cashOnHandCreditCorrections: {},    // { [payWeekIdx]: dollars }
   // Pending/final paycheck still owed from the lost job (TODO §1.H15) —
   // optional, skippable in the wizard (unlike cash on hand). Resolved once at
   // Activate time from "days worked in your final week" + "which day checks

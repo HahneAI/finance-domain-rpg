@@ -163,11 +163,19 @@ function weeklyAmountForBurn(exp, todayDate, phaseIdx) {
 // occurrence at a time, advancing the cursor past each hit, same approach
 // NewJobSeasonBudgetPanel's upcomingBills list uses for a single occurrence.
 export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso) {
+  return sumBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, isTrackedActiveEssential);
+}
+
+// The occurrence walk itself, shared with the employed Cash on Hand engine
+// (lib/cashOnHand.js, TODO §22) — only the "which bills count" predicate
+// differs (NJS: tracked + NJS-active essentials; employed: every live Needs
+// bill), so the due-date math can't drift between the two modes.
+export function sumBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, include) {
   if (!fromDateExclusiveIso || !throughDateInclusiveIso) return 0;
   const through = new Date(throughDateInclusiveIso + "T12:00:00");
   let total = 0;
   for (const exp of expenses ?? []) {
-    if (!isTrackedActiveEssential(exp, throughDateInclusiveIso)) continue;
+    if (!include(exp, throughDateInclusiveIso)) continue;
     const amount = getExpenseDisplayAmount(exp);
     if (amount <= 0) continue;
     const cursor = new Date(fromDateExclusiveIso + "T12:00:00");

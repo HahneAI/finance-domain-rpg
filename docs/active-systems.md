@@ -276,5 +276,5 @@ v1 (`resume_profile`, `resume_review` chat type; migration 036) and v2 (any-file
 12 functions max (one per non-`_` file in `api/`). **Currently 12/12.** Merge candidates if another is
 needed: the three `stripe-*.js` routes; `admin-beta-hub.js`/`admin-changelog.js` dispatch on a body field
 as precedent (`api/seed.js` already merged three seeds). A build failing on "No more than 12 Serverless
-Functions" is this, not an outage. Next migration number is **047** (verify against `database/migrations/`;
+Functions" is this, not an outage. Next migration number is **048** (verify against `database/migrations/`;
 `038_BOOKMARK_*` is a snapshot, not a migration).

@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet, computeThisWeekActualSpend, getBillsDueOn } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, saveResourceSnapshot, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { PENDING_BETA_CODE_STORAGE_KEY, MAX_PENDING_BETA_CODE_ATTEMPTS, parsePendingBetaCode } from "./lib/pendingBetaCode.js";
@@ -15,6 +15,8 @@ import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { computeCashOnHand, resolvePaycheckCreditIso } from "./lib/cashOnHand.js";
+import { computeClaimDates } from "./lib/claimDate.js";
+import { buildResourceSnapshotPayload, RESOURCE_SNAPSHOT_SCHEMA_VERSION } from "./lib/resourceSnapshot.js";
 import { PaycheckLandedStep } from "./components/PaycheckLandedStep.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
@@ -2062,6 +2064,47 @@ export default function App() {
   //   that accounts for already-logged partial shifts.
   // ─────────────────────────────────────────────────────────────────────────────────
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
+
+  // ── Cyborg Resource snapshot (TODO §22.F, migration 047) ─────────────────────
+  // Cyborg reads Cash on Hand, the next paycheck and the next Claim Date from one
+  // row this app publishes. Every value comes from the same function the UI uses:
+  // the `cashOnHand` memo above and computeClaimDates() — called with exactly the
+  // props HomePanel receives, so its Claim Date can't differ from Home's (F177).
+  // Admin-only (the one account linked to Cyborg) — admins bypass the paywall,
+  // so this never runs for a read-only (expired) account; no isExpiredReadOnly
+  // check needed (it's also computed below the early returns, out of reach). Writes when the payload
+  // changes (debounced) and again on every return to the foreground — a resumed
+  // iOS PWA doesn't reload, and the snapshot's `computed_at` is what Cyborg shows
+  // as "as of". Best effort: never touches SaveFailedBanner or the real save.
+  const resourceSnapshotPayload = useMemo(() => {
+    if (loading || !isAdmin) return null;
+    const { nextClaim } = computeClaimDates({
+      goals, futureWeeks, timelineWeekNets: futureWeekNetsRaw, expenses,
+      logNetLost: logTotals.netLost, logNetGained: logTotals.netGained,
+      futureEventDeductions, config, currentWeek, today: effectiveToday,
+    });
+    return buildResourceSnapshotPayload({ cashOnHand, nextClaim });
+  }, [loading, isAdmin, goals, futureWeeks, futureWeekNetsRaw, expenses, logTotals.netLost, logTotals.netGained, futureEventDeductions, config, currentWeek, effectiveToday, cashOnHand]);
+  const resourceSnapshotJson = resourceSnapshotPayload ? JSON.stringify(resourceSnapshotPayload) : null;
+  const lastResourceSnapshotRef = useRef(null);
+  const [resourceSnapshotResumeTick, setResourceSnapshotResumeTick] = useState(0);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      lastResourceSnapshotRef.current = null; // force a re-publish: fresh "as of"
+      setResourceSnapshotResumeTick((t) => t + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+  useEffect(() => {
+    if (!resourceSnapshotJson || resourceSnapshotJson === lastResourceSnapshotRef.current) return;
+    const timer = setTimeout(() => {
+      lastResourceSnapshotRef.current = resourceSnapshotJson;
+      saveResourceSnapshot(JSON.parse(resourceSnapshotJson), RESOURCE_SNAPSHOT_SCHEMA_VERSION);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [resourceSnapshotJson, resourceSnapshotResumeTick]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Closes whichever wizard mount is open. Historically this staged a 180ms

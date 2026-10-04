@@ -330,7 +330,7 @@ never tick the box — only Anthony does.
   **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
   handling since it calls Anthropic directly and real money is on the line.
 
-**Migrations:** next real migration is **047** (042–046 exist) — always verify against
+**Migrations:** next real migration is **048** (042–047 exist) — always verify against
 `database/migrations/` before numbering; this note has gone stale five times. `0NN_BOOKMARK_*` files
 (latest `038_BOOKMARK_schema_snapshot_2026-08-06.sql`) are schema snapshots, **never** a pending
 migration. Per-migration history, and the 036/037 production-confirmation note:

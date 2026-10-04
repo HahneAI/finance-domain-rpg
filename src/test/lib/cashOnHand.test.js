@@ -117,4 +117,15 @@ describe("pay periods and set-aside", () => {
     expect(computeNeedsSetAsidePerCheck(expenses, today, "weekly").perCheck).toBe(upkeepNeeds);
     expect(computeNeedsSetAsidePerCheck(expenses, today, "biweekly").perCheck).toBe(upkeepNeeds * 2);
   });
+
+  it("weeklyLifestyle matches the Upkeep Lifestyle total and never enters the set-aside (TODO §22.F)", () => {
+    const expenses = [bill({ id: "rent", amount: 400, cycle: "weekly" }), bill({ id: "fun", amount: 90, cycle: "weekly", category: "Lifestyle" })];
+    const today = "2026-10-01";
+    const upkeepLifestyle = expenses.filter(e => e.category === "Lifestyle")
+      .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, today.slice(0, 7), getPhaseIndex(new Date(today + "T12:00:00"))), 0);
+    const r = computeNeedsSetAsidePerCheck(expenses, today, "weekly");
+    expect(upkeepLifestyle).toBeGreaterThan(0);
+    expect(r.weeklyLifestyle).toBe(upkeepLifestyle);
+    expect(r.perCheck).toBe(r.weeklyNeeds); // weekly pay: set-aside is Needs alone
+  });
 });

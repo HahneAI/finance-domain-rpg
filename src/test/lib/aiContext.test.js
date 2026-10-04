@@ -43,6 +43,34 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far, $1,500 total target");
     expect(block).toContain("Active goals total (Home tile — unfunded target sum): $1,000");
     expect(block).toContain("Expenses: 1 active line, $400/week");
+  });
+
+  it("excludes a deleted bill from the expense count and label list", () => {
+    const allWeeks = buildAllWeeks(52);
+    // avgWeeklySpend arrives already grounded from App.jsx, and a deleted bill
+    // contributes $0 to it by construction (zeroed forward). Counting it here
+    // made one sentence contradict itself: "2 active lines, $400/week" where
+    // the second line was worth nothing and is hidden from Upkeep.
+    const block = buildCoachContext({
+      weeklyIncome: 1000,
+      avgWeeklySpend: 400,
+      expenses: [
+        { label: "Food", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }], newJobSeasonStatus: "active" },
+        {
+          label: "Cancelled Streaming", category: "Lifestyle", newJobSeasonStatus: "active",
+          history: [
+            { effectiveFrom: "2026-01-01", weekly: [4, 4, 4, 4] },
+            { effectiveFrom: "2026-07-01", weekly: [0, 0, 0, 0] },
+          ],
+        },
+      ],
+      currentWeek: { idx: 27 },
+      today: "2026-07-07",
+      allWeeks,
+    });
+
+    expect(block).toContain("Expenses: 1 active line, $400/week");
+    expect(block).not.toContain("Cancelled Streaming");
     expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
     // Regression: a live test asked Coach for a fiscal week number and got a
     // vague, seemingly-guessed "mid-November" — the raw ISO date and bare

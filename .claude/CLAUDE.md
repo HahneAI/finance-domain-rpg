@@ -46,6 +46,43 @@ next most mergeable group (same shape, different Stripe action).
 
 **Three-tier pipeline:** `claude/*` feature branches → `Version-control` (integration) → `master` (production). Push to feature branches; user merges to Version-control, then to master. For systematic cross-file updates (e.g. section numbering), use placeholder-based two-pass replacement (`§15` → `__SECTION_15__` → `§1`) to prevent regex overlap when replacing multiple references simultaneously.
 
+### Numbering collision check — MANDATORY, run it twice
+
+**Run before pushing AND again right after merging `Version-control`** whenever you add a
+`docs/TODO.md` section, a `database/migrations/` file, or a `drift-app-warden.md` F-entry:
+
+```bash
+{ grep -oE '^## [0-9]+\.' docs/TODO.md | sort | uniq -d | sed 's/^/TODO heading /'
+  grep -oE '^\| [0-9]+ \| [0-9]+ \|' docs/TODO.md | awk -F'|' '{print $3}' | sort -n | uniq -d | sed 's/^/TODO index §/'
+  ls database/migrations/*.sql | sed -E 's#.*/([0-9]+)_.*#\1#' | sort | uniq -d | sed 's/^/migration /'
+  grep -oE '^\*\*F[0-9]+ ·' docs/drift-app-warden.md | sort | uniq -d | sed 's/^/warden /'
+} | grep . || echo "no numbering collisions"
+```
+
+**Why "after merging" is the half that matters: git will not catch this for you.** Two branches
+appending `## 27.` at *different* points in a long file do not overlap textually, so the merge
+auto-resolves clean with no conflict and no warning — the file just quietly ends up with two
+`## 27.` headings and two Priority Index rows. Every collision so far was found by eye, after the
+fact. This has now happened four times: F-numbers once, TODO §27 twice (Job Hunt OS vs React
+upgrade, then again vs Location-Aware Claim Date), and §28 once (Coach over SMS vs React upgrade,
+2026-10-04 — a renumber that *itself* collided on the next merge). "Pick the next free number"
+is not enough, because a sibling branch picked the same next-free number an hour ago.
+
+**Resolution rule:** the number stays with whichever entry **already landed on `Version-control`
+AND is already cross-referenced**; the later writer renumbers. Grep the number across `docs/`
+before choosing — an entry cited from other docs is expensive to move, an hour-old one is not.
+Use the placeholder two-pass above only for a genuinely cross-file renumber; a 2–4 site renumber
+is safer done directly, asserting an exact match count per edit.
+
+**Known open collisions (pre-existing, not yet resolved):** `drift-app-warden.md` has **two F161
+entries** (§7 Setup Wizard Schedule+Tax merge / Bulk Edit `monthlyOverrides` regression, DW-20)
+and **two F162 entries** (§7 blur-gated reveals / duplicate PWA manifest, DW-21). Both sides of
+both pairs are cited from 4+ docs, so renumbering needs its own pass — until then, always
+qualify which one you mean. The check above reports these every run; that is expected, not a
+new failure.
+
+**Next free numbers (verify, do not trust):** TODO `§31` · migration `048` · warden `F181`.
+
 ---
 ## Commands
 ```bash
@@ -330,8 +367,9 @@ never tick the box — only Anthony does.
   **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
   handling since it calls Anthropic directly and real money is on the line.
 
-**Migrations:** next real migration is **047** (042–046 exist) — always verify against
-`database/migrations/` before numbering; this note has gone stale five times. `0NN_BOOKMARK_*` files
+**Migrations:** next real migration is **048** (042–047 exist) — always verify against
+`database/migrations/` before numbering; this note has gone stale five times (the Git PR Flow
+section's numbering collision check covers this — run it when adding a migration). `0NN_BOOKMARK_*` files
 (latest `038_BOOKMARK_schema_snapshot_2026-08-06.sql`) are schema snapshots, **never** a pending
 migration. Per-migration history, and the 036/037 production-confirmation note:
 `database/migrations/README.md`. Serverless cap + migration pointer: `docs/active-systems.md` §27.

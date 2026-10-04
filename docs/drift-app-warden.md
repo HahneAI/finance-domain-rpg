@@ -1243,7 +1243,8 @@ beneath it is unconditional, not gated on the rate having a value).
 | `newJobSeasonStatus` value set (now `active`/`paused`/`cancelled`/**`paid`**, shotgun 2026-10-01 §25/§26) or the "deleted expense" test (`isExpenseRemoved`/`getNextNonZeroIso`, moved to `finance.js` from `BudgetPanel.jsx`) | Every status reader MUST go through `isNjsBillActive` (`newJobSeasonRunway.js`): runway predicates, `NewJobSeasonBudgetPanel`, `App.jsx` `projectableExpenses`, `aiContext.js`, `coachTools.js` (3 sites) — a raw `=== "active"` silently drops paid bills from burn/projections/Coach. `paid` auto-resets via `isPaidForCurrentCycle` (derived, never written back); `newJobSeasonPaidSkipDecay` stops `sumBillsDueSince` double-subtracting a paid occurrence. `NewJobSeasonEntry` filters deleted bills for display but passes them through untouched into `onActivate`'s array | `grep -rn 'newJobSeasonStatus' src` must show no raw `=== "active"` outside `isNjsBillActive`; `njsDeletedAndPaidBills.test.jsx` (deleted bill absent from `sumBillsDueSince` — the money assertion; mark-paid cash rules) | D1 |
 | Expense cadence/amount correction or the optional `dueDateAnchor` (shotgun #2, 2026-10-01: `applyCadenceCorrection` in `expense.js`, `ExpenseDueDateField` in Budget's detail sheet, `computeThisWeekActualSpend` in `finance.js`) | A cadence correction is PERMANENT (rewrites `billingMeta` + `monthlyOverrides` forward via `applyMonthEditForward`, so normal Budget/`computeRemainingSpend`/Coach all see it); `dueDateAnchor` is read by `getNextDueDate` (NJS Upcoming Bills, Mark-as-Paid, §26 step) and now editable outside NJS; `computeThisWeekActualSpend` must keep its undated half on `getExactEffectiveAmountForMonth` (= `computeRemainingSpend`'s figure) — it has no UI consumer yet, so §20.B2 must read it, not re-derive | `njsCadenceAndDueDates.test.jsx`; before wiring B2, diff its undated half against `avgWeeklySpend` | D1 |
 | `computeThisWeekActualSpend` / `getBillsDueOn` / `resolvePerPaymentAmount` (`finance.js`, shotgun run #3) or the `thisWeekActual`/`billsDueToday` memos in `App.jsx` | Home's "With this week's bills" sub-line and Budget's identical line read ONE `App.jsx` memo (weekly-pay accounts only — biweekly/monthly checks span more than the 7-day window); the due-today card, the NJS "paid" skip and the `.ics` export (`lib/billsIcs.js`) all share `getNextDueDate`'s cycle math — a new cycle (e.g. §21 Quarterly) must be added to `billsIcs.js` RRULES too. Never recompute either figure inside a panel (F150) | `dueTodayAndCalendar.test.jsx`; Home vs Budget "With this week's bills" must match on a weekly-pay test account | D1 |
-| `computeCashOnHand` / `computeNeedsSetAsidePerCheck` / `resolvePayPeriodWeeks` (`lib/cashOnHand.js`, TODO §22, 2026-10-03), the `cashOnHand` memo in `App.jsx`, `cashOnHand*` config fields | ONE memo feeds Home's `CashOnHandCard` and Log's `PaycheckCreditsLedger` — never recompute in a panel (F150). Debits reuse `sumBillOccurrencesSince` (`newJobSeasonRunway.js`, shared with NJS `sumBillsDueSince` — a change to the occurrence walk moves BOTH modes). Credits read `weekNetLookup[idx].adjustedNet` (pre-Freedom-Allowance, by design — FA is counted, reported as `freedomAllowanceIncluded`); a credit is `pending` until `weekConfirmations[idx]` exists and its amount is `cashOnHandCreditCorrections[idx]` when set. Set-aside must equal Upkeep's Needs category total × `perCheckFactor` (`BudgetPanel.jsx` overview `cTot`) — change both or neither. Credit date = day after `payPeriodEndDate` (base-user `isPayPeriodPast` rule). Returns null in NJS mode — NJS keeps its own cash card. Status: orange band = max(`ORANGE_BAND_MIN` $200, `ORANGE_BAND_PCT` 20% × set-aside); red also when `atRiskBill` (first live Needs occurrence before `nextPaydayIso` that running cash can't cover — `listBillOccurrencesSince`, itemized twin of the shared walk). `PaycheckLandedStep` (App.jsx, after WeekConfirmModal's onConfirm) is the ONLY writer of `cashOnHandCreditCorrections`; WeekConfirmModal is suppressed while it is open. Coach reads the same object (`buildCoachContext({ cashOnHand })`) — never re-derive | `cashOnHand.test.js` (parity + thresholds + at-risk bill), `aiContext.test.js` Cash on Hand block; `npm run live-test` §22/§22.B/§22.C | D1 |
+| `computeCashOnHand` / `computeNeedsSetAsidePerCheck` / `resolvePayPeriodWeeks` (`lib/cashOnHand.js`, TODO §22, 2026-10-03), the `cashOnHand` memo in `App.jsx`, `cashOnHand*` config fields | ONE memo feeds Home's `CashOnHandCard` and Log's `PaycheckCreditsLedger` — never recompute in a panel (F150). Debits reuse `sumBillOccurrencesSince` (`newJobSeasonRunway.js`, shared with NJS `sumBillsDueSince` — a change to the occurrence walk moves BOTH modes). Credits read `weekNetLookup[idx].adjustedNet` (pre-Freedom-Allowance, by design — FA is counted, reported as `freedomAllowanceIncluded`); a credit is `pending` until `weekConfirmations[idx]` exists and its amount is `cashOnHandCreditCorrections[idx]` when set. Set-aside must equal Upkeep's Needs category total × `perCheckFactor` (`BudgetPanel.jsx` overview `cTot`) — change both or neither. Credit date = day after `payPeriodEndDate` (base-user `isPayPeriodPast` rule). Returns null in NJS mode — NJS keeps its own cash card. Status: orange band = max(`ORANGE_BAND_MIN` $200, `ORANGE_BAND_PCT` 20% × set-aside); red also when `atRiskBill` (first live Needs occurrence before `nextPaydayIso` that running cash can't cover — `listBillOccurrencesSince`, itemized twin of the shared walk). `PaycheckLandedStep` (App.jsx, after WeekConfirmModal's onConfirm) is the ONLY writer of `cashOnHandCreditCorrections`; WeekConfirmModal is suppressed while it is open. Coach reads the same object (`buildCoachContext({ cashOnHand })`) — never re-derive. `nextPaycheckEstimate` (§22.F) sums the next payday's pay period exactly like a credit's `estimate` — change both or neither. `weeklyLifestyle` (§22.F) must equal Upkeep's Lifestyle category total (`BudgetPanel.jsx` overview `cTot` for Lifestyle — regular, non-loan) and never enters `setAside`. **External consumer:** the Cyborg app reads `cashOnHand`/`status`/`gap`/`setAside`/`weeklyNeeds`/`weeklyLifestyle`/`pendingCount`/`nextPaydayIso`/`nextPaycheckEstimate`/`atRiskBill` through the resource snapshot (next row) | `cashOnHand.test.js` (parity + thresholds + at-risk bill + next paycheck), `aiContext.test.js` Cash on Hand block; `npm run live-test` §22/§22.B/§22.C | D1 |
+| `lib/resourceSnapshot.js` / `resource_snapshots` (migration 047) / the snapshot effect in `App.jsx` (TODO §22.F, 2026-10-04) | **Cross-app:** the Cyborg app (separate repo, `docs/resource-track-source.md` §5a) reads this row read-only and shows its figures with "as of `computed_at`". The payload only re-shapes `computeCashOnHand()` and `computeClaimDates().nextClaim` — never compute a figure inside `buildResourceSnapshotPayload`. A change to any copied field's **meaning** (or a rename/removal) must bump `RESOURCE_SNAPSHOT_SCHEMA_VERSION` and be mirrored in Cyborg's reader in the same change window. Admin-only write; never routes through `SaveFailedBanner` or the eager-save table (derived output, not user data). The payload memo sits **above** App.jsx's early returns (rules of hooks) | `resourceSnapshot.test.js`; after deploy, the admin account's `resource_snapshots` row updates on open/resume | D1 |
 | `estimatePendingCheckAmount`'s flat withholding-rate assumption (F144, `newJobSeasonRunway.js`) | The one-time `newJobSeasonPendingCheckAmount` stamped on Activate — no other consumer | Manual: a job-loss mid-pay-period test account; compare the stamped estimate against a hand-computed `computeNet`-equivalent for the same worked days | D1 |
 | `NewJobSeasonEntry` step contents (cash-on-hand, `trackDuringNewJobSeason`, due dates) | `computeNewJobSeasonRunway()` inputs (T2/T4 surfaces), F11's reset list | `newJobSeasonFlow.test.jsx` + runway headline sanity on a test account | D1 |
 | `isFoodPrimary`/`EXPENSE_CYCLE_OPTIONS` semantics (`db.js`, `lib/expense.js`) | `NewJobSeasonEntry`'s Food special case (§1) — Step 3 skips the week-of-month/custom-date `DueDatePicker` for the Food expense specifically (`exp.isFoodPrimary`) and instead asks which day it's shopped, resolving to a weekly `dueDateAnchor` (`resolveNextWeekdayOnOrAfter`, `lib/newJobSeasonRunway.js`) and flipping `billingMeta.cycle` to `"weekly"` — a *permanent* change to the persisted expense, not scoped to New Job Season only, so it also affects normal-mode Budget's Upcoming Bills/due-date display going forward | `newJobSeasonFlow.test.jsx`'s "asks Food which day..." case; `newJobSeasonRunway.test.js`'s `resolveNextWeekdayOnOrAfter` cases | D1 |
@@ -1423,8 +1424,9 @@ active all 52 weeks (`10ba9af` purged exactly that dead fallback).
 > `weeklyIncome` back out by 52. Check: the prop has no default in the signature; keep it
 > that way.
 
-**F18 · `computeGoalTimeline` consumption + Reset Timeline** — call at
-`HomePanel.jsx:287–295` (epoch arg `:295`), reset handler `:500–510` — **[L]**
+**F18 · `computeGoalTimeline` consumption + Reset Timeline** — call in
+`lib/claimDate.js`'s `computeClaimDates()` (moved out of `HomePanel.jsx` 2026-10-04, TODO §22.F; epoch arg
+`config.goalTimelineEpochIdx ?? null` unchanged), reset handler in `HomePanel.jsx` — **[L]**
 The Home goal cards run the authoritative week-by-week surplus simulation with
 `config.goalTimelineEpochIdx ?? null`. Reset Timeline writes the next pay week's idx as
 the new epoch **and** clears active goals' stale `dueWeek`, double eager-saving (config
@@ -1585,7 +1587,8 @@ goal's own future weeks.
 > wrong goal ETA.
 
 **F177 · Claim Date surface (hero + funding queue + inverted goal card)** — `claimQueue`
-`HomePanel.jsx:524–534`, hero block `:686–800`, card header (twice, see below) — **[G]**
+`lib/claimDate.js` `computeClaimDates()` (moved from `HomePanel.jsx` 2026-10-04, TODO §22.F), hero block
+and card header (twice, see below) in `HomePanel.jsx` — **[G]**
 Added 2026-09. The goal surface leads with the **date**, not the dollar target — the
 app-side half of the marketing site's reframe ("we are not a budgeting app; the unit is
 the day you get the thing"). Three pieces: a "Next Claim Date" hero showing the soonest
@@ -1603,6 +1606,11 @@ on the card.
 > **THEN** the hero and the card beneath it can disagree about the same goal — the exact
 > two-surfaces-one-number shape of F18's own trigger. Check: grep `finishDate` in
 > HomePanel — every consumer traces back to `resolveGoalFinishInfo`.
+> **IF** a second caller of `computeClaimDates()` is added (App.jsx's Cyborg Resource snapshot,
+> TODO §22.F, is the first), **THEN** it must pass exactly the props HomePanel receives —
+> `timelineWeekNets` is `futureWeekNetsRaw`, `today` is `effectiveToday`, log totals from the
+> same `logTotals` memo. Different inputs = a Claim Date in Cyborg that disagrees with Home's.
+> Check: the snapshot's `computeClaimDates({...})` call in `App.jsx` vs. the `<HomePanel>` props.
 > **IF** goals are empty or all completed, **THEN** the hero must not render at all
 > (§8.3's Goals row: no fabricated signal). Covered by
 > `HomePanel.test.jsx`'s "Claim Date surface" block, which asserts the hero *does*
@@ -5807,6 +5815,39 @@ renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
 > block (edits are what get created, re-projection on amount change, single-confirm, read-only),
 > and `live-testing-checklist.md` item 10 for the browser pass.
 
+**F180 · A deleted bill is still in the array — status checks alone never see it** — `coachTools.js`, `aiContext.js` — **[L]+[G]**
+2026-10-04. This app never splices a deleted expense out of `expenses` (point-in-time design,
+TODO §3): it **zeroes the amount forward** and keeps the row, its label, and its history. Its
+`newJobSeasonStatus` stays `"active"` forever. So `isNjsBillActive(e)` — and the four hand-rolled
+`(e.newJobSeasonStatus ?? "active") === "active"` filters it replaced — match a bill the user
+deleted and `BudgetPanel` already hides.
+> **Why it stayed invisible for three months: the dollar figures were never wrong.** A zeroed
+> bill contributes exactly $0 to `computeRemainingSpend` by construction, so every total,
+> ratio and Budget Health number stayed correct. The defect only surfaces where a bill is
+> resolved **by name or counted**, which is precisely what the Coach layer does and what the
+> totals never do. A grounding audit that checks figures against their source function —
+> the standard §6 procedure — passes this bug cleanly.
+> **The tell was a self-contradicting sentence.** `aiContext`'s line read
+> `Expenses: N active lines, $X/week`, where `N` counted deleted bills and `$X`
+> (`avgWeeklySpend`, passed in already grounded from `App.jsx`) excluded them. **IF** a context
+> line pairs a count with a figure, **THEN** both sides must come from the same filtered set.
+> **The pairing is the contract.** `newJobSeasonRunway.js` has always written
+> `isNjsBillActive(exp) && … && !isExpenseRemoved(exp, todayIso)`; the Coach call sites took
+> only the first half. `isExpenseRemoved` is the same test `BudgetPanel`'s `isRemovedThisPhase`
+> uses to hide the row, which is what makes it the right one — Coach must not describe, or
+> deep-link to, a row that is not on screen. **IF** a new surface filters expenses, **THEN** it
+> uses the full pairing, not `isNjsBillActive` alone. In `coachTools.js` the single
+> `visibleExpenses(data)` helper is that pairing; do not re-filter inline beside it.
+> **`navigate_to` is the sharp edge.** A focus chip aimed at a deleted bill lands the user on
+> Upkeep with nothing highlighted — the same invisible-target class as the collapsed-category
+> clipping bug in F175.
+> **Widening note:** `isNjsBillActive` admits `"paid"` as well as `"active"` (TODO §25). That is
+> correct and deliberate — paid-for-this-cycle is not cancelled — and must not be "tightened"
+> back to an equality check while fixing something else.
+> Check: `coachTools.test.js`'s three deleted-bill cases (`get_expense_detail`,
+> `simulate_expense_change`, `navigate_to` focus) and `aiContext.test.js`'s count/label case.
+> All four were confirmed red against the unfixed source before being committed.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the
@@ -5823,6 +5864,7 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | Any Spine-A signature the context reads (F13/F15/F18/F23/F38/F102) | `buildCoachContext` is a named consumer in that entry's blast radius | The Spine-A entry's own procedure + `aiContext.test.js` | D1 |
 | `computeGoalTimeline` epoch handling (F18) | Coach goal line **and** Home goal cards — both pass `config?.goalTimelineEpochIdx ?? null` | Grep `computeGoalTimeline(` for epoch-arg parity; goal ETA on card = Coach answer | D1 |
 | Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
+| Any expense filter in the Coach layer (F180) | Every by-name lookup and every count — `visibleExpenses` in `coachTools.js`, `activeExpenses` in `aiContext.js` | Grep `isNjsBillActive` for a use NOT paired with `!isExpenseRemoved`; the four deleted-bill tests | D1/D5 |
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
 | `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays` signature (converged target — both former F24 quarantines closed `3267286`, 2026-07-22) | `CoachNetWorthCard.jsx` (Red tier) and `App.jsx`'s `coachRunwayDays` → `AskCoachPanel` both call it directly now — a signature change must be verified against both, not just the two New Job Season panels | `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block + `CoachNetWorthCard.test.jsx`; New Job Season Home headline, Coach card, and Ask Coach's stated runway must all agree on one account | D1 |
 | `coach_chats` db functions get a second `chat_type` UI caller (F116/F146) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |

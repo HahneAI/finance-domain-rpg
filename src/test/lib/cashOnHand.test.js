@@ -80,11 +80,24 @@ describe("computeCashOnHand (TODO §22)", () => {
     const expenses = [bill({ id: "phone", amount: 100, anchor: "2026-10-02" }), bill({ id: "rent", amount: 900, anchor: "2026-10-03" })];
     const r = computeCashOnHand(base({ cashOnHandAnchor: 1500, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses }));
     expect(r.nextPaydayIso).toBe("2026-10-05");
+    expect(r.nextPaycheckEstimate).toBe(1200); // week 13's adjustedNet — same estimate a credit would carry
     expect(r.dueBeforePayday).toBe(1000);
     expect(r.atRiskBill).toBeNull();
     const short = computeCashOnHand(base({ cashOnHandAnchor: 600, cashOnHandAnchorAsOf: "2026-10-01" }, { expenses }));
     expect(short.status).toBe("red");
     expect(short.atRiskBill).toMatchObject({ id: "rent", dueIso: "2026-10-03", amount: 900 });
+  });
+});
+
+describe("nextPaycheckEstimate (TODO §22.F)", () => {
+  it("sums the next payday's whole pay period, the same way a credit's estimate does", () => {
+    const r = computeCashOnHand(base({ userPaySchedule: "biweekly" }, { effectiveToday: "2026-09-29" }));
+    // next payday is week 13's (10/5); biweekly → weeks 12 + 13
+    expect(r.nextPaydayIso).toBe("2026-10-05");
+    expect(r.nextPaycheckEstimate).toBe(1100 + 1200);
+  });
+  it("is null when no payday is left on the grid", () => {
+    expect(computeCashOnHand(base({}, { effectiveToday: "2026-10-10" })).nextPaycheckEstimate).toBeNull();
   });
 });
 
@@ -103,5 +116,16 @@ describe("pay periods and set-aside", () => {
       .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, today.slice(0, 7), getPhaseIndex(new Date(today + "T12:00:00"))), 0);
     expect(computeNeedsSetAsidePerCheck(expenses, today, "weekly").perCheck).toBe(upkeepNeeds);
     expect(computeNeedsSetAsidePerCheck(expenses, today, "biweekly").perCheck).toBe(upkeepNeeds * 2);
+  });
+
+  it("weeklyLifestyle matches the Upkeep Lifestyle total and never enters the set-aside (TODO §22.F)", () => {
+    const expenses = [bill({ id: "rent", amount: 400, cycle: "weekly" }), bill({ id: "fun", amount: 90, cycle: "weekly", category: "Lifestyle" })];
+    const today = "2026-10-01";
+    const upkeepLifestyle = expenses.filter(e => e.category === "Lifestyle")
+      .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, today.slice(0, 7), getPhaseIndex(new Date(today + "T12:00:00"))), 0);
+    const r = computeNeedsSetAsidePerCheck(expenses, today, "weekly");
+    expect(upkeepLifestyle).toBeGreaterThan(0);
+    expect(r.weeklyLifestyle).toBe(upkeepLifestyle);
+    expect(r.perCheck).toBe(r.weeklyNeeds); // weekly pay: set-aside is Needs alone
   });
 });

@@ -32,17 +32,13 @@ reference copies to wire up by hand if wanted.
 
 | Plugin | Version | Skills | Commands | Agents | MCP | Hooks | Credentials / network |
 |--------|---------|-------:|---------:|-------:|:---:|:-----:|-----------------------|
-| claude-code-setup | 1.0.0 | 1 | 0 | 0 | – | – | none |
 | claude-md-management | 1.0.0 | 1 | 1 | 0 | – | – | none |
 | claude-security | 0.12.0 | 1 | 0 | 9 | – | ✔ | none; **see caveat 1** |
 | code-simplifier | 1.0.0 | 0 | 0 | 1 | – | – | none |
-| confidence | 0.9.0 | 14 | 17 | 0 | ✔ (2) | – | `confidence-flags` + `confidence-docs`: remote HTTP (`mcp.confidence.dev`); flags server needs Confidence auth |
-| data (`astronomer-data`) | 0.1.0 | 34 | 0 | 0 | – | ✔ | hooks run `uv`; skills talk to Airflow/Astro/warehouses with the user's own credentials |
 | figma | 2.2.120 | 14 | 0 | 0 | ✔ | – | remote HTTP `mcp.figma.com`; Figma OAuth |
 | frontend-design | ab024cdcfa7c | 1 | 0 | 0 | – | – | none |
 | legalzoom | 1.0.0 | 1 | 1 | 0 | ✔ | – | remote HTTP `legalzoom.com`; LegalZoom account; sends contract text off-machine |
 | mapbox | 1.0.0 | 20 | 0 | 0 | ✔ (3) | – | remote HTTP `mcp.mapbox.com`, `mcp-devkit…`, `mcp-docs…`; devkit/runtime need a Mapbox token |
-| plugin-dev | ab024cdcfa7c | 7 | 1 | 3 | – | – | none |
 | session-report | ab024cdcfa7c | 1 | 0 | 0 | – | – | none (reads local `~/.claude/projects` transcripts) |
 | skill-creator | ab024cdcfa7c | 1 | 0 | 0 | – | – | none |
 | stripe | 0.10.3 | 10 | 2 | 1 | ✔ | ✔ | remote HTTP `mcp.stripe.com`; Stripe auth. **Use test mode only** — this repo has live billing (`api/stripe-*`) |
@@ -65,7 +61,7 @@ Result of a read-only audit of the three partially staged plugins. Everything el
 | claude-security | **Defer** | Copying `scripts/`, `workflows/` and `hooks/` would not be enough. (1) Its files use `${CLAUDE_PLUGIN_ROOT}`, which as far as we know is only defined for installed plugins, not project-level `.claude/skills` (unverified). (2) Its orchestrator names tools `Workflow(claude-security:scan)` and `Agent(claude-security:scan-researcher, …)`; the staged agents are named `scan-researcher` etc. without the namespace, so those references would not resolve. (3) Its own description says to run it as the main agent with `claude --agent claude-security:claude-security`. For now use the built-in `/security-review` skill. Revisit only if a real install is needed. |
 
 Suggested test order: fully staged, no-credential plugins first (`frontend-design`, `code-simplifier`,
-`skill-creator`, `plugin-dev`, `session-report`), then `vercel` and `figma`, then the MCP/credential
+`skill-creator`, `session-report`), then `vercel` and `figma`, then the MCP/credential
 plugins. Leave `claude-security` last.
 
 ## Caveats
@@ -74,11 +70,9 @@ plugins. Leave `claude-security` last.
    scripts or workflows at the plugin root will not fully work from here. Known case: `claude-security`
    (its `workflows/`, `scripts/` and `hooks.py|sh` are not staged; its `hooks.json.disabled` references them) — see
    *Readiness verdicts*: deferred.
-   `vercel`'s hooks reference ~40 `.mjs` files that are not staged. `data`'s hooks reference
-   `skills/*/scripts/…`, which *are* staged inside the skill folders but under renamed paths.
+   `vercel`'s hooks reference ~40 `.mjs` files that are not staged.
 2. **Partial skill sets** where `plugin.json` declares no extra roots: `figma` stages `skills/` only (14 of its 30
-   skills); `workflow-skills/` and `skills-figquery/` are not declared by the plugin and were left out. `data`
-   has 34 staged skills; its 3 `astro-airflow-mcp/.claude/commands/` are contributor tooling, not plugin commands.
+   skills); `workflow-skills/` and `skills-figquery/` are not declared by the plugin and were left out.
    `vercel`'s `commands/_conventions.md` and `*.tmpl` helpers are not commands and were left out.
 3. **No LICENSE file in the source** for figma, legalzoom, stripe, supabase — nothing copied; see each
    `plugin.json` (stripe/supabase declare MIT; legalzoom declares PROPRIETARY).
@@ -87,7 +81,8 @@ plugins. Leave `claude-security` last.
    namespace in some sessions. Enabling a staged copy adds a second, project-level copy.
    `plugin-toggle.mjs enable` only warns about collisions with project-level (`.claude/skills`) and user-level
    (`~/.claude/skills`) skills, not plugin-namespaced ones.
-5. **`npm run lint`:** `.claude/**` is now in `globalIgnores` in `eslint.config.js`, so the ~24 staged `.js`/`.jsx`/`.mjs`
-   files (mostly `confidence-*` test fixtures) don't count toward lint. (Without it lint went from 5 to 61 problems.)
+5. **`npm run lint`:** `.claude/**` is now in `globalIgnores` in `eslint.config.js`, so the ~10 staged `.js`/`.jsx`/`.mjs`
+   files (test fixtures and scripts inside some plugins' skill folders) don't count toward lint. (Without it, lint
+   reported dozens of extra problems from the staged copies.)
 6. **Long folder names:** `<plugin>-<skill>` is used literally, so Twilio/Stripe/Mapbox folders repeat the
    plugin name (e.g. `twilio-developer-kit-twilio-…`). Longest staged path is ~133 characters.

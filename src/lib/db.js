@@ -807,6 +807,28 @@ export async function saveResumeProfile(profile) {
   return true;
 }
 
+/**
+ * Upserts this account's Cyborg Resource snapshot (TODO §22.F, migration 047)
+ * — derived output for the Cyborg app to read, never read back here. Best
+ * effort: a failure is logged and returns false, but never surfaces
+ * SaveFailedBanner — it isn't the user's data and must not block a real save.
+ */
+export async function saveResourceSnapshot(payload, schemaVersion) {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+  const { error } = await supabase
+    .from("resource_snapshots")
+    .upsert(
+      { user_id: userId, schema_version: schemaVersion, payload, computed_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+  if (error) {
+    console.error("Failed to save resource snapshot:", error.message);
+    return false;
+  }
+  return true;
+}
+
 const RESUME_BUCKET = "resumes";
 
 /**

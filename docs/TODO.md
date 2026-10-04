@@ -15,6 +15,7 @@
 | 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 0 | 9 $ |
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
+| 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -35,7 +36,7 @@
 | 3 | 19 | Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment | 6 | 40 |
 | 4 | 8 | Fable Five Creative Brainstorming — Tasks & Features | 57 | 0 |
 
-**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites.
+**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off.
 
 ---
 
@@ -592,6 +593,229 @@ Anthony's call: document only, don't build yet (2026-08-31).*
 
 ---
 
+## 27. New Job Season — Job Hunt Operating System (rules-based V1, Coach-ready seams) *(new — scoped 2026-10-04 from a real job loss, NOT built, no code written)*
+
+*Source: reverse-engineered from the real job-hunt chats of Sept 30 – Oct 2, 2026 (the job-hunt chat, the two-version resume split chat, the Sterling Equine meeting-prep chat). Turns a manually-coordinated emergency job search into a repeatable feature inside New Job Season.*
+
+**The rule for whoever builds this (human or AI agent): V1 is rules-based and must be fully usable with no Coach, no AI chat, no screenshots, no web search.** Every `🔌 Coach root` marker below is a *seam* — a named place where Coach plugs in later — not a V1 deliverable. Build the deterministic engine first; leave the seam as a documented, pure, un-wired export. **Do not import `coachPrompts.js`, `aiContext.js`, or call `api/coach.js` from any V1 code in this entry.**
+
+### 27.0 Read first — what already exists (extend it, don't fork it)
+
+- **`config.jobApplications`** + `ReemploymentTracker.jsx` already exist (company/role/dateApplied/status; `STATUS_OPTIONS` = applied · screening · interview · offer · rejected · withdrawn; stored inline on config, no schema). §27 **extends this record and this component** — a second application list is a parallel-store drift bug. The §4 stage model below becomes a superset of `STATUS_OPTIONS`; **existing saved rows must keep resolving** (map `screening`→`Spoke to Human`/`Reviewing` and `rejected`→`Closed`, or keep legacy values valid — decide at build, never break old data).
+- **`config.targetIncomeAnnual`**, **`config.returnToWorkDate`**, `config.jobHuntIncomeLog` (gig cash, summed by `sumJobHuntIncome`).
+- **Runway:** `computeNewJobSeasonRunway()` / `resolvePrimaryRunwayDays()` (`lib/newJobSeasonRunway.js`) is the only runway source. §27's runway link (27.8) **reads it, never re-derives it**. §22 (Cash on Hand) is the sibling cash surface.
+- **Coach side already built:** `JobHuntChatPanel.jsx` + `buildJobHuntContext()` (`aiContext.js`) + `JOB_HUNT_SYSTEM_PROMPT` (§2.E) and Résumé Review (§2.E1). Coach roots below are where §27's data feeds *those*, not new AI surfaces.
+- **Hard constraints:** `api/` is at **12/12 functions — V1 adds zero routes** (everything is client + config/Supabase under RLS). Next migration number is contested (§22.F plans 047) — verify against `database/migrations/`. The panel name in user-facing copy is **Upkeep**, never "Budget".
+- **Drift Warden:** new persisted config fields → the **four-site procedure** incl. `HISTORY_SENSITIVE_FIELDS` (`lib/configHistory.js`; `jobApplications` is deliberately excluded there as its own log — decide per new field and document); any save/confirm/add/delete/close button → **eager save** (`saveConfigNow`, synchronous compute); `readOnly` paywall shadowing; `.text-*` scale + design tokens; consult warden §8 (Home), the persistence spine and §7 if the wizard is touched. State the entries consulted in the commit.
+
+### 27.1 What actually happened (the real flow) — the product's spine
+
+| Phase | What we did | What was really going on | Feature home |
+|---|---|---|---|
+| **0. Shock** | Fired. First asks: union hall? lawsuit? | Panic about income. Legal routes (EEOC, NLRB, MCHR, attorney, 180–300 day deadlines) were worth one answer; the real work was replacing income fast | 27.12 (resource page, not a build) |
+| **1. Set the rules** | Pay floor, curfew (home by 11 PM), home base, kids' location, car MPG, gas price, open to any line of work | These constraints drove every decision and were never stored in one place | 27.2 Constraint profile |
+| **2. Cast a wide net** | ~40 Indeed applications + calls + walk-ins | Volume was fine; **tracking was the bottleneck** | 27.3 Tracker |
+| **3. Run a tracker** | company, role, phone, address, status, next step | Lived in chat; drifted from reality repeatedly (27.6) | 27.3 / 27.4 |
+| **4. Calendar + reminders** | Interviews → calendar; callbacks/confirmations/prep → reminders | **The reminder was the product** | 27.7 |
+| **5. Triage daily** | Each morning: live / dead / next call | Dead leads were closed explicitly, which kept focus | 27.7 Today list |
+| **6. Prep per lead** | Resume variant, talking points, questions, pay negotiation | Biggest quality gain | 27.5, 27.9 |
+| **7. Bridge job** | Took a nearby $18.50 job while the hunt continues | Reframed as "upgrade from a safe floor" | 27.4 bridge flag |
+| **8. Re-plan around the new job** | New 7–3 M–F shift became the scheduling baseline | Surfaced conflicts (interview during shift) | 27.6 conflict checker |
+
+> 🔌 **Coach root (flow-wide):** Coach's job-hunt mode should be able to answer "where am I in the flow?" Add a pure `getJobHuntPhase({ config })` in the new lib (returns 0–8 from the data: no profile → 1; apps but no tracker discipline → 2/3; has bridge job → 7/8). V1 uses it only to choose what the Home widget highlights; Coach later reads the same value so its advice matches the screen. Seam id: `NJS-JH-FLOW`.
+
+### 27.2 Constraint profile — V1 core, one screen, set once
+
+Captured once, reused as a filter everywhere (these were repeated verbally many times):
+
+- [ ] **Pay floor** (hard) vs **preferred pay** (soft). Soft = *flag, don't hide* (e.g. a bridge job under the floor is OK if flagged as bridge).
+- [ ] **Target pay** for the upgrade goal ($21+ hourly, salary, or base + commission) — **reuse `config.targetIncomeAnnual`**; add an hourly target only if it can't be derived.
+- [ ] **Latest home-by time** (hard) + exception rule (e.g. overnight only above $X/hr).
+- [ ] **Home pin(s):** primary address + secondary location (kids, partner); commute measured from both. V1 = manual entry.
+- [ ] **Vehicle:** MPG + current gas price (V1 manual; auto gas price is V2) → turns commute into dollars.
+- [ ] **Willing categories** (sales, warehouse, trades, office…) and **job-type preference** (hourly / salary / base + commission).
+- [ ] **Current work schedule** once employed — **reuse the existing config schedule fields**, do not add a second schedule.
+- [ ] Wizard note: this is a *new asked field set* → four-site procedure; blank-by-default (`BLANK_PAY_FIELDS` pattern) if surfaced in the ad-lib wizard; otherwise a Profile/NJS settings card. Required-field parity rule applies if it enters the wizard.
+
+> 🔌 **Coach root:** export `buildConstraintSummary(profile)` → one plain-language paragraph ("floor $18/hr, home by 11 PM, 22 mpg, willing: sales/warehouse"). V1 renders it as the header of the Today list; `buildJobHuntContext()` later includes it so Coach never asks the user to restate rules they already set (the single biggest repeated-verbally failure). Seam id: `NJS-JH-CONSTRAINTS`.
+
+### 27.3 Data model
+
+**Application / lead** (extends the existing `jobApplications` row — all new fields optional so old rows stay valid):
+
+| Field | Notes |
+|---|---|
+| company, role | Required (already exist) |
+| source | indeed · walk-in · referral · phone · recruiter outreach |
+| contact name + phone + address | **People, not just companies** (HR "Ashley", boss "Tim") |
+| parent / location | Disambiguates "Atlas Roofing Corp" vs "Atlas Molded Products" |
+| pay type / amount / frequency | hourly · salary · base+commission · unknown; number or `unknown`; weekly vs biweekly (matters when runway is short) |
+| shift + shift end time | Checked against the curfew rule |
+| commute minutes + miles | Per home pin; V1 manual |
+| resume variant used | A / B / … (27.5) |
+| stage | 27.4 |
+| next action + due date | **The most important field** |
+| last contact date | Drives staleness |
+| quoted number / notes | Anything quoted ("I quoted $22/hr") |
+| dateApplied | Already exists — **required**, fixes the wrong-date failure |
+
+**Contact log** — each call/visit/voicemail: date, who, outcome (reached / voicemail / no answer), what was promised. Must answer "did I already update you on X?" in one tap. Per-lead array inside the lead (no new top-level table in V1).
+
+**Runway / cash** — already partly built (see 27.0); this entry only *links* to it.
+
+> 🔌 **Coach root:** shape the lead record so a future Coach reader needs no translation — keep field names stable and plain (no encoded status ints), and export `summarizeLead(lead, { now })` (pure: one line, stage + last contact age + next action + overdue flag). `buildJobHuntContext()` currently summarises the log by count; swap in `summarizeLead` per active lead later. Also reserve (don't build) an optional `lead.source === "coach"` / `lead.suggestedBy` marker so Coach-created leads are distinguishable. Seam id: `NJS-JH-LEAD`.
+
+### 27.4 Stage model
+
+```
+Applied → Reviewing → Contacted → Voicemail Left → Spoke to Human →
+Interview Scheduled → Interviewed → Offer → Accepted
+                                  ↘ Filled / Closed / Dud
+```
+
+Rules learned (each is an acceptance test):
+- [ ] **"Applied" is not trustworthy** — Indeed said "reviewing" for days with no movement. Don't treat it as progress in any score or count.
+- [ ] **Dud/Closed is an explicit action**, never silence. Closing frees attention and deletes the lead's reminders (27.7).
+- [ ] **"Filled" is a distinct close reason** (information: call earlier next time). Keep a `closeReason`.
+- [ ] **Voicemail Left is its own stage** and implies a retry date (prompt for next-action date on entering it).
+- [ ] **Same company, two roles = two records** (Forte: Forklift vs Materials Processor).
+- [ ] **Bridge job flag:** an accepted job becomes the "current job" record and the hunt continues for "upgrade" targets. Wire-in point for the open question "does bridge income feed runway?" (27.13) — **do not decide silently**; default to *not* auto-feeding runway until answered.
+- [ ] Legacy `STATUS_OPTIONS` mapping decided and tested (27.0). Tone mapping must use existing tokens (`--color-warning`/`green`/`deduction`), no raw hex.
+
+> 🔌 **Coach root:** a single exported `STAGE_META` map (`{ stage: { label, tone, isActive, isTerminal, impliesRetry } }`) used by the UI *and* by Coach context, so Coach can say "you left 3 voicemails — retry dates are Thursday" from the same table the screen uses (§6 grounding rule: never a parallel approximation). Seam id: `NJS-JH-STAGES`.
+
+### 27.5 Resume-variant system
+
+Repeatable method from the resume-split chat:
+- [ ] Keep **one shared work history** (identical text on every variant); vary only **summary** and **skills ordering/emphasis**.
+- [ ] Skills in two blocks: **"primary for this role type"** first, then **"other skills you may have other uses for."**
+- [ ] 2–3 variants, each **tagged by category** (A = sales/business, B = factory/warehouse); each application records which variant was sent; **auto-suggest the variant by application category**.
+- [ ] **Review rules the UI must encode as a checklist (V1 = static checklist, not AI):** cut anything unverifiable that conflicts with the record, challenge *only* items that look false, keep all skills the user confirms; remove untested projections; no certifications that don't exist ("employer-certified", not "OSHA-certified"); years only for old jobs, never invent months (background checks verify dates); handle the prior-job exit as dates only + prepare a one-line spoken answer.
+- [ ] **Coordinate with Résumé Center (§2.E1, built):** variants should *reference* stored résumé documents, not duplicate file storage. Check §2.E1's storage model before choosing where a variant's text lives.
+
+> 🔌 **Coach root:** `suggestVariant(category, variants)` is a pure tag-match in V1. Coach later adds (a) **variant generation from the one master history** (V2), (b) the honesty review pass above as an AI check against the checklist. Reserve `variant.sourceHistoryHash` (don't build) so generated variants can be shown stale when the master history changes. Hand-off to Résumé Review stays the explicit redirect §2.E established ("not a resume-writing service"). Seam id: `NJS-JH-RESUME`.
+
+### 27.6 Where the manual flow broke → these ARE the product requirements
+
+| Failure | What happened | Product fix (V1) |
+|---|---|---|
+| Counts drifted | Indeed "Applied" went 39 → 43; only 3 identifiable | Per-application records + a total that must equal the records |
+| Wrong date | Optimal Marketing applied 9/30, user thought 10/1 | Required date on every application |
+| Duplicate company | Atlas Roofing Corp vs Atlas Molded Products | Parent/location field |
+| Time conflict | Interview moved to 1:30; Mouser at 2:30 was 41 min away | **Conflict check:** travel time + prior event end |
+| Schedule collision | Interview Wed 1 PM vs new 7–3 shift | Compare events against the work schedule |
+| Stale info | Charlie's filled that morning; user drove there anyway | "Confirm 1–2 h before" reminder on every interview |
+| Orphan reminders | Atlas reminders outlived the lead | Closing a lead deletes its reminders |
+| Missing contact names | Had a company, not the person | **Required contact name before a follow-up reminder** |
+| Unverified leads | $25/hr call center, no company name | Legitimacy checklist (27.8) |
+
+- [ ] Conflict checker is a **pure function** `findConflicts({ events, workSchedule, curfew, commute })` returning typed flags (`overlap` / `travel-too-tight` / `curfew` / `shift-collision`) — **flag, never hide**. Build against the existing schedule helpers; don't re-implement weekday/shift logic (`active-systems.md` §11 for DHL day patterns).
+
+> 🔌 **Coach root:** the conflict flags are the exact payload Coach needs to say "that 1 PM interview hits your Wednesday shift — want to ask for the time off?" Export the flag objects with a human-readable `reason` string and the ids of the involved leads so Coach (and later a drafted time-off message) can cite them without recomputing. Seam id: `NJS-JH-CONFLICTS`.
+
+### 27.7 Daily operating loop (the V1 screen)
+
+1. [ ] **Today list** — next actions due today, sorted by stage value + time-of-day windows (e.g. call HR before 3 PM).
+2. [ ] **Calls to make** — tap-to-call with the previous contact log inline.
+3. [ ] **After each contact** — one-tap outcome (reached / voicemail / no answer / closed) + next-action date. Eager save on every tap.
+4. [ ] **Evening review** — done / rolls to tomorrow / anything to close.
+5. [ ] **Weekly** — applied count, contacts made, interviews, offers, runway days left (**from `resolvePrimaryRunwayDays`**).
+6. [ ] **Stale rule:** any active lead with no contact in 5 days → "follow up or close".
+7. [ ] **Reminders/calendar from next actions**, auto-**deleted on close** (27.4). Decide in-app-only vs external calendar at build; external sync is §20.D's stretch — don't build a second calendar integration. Overlaps §20.C (due-today pop-up): share the alert surface.
+
+> 🔌 **Coach root:** export `buildTodayList({ leads, now, constraints })` as a pure, sorted, explainable list (each item carries a `why` string: "voicemail left 2 days ago — retry due"). V1 renders it. Coach's morning nudge later is simply "read out `buildTodayList`" — and the V2 **morning-send drafting** (status-check emails timed for mornings) hangs off the same list. Evening review's "what rolled" is also a pure diff Coach can narrate. Seam id: `NJS-JH-TODAY`.
+
+### 27.8 Rules and checklists to build in
+
+**Pay logic**
+- [ ] Flag base vs commission vs unknown; "unknown" prompts a question-to-ask.
+- [ ] **Effective hourly after commute cost:** `pay − (round-trip miles ÷ MPG × gas price) ÷ hours worked`. Pure function in the new lib, unit-tested with the Sept-30 example; never inlined in JSX.
+- [ ] Pay frequency stored (weekly vs biweekly) and surfaced next to runway.
+- [ ] **Runway link:** "days of runway vs best active lead" — reads `computeNewJobSeasonRunway` output + the lead's effective hourly; adds no second runway calc.
+
+**Shift logic** — compare shift end + commute to the home-by rule; flag, don't hide.
+
+**Legitimacy checklist** (any lead that sounds too good): company name verifiable? reviews? BBB? any upfront fees? pay stated before details? (V1 = static checklist the user ticks.)
+
+**Salary-negotiation notes** — never claim unverifiable numbers in the room ("$100K easily"); say "paid on results, aim for top tier"; quote a number only after hearing the job description and **record the quoted number on the lead**; ask: base vs commission, title, reporting line, first 90 days, how tool-building is recognized.
+
+**New-job rules** — tell the new employer about known interview dates before day 1; ask for time off only for high-value interviews, with weeks of notice; a bridge job is not a throwaway — first-weeks attendance matters.
+
+> 🔌 **Coach root:** each rule above is data, not prose-in-a-prompt: export them as a `JOB_HUNT_RULES` array (`{ id, appliesTo, check(lead, profile) → flag|null, advice }`). V1 renders flags from `check()`; Coach later reads the *same* array as its negotiation/legitimacy guardrails so the AI can't contradict the screen (e.g. it must not suggest claiming "$100K easily"). The V2 **honest idea-rating** and **negotiation coaching** are prompt-layer on top of these. Seam id: `NJS-JH-RULES`.
+
+### 27.9 Meeting-prep template (from Sterling Equine) — V1 fill-in-the-blank
+
+Per high-priority lead, a template with fields: (1) 30-second opening pitch · (2) likely pain points (**hypotheses, confirm in the meeting**) · (3) matching proof points from the right resume variant (**only real things**) · (4) 3–5 questions to ask (pay structure, title, reporting line, 90 days) · (5) pay-handling plan if commission-heavy · (6) closing ask (next step) · (7) a 10-line car cheat sheet.
+- [ ] Mark each field **verified fact vs guess** (lesson: a wrong domain was almost cited; research the right company first).
+- [ ] A "weak spots" field for honest self-assessment (Resume A proves ops/automation better than closing deals).
+- [ ] Stored on the lead; no AI in V1.
+
+> 🔌 **Coach root:** the template's field list is the *schema* for Coach's later "prep me for [company]" output — export `MEETING_PREP_FIELDS` so a Coach reply can be parsed/inserted field-by-field instead of free text, and so `verified` vs `hypothesis` stays a real flag Coach must set. §2.E already says prep-mode works via free-text chat; this seam is what lets that chat write *into* the template later. Seam id: `NJS-JH-PREP`.
+
+### 27.10 V1 scope vs V2 (AI-assisted) scope
+
+**V1 — ship now (no AI chat, no screenshots, no web search):**
+- [ ] Constraint profile (27.2) · [ ] Application tracker, stage model, next-action date (27.3–27.4) · [ ] Contact log with one-tap outcomes · [ ] Today list + stale flags · [ ] Reminders/calendar from next actions, deleted on close · [ ] Conflict check vs interviews/work schedule/curfew · [ ] Resume variants + per-application tagging · [ ] Manual commute entry + effective-hourly · [ ] Runway link · [ ] Meeting-prep template
+
+**V2 — keep, don't lose (this is the Coach-plug-in layer; each item names its seam):**
+- [ ] Auto-fill commute time/miles from a map lookup per home pin → `NJS-JH-CONSTRAINTS`
+- [ ] Auto gas price for cost math → `NJS-JH-CONSTRAINTS`
+- [ ] Company/role research (legitimacy, competitors, how they sell, parent company) → `NJS-JH-RULES`, overlaps **§2.I Job Scout**
+- [ ] Pay scraping from reviews (commission volatility, turnover) → `NJS-JH-RULES`
+- [ ] Screenshot ingestion (Indeed status screens → record updates) → `NJS-JH-LEAD`, **needs §14 camera/OCR infra**
+- [ ] AI call-prep and negotiation coaching, with honest ratings of ideas → `NJS-JH-PREP`, `NJS-JH-RULES`
+- [ ] Draft emails and status-check messages timed for morning sends → `NJS-JH-TODAY`
+- [ ] Resume-variant generation from one master history → `NJS-JH-RESUME`
+- [ ] Union/legal-route lookup for firing situations → 27.12
+- [ ] Gig and side-income suggestions, **labeled as unreliable income** → feeds `config.jobHuntIncomeLog`, never auto-counted as reliable runway
+
+**Any V2 item that adds an `api/` route must consolidate first — 12/12 cap (see CLAUDE.md).** Anything that spends model tokens goes through the existing `api/coach.js` pipeline and its gate (`canAccessAiFeatures`), not a new route.
+
+### 27.11 Build order
+
+1. [ ] Constraint profile + application record + stage model (extends `jobApplications`; legacy mapping + tests)
+2. [ ] Next-action date + Today list
+3. [ ] Contact log + stale flags
+4. [ ] Calendar/reminder integration with auto-cleanup on close
+5. [ ] Conflict checker (events, work schedule, curfew)
+6. [ ] Resume variants
+7. [ ] Effective-hourly calculator
+8. [ ] Runway link ("days of runway vs best active lead")
+9. [ ] **V2 AI layer — wire Coach into the seams** (only after 1–8 work with Coach switched off)
+
+**Coach-independence acceptance test (gate for step 9):** with every Coach/AI flag off and `api/coach.js` unreachable, steps 1–8 pass their tests and the full daily loop (27.7) is usable. Then, and only then, `buildJobHuntContext()` is extended to consume the seams, one at a time, each with a grounding test against the same functions the UI uses (`aiContext.test.js` pattern).
+
+### 27.12 Legal-route guidance (shock phase)
+
+Open question 3 below decides scope. Default if unanswered: **a static linked resource card** (unemployment filing, EEOC/NLRB/state agency, filing deadlines of 180–300 days) shown once on entering New Job Season — **no legal advice generated in-app, no AI**. Coach/V2 lookup is `NJS-JH-RULES`-adjacent and must carry a "not legal advice" guard.
+
+### 27.13 Open questions (need the owner's call — do not decide silently)
+
+- [ ] Should "bridge job" income feed the runway calculation automatically? *(touches `computeNewJobSeasonRunway` — Drift Warden fiscal-math spine; default: no)*
+- [ ] Audience: only people who lost a job suddenly, or anyone job hunting? *(decides whether this lives only in NJS or also in normal mode)*
+- [ ] How much legal-route guidance belongs in V1 vs a linked resource page? (27.12 default: linked card)
+- [ ] **Privacy:** contact names/phone numbers are sensitive. Local-only storage or synced? *(Today everything on `config` syncs; `jobApplications` is already synced. No field-level encryption exists — cross-check §11 and warden §19 F120 before storing recruiter/contact PII, and decide whether contact data stays local-only (`useLocalStorage`) while the non-PII lead fields sync.)*
+
+### 27.14 Coach-roots index (so an agent can find every seam at once)
+
+| Seam id | Section | V1 artifact (pure, un-wired from Coach) | Coach plugs in later as |
+|---|---|---|---|
+| `NJS-JH-FLOW` | 27.1 | `getJobHuntPhase()` | "where am I" awareness |
+| `NJS-JH-CONSTRAINTS` | 27.2 | `buildConstraintSummary()` | context line; auto commute/gas |
+| `NJS-JH-LEAD` | 27.3 | `summarizeLead()` | per-lead context; screenshot ingestion |
+| `NJS-JH-STAGES` | 27.4 | `STAGE_META` | stage-aware advice |
+| `NJS-JH-RESUME` | 27.5 | `suggestVariant()` | variant generation + honesty check |
+| `NJS-JH-CONFLICTS` | 27.6 | `findConflicts()` | time-off / reschedule drafts |
+| `NJS-JH-TODAY` | 27.7 | `buildTodayList()` | morning nudge + drafted messages |
+| `NJS-JH-RULES` | 27.8 | `JOB_HUNT_RULES` | negotiation/legitimacy guardrails + research |
+| `NJS-JH-PREP` | 27.9 | `MEETING_PREP_FIELDS` | "prep me for X" writes into template |
+
+Each seam gets a one-line `// Coach root: NJS-JH-…` comment at its export so a grep finds all nine. Add a drift-warden row when built: these functions gain an **AI-context consumer**, so a change to any must re-check `buildJobHuntContext()` (§6/§24 grounding rule).
+
+**Status: scoped and design-locked except the 27.13 questions. No code, schema, or migration written.**
+
+---
+
 # TIER 2 — ACTIVE WORKSTREAMS (partly built; open items remain)
 
 ---
@@ -1003,6 +1227,8 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 ### E. Job Hunt AI Assistant *(extracted from §1.E — Phase 3)*
 
 *Requires New Job Season (§1.C) to be live first.*
+
+**See §27 (Job Hunt Operating System):** the rules-based tracker/Today-list/conflict engine this chat panel should eventually read from. §27 defines nine named Coach-root seams (`NJS-JH-*`, index at §27.14); wire them into `buildJobHuntContext()` only after §27's V1 works with Coach off.
 
 **AI-gating decision resolved, 2026-07-25 (user directive).** Ships behind the same narrow
 `canAccessAiFeatures` gate every other AI surface uses today — **note this gate itself widened

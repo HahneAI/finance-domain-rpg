@@ -476,7 +476,7 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
 - [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
-### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04, not built)*
+### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **not yet applied**, unchecked until Anthony verifies)*
 
 *Decided 2026-10-04 in a side-by-side session with the Cyborg repo (its `docs/resource-track-source.md`
 §5a, TODO §55-0). Cyborg's Resource track shows figures that only this app computes. Rather than Cyborg
@@ -494,12 +494,12 @@ the main thing being passed.*
 - **Staleness is shown, not fixed:** Cyborg prints "as of `computed_at`". No roll-forward by date.
 
 **Build steps:**
-- [ ] **Migration 047** (verify the number against `database/migrations/` first): `resource_snapshots` —
+- [x] **Migration 047** (verify the number against `database/migrations/` first): `resource_snapshots` —
   one row per user, `user_id uuid primary key references auth.users on delete cascade`, `computed_at
   timestamptz`, and the fields below as columns (or one `jsonb payload` + `schema_version int` — decide at
   build; jsonb avoids a migration per added field). RLS: select/insert/update where `user_id = auth.uid()`,
   no delete policy needed beyond the cascade. Add to `database/migrations/README.md`.
-- [ ] **Payload** — every value from the function the UI already uses, never re-derived:
+- [x] **Payload** — every value from the function the UI already uses, never re-derived:
   - from `computeCashOnHand()` (App.jsx's existing memo): `cashOnHand`, `status`, `gap`, `setAside`,
     `weeklyNeeds`, `pendingCount` (so Cyborg can say "estimated"), `nextPaydayIso`, `atRiskBill` (name +
     amount only);
@@ -509,23 +509,32 @@ the main thing being passed.*
     `resolveGoalFinishInfo()` is a closure inside `HomePanel.jsx` (~line 521), not a lib function, so App
     can't call it. Extract it (and the `claimQueue` sort) into a lib that HomePanel then imports — the date
     must keep tracing to the one function (warden §8 F177/F18), never a second derivation.
-- [ ] **Write triggers:** on app load once data has loaded, after every successful persisted save, and on
+- [x] **Write triggers:** on app load once data has loaded, after every successful persisted save, and on
   `visibilitychange` → visible (a resumed iOS PWA does not reload; App.jsx already listens there). Skip the
   write when the payload is unchanged from the last one written this session. A failed snapshot write is
   silent (log only) — it must never surface `SaveFailedBanner` or block the user's real save.
-- [ ] **Not a persisted user field:** the snapshot is derived output, not config. It does not go through the
+- [x] **Not a persisted user field:** the snapshot is derived output, not config. It does not go through the
   four-site persisted-field procedure, `HISTORY_SENSITIVE_FIELDS`, or the eager-save table, and it is not
   read back by this app.
-- [ ] **readOnly (paywall-expired):** decide whether an expired account still publishes. Admin bypasses the
-  paywall, so this doesn't block the one real user; default to "no write when `readOnly`."
-- [ ] **Service worker:** writes are POST/PATCH and already bypass the workbox `supabase-api` NetworkFirst
+- [x] **readOnly (paywall-expired):** moot while the write is admin-only — admins bypass the paywall, so no
+  read-only account ever publishes. Revisit if publishing opens to other users.
+- [ ] **Service worker (verify live):** writes are POST/PATCH and already bypass the workbox `supabase-api` NetworkFirst
   cache. Confirm nothing caches the snapshot table on either side.
-- [ ] **Drift warden:** add a row — `computeCashOnHand` result shape, `resolveGoalFinishInfo`, and
+- [x] **Drift warden:** add a row — `computeCashOnHand` result shape, `resolveGoalFinishInfo`, and
   `weekNetLookup` now have an **external consumer** (Cyborg). A change to any of them must check the
   snapshot payload and bump `schema_version` if a field's meaning changes. Consult §8 (Home) and the
   fiscal-math + persistence spines when building.
-- [ ] Tests: payload builder as a pure function (`lib/resourceSnapshot.js`) with unit tests against the same
+- [x] Tests: payload builder as a pure function (`lib/resourceSnapshot.js`) with unit tests against the same
   fixtures `cashOnHand.test.js` uses; the write itself mocked.
+
+**Build notes 2026-10-04:**
+- `computeClaimDates()` (`lib/claimDate.js`) — `resolveGoalFinishInfo`, the claim queue, the goal timeline call
+  and their helpers moved verbatim out of `HomePanel.jsx`; HomePanel and the snapshot both call it.
+- `computeCashOnHand()` gained `nextPaycheckEstimate` (same pay-period sum as a credit's `estimate`).
+- Write: `saveResourceSnapshot()` (`db.js`), from a debounced (1.5s) effect in `App.jsx` keyed on the payload,
+  plus a forced re-publish on every `visibilitychange` → visible. Payload memo is above App's early returns.
+- **Before it works live:** run 047 in the Supabase SQL editor. Then confirm the admin account's row appears and
+  `computed_at` moves on each open/resume.
 
 ### E. Explicitly out of scope for this entry
 

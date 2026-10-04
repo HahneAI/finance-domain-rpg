@@ -116,11 +116,19 @@ export function computeCashOnHand({ config, expenses, allWeeks, weekNetLookup, w
   //            Needs bill due before the next payday can't be covered by the
   //            cash on hand, walking upcoming bills in due-date order.
   const orangeBand = Math.max(ORANGE_BAND_MIN, setAside.perCheck * ORANGE_BAND_PCT);
-  const nextPaydayIso = (allWeeks ?? [])
+  const nextPayWeek = (allWeeks ?? [])
     .filter(w => w.active && w.isPayWeek)
-    .map(resolvePaycheckCreditIso)
-    .filter(d => d > effectiveToday)
-    .sort()[0] ?? null;
+    .map(w => ({ w, iso: resolvePaycheckCreditIso(w) }))
+    .filter(x => x.iso > effectiveToday)
+    .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0))[0] ?? null;
+  const nextPaydayIso = nextPayWeek?.iso ?? null;
+  // The amount that payday will credit, estimated exactly the way a credit's
+  // `estimate` is above (sum of the pay period's adjustedNet) — TODO §22.F
+  // passes it to the Cyborg Resource snapshot; never re-derive it elsewhere.
+  const nextPaycheckEstimate = nextPayWeek
+    ? resolvePayPeriodWeeks(nextPayWeek.w, allWeeks, sched)
+      .reduce((s, pw) => s + (weekNetLookup?.[pw.idx]?.adjustedNet ?? 0), 0)
+    : null;
   const dayBefore = (iso) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() - 1); return toLocalIso(d); };
   const upcomingBills = nextPaydayIso
     ? listBillOccurrencesSince(expenses, effectiveToday, dayBefore(nextPaydayIso), isLiveNeedsBill)
@@ -154,6 +162,7 @@ export function computeCashOnHand({ config, expenses, allWeeks, weekNetLookup, w
     orangeBand,
     atRiskBill,
     nextPaydayIso,
+    nextPaycheckEstimate,
     dueBeforePayday: upcomingBills.reduce((t, o) => t + o.amount, 0),
     ifStoppedWeeks,
   };

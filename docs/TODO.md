@@ -33,10 +33,10 @@
 | 3 | 17 | Terms of Service / Privacy Policy Consent Capture | 5 | 0 |
 | 3 | 18 | Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25) | 10 | 0 |
 | 3 | 16 | Dev Infrastructure — Claude Code on the web headless UI testing | 7 | 0 |
-| 3 | 28 | React 19.2.4 → 19.3.0 upgrade (deferred out of the 2026-10-04 security cleanup) | 5 | 0 |
+| 3 | 30 | React 19.2.4 → 19.3.0 upgrade (deferred out of the 2026-10-04 security cleanup) | 5 | 0 |
 | 3 | 19 | Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment | 6 | 40 |
 | 4 | 8 | Fable Five Creative Brainstorming — Tasks & Features | 57 | 0 |
-| 4 | 27 | Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach | 16 | 0 |
+| 4 | 29 | Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach | 16 | 0 |
 | 4 | 28 | Coach over SMS — Twilio prerequisites & sequence | 11 | 0 |
 
 **Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off.
@@ -4948,7 +4948,7 @@ false checklist per CLAUDE.md's own drift-warden philosophy)*
 
 ---
 
-## 28. React 19.2.4 → 19.3.0 Upgrade
+## 30. React 19.2.4 → 19.3.0 Upgrade
 
 *Split out of the 2026-10-04 dependency cleanup (commit `c41677c`), deliberately rather than
 opportunistically. `npm audit fix` pulled `react` to 19.3.0 and left `react-dom` at 19.2.4; React
@@ -5370,7 +5370,7 @@ mature systems), and archived Stripe subscriptions validated end-to-end in test 
 
 ---
 
-## 27. Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach *(new — scoped 2026-10-04, idea stage, nothing built)*
+## 29. Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach *(new — scoped 2026-10-04, idea stage, nothing built)*
 
 *Section thesis: a goal's dollar target is currently whatever the user types. Let the app (and Coach)
 find out what the goal really costs — the drive, the gas, the rental-vs-own-car math — and, for a

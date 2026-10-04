@@ -1,3 +1,4 @@
+import { CashOnHandCard } from "./CashOnHandCard.jsx";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -57,6 +58,8 @@ function AnimatedGoalTarget({ target, animate }) {
 
 export function HomePanel({
   navigate,
+  cashOnHand = null,
+  onOpenCashLedger,
   weeklyIncome,
   // Every real caller (App.jsx, DemoAccountTree.jsx) computes and passes this —
   // it's the correct full-year net (projectedAnnualNet + event adjustments -
@@ -841,6 +844,22 @@ export function HomePanel({
             </div>
           )}
         </div>
+      )}
+
+      {/* TODO §22 — Cash on Hand hero, directly under the Claim Date banner.
+          Numbers come from computeCashOnHand() (App.jsx); New Job Season has
+          its own cash card, so this is employed-mode only. */}
+      {!config?.newJobSeasonMode && (
+        <CashOnHandCard
+          cash={cashOnHand}
+          checkWord={checksPerYear === 52 ? "week" : checksPerYear === 12 ? "month" : "paycheck"}
+          onOpenLedger={onOpenCashLedger}
+          onSetBalance={(v) => {
+            const next = { ...config, cashOnHandAnchor: v, cashOnHandAnchorAsOf: todayIso };
+            setConfig(next);
+            saveConfigNow?.(next);
+          }}
+        />
       )}
 
       <div>

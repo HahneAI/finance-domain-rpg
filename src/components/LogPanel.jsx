@@ -1,4 +1,5 @@
 /* eslint-disable react-hooks/static-components */
+import { PaycheckCreditsLedger } from "./PaycheckCreditsLedger.jsx";
 import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
@@ -42,6 +43,7 @@ export function LogPanel({
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
   logNetLost = 0, logNetGained = 0, adjustedTakeHome = 0,
   ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
+  cashOnHand = null, onOpenCheckIn,
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -609,6 +611,9 @@ export function LogPanel({
         <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
       </div>
     </div>}
+
+    {/* TODO §22 — paycheck credits feeding Home's Cash on Hand card */}
+    <PaycheckCreditsLedger cash={cashOnHand} onOpenCheckIn={onOpenCheckIn} />
 
     {/* Log header + add button */}
     <div style={{ marginBottom: "12px" }}>

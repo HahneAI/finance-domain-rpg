@@ -163,11 +163,26 @@ function weeklyAmountForBurn(exp, todayDate, phaseIdx) {
 // occurrence at a time, advancing the cursor past each hit, same approach
 // NewJobSeasonBudgetPanel's upcomingBills list uses for a single occurrence.
 export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso) {
-  if (!fromDateExclusiveIso || !throughDateInclusiveIso) return 0;
+  return sumBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, isTrackedActiveEssential);
+}
+
+// The occurrence walk itself, shared with the employed Cash on Hand engine
+// (lib/cashOnHand.js, TODO §22) — only the "which bills count" predicate
+// differs (NJS: tracked + NJS-active essentials; employed: every live Needs
+// bill), so the due-date math can't drift between the two modes.
+export function sumBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, include) {
+  return listBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, include)
+    .reduce((s, o) => s + o.amount, 0);
+}
+
+// Same walk, itemized ({ expense, dueIso, amount }) — Cash on Hand's per-bill
+// red tier (TODO §22.B rule (b)) needs to name WHICH bill is at risk.
+export function listBillOccurrencesSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso, include) {
+  if (!fromDateExclusiveIso || !throughDateInclusiveIso) return [];
   const through = new Date(throughDateInclusiveIso + "T12:00:00");
-  let total = 0;
+  const out = [];
   for (const exp of expenses ?? []) {
-    if (!isTrackedActiveEssential(exp, throughDateInclusiveIso)) continue;
+    if (!include(exp, throughDateInclusiveIso)) continue;
     const amount = getExpenseDisplayAmount(exp);
     if (amount <= 0) continue;
     const cursor = new Date(fromDateExclusiveIso + "T12:00:00");
@@ -182,12 +197,12 @@ export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateIncl
       const dueIso = toLocalIso(due);
       const skip = exp.newJobSeasonStatus === "paid" && exp.newJobSeasonPaidSkipDecay === true
         && exp.newJobSeasonPaidDueDate === dueIso;
-      if (!skip) total += amount;
+      if (!skip) out.push({ expense: exp, dueIso, amount });
       cursor.setTime(due.getTime());
       cursor.setDate(cursor.getDate() + 1);
     }
   }
-  return total;
+  return out;
 }
 
 /**

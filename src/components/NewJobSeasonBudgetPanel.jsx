@@ -307,7 +307,7 @@ export function NewJobSeasonBudgetPanel({
                   background: "var(--color-bg-raised)", border: `1px solid ${bill.paid ? "var(--color-border-subtle)" : tierColor}`, borderRadius: "10px",
                   opacity: bill.paid ? 0.6 : 1,
                 }}>
-                  <div style={{ flex: "0 0 auto", minWidth: "48px", textAlign: "center", color: tierColor }}>
+                  <div style={{ flex: "0 0 auto", minWidth: "48px", textAlign: "center", color: bill.daysUntil <= 14 ? tierColor : "var(--color-text-secondary)" }}>
                     <div style={{ fontSize: "18px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>{bill.daysUntil}</div>
                     <div className="text-2xs" style={{ letterSpacing: "1px", textTransform: "uppercase" }}>{bill.daysUntil === 1 ? "day" : "days"}</div>
                   </div>

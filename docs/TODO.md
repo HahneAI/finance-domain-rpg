@@ -473,6 +473,57 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
 - [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
+### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04, not built)*
+
+*Decided 2026-10-04 in a side-by-side session with the Cyborg repo (its `docs/resource-track-source.md`
+§5a, TODO §55-0). Cyborg's Resource track shows figures that only this app computes. Rather than Cyborg
+rebuilding or copying `finance.js` (a parallel formula — warden case law), **this app publishes a small
+snapshot computed by its own functions, and Cyborg reads it.** Layered onto §22: the Cash on Hand engine is
+the main thing being passed.*
+
+**Locked:**
+- **Read-only one way.** Cyborg never writes to this app. No new `api/` route either side — Cyborg reads the
+  table straight from this app's Supabase under RLS with the user's own session (the 12/12 function cap is
+  untouched; Supabase's REST API isn't a Vercel function).
+- **One account for now:** Anthony's admin account, linked once to his admin Cyborg account. Gate the write on
+  `is_admin` (or an explicit opt-in flag) so no other user writes snapshots nobody reads. Per-user linking is
+  Cyborg's problem if it ever takes other users.
+- **Staleness is shown, not fixed:** Cyborg prints "as of `computed_at`". No roll-forward by date.
+
+**Build steps:**
+- [ ] **Migration 047** (verify the number against `database/migrations/` first): `resource_snapshots` —
+  one row per user, `user_id uuid primary key references auth.users on delete cascade`, `computed_at
+  timestamptz`, and the fields below as columns (or one `jsonb payload` + `schema_version int` — decide at
+  build; jsonb avoids a migration per added field). RLS: select/insert/update where `user_id = auth.uid()`,
+  no delete policy needed beyond the cascade. Add to `database/migrations/README.md`.
+- [ ] **Payload** — every value from the function the UI already uses, never re-derived:
+  - from `computeCashOnHand()` (App.jsx's existing memo): `cashOnHand`, `status`, `gap`, `setAside`,
+    `weeklyNeeds`, `pendingCount` (so Cyborg can say "estimated"), `nextPaydayIso`, `atRiskBill` (name +
+    amount only);
+  - **next paycheck amount** — the engine returns `nextPaydayIso` but no amount. Add it to the engine's
+    result from `weekNetLookup` (the same source the credits use), not computed at the write site;
+  - **next Claim Date** — label + date of the soonest goal in the claim queue. **Wrinkle:**
+    `resolveGoalFinishInfo()` is a closure inside `HomePanel.jsx` (~line 521), not a lib function, so App
+    can't call it. Extract it (and the `claimQueue` sort) into a lib that HomePanel then imports — the date
+    must keep tracing to the one function (warden §8 F177/F18), never a second derivation.
+- [ ] **Write triggers:** on app load once data has loaded, after every successful persisted save, and on
+  `visibilitychange` → visible (a resumed iOS PWA does not reload; App.jsx already listens there). Skip the
+  write when the payload is unchanged from the last one written this session. A failed snapshot write is
+  silent (log only) — it must never surface `SaveFailedBanner` or block the user's real save.
+- [ ] **Not a persisted user field:** the snapshot is derived output, not config. It does not go through the
+  four-site persisted-field procedure, `HISTORY_SENSITIVE_FIELDS`, or the eager-save table, and it is not
+  read back by this app.
+- [ ] **readOnly (paywall-expired):** decide whether an expired account still publishes. Admin bypasses the
+  paywall, so this doesn't block the one real user; default to "no write when `readOnly`."
+- [ ] **Service worker:** writes are POST/PATCH and already bypass the workbox `supabase-api` NetworkFirst
+  cache. Confirm nothing caches the snapshot table on either side.
+- [ ] **Drift warden:** add a row — `computeCashOnHand` result shape, `resolveGoalFinishInfo`, and
+  `weekNetLookup` now have an **external consumer** (Cyborg). A change to any of them must check the
+  snapshot payload and bump `schema_version` if a field's meaning changes. Consult §8 (Home) and the
+  fiscal-math + persistence spines when building.
+- [ ] Tests: payload builder as a pure function (`lib/resourceSnapshot.js`) with unit tests against the same
+  fixtures `cashOnHand.test.js` uses; the write itself mocked.
+
 ### E. Explicitly out of scope for this entry
 
 - [ ] Coach-voiced version of the check-in (tether to §2.C tiers) — plausible later.

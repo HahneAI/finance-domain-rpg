@@ -26,7 +26,7 @@
 | 3 | 7 | Expense Input/Editor Revamp — Mandatory Rent + Preset Categories | 11 | 0 |
 | 3 | 9 | Multi-Year Fiscal Rollover — Beyond FY2026 | 3 | 0 |
 | 3 | 10 | In-App Tutorials, Onboarding & Help | 5 | 0 |
-| 3 | 11 | Data Encryption & At-Rest Security Posture | 4 | 0 |
+| 3 | 11 | Data Encryption & At-Rest Security Posture | 5 | 0 |
 | 3 | 14 | Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture | 11 | 0 |
 | 3 | 15 | UI Cohesion — Cross-Panel Header/Accent Consistency | 5 | 0 |
 | 3 | 5 | CPA/Tax-Ready Statement Export | 0 | 0 |
@@ -3840,6 +3840,31 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 - [ ] **Audit cadence** — no recurring security-posture review currently exists; consider whether
   this section should be re-visited whenever a new `user_data` field is proposed (tying it to the
   existing F110 four-site procedure checklist) rather than left as a one-time flag.
+- [ ] **Two `SECURITY DEFINER` lookup functions are callable with any `uid` (found 2026-10-04 by the
+  Supabase-skill audit of `database/migrations/` — static read of the SQL only, NOT tested against
+  the live DB; severity low).** `is_tracked_beta_tester(uid uuid)` (037) and
+  `get_user_employer_preset(uid uuid)` (040) are `security definer`, `set search_path = public`, take
+  an arbitrary `uid`, never compare it to `auth.uid()`, and no migration `REVOKE`s `EXECUTE` — so by
+  Postgres' default grants, any role with API access (likely `anon` and `authenticated`) can call them
+  via PostgREST `/rest/v1/rpc/…` for any user id and learn that user's beta-tester status or employer
+  preset (e.g. "DHL"). The attacker needs a victim's user UUID (random v4 — not guessable, but it can
+  leak elsewhere), and the data is minor, so this is hardening, not an incident. **Context for the
+  fix:** no `src/` or `api/` code calls either function over RPC — they run only inside RLS policies
+  (always with `auth.uid()`; 037 L99/L173, 040 L52–67) and inside 037's `SECURITY DEFINER` trigger
+  (`NEW.user_id`, L140). The other four `SECURITY DEFINER` functions (031, 033, 034, 037's
+  checklist trigger) are all `search_path = public` trigger functions, which PostgREST cannot call.
+  **Before writing the fix:** (1) have the owner run this read-only query to see real live grants —
+  `select p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') as anon_exec,
+  has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_exec from pg_proc p join
+  pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef;` — default
+  grants can differ per project; (2) confirm which roles the 037/040 policies are `TO` — policy
+  functions are checked against the *evaluating* role, so `authenticated` must keep `EXECUTE` (and
+  `anon` too if any of those policies apply to it); (3) read warden §14/§20 (Auth, Entitlements) —
+  these functions gate tracked-tester content. **Likely fix (one new migration, number verified
+  against the folder, additive, no data touched):** `revoke execute on function … from public, anon`
+  for both, re-granting `authenticated`; optionally add a `uid = (select auth.uid())` guard inside the
+  body *only if* step (2) shows no service-role or admin path passes a different uid. Apply and verify
+  by hand per the Supabase skill's repo workflow — no SQL run from a session.
 
 ---
 

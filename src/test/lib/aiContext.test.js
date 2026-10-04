@@ -601,3 +601,20 @@ describe("buildJobHuntContext", () => {
     expect(buildJobHuntContext()).toBe("");
   });
 });
+
+describe("buildCoachContext — Cash on Hand (TODO §22)", () => {
+  const cash = {
+    anchor: 400, asOf: "2026-09-12", cashOnHand: 610, creditsTotal: 1700, pendingCount: 1, pendingTotal: 800,
+    billsDueSince: 1490, freedomAllowanceIncluded: 100, setAside: 900, gap: -290, status: "red",
+    atRiskBill: { id: "r", label: "Rent", amount: 900, dueIso: "2026-10-03" }, nextPaydayIso: "2026-10-05", ifStoppedWeeks: 0.7,
+  };
+  it("passes the engine's numbers through verbatim, labeled as a self-reported estimate", () => {
+    const ctx = buildCoachContext({ config: {}, cashOnHand: cash });
+    expect(ctx).toMatch(/Cash on hand \(user's own self-reported balance carried forward — an estimate, not a bank read\): \$610/);
+    expect(ctx).toMatch(/1 check-in unfinished/);
+    expect(ctx).toMatch(/at-risk bill: Rent \$900 due 2026-10-03, before next payday 2026-10-05/);
+  });
+  it("omits the lines when Cash on Hand isn't set up", () => {
+    expect(buildCoachContext({ config: {} })).not.toMatch(/Cash on hand/);
+  });
+});

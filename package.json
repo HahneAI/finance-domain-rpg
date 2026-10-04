@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "live-test": "node scripts/live-test/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.2",

@@ -141,6 +141,24 @@ describe('BudgetPanel', () => {
     expect(screen.getAllByText(/Food/i).length).toBeGreaterThan(0)
   })
 
+  // TODO §20.B2/§20.D (shotgun run #3): the "with this week's bills" line and the calendar export button.
+  it('shows the second "with this week\'s bills" figure only when App.jsx passes one', () => {
+    const { unmount } = renderPanel()
+    expect(screen.queryByText(/With this week's bills/)).toBeNull()
+    unmount()
+    renderPanel({ thisWeekActualSpend: 100 })
+    expect(screen.getByText(/With this week's bills/)).toBeTruthy()
+  })
+
+  it('offers the .ics calendar export only when a bill has a due date', () => {
+    const { unmount } = renderPanel()
+    expect(screen.queryByLabelText('Add due dates to calendar')).toBeNull()
+    unmount()
+    const dated = { ...INITIAL_EXPENSES[0], dueDateAnchor: `${TODAY.slice(0, 7)}-28` }
+    renderPanel({ expenses: [dated, ...INITIAL_EXPENSES.slice(1)] })
+    expect(screen.getByLabelText('Add due dates to calendar')).toBeTruthy()
+  })
+
   it('renders with an empty expense list', () => {
     const { container } = renderPanel({ expenses: [] })
     expect(container.textContent.length).toBeGreaterThan(0)

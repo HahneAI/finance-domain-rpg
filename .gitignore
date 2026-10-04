@@ -35,3 +35,4 @@ agent-and-skill-overview.md
 .promptfoo/
 scripts/coach-eval/results/*
 !scripts/coach-eval/results/.gitkeep
+tmp-live-test/

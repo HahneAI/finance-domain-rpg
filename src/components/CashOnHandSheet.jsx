@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
@@ -7,8 +8,9 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
  * card (TODO §1.H17). Deliberately not the full BudgetPanel expense-detail
  * sheet pattern (view/edit modes, multi-scope save buttons) — this is one
  * number, one Save. Visual language matches that sheet (bg-surface, pull
- * handle, 20px top-radius, portal-free since it isn't nested under any
- * scrolling ancestor here) via the shared `.fold-sheet` class (index.css) —
+ * handle, 20px top-radius; portaled to document.body so the fixed mobile
+ * bottom nav (a higher stacking context than the panel wrapper) can't cover
+ * the Save button) via the shared `.fold-sheet` class (index.css) —
  * up-from-bottom entrance, slide-back-down exit, both driven by
  * `useFoldTransition` so the exit actually animates instead of an instant
  * unmount (a real gap in the expense-detail sheet's own close behavior).
@@ -56,7 +58,7 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       className="fold-backdrop" data-fold={fold.fold}
       onClick={onClose}
@@ -140,6 +142,7 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
           </Pressable>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

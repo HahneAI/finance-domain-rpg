@@ -8,6 +8,20 @@ metadata:
 
 # Supabase
 
+## Authority Finance overrides — read first, these beat anything below
+
+This repo is a **Vite + React** app on Supabase (Auth + Postgres), deployed on Vercel. It is **not** a Supabase-CLI project: there is no `supabase/` folder, no `config.toml`, no declarative schemas and no `.mcp.json`. Where the generic guidance below conflicts with this block, **this block wins.**
+
+1. **Migrations are hand-written SQL files in `database/migrations/NNN_name.sql`, applied to production by the owner by hand.** Verify the next number against that folder (never from memory; the `.claude/CLAUDE.md` Migrations note says which is next but has gone stale before). `0NN_BOOKMARK_*` files are schema snapshots, never migrations. Write the file, explain how to apply and verify it, and stop. **Never run SQL against any live database** — not via MCP `execute_sql`/`apply_migration`, not via `psql`, not via any CLI. **Never run** `supabase migration new`, `db pull`, `db push` or `db reset`. **No destructive migrations** (no `DROP`, no data-losing `ALTER`, no `TRUNCATE`) without the owner's explicit say-so for that specific change.
+2. **The Supabase MCP server is not configured. Do not create or edit `.mcp.json`** and do not suggest wiring it casually. If the owner asks for it: project-scoped and read-only (check the current MCP docs for the exact flags), never write access to production.
+3. **Keys:** the browser uses only the public key (`VITE_SUPABASE_ANON_KEY`, plus `VITE_SUPABASE_URL`). `SUPABASE_SERVICE_ROLE_KEY` exists **only** in `api/` serverless routes — never in any `VITE_`-prefixed variable, never in `src/`. (`VITE_` is this repo's equivalent of Next.js's `NEXT_PUBLIC_`: everything with that prefix ships to the browser.)
+4. **Privileged writes go through `api/` service-role routes** (tier flags, subscription columns, changelog, beta content/scores — RLS migration 019: the client never writes them). **Do not add a file to `api/`**: Vercel Hobby allows 12 functions and the repo is at 12/12; fold new behavior into an existing dispatcher route instead.
+5. **`SECURITY DEFINER` is already used on purpose** (e.g. `is_tracked_beta_tester`, `get_user_employer_preset(uid)`, migrations 031/037/040). Any new or edited one must follow the checklist below (non-exposed schema or an `auth.uid()` check in the body; `EXECUTE` revoked from `PUBLIC` where appropriate) and be called out in your report.
+6. **Production ground truth:** the latest `038_BOOKMARK_schema_snapshot_*.sql` plus `database/migrations/README.md` describe what is live. Do not assume a migration is applied until the owner says so.
+7. **Drift Warden applies.** Before changing RLS, auth, tier flags, entitlements or any persisted field, read the matching trigger map in `docs/drift-app-warden.md` (§14 Auth, §19 Persistence, §20 Entitlements; a new persisted field also needs the four-site procedure in `CLAUDE.md`) and put the entries consulted in your report ("none applicable" is valid; silence is not).
+8. **No external posting.** `references/skill-feedback.md` describes filing a GitHub issue. Never do that unless the owner explicitly asks in that conversation, and never include repo contents, schema or user data in one.
+9. **Report format:** state which migration file you wrote (or "none"), that nothing was run against a live database, which Supabase docs/changelog pages you checked, and the Drift Warden line.
+
 ## Core Principles
 
 **1. Supabase changes frequently — verify against changelog and current docs before implementing.**
@@ -76,21 +90,7 @@ For any security concern not covered above, fetch the Supabase product security 
 
 ## Supabase CLI
 
-Always discover commands via `--help` — never guess. The CLI structure changes between versions.
-
-```bash
-supabase --help                    # All top-level commands
-supabase <group> --help            # Subcommands (e.g., supabase db --help)
-supabase <group> <command> --help  # Flags for a specific command
-```
-
-**Supabase CLI Known gotchas:**
-
-- `supabase db query` requires **CLI v2.79.0+** → use MCP `execute_sql` or `psql` as fallback
-- `supabase db advisors` requires **CLI v2.81.3+** → use MCP `get_advisors` as fallback
-- In imperative migration projects, create new hand-authored migration files with `supabase migration new <name>` first. Never invent a migration filename or rely on memory for the expected format. Declarative schema projects generate migrations from `supabase/schemas/`; see "Making and Committing Schema Changes" below.
-
-**Version check and upgrade:** Run `supabase --version` to check. For CLI changelogs and version-specific features, consult the [CLI documentation](https://supabase.com/docs/reference/cli/introduction) or [GitHub releases](https://github.com/supabase/cli/releases).
+**Not used in this repo** (see overrides above). Never run commands that touch a database. If the owner asks you to use the CLI for something read-only, discover commands via `--help` — never guess — and say what each one touches before running it.
 
 ## Supabase MCP Server
 
@@ -103,7 +103,7 @@ For setup instructions, server URL, and configuration, see the [MCP setup guide]
    A `401` is expected (no token) and means the server is up. Timeout or "connection refused" means it may be down.
 
 2. **Check `.mcp.json` configuration:**
-   Verify the project root has a valid `.mcp.json` with the correct server URL. If missing, create one pointing to `https://mcp.supabase.com/mcp`.
+   This repo deliberately has no `.mcp.json` — **do not create one** (see overrides). Report that it is absent and ask the owner.
 
 3. **Authenticate the MCP server:**
    If the server is reachable and `.mcp.json` is correct but tools aren't visible, the user needs to authenticate. The Supabase MCP server uses OAuth 2.1 — tell the user to trigger the auth flow in their agent, complete it in the browser, and reload the session.
@@ -118,26 +118,13 @@ Before implementing any Supabase feature, find the relevant documentation. Use t
 
 ## Making and Committing Schema Changes
 
-First decide which schema workflow the project uses.
+**This repo's workflow (the generic CLI/declarative workflows do not apply):**
 
-### Option A: Declarative schemas
-
-Use this when `supabase/schemas/` exists or `config.toml` sets `schema_paths`. Edit the desired schema state in those files, then generate and review the migration. Do not start by hand-writing a migration. See the [Declarative database schemas guide](https://supabase.com/docs/guides/local-development/declarative-database-schemas).
-
-### Option B: Imperative migrations
-
-Use this when the project does not use declarative schemas.
-
-**To make schema changes, use `execute_sql` (MCP) or `supabase db query` (CLI).** These run SQL directly on the database without creating migration history entries, so you can iterate freely and generate a clean migration when ready.
-
-Do NOT use `apply_migration` to change a local database schema — it writes a migration history entry on every call, which means you can't iterate, and `supabase db diff` / `supabase db pull` will produce empty or conflicting diffs. If you use it, you'll be stuck with whatever SQL you passed on the first try.
-
-**When ready to commit** your changes to a migration file:
-
-1. **Run advisors** → `supabase db advisors` (CLI v2.81.3+) or MCP `get_advisors`. Fix any issues.
-2. **Review the Security Checklist above** if your changes involve views, functions, triggers, or storage.
-3. **Generate the migration** → `supabase db pull <descriptive-name> --local --yes`
-4. **Verify** → `supabase migration list --local`
+1. Read `database/migrations/README.md` and the latest `038_BOOKMARK_*` snapshot for current shape; read the existing migrations that touch the same table (RLS conventions live in 019 and 024).
+2. Find the next number in `database/migrations/` and write one new `NNN_descriptive_name.sql`: idempotent where possible (`IF NOT EXISTS`), additive, with a header comment explaining the *why* and the owner's apply-and-verify steps.
+3. Run the Security Checklist above against it (RLS enabled; `TO authenticated` plus an ownership predicate in `USING`; `UPDATE` policies with both `USING` and `WITH CHECK`; views `security_invoker`; any `SECURITY DEFINER` justified; Storage upsert needs INSERT + SELECT + UPDATE).
+4. Update `database/migrations/README.md`, and the `.claude/CLAUDE.md` Migrations note if the next number changed.
+5. **Do not apply it anywhere.** Tell the owner what to run and how to verify (a read-only query).
 
 ## Debugging
 

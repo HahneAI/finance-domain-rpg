@@ -12,6 +12,8 @@ metadata:
 
 # Supabase Postgres Best Practices
 
+> **Authority Finance:** schema, RLS and index changes go in a new hand-written file in `database/migrations/` that the owner applies by hand — never run SQL against a live database, and no destructive migrations without explicit approval. Follow the "Authority Finance overrides" block in the `supabase` skill, and check existing RLS conventions (migrations 019 and 024) before writing new policies.
+
 Comprehensive performance optimization guide for Postgres, maintained by Supabase. Contains rules across 8 categories, prioritized by impact to guide automated query optimization and schema design.
 
 ## When to Apply

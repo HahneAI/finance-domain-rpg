@@ -13,7 +13,7 @@
 | 1 | 26 | New Job Season Wizard — Auto Week-of-Month Detection + "Already Paid This Week?" Step | 0 | 6 $ |
 | 1 | 23 | New Job Season Wizard — Per-Bill Weekly/Biweekly Payment Cadence | 0 | 5 $ |
 | 1 | 20 | Optional Expense Due Dates — Real "Left This Week" + Due-Today Alerts | 0 | 9 $ |
-| 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 20 | 0 |
+| 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
@@ -414,7 +414,7 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 
 ### A. Cash-on-hand engine (import from NJS, don't duplicate)
 
-- [ ] **Extract/generalize the NJS cash math into a shared pure lib** — `computeNewJobSeasonRunway`,
+- [x] **Extract/generalize the NJS cash math into a shared pure lib** — `computeNewJobSeasonRunway`,
   `sumBillsDueSince`, timeline-aware cash decay (`lib/newJobSeasonRunway.js`) become callable for
   employed users too (new thin wrapper or parameterized entry point; NJS output must stay
   byte-identical — NJS tests are the regression net). Single source of truth: Coach/AI context, Home
@@ -423,52 +423,55 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] **New persisted fields** (four-site procedure incl. `HISTORY_SENSITIVE_FIELDS` in
   `lib/configHistory.js`; eager-save via `saveConfigNow`): employed cash anchor + as-of date, and a
   per-period credit ledger. Decide the ledger's storage shape in design (config array vs. log events).
-- [ ] **One-time starting-balance prompt** for employed users (re-anchor available later from the card).
+  *(Still open: fields are in `DEFAULT_CONFIG` + eager-saved and the storage shape is decided (derived credits + `cashOnHandCreditCorrections`), but they were deliberately NOT added to `HISTORY_SENSITIVE_FIELDS` — NJS's own cash fields aren't there either. Decide whether a balance edit should create an account_history entry.)*
+- [x] **One-time starting-balance prompt** for employed users (re-anchor available later from the card).
   Required-field pattern + numeric-input rules (string draft, parse at commit).
-- [ ] **Payday auto-credit:** on each pay date, credit the confirmed net (from the check-in /
+- [x] **Payday auto-credit:** on each pay date, credit the confirmed net (from the check-in /
   `weekConfirmations`) when it exists, projected net (`finance.js`) otherwise, flagged "estimated."
   Must survive missed app-opens (credit by date, not by an in-session event). Weekly, biweekly,
   salary, monthly pay schedules all covered.
-- [ ] **Include Freedom Allowance in the balance** and expose it as a separate returned field for the
+- [x] **Include Freedom Allowance in the balance** and expose it as a separate returned field for the
   card's "includes $X" line. Confirm it does not leak into `computeNet`/`spendableNets` double-counting
   (`finance.js` ~1133–1188 already subtracts it from spendable income).
 
 ### B. The Home card
 
-- [ ] Hero card: cash on hand, this period's set-aside (per Upkeep's per-check figure), and the gap/
+- [x] Hero card: cash on hand, this period's set-aside (per Upkeep's per-check figure), and the gap/
   surplus between them; secondary "if paychecks stopped" runway line. Pay-schedule-aware wording
   (week / paycheck / month — reuse `checkWord`/`checkUnit` vocabulary from `BudgetPanel.jsx`).
-- [ ] **Three-state traffic light** — green (covered), orange (short by a moderate amount, "tighten
+- [x] **Three-state traffic light** — green (covered), orange (short by a moderate amount, "tighten
   up"), red (shortfall puts a Needs bill at risk). **Open design question — resolve before building
   the red tier:** (a) dollar-threshold rule (V1, labeled approximation) vs. (b) per-bill rule using
   §20 due dates ("shortfall exceeds what's left after protecting this period's due Needs bills").
   Ship (a) honestly labeled if needed; (b) is the target. Don't let (a) pass as (b).
   **Resolved 2026-10-03:** both — (a) with Anthony's thresholds (orange ≤ max($200, 20%) short) and (b)
   per-bill red, which wins whenever it fires.
-- [ ] `readOnly` (paywall-expired) gate + eager-save shadowing on any new callback; tokens + `.text-*` scale only;
+- [x] `readOnly` (paywall-expired) gate + eager-save shadowing on any new callback; tokens + `.text-*` scale only;
   update `docs/drift-app-warden.md` (Home panel + fiscal-math + AI-context rows) in the same PR.
 
 ### C. Pay-period check-in: the cash-correction step (the user's key mechanism)
 
-- [ ] **Add a final step to the existing pay-period check-in** (`WeekConfirmModal.jsx` — weekly for
+- [x] **Add a final step to the existing pay-period check-in** (`WeekConfirmModal.jsx` — weekly for
   weekly pay, the paycheck check-in for biweekly/salary (two-week flow), the monthly check-in for monthly
   pay): after the user logs their days, ask **"How much of this check is actually in your bank account?"**
   pre-filled with the app's assumed net for that period. User edits it to the real figure; that value is
   what's added to cash on hand (replacing the estimate and clearing the "estimated" flag).
-- [ ] The step must be optional/skippable without corrupting the balance (skip = keep the estimate),
+- [x] The step must be optional/skippable without corrupting the balance (skip = keep the estimate),
   and must work through the biweekly two-week intercept (`isBiweeklyTwoWeek`, `priorWeek`) and re-open
   via `handleReopenLastCheckIn` (editing a past check-in re-derives the credit, no double-count).
-- [ ] Eager-save on confirm (`saveConfigNow`/weekConfirmations path — same synchronous-value rule).
-- [ ] Self-report copy: say plainly this is the user's own number, not a bank read.
+  *(Done 2026-10-03; weekly path live-tested. The biweekly two-week flow fires one confirm per pay period, so the step runs once after it — covered by construction, not yet live-tested.)*
+- [x] Eager-save on confirm (`saveConfigNow`/weekConfirmations path — same synchronous-value rule).
+- [x] Self-report copy: say plainly this is the user's own number, not a bank read.
 
 ### D. Consumers that must not drift
 
-- [ ] Coach/AI context (`lib/aiContext.js`, `lib/coachTools.js`) — employed cash/runway must resolve
+- [x] Coach/AI context (`lib/aiContext.js`, `lib/coachTools.js`) — employed cash/runway must resolve
   through the shared function (grounding rule §6/§24), never a parallel approximation.
+  *(Done via `buildCoachContext({ cashOnHand })`; `coachTools.js` has no cash tool yet and `CoachNetWorthCard` isn't wired.)*
 - [ ] `Account/Admin` surfaces that print cash/runway for NJS (`NewJobSeasonDashboard`, Config View) —
   confirm they still read the same engine after extraction.
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
-- [ ] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
+- [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
 ### E. Explicitly out of scope for this entry
 

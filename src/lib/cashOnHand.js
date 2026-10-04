@@ -54,7 +54,13 @@ export function computeNeedsSetAsidePerCheck(expenses, todayIso, userPaySchedule
   const weekly = (expenses ?? [])
     .filter(e => e.type === "loan" || e.category === "Needs")
     .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, monthKey, phaseIdx), 0);
-  return { weeklyNeeds: weekly, perCheck: weekly * perCheckFactor, perCheckFactor, checksPerYear };
+  // Upkeep's Lifestyle category total (regular, non-loan Lifestyle expenses, same
+  // per-expense function). Never part of the set-aside — reported only so the
+  // Cyborg Resource snapshot (TODO §22.F) can show a runway against ALL spend.
+  const weeklyLifestyle = (expenses ?? [])
+    .filter(e => e.type !== "loan" && e.category === "Lifestyle")
+    .reduce((s, e) => s + getExactEffectiveAmountForMonth(e, monthKey, phaseIdx), 0);
+  return { weeklyNeeds: weekly, weeklyLifestyle, perCheck: weekly * perCheckFactor, perCheckFactor, checksPerYear };
 }
 
 export const ORANGE_BAND_MIN = 200;
@@ -157,6 +163,7 @@ export function computeCashOnHand({ config, expenses, allWeeks, weekNetLookup, w
     cashOnHand,
     setAside: setAside.perCheck,
     weeklyNeeds: setAside.weeklyNeeds,
+    weeklyLifestyle: setAside.weeklyLifestyle,
     gap,
     status,
     orangeBand,

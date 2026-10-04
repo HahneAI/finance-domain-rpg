@@ -5,7 +5,7 @@ import { buildResourceSnapshotPayload } from "../../lib/resourceSnapshot.js";
 // computeClaimDates() already produced; it never derives a figure of its own.
 const cash = {
   cashOnHand: 1234.567, pendingCount: 1, status: "orange", gap: -150.004, setAside: 1384.57,
-  weeklyNeeds: 692.285, asOf: "2026-09-15", nextPaydayIso: "2026-10-05", nextPaycheckEstimate: 1199.999,
+  weeklyNeeds: 692.285, weeklyLifestyle: 120.004, asOf: "2026-09-15", nextPaydayIso: "2026-10-05", nextPaycheckEstimate: 1199.999,
   atRiskBill: null,
 };
 
@@ -17,7 +17,7 @@ describe("buildResourceSnapshotPayload (TODO §22.F)", () => {
     });
     expect(p.cash).toEqual({
       cashOnHand: 1234.57, pendingCount: 1, status: "orange", gap: -150, setAside: 1384.57,
-      weeklyNeeds: 692.29, anchorAsOf: "2026-09-15", atRiskBill: null,
+      weeklyNeeds: 692.29, weeklyLifestyle: 120, anchorAsOf: "2026-09-15", atRiskBill: null,
     });
     expect(p.nextPaycheck).toEqual({ dateIso: "2026-10-05", amount: 1200 });
     expect(p.nextClaim).toEqual({ label: "Emergency fund", dateIso: "2027-03-14" });

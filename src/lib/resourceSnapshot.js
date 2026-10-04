@@ -31,6 +31,10 @@ export function buildResourceSnapshotPayload({ cashOnHand, nextClaim }) {
           gap: cents(cashOnHand.gap),
           setAside: cents(cashOnHand.setAside),
           weeklyNeeds: cents(cashOnHand.weeklyNeeds),
+          // Upkeep's Lifestyle total — with weeklyNeeds, the whole weekly spend
+          // Cyborg's "never worked again" runway divides by. Additive field: no
+          // schema_version bump (a reader without it just lacks that runway).
+          weeklyLifestyle: cents(cashOnHand.weeklyLifestyle),
           anchorAsOf: cashOnHand.asOf,
           atRiskBill: cashOnHand.atRiskBill
             ? { label: cashOnHand.atRiskBill.label, dueIso: cashOnHand.atRiskBill.dueIso, amount: cents(cashOnHand.atRiskBill.amount) }

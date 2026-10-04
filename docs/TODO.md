@@ -532,6 +532,8 @@ the main thing being passed.*
 - `computeClaimDates()` (`lib/claimDate.js`) — `resolveGoalFinishInfo`, the claim queue, the goal timeline call
   and their helpers moved verbatim out of `HomePanel.jsx`; HomePanel and the snapshot both call it.
 - `computeCashOnHand()` gained `nextPaycheckEstimate` (same pay-period sum as a credit's `estimate`).
+- Then `weeklyLifestyle` (Upkeep's Lifestyle total, never in the set-aside) — Cyborg's King of Kings line divides
+  by Needs + Lifestyle ("every expense covered if you never worked again").
 - Write: `saveResourceSnapshot()` (`db.js`), from a debounced (1.5s) effect in `App.jsx` keyed on the payload,
   plus a forced re-publish on every `visibilitychange` → visible. Payload memo is above App's early returns.
 - **Before it works live:** run 047 in the Supabase SQL editor. Then confirm the admin account's row appears and

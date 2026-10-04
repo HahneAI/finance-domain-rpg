@@ -35,6 +35,8 @@
 | 3 | 16 | Dev Infrastructure — Claude Code on the web headless UI testing | 7 | 0 |
 | 3 | 19 | Ad-Lib Wizard Pilot — Fill-In-The-Blank Onboarding Experiment | 6 | 40 |
 | 4 | 8 | Fable Five Creative Brainstorming — Tasks & Features | 57 | 0 |
+| 4 | 27 | Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach | 16 | 0 |
+| 4 | 28 | Coach over SMS — Twilio prerequisites & sequence | 11 | 0 |
 
 **Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off.
 
@@ -5317,5 +5319,142 @@ mature systems), and archived Stripe subscriptions validated end-to-end in test 
   not. The paywall gates the engine, never the user's own memories. That single sentence of
   policy is a trust differentiator competitors structurally can't match, and it makes F3's
   Chronicle/Heirloom features safe to invest emotion in.
+
+---
+
+## 27. Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach *(new — scoped 2026-10-04, idea stage, nothing built)*
+
+*Section thesis: a goal's dollar target is currently whatever the user types. Let the app (and Coach)
+find out what the goal really costs — the drive, the gas, the rental-vs-own-car math — and, for a
+big purchase, where the user can try it **in person first**, so a user who needs six months to save
+$3,000 isn't gambling that money on something they've only seen online. Dates, not dollars: a more
+honest target makes a more honest Claim Date.*
+
+**Architecture principle (decided 2026-10-04): Mapbox returns data, Coach interprets it — Mapbox
+output is not rendered raw to the user.** A Coach tool calls Mapbox (Directions / Search Box),
+receives structured numbers and place categories, and Coach turns them into a plain-language
+answer with stated assumptions. Same grounding rule as `active-systems.md` §6 / warden §21:
+every figure Coach states resolves to a tool result or user input, never to model memory.
+`coachTools.js` tools already execute client-side (`executeCoachTool`), so a Mapbox tool can call
+Mapbox with a URL-restricted **public** token from the browser — **no new `api/` function**
+(12/12 Hobby cap; see `active-systems.md` §27).
+
+### A. Foundation — the numbers engine (no UI, no Coach yet)
+- [ ] **`tripCost` pure function lib** (e.g. `src/lib/tripCost.js`) — inputs: miles, drive minutes
+  (from Directions), mpg, fuel price, cost-per-mile; outputs: own-car cost (fuel-only and all-in),
+  round-trip totals, per-shift commute cost. Every output is labeled an **estimate**. Fully
+  unit-tested before anything consumes it.
+- [ ] **Rate constants live in config, not code** — IRS standard mileage rate was 72.5¢ from
+  2026-01-01 (irs.gov); one source reports a mid-year raise to 76¢ effective 2026-07-01 —
+  **unverified, check irs.gov before hard-coding.** It is a tax-deduction rate, so label it an
+  "all-in estimate", never "true trip cost". Fuel price: EIA publishes weekly state/regional retail
+  gasoline averages — confirm API access/key on eia.gov/opendata; fall back to a user-entered price.
+- [ ] **Mapbox access setup** — `VITE_MAPBOX_TOKEN` (public `pk.` token, URL-restricted to the app's
+  domains), added to the Environment Variables list. Use **temporary** geocoding only (100k/mo free;
+  **permanent** geocoding — storing coordinates — has no free tier and needs a payment method), so
+  store a goal's destination as **text** and re-geocode on demand. Free tier: 50k map loads,
+  100k directions requests/mo; $2 per 1,000 directions after. **Verify Mapbox's current ToS
+  (display/attribution requirements for Directions and Search results) before shipping anything.**
+- [ ] **Location privacy + consent** — device location is requested only when the user taps
+  "plan this" (never on load), no location history is stored, only the destination text a user
+  chose. Update ToS/Privacy copy and bump the consent version (§17 `consent_records`).
+
+### B. Coach as the interpreter
+- [ ] **Coach tools `plan_trip` / `commute_cost` / `find_nearby`** in `coachTools.js` — client-side,
+  structured results (miles, minutes, cost estimate, place categories + names), each tagged
+  `estimate: true` with its data source. Add to `ASK_COACH_TOOLS`; `JOB_HUNT_TOOLS` gets
+  `commute_cost` only (see D).
+- [ ] **Hypothesis numbers with stated assumptions** — Coach answers in ranges with its inputs
+  spelled out ("about $X in gas at Y mpg and today's regional price — adjust if your car differs"),
+  never single-point precision. Extend the Coach personality rubric check
+  (`docs/coach-personality-rubric.md`) to cover estimate language.
+- [ ] **Web research for store types (decision needed)** — Coach has **no web search today**.
+  Option: Anthropic's server-side web search tool inside the existing `api/coach.js` (no new
+  function; each search costs real money. Note the only Coach call cap today is the `is_ai_admin`
+  daily cap, migration 043 — regular users have none, so decide a per-user cap before enabling).
+  **Verify the current tool name, pricing and behavior in the `claude-api` skill/docs before
+  building.** Output is store **types/chains** that plausibly carry a product ("sporting-goods
+  stores and some big-box retailers sell treadmills"), cross-referenced with Mapbox places near
+  the user. **Never claims a specific store has the item in stock** — wording is "may carry —
+  call ahead." Inventory and live prices are out of scope.
+
+### C. Try before you buy
+- [ ] **High-ticket goal prompt** — when a goal crosses a threshold (decide: e.g. ≥ $500) and its
+  name matches a physical product/service, Coach offers: "want to try one in person before you
+  save toward it?" → nearby place categories + a plain-language suggestion + the trip cost to get
+  there. The point: let a user who needs months to fund a $3,000 item test it first.
+- [ ] **Decide whether to persist "try-it" notes on the goal.** If yes, it is a new persisted
+  goal field → the four-site persisted-field procedure + eager save (`onSaveGoalsNow`), and
+  warden §8/§19 checks. If no, keep it conversational only (cheaper, lower drift risk — start here).
+- [ ] **"Add trip cost to this goal" action** — optional, user-confirmed button: adds the
+  estimated trip cost to the goal's target. Eager-saves via `onSaveGoalsNow(next)` with the
+  synchronously computed value; shadowed as a no-op when `readOnly`. The Claim Date still comes
+  **only** from `resolveGoalFinishInfo()` (warden §8 F177) — this changes an *input*, never
+  computes a date. Edit the duplicated mobile/desktop goal-card branches as a pair if touched.
+
+### D. Commute cost & job-search radius (New Job Season)
+- [ ] **Commute cost for hourly/DHL users** — round-trip cost per shift from home to work; Plant
+  vs Warehouse shift patterns matter (`getDhlPlannedDayIndexes()`). Show **actual** dollars as
+  computed, never scaled by `perCheckFactor` (the §10 F163 rule applies to averaged summary
+  values only — lesson from the frontend-design A/B run).
+- [ ] **Job-search radius in New Job Season** — Coach tool: "what does a job N miles away really
+  cost me per week?" feeding the runway story (warden §8/§10 New Job Season entries;
+  `computeNewJobSeasonRunway` inputs must stay the single source of runway math).
+- [ ] **Rental break-even calculator** — own-car cost (A) vs a rental quote **the user types in**.
+  Coach never states rental prices or recommends agencies from model memory (invented figures).
+
+### E. Guardrails, order and housekeeping
+- [ ] **Build order:** A (engine) → B (Coach tools, no web search) → C-prompt + D commute cost →
+  web-research decision → place finder. Skip inventory/price availability entirely.
+- [ ] **Staged plugins:** enable `mapbox` (20 skills; its MCP stays unwired) through the CLAUDE.md
+  5-step adoption check only when building starts — most skills target map-rendering features this
+  needs little of; prune to the few relevant ones. Use the `frontend-design` skill for any new UI.
+- [ ] **Drift Warden pass before merge:** §8 (Home/goal card pair, F177), §10 (Upkeep, F163),
+  New Job Season entries, §21 (AI context grounding), §19 only if a persisted field is added.
+
+---
+
+## 28. Coach over SMS — Twilio prerequisites & sequence *(new — scoped 2026-10-04, idea stage, nothing built)*
+
+*Section thesis: Coach showing up in a text thread is a real engagement idea (vision rating 6/10),
+but the build is dominated by constraints, not code. This section is the prerequisite checklist so
+the reasoning isn't lost. **Do not start two-way Coach until PWA push and one-way reminders have
+shown the channel is worth it.***
+
+**Sequence:** (1) PWA push reminders (`§8.C` weekly pre-game briefing) → (2) opt-in one-way SMS
+reminders with **no dollar figures** → (3) two-way Coach over SMS. Each step is a decision gate.
+
+- [ ] **Free a serverless slot first** — `api/` is **12/12** (Hobby cap). A Twilio inbound webhook
+  needs a route: merge the three `stripe-*.js` routes (same shape) or dispatch the webhook from an
+  existing route on a body/path field, as `api/seed.js` / `admin-beta-hub.js` already do.
+- [ ] **US A2P 10DLC registration** — brand → campaign → numbers. Campaigns fail review when the
+  opt-in/opt-out method is inadequate; new campaigns require privacy-policy and terms URLs from
+  2026-06-30 (Twilio changelog). **Review times and fees were not confirmed — verify with Twilio
+  before committing a timeline.**
+- [ ] **SMS consent is its own capture** — separate from ToS (§17 `consent_records` pattern),
+  stored with timestamp/wording. **STOP and any reasonable revocation** (FCC 2024 TCPA amendments,
+  compliance April 2025) must suppress sends immediately across every message type.
+- [ ] **Phone verification before linking** — OTP confirmation in-app; a phone number alone is not
+  identity, and inbound texts must map to exactly one verified account.
+- [ ] **Content policy: no balances or account figures in texts** — SMS is unencrypted and carriers
+  commonly flag financial-information messages as phishing. Safe wording is event-shaped ("Rent is
+  due Friday"), not number-shaped. Write the template list before any Coach reply is allowed to send.
+- [ ] **Cost guardrails** — every inbound text triggers a paid Anthropic call plus SMS fees both
+  ways. **There is no per-user Coach cap today** — migration 043 / `api/coach.js` cap only
+  `is_ai_admin` accounts (counter-column pattern, usable as a template). Build per-user daily caps
+  and spend accounting before launch; same real-money care as the Coach live-test skill.
+- [ ] **Server-side Coach context (verify first)** — believed (unverified) that `aiContext.js`
+  assembles context from client-side state. If so, SMS needs the same context rebuilt server-side
+  from Supabase, through the same authoritative functions (`active-systems.md` §6 grounding rule)
+  — likely the largest single piece of work.
+- [ ] **Webhook hardening** — Twilio signature validation and idempotency (mirror
+  `stripe-webhook`), a non-streaming Coach response path, message-length/segment handling, and a
+  graceful fallback when a user is over cap or unverified.
+- [ ] **Phase gates** — Phase 1 one-way reminders (opt-in, no figures) must hit an agreed
+  engagement/opt-out bar vs PWA push before Phase 2 two-way Coach is scheduled.
+- [ ] **Staged plugin:** `twilio-developer-kit` (57 skills; MCP stays unwired) — enable via the
+  CLAUDE.md 5-step check only when Phase 1 starts, and prune to the few skills that apply.
+- [ ] **Drift Warden pass:** §14/§20 (auth/entitlements — a texting channel is a new auth surface),
+  §21 (AI context grounding), §19 (new persisted consent/phone fields → four-site procedure).
 
 ---

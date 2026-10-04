@@ -212,6 +212,42 @@ describe("executeCoachTool — get_expense_detail", () => {
     expect(r.availableLabels).toEqual(["Rent", "Gym"]);
   });
 
+  // A deleted bill is never spliced out of the array (point-in-time design,
+  // TODO §3) — it is zeroed forward and keeps its label and history. It stays
+  // newJobSeasonStatus "active" forever, so a bare status filter still finds
+  // it. The dollar totals never noticed (a zeroed bill adds $0 to
+  // computeRemainingSpend by construction), which is exactly why this hid: it
+  // only shows up on a lookup BY NAME, which is all three of these tools.
+  const deletedBill = {
+    label: "Old Streaming", category: "Lifestyle", newJobSeasonStatus: "active",
+    billingMeta: { amount: 18, cycle: "every30days", effectiveFrom: "2026-01-01" },
+    history: [
+      { effectiveFrom: "2026-01-01", weekly: [4, 4, 4, 4] },
+      { effectiveFrom: "2026-07-01", weekly: [0, 0, 0, 0] },
+    ],
+  };
+
+  it("does not resolve a bill the user deleted (zeroed forward, still in the array)", () => {
+    const data = baseData({ expenses: [...baseData().expenses, deletedBill] });
+    const r = executeCoachTool("get_expense_detail", { label: "Old Streaming" }, data);
+    expect(r.error).toContain("No active expense");
+    expect(r.availableLabels).not.toContain("Old Streaming");
+  });
+
+  it("does not offer a deleted bill as a simulation target", () => {
+    const data = baseData({ expenses: [...baseData().expenses, deletedBill] });
+    const r = executeCoachTool("simulate_expense_change", { label: "Old Streaming", newWeeklyCost: 0 }, data);
+    expect(r.error).toBeTruthy();
+  });
+
+  it("never deep-links to a deleted bill — BudgetPanel hides that row", () => {
+    // The chip would land the user on Upkeep with nothing highlighted, the
+    // same invisible-target failure the collapsed-category fix already cost us.
+    const data = baseData({ expenses: [...baseData().expenses, deletedBill] });
+    const r = executeCoachTool("navigate_to", { panel: "upkeep", focus: "Old Streaming" }, data);
+    expect(r.focusRef ?? null).toBeNull();
+  });
+
   it("returns payoff detail for a loan", () => {
     const loan = {
       label: "Car Loan", type: "loan", category: "Loan", newJobSeasonStatus: "active",

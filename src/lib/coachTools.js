@@ -32,12 +32,12 @@ import {
   calcEventImpact,
   resolveEventWeekMeta,
   getExactEffectiveAmountForMonth,
-  getEffectiveAmountForMonth,
   getPhaseIndex,
   computeLoanPayoffDate,
   loanPaymentsRemaining,
   loanWeeklyAmount,
   fmtFullDate,
+  isExpenseRemoved,
 } from "./finance.js";
 import {
   getFiscalWeekNumber,
@@ -48,6 +48,23 @@ import {
 } from "./fiscalWeek.js";
 import { getNextDueDate, getExpenseDisplayAmount, getExpenseDisplaySuffix, normalizeCycle } from "./expense.js";
 import { isNjsBillActive } from "./newJobSeasonRunway.js";
+
+// Every tool that looks up a bill by name resolves its candidate set through
+// this, never through a bare status check. isNjsBillActive alone is not enough:
+// a deleted bill is zeroed forward and LEFT in the array (point-in-time design,
+// TODO §3), so it still reads as "active" and still carries its old label. The
+// dollar totals never noticed — a zeroed bill contributes $0 to
+// computeRemainingSpend by construction — but a name lookup does, which is
+// exactly what these tools do. isExpenseRemoved is the same test BudgetPanel's
+// isRemovedThisPhase uses to HIDE the row, so pairing the two here is what
+// keeps Coach from describing (or deep-linking to) a bill that is not on screen.
+// newJobSeasonRunway.js pairs them for the same reason.
+function visibleExpenses(data) {
+  const todayIso = data?.today ?? null;
+  return (data?.expenses ?? []).filter(
+    (e) => isNjsBillActive(e) && !isExpenseRemoved(e, todayIso)
+  );
+}
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 
 // ── Tool schemas ────────────────────────────────────────────────────────
@@ -406,11 +423,11 @@ function toolGetGoalDetail({ rank }, data) {
 }
 
 function toolGetExpenseDetail({ label }, data) {
-  const { expenses = [], today = null } = data;
+  const { today = null } = data;
   const needle = String(label ?? "").trim().toLowerCase();
   if (!needle) return { error: "A label is required." };
 
-  const active = expenses.filter(isNjsBillActive);
+  const active = visibleExpenses(data);
   const exp = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
     ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
   if (!exp) {
@@ -604,7 +621,7 @@ function toolListLogEntries({ type = null, limit = 10 }, data) {
 function toolSimulateExpenseChange({ label, newWeeklyCost }, data) {
   const needle = String(label ?? "").trim().toLowerCase();
   const expenses = data.expenses ?? [];
-  const active = expenses.filter(isNjsBillActive);
+  const active = visibleExpenses(data);
   const target = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
     ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
   if (!target) {
@@ -838,7 +855,7 @@ function toolNavigateTo({ panel, focus }, data) {
         focusNote = `There is no goal ${rank} — the panel will open without highlighting anything.`;
       }
     } else {
-      const active = (data.expenses ?? []).filter(isNjsBillActive);
+      const active = visibleExpenses(data);
       const needle = raw.toLowerCase();
       const hit = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
         ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));

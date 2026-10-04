@@ -1,4 +1,4 @@
-import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate } from "./finance.js";
+import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate, isExpenseRemoved } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
@@ -128,7 +128,15 @@ export function buildCoachContext({
   const activeGoals = goals.filter((g) => !g.completed);
   const totalActiveGoalsTarget = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   const totalGoalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
-  const activeExpenses = expenses.filter(isNjsBillActive);
+  // Paired with isExpenseRemoved, not isNjsBillActive alone: a deleted bill is
+  // zeroed forward and kept in the array, so the bare status check still counts
+  // it and still prints its label. avgWeeklySpend (passed in from App.jsx,
+  // grounded) already excludes it by arithmetic, so the unpaired version made
+  // one sentence disagree with itself — "N active lines, $X/week" where N
+  // counted bills contributing $0 and hidden from Upkeep.
+  const activeExpenses = expenses.filter(
+    (e) => isNjsBillActive(e) && !isExpenseRemoved(e, today)
+  );
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const weeksLeft = weekNumber != null ? Math.max(TOTAL_FISCAL_WEEKS - weekNumber, 0) : null;
   const mostRecentLog = logs.length

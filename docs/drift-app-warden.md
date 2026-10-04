@@ -5807,6 +5807,39 @@ renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
 > block (edits are what get created, re-projection on amount change, single-confirm, read-only),
 > and `live-testing-checklist.md` item 10 for the browser pass.
 
+**F180 · A deleted bill is still in the array — status checks alone never see it** — `coachTools.js`, `aiContext.js` — **[L]+[G]**
+2026-10-04. This app never splices a deleted expense out of `expenses` (point-in-time design,
+TODO §3): it **zeroes the amount forward** and keeps the row, its label, and its history. Its
+`newJobSeasonStatus` stays `"active"` forever. So `isNjsBillActive(e)` — and the four hand-rolled
+`(e.newJobSeasonStatus ?? "active") === "active"` filters it replaced — match a bill the user
+deleted and `BudgetPanel` already hides.
+> **Why it stayed invisible for three months: the dollar figures were never wrong.** A zeroed
+> bill contributes exactly $0 to `computeRemainingSpend` by construction, so every total,
+> ratio and Budget Health number stayed correct. The defect only surfaces where a bill is
+> resolved **by name or counted**, which is precisely what the Coach layer does and what the
+> totals never do. A grounding audit that checks figures against their source function —
+> the standard §6 procedure — passes this bug cleanly.
+> **The tell was a self-contradicting sentence.** `aiContext`'s line read
+> `Expenses: N active lines, $X/week`, where `N` counted deleted bills and `$X`
+> (`avgWeeklySpend`, passed in already grounded from `App.jsx`) excluded them. **IF** a context
+> line pairs a count with a figure, **THEN** both sides must come from the same filtered set.
+> **The pairing is the contract.** `newJobSeasonRunway.js` has always written
+> `isNjsBillActive(exp) && … && !isExpenseRemoved(exp, todayIso)`; the Coach call sites took
+> only the first half. `isExpenseRemoved` is the same test `BudgetPanel`'s `isRemovedThisPhase`
+> uses to hide the row, which is what makes it the right one — Coach must not describe, or
+> deep-link to, a row that is not on screen. **IF** a new surface filters expenses, **THEN** it
+> uses the full pairing, not `isNjsBillActive` alone. In `coachTools.js` the single
+> `visibleExpenses(data)` helper is that pairing; do not re-filter inline beside it.
+> **`navigate_to` is the sharp edge.** A focus chip aimed at a deleted bill lands the user on
+> Upkeep with nothing highlighted — the same invisible-target class as the collapsed-category
+> clipping bug in F175.
+> **Widening note:** `isNjsBillActive` admits `"paid"` as well as `"active"` (TODO §25). That is
+> correct and deliberate — paid-for-this-cycle is not cancelled — and must not be "tightened"
+> back to an equality check while fixing something else.
+> Check: `coachTools.test.js`'s three deleted-bill cases (`get_expense_detail`,
+> `simulate_expense_change`, `navigate_to` focus) and `aiContext.test.js`'s count/label case.
+> All four were confirmed red against the unfixed source before being committed.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the
@@ -5823,6 +5856,7 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | Any Spine-A signature the context reads (F13/F15/F18/F23/F38/F102) | `buildCoachContext` is a named consumer in that entry's blast radius | The Spine-A entry's own procedure + `aiContext.test.js` | D1 |
 | `computeGoalTimeline` epoch handling (F18) | Coach goal line **and** Home goal cards — both pass `config?.goalTimelineEpochIdx ?? null` | Grep `computeGoalTimeline(` for epoch-arg parity; goal ETA on card = Coach answer | D1 |
 | Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
+| Any expense filter in the Coach layer (F180) | Every by-name lookup and every count — `visibleExpenses` in `coachTools.js`, `activeExpenses` in `aiContext.js` | Grep `isNjsBillActive` for a use NOT paired with `!isExpenseRemoved`; the four deleted-bill tests | D1/D5 |
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
 | `computeNewJobSeasonRunway`/`resolvePrimaryRunwayDays` signature (converged target — both former F24 quarantines closed `3267286`, 2026-07-22) | `CoachNetWorthCard.jsx` (Red tier) and `App.jsx`'s `coachRunwayDays` → `AskCoachPanel` both call it directly now — a signature change must be verified against both, not just the two New Job Season panels | `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block + `CoachNetWorthCard.test.jsx`; New Job Season Home headline, Coach card, and Ask Coach's stated runway must all agree on one account | D1 |
 | `coach_chats` db functions get a second `chat_type` UI caller (F116/F146) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |

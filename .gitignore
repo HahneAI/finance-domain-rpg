@@ -36,3 +36,7 @@ agent-and-skill-overview.md
 scripts/coach-eval/results/*
 !scripts/coach-eval/results/.gitkeep
 tmp-live-test/
+
+# session-report skill output (contains usage data / optionally prompt excerpts) — must never be committed
+session-report-*.html
+session-report-*.json

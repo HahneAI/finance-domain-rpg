@@ -40,7 +40,6 @@ reference copies to wire up by hand if wanted.
 | legalzoom | 1.0.0 | 1 | 1 | 0 | ✔ | – | remote HTTP `legalzoom.com`; LegalZoom account; sends contract text off-machine |
 | mapbox | 1.0.0 | 20 | 0 | 0 | ✔ (3) | – | remote HTTP `mcp.mapbox.com`, `mcp-devkit…`, `mcp-docs…`; devkit/runtime need a Mapbox token |
 | session-report | ab024cdcfa7c | 1 | 0 | 0 | – | – | none (reads local `~/.claude/projects` transcripts) |
-| skill-creator | ab024cdcfa7c | 1 | 0 | 0 | – | – | none |
 | stripe | 0.10.3 | 10 | 2 | 1 | ✔ | ✔ | remote HTTP `mcp.stripe.com`; Stripe auth. **Use test mode only** — this repo has live billing (`api/stripe-*`) |
 | supabase | 0.1.15 | 2 | 0 | 0 | ✔ | – | remote HTTP `mcp.supabase.com`; Supabase OAuth. **Can reach the production project** |
 | twilio-developer-kit | 0.3.2 | 57 | 0 | 0 | ✔ | – | `twilio-docs`: remote HTTP docs server, no auth |
@@ -61,7 +60,7 @@ Result of a read-only audit of the three partially staged plugins. Everything el
 | claude-security | **Defer** | Copying `scripts/`, `workflows/` and `hooks/` would not be enough. (1) Its files use `${CLAUDE_PLUGIN_ROOT}`, which as far as we know is only defined for installed plugins, not project-level `.claude/skills` (unverified). (2) Its orchestrator names tools `Workflow(claude-security:scan)` and `Agent(claude-security:scan-researcher, …)`; the staged agents are named `scan-researcher` etc. without the namespace, so those references would not resolve. (3) Its own description says to run it as the main agent with `claude --agent claude-security:claude-security`. For now use the built-in `/security-review` skill. Revisit only if a real install is needed. |
 
 Suggested test order: fully staged, no-credential plugins first (`frontend-design`, `code-simplifier`,
-`skill-creator`, `session-report`), then `vercel` and `figma`, then the MCP/credential
+`session-report`), then `vercel` and `figma`, then the MCP/credential
 plugins. Leave `claude-security` last.
 
 ## Caveats

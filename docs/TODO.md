@@ -532,7 +532,12 @@ the main thing being passed.*
   by Needs + Lifestyle ("every expense covered if you never worked again").
 - Write: `saveResourceSnapshot()` (`db.js`), from a debounced (1.5s) effect in `App.jsx` keyed on the payload,
   plus a forced re-publish on every `visibilitychange` → visible. Payload memo is above App's early returns.
-- **Before it works live:** run 047 in the Supabase SQL editor. Then confirm the admin account's row appears and
+- **Fix 2026-10-05 (live check):** Anthony's account is in New Job Season, where `computeCashOnHand()` returns null
+by design — so the first live snapshot had no cash/burn/paycheck and a stale Claim Date (Sep 1). The payload now
+takes `newJobSeasonDash` as the cash stand-in (`mode: 'new_job_season'`: NJS effective cash, essential weekly burn,
+lifestyle spend, pending check) and publishes no Claim Date in NJS or when already past.
+
+**Before it works live:** run 047 in the Supabase SQL editor. Then confirm the admin account's row appears and
   `computed_at` moves on each open/resume.
 
 ### E. Explicitly out of scope for this entry

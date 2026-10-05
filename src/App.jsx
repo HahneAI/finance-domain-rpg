@@ -2083,8 +2083,8 @@ export default function App() {
       logNetLost: logTotals.netLost, logNetGained: logTotals.netGained,
       futureEventDeductions, config, currentWeek, today: effectiveToday,
     });
-    return buildResourceSnapshotPayload({ cashOnHand, nextClaim });
-  }, [loading, isAdmin, goals, futureWeeks, futureWeekNetsRaw, expenses, logTotals.netLost, logTotals.netGained, futureEventDeductions, config, currentWeek, effectiveToday, cashOnHand]);
+    return buildResourceSnapshotPayload({ cashOnHand, njsDash: newJobSeasonDash, nextClaim, today: effectiveToday });
+  }, [loading, isAdmin, goals, futureWeeks, futureWeekNetsRaw, expenses, logTotals.netLost, logTotals.netGained, futureEventDeductions, config, currentWeek, effectiveToday, cashOnHand, newJobSeasonDash]);
   const resourceSnapshotJson = resourceSnapshotPayload ? JSON.stringify(resourceSnapshotPayload) : null;
   const lastResourceSnapshotRef = useRef(null);
   const [resourceSnapshotResumeTick, setResourceSnapshotResumeTick] = useState(0);

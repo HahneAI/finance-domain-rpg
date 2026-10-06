@@ -2093,8 +2093,20 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     identical (`claude-haiku-4-5`, `scripts/coach-eval/promptfooconfig.phase5-amber-refix.yaml`):
     exactly one figurative touch, exactly one named lever, all three runs. Regression test added
     in `coachPrompts.test.js`. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
-  - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
-    no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
+  - [x] Repeat-verify passes (run 2026-10-06, 12 calls, 0 errors; full writeup in
+    `coach-personality-rubric.md` Known Limitations). **Job Hunt Chat:** voice holds 6/6 (3
+    sentences, no metaphor, urgency as content) BUT the "which application first" pick flips
+    between draws and one draw states a wrong gap ("over three weeks" for 17 days) — new open
+    item, grounding/tiebreak not voice. **Résumé Review score-1:** NOT reached (~15 sentences
+    under a 2–3-sentence override); floor 3–4 (natural baseline measured 2026-10-06: 13–17 sentences / 270–350 words; proposed target score 3, range 3–5), feeds the batch decision. **Ask Coach
+    tool-available:** no metaphor, Axis 2 shift confirmed (1 draw/scenario, directional); both
+    draws called `navigate_to` unprompted on "How's my week looking?".
+  - [x] Job Hunt Chat first-pick + wrong-gap — FIXED + re-verified 2026-10-06 (`Today:` + computed
+    `N days ago` in `buildJobHuntContext`, one-pick tiebreak in `JOB_HUNT_ADDENDUM`): 6/6 Riverbend
+    first, 6/6 correct "17 days". Résumé Review: `Today:` now in its context block + no-recap /
+    date-after-Today rules in `RESUME_REVIEW_ADDENDUM` — dates 3/3 fixed, recap partly (2/3 still
+    close on the body's gap, as an action); length intentionally untouched. Residual (minor): loose
+    runway-to-weeks conversion on tight runway. Writeup: rubric Known Limitations.
   - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
     above. This is Phase 5's actual finish line.

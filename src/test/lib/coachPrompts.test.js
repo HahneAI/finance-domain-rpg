@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt, RESUME_REVIEW_SYSTEM_PROMPT } from "../../lib/coachPrompts.js";
+import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt, RESUME_REVIEW_SYSTEM_PROMPT, JOB_HUNT_SYSTEM_PROMPT } from "../../lib/coachPrompts.js";
 
 describe("COACH_PERSONA_PROMPT", () => {
   it("explicitly instructs against combative language, per docs/coach-personality-rubric.md", () => {
@@ -162,8 +162,26 @@ describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {
     expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/never explained, and never more than the one touch/i);
   });
 
+  // 2026-10-06 repeat-verify: 2 of 3 natural draws restated the leadership gap
+  // in the closing line; 2 of 3 called "2021 to 2026" a typo because no date
+  // was ever supplied. The prompt now bans the recap and anchors dates to Today.
+  it("bans restating a named gap in the closing line and anchors date judgments to the given Today", () => {
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/don't restate a gap you already named/i);
+    expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/only flag a date as an error if it falls after today/i);
+  });
+
   it("still keeps the exception to the two-to-three-sentence rule and the no-Markdown rule", () => {
     expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/exception to the two-to-three-sentence rule/i);
     expect(RESUME_REVIEW_SYSTEM_PROMPT).toMatch(/never asterisks or dash-bullets/i);
+  });
+});
+
+describe("JOB_HUNT_SYSTEM_PROMPT", () => {
+  // 2026-10-06 repeat-verify: the "follow up on first" pick flipped between
+  // draws on identical data, and one draw invented elapsed time.
+  it("commits to one pick (live conversation outranks a quiet application) and forbids estimating elapsed time", () => {
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/give one pick and commit to it/i);
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/scheduled interview or other live conversation outranks/i);
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never estimate elapsed time yourself/i);
   });
 });

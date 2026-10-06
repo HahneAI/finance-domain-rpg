@@ -328,7 +328,7 @@ export function NewJobSeasonHomePanel({
             </Pressable>
           </div>
 
-          <ResumeReviewCard config={config} />
+          <ResumeReviewCard config={config} effectiveToday={effectiveToday} />
 
           {(jobHuntOpen || jobHuntExiting) && (
             <JobHuntChatPanel

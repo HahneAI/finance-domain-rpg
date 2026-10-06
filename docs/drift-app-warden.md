@@ -5423,7 +5423,11 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > silent copy-paste of either existing gate function. **IF** `buildJobHuntContext`'s
 > fields are extended, **THEN** they must resolve through the same authoritative function the
 > on-screen New Job Season panels use, per F113's rule — this function is exempt from `buildCoachContext`
-> itself but not from the grounding rule that governs it. **IF** persistence/retention/summary
+> itself but not from the grounding rule that governs it. **IF** a Job Hunt / Résumé Review context field
+> is a *date* or *elapsed time*, **THEN** compute it in the builder (`buildJobHuntContext` emits `Today:` +
+> `N days ago` per application; `ResumeReviewCard` prepends `Today:` — 2026-10-06, found because the model
+> guessed both) and mirror it in `scripts/coach-eval/prompts/resumeReview.js`; never leave the model to infer
+> it. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
 > entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
 > and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags

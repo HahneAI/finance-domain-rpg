@@ -785,7 +785,25 @@ call the résumé's "2021 to 2026" end date a typo / "still in the future", whil
 today is 2026-03-09 (possible wrong-fact, same class as the Job Hunt "three weeks" miss — I did
 not verify what date, if any, the Résumé Review prompt supplies).
 
+**Fix + re-verify, 2026-10-06 (Job Hunt first-pick / wrong-gap; Résumé Review date + recap).**
+Root causes found in code, not the model: `buildJobHuntContext()` gave applied *dates* but no
+"Today" and no elapsed days (so Coach guessed the gap), and the Résumé Review context block had
+no date at all (so Coach guessed "today" and called 2026 a typo) — confirming the open question
+just above: it supplied none. Fix: `buildJobHuntContext` now emits `Today:` and a computed
+`N days ago` per application; `ResumeReviewCard` prepends `Today:` (eval loader mirrors it);
+`JOB_HUNT_ADDENDUM` gained a one-pick tiebreak (live conversation outranks a quiet application) +
+"never estimate elapsed time"; `RESUME_REVIEW_ADDENDUM` gained "don't restate a gap already named
+in the closing line" + "only flag a date after Today". Live re-verify (Sonnet, `--repeat 3
+--no-cache`, 9 calls, 0 errors):
+- **Job Hunt: FIXED.** 6/6 draws pick Riverbend first (was 2/3 flipping); 6/6 state "17 days"
+  correctly (was one "over three weeks"). Still 3–4 sentences, no metaphor. Residual: two tight
+  draws convert 9 days of runway loosely ("a little under two weeks"; actually ~1.3 weeks).
+- **Résumé Review dates: FIXED** (3/3 no typo flag). **Recap: only partly fixed** — 2 of 3 still
+  close on the same leadership item the body names, now as an action rather than a re-description.
+  **Length unchanged:** 13 / 9 / 19 sentences, 318 / 257 / 351 words (before: 13–17, 272–346) —
+  no trimming achieved; the Axis 3 proposal (target 3, range 3–5) stands.
 
+## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through
 "Calibration Methodology" above first, this is the same four steps restated as a per-row checklist:

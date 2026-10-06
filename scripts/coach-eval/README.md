@@ -393,9 +393,10 @@ retry-on-a-hunch.** Concretely for this file:
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
-    Warmth/formality (still undefined), the Job Hunt first-pick/wrong-gap
-    fix — then the batch decision: lock one target number per mode/axis
-    pair across all four modes.
+    Warmth/formality (still undefined) — then the batch decision: lock one
+    target number per mode/axis pair across all four modes. (Job Hunt
+    first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
+    2026-10-06 — see the rubric's Known Limitations.)
 - [~] Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to
   remaining flat-default modes" scope). Widen live testing to Coach modes
   beyond the four that exist today, once each is actually built — blocked

@@ -803,29 +803,25 @@ export default function App() {
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
   }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Identity change flow (TODO §31). Profile → Identity → "Same goals list"
-  // clears config.identity now (the picker returns on Home). "Edit goals first"
-  // parks the change: the user lands on the Goals page with the identity still
-  // locked, and it is cleared when they tap Done OR leave that screen — either
-  // way the picker is waiting when they come back. One eager write, readOnly
-  // refused here independently of the UI (F176 rule).
-  const [identityEditPending, setIdentityEditPending] = useState(false);
-  const finishIdentityChange = useCallback(() => {
-    setIdentityEditPending(false);
+  // Identity change flow (TODO §31): PICK FIRST, TIDY SECOND. Profile → Identity →
+  // confirm opens the picker on Home while the OLD identity is still set (so
+  // cancelling or leaving the screen changes nothing). Confirming seeds the new
+  // identity's goals after the existing ones (handleApplyArchetype below) and
+  // raises `identityTidy`: the Goals page then asks the user to remove old goals,
+  // set realistic numbers and reorder, with the new goals already on the list.
+  // Neither flag is persisted. readOnly is refused here, not just in the UI (F176).
+  const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+  const [identityTidy, setIdentityTidy] = useState(false);
+  const handleChangeIdentity = useCallback(() => {
     if (isExpiredReadOnlyRef.current) return;
-    const next = { ...config, identity: null };
-    setConfig(next);
-    savePersistedStateNow({ config: next });
-  }, [config, setConfig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const handleChangeIdentity = useCallback(({ editGoalsFirst }) => {
-    if (isExpiredReadOnlyRef.current) return;
-    if (editGoalsFirst) setIdentityEditPending(true);
-    else finishIdentityChange();
+    setIdentityPickerOpen(true);
     navigateDirect("home");
-  }, [finishIdentityChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (identityEditPending && currentView !== "home") finishIdentityChange();
-  }, [identityEditPending, currentView, finishIdentityChange]);
+    if (currentView === "home") return;
+    if (identityPickerOpen) setIdentityPickerOpen(false);
+    if (identityTidy) setIdentityTidy(false);
+  }, [currentView, identityPickerOpen, identityTidy]);
 
   // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
   // goals AND stamps config.identity in ONE eager write — two back-to-back
@@ -841,7 +837,13 @@ export default function App() {
     // One goal_created per seeded goal — same accounting as F176, or beta
     // analytics under-count goals for anyone who starts from a template.
     for (let i = 0; i < addedCount; i++) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  }, [setGoals, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Switching identity (not first pick): close the picker and, where goals are
+    // editable (not New Job Season — theirs are paused/read-only), start tidy-up.
+    if (identityPickerOpen) {
+      setIdentityPickerOpen(false);
+      if (!config.newJobSeasonMode) setIdentityTidy(true);
+    }
+  }, [setGoals, setConfig, isTester, betaCodeUsed, identityPickerOpen, config.newJobSeasonMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2382,6 +2384,8 @@ export default function App() {
           goals={goals}
           onApplyArchetype={handleApplyArchetype}
           avgWeeklySpend={remainingSpend?.avgWeeklySpend ?? 0}
+          identityPickerOpen={identityPickerOpen}
+          onCloseIdentityPicker={() => setIdentityPickerOpen(false)}
           expenses={expenses}
           effectiveToday={effectiveToday}
           includeBenefits={newJobSeasonIncludeBenefits}
@@ -2408,8 +2412,10 @@ export default function App() {
           setGoals={setGoals}
           onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
           onApplyArchetype={handleApplyArchetype}
-          identityEditPending={identityEditPending}
-          onFinishIdentityEdit={finishIdentityChange}
+          identityPickerOpen={identityPickerOpen}
+          onCloseIdentityPicker={() => setIdentityPickerOpen(false)}
+          identityTidy={identityTidy}
+          onFinishIdentityTidy={() => setIdentityTidy(false)}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           futureWeeks={futureWeeks}

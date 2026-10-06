@@ -75,10 +75,12 @@ export function HomePanel({
   // Archetype picker commit (TODO §31) — App.handleApplyArchetype. Optional:
   // callers that omit it (DemoAccountTree) simply never show the picker.
   onApplyArchetype: onApplyArchetypeProp,
-  // "Edit goals first" identity-change flow (TODO §31): while pending the banner
-  // offers Done, which clears the identity so the picker returns.
-  identityEditPending = false,
-  onFinishIdentityEdit,
+  // Identity-change flow (TODO §31), all non-persisted App state: picker shown
+  // while the old identity is still set; tidy banner after the switch.
+  identityPickerOpen = false,
+  onCloseIdentityPicker,
+  identityTidy = false,
+  onFinishIdentityTidy,
   setConfig: setConfigProp,
   saveConfigNow: saveConfigNowProp,
   futureWeeks = [],
@@ -355,7 +357,7 @@ export function HomePanel({
     }
     return out;
   };
-  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && !config.identity && !identitySkipped;
+  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && (config.identity ? identityPickerOpen : !identitySkipped);
 
   const prevMonthStart = resolvePrevMonthStart(today);
 
@@ -593,7 +595,12 @@ export function HomePanel({
           onApply={({ archetypeId, selected }) => {
             onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
           }}
-          onSkip={() => setIdentitySkipped(true)}
+          onSkip={() => (config.identity ? onCloseIdentityPicker?.() : setIdentitySkipped(true))}
+          {...(config.identity ? {
+            title: "Choose your new identity",
+            subtitle: "Your current goals stay put. The new ones are added after them — you'll tidy up the list next.",
+            skipLabel: "Keep my current identity",
+          } : {})}
         />
       )}
       {goals.length === 0 && !showArchetypePicker && (
@@ -623,7 +630,7 @@ export function HomePanel({
         </div>
       </div>
       {config?.identity && !showArchetypePicker && (
-        <IdentityLockedBanner identity={config.identity} pending={identityEditPending} onDone={readOnly ? undefined : onFinishIdentityEdit} />
+        <IdentityLockedBanner identity={config.identity} tidy={identityTidy} onDone={readOnly ? undefined : onFinishIdentityTidy} />
       )}
 
       {/* ── Next Claim Date ──────────────────────────────────────────────────

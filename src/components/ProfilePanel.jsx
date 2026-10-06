@@ -3428,23 +3428,16 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         Sign Out (This Device)
       </Pressable>
 
-      {/* Identity change confirm (TODO §31). Keep = same goals list, picker returns
-          now; Edit first = Goals page with the identity still locked until the
-          user is done. Jobless users have no editable goals, so no edit option.
-          Without a handler (isolated tests) it falls back to a plain eager clear. */}
+      {/* Identity change confirm (TODO §31). Continue = App opens the picker on Home
+          with the OLD identity still set; the user tidies their goals after picking.
+          Nothing is written here. */}
       <IdentityChangeDialog
         open={showIdentityDialog}
         identity={config.identity}
-        canEditGoals={!config.newJobSeasonMode}
         onCancel={() => setShowIdentityDialog(false)}
-        onKeep={() => {
+        onContinue={() => {
           setShowIdentityDialog(false);
-          if (onChangeIdentity) onChangeIdentity({ editGoalsFirst: false });
-          else saveConfigNow({ ...config, identity: null });
-        }}
-        onEditFirst={() => {
-          setShowIdentityDialog(false);
-          if (onChangeIdentity) onChangeIdentity({ editGoalsFirst: true });
+          onChangeIdentity?.();
         }}
       />
 

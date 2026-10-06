@@ -1082,4 +1082,13 @@ describe('NewJobSeasonHomePanel — identity picker (TODO §31)', () => {
     expect(b).toHaveTextContent('The Explorer')
     expect(screen.queryByText(/Done — choose identity/)).toBeNull()
   })
+
+  it('switching identity: picker shows with the old identity set; Keep closes it; paused copy, no edit promise', () => {
+    const onCloseIdentityPicker = vi.fn()
+    render(<NewJobSeasonHomePanel {...base} config={{ ...JOB_LOSS_CONFIG, identity: { archetypeId: 'builder' } }} identityPickerOpen onCloseIdentityPicker={onCloseIdentityPicker} onApplyArchetype={() => {}} />)
+    expect(screen.getByText('Choose your new identity')).toBeTruthy()
+    expect(screen.getByText(/paused until you're earning again/i)).toBeTruthy()
+    fireEvent.click(screen.getByText('Keep my current identity'))
+    expect(onCloseIdentityPicker).toHaveBeenCalledTimes(1)
+  })
 })

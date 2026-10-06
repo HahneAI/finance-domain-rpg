@@ -283,16 +283,39 @@ describe('HomePanel — identity picker (TODO §31)', () => {
     expect(b).toHaveTextContent(/Identity locked in/i)
     expect(b).toHaveTextContent('The Heartbeat')
   })
-  it('pending edit mode says so and Done calls onFinishIdentityEdit; read-only offers no Done', () => {
-    const onFinishIdentityEdit = vi.fn()
+  it('while switching identity: shows the picker with the OLD identity still set, and "Keep" closes it without writing', () => {
+    const onCloseIdentityPicker = vi.fn(); const onApplyArchetype = vi.fn()
     const c = { ...cfg, identity: { archetypeId: 'builder' } }
-    const { unmount } = render(<HomePanel {...baseProps} config={c} identityEditPending onFinishIdentityEdit={onFinishIdentityEdit} onApplyArchetype={() => {}} />)
-    expect(screen.getByTestId('identity-locked-banner')).toHaveTextContent(/Editing your goals/i)
-    fireEvent.click(screen.getByText(/Done — choose identity/))
-    expect(onFinishIdentityEdit).toHaveBeenCalledTimes(1)
+    render(<HomePanel {...baseProps} config={c} identityPickerOpen onCloseIdentityPicker={onCloseIdentityPicker} onApplyArchetype={onApplyArchetype} />)
+    expect(screen.getByText('Choose your new identity')).toBeTruthy()
+    expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
+    fireEvent.click(screen.getByText('Keep my current identity'))
+    expect(onCloseIdentityPicker).toHaveBeenCalledTimes(1)
+    expect(onApplyArchetype).not.toHaveBeenCalled()
+  })
+  it('confirming a new pick appends its goals AFTER the existing ones and swaps config.identity', () => {
+    const onApplyArchetype = vi.fn()
+    const existing = [{ id: 'g_old', label: 'Old goal', target: 100, completed: false, templateKey: 'builder.starter_emergency' }]
+    render(<HomePanel {...baseProps} goals={existing} config={{ ...cfg, identity: { archetypeId: 'builder' } }} identityPickerOpen onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Explorer'))
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    const p = onApplyArchetype.mock.calls[0][0]
+    expect(p.goals[0].id).toBe('g_old')
+    expect(p.goals).toHaveLength(5)
+    expect(p.config.identity.archetypeId).toBe('explorer')
+  })
+  it('tidy mode asks the user to clean up the list; Done dismisses it; read-only offers no Done', () => {
+    const onFinishIdentityTidy = vi.fn()
+    const c = { ...cfg, identity: { archetypeId: 'explorer' } }
+    const { unmount } = render(<HomePanel {...baseProps} config={c} identityTidy onFinishIdentityTidy={onFinishIdentityTidy} onApplyArchetype={() => {}} />)
+    const b = screen.getByTestId('identity-locked-banner')
+    expect(b).toHaveTextContent(/tidy up your goals/i)
+    expect(b).toHaveTextContent(/new goals are at the end of the list/i)
+    fireEvent.click(screen.getByText('Done'))
+    expect(onFinishIdentityTidy).toHaveBeenCalledTimes(1)
     unmount()
-    render(<HomePanel {...baseProps} config={c} identityEditPending readOnly onFinishIdentityEdit={onFinishIdentityEdit} onApplyArchetype={() => {}} />)
-    expect(screen.queryByText(/Done — choose identity/)).toBeNull()
+    render(<HomePanel {...baseProps} config={c} identityTidy readOnly onFinishIdentityTidy={onFinishIdentityTidy} onApplyArchetype={() => {}} />)
+    expect(screen.queryByText('Done')).toBeNull()
   })
   it('shows no banner (the picker instead) when no identity is chosen', () => {
     render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={() => {}} />)

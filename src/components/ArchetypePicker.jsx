@@ -65,6 +65,7 @@ export function ArchetypePicker({
   // New Job Season (no income): Claim Dates are paused, so there is nothing
   // honest to preview — rows say when they start instead of showing a date.
   datesPaused = false,
+  skipLabel = "Not now",
   title = "Who are you becoming?",
   subtitle = "Pick one. We'll start you with a few goals to make it real — change any of them.",
 }) {
@@ -134,7 +135,7 @@ export function ArchetypePicker({
         {onSkip && (
           <div style={{ textAlign: "center", marginTop: "12px" }}>
             <Pressable scale={0.97} className="text-xs" style={{ ...ghostBtn, border: "none", background: "transparent" }} onClick={onSkip}>
-              Not now
+              {skipLabel}
             </Pressable>
           </div>
         )}

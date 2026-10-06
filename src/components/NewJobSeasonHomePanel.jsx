@@ -48,6 +48,7 @@ export function NewJobSeasonHomePanel({
   // Archetype picker (TODO §31) — App.handleApplyArchetype + the weekly-spend
   // figure Home uses for the emergency-fund target. Optional: no handler, no picker.
   onApplyArchetype: onApplyArchetypeProp, avgWeeklySpend = 0,
+  identityPickerOpen = false, onCloseIdentityPicker,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
@@ -56,7 +57,7 @@ export function NewJobSeasonHomePanel({
   const saveConfigNow = readOnly ? noop : saveConfigNowProp;
   const onApplyArchetype = readOnly ? noop : onApplyArchetypeProp;
   const [identitySkipped, setIdentitySkipped] = useState(false);
-  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && !config.identity && !identitySkipped;
+  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && (config.identity ? identityPickerOpen : !identitySkipped);
 
   // Goals the visitor had going when the job ended. Priority order is the
   // array's own order, same as HomePanel's — the first one is what they were
@@ -160,7 +161,8 @@ export function NewJobSeasonHomePanel({
           onApply={({ archetypeId, selected }) => {
             onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
           }}
-          onSkip={() => setIdentitySkipped(true)}
+          onSkip={() => (config.identity ? onCloseIdentityPicker?.() : setIdentitySkipped(true))}
+          {...(config.identity ? { title: "Choose your new identity", subtitle: "Your goals stay as they are, paused until you're earning again. The new ones are added after them.", skipLabel: "Keep my current identity" } : {})}
         />
       )}
 

@@ -322,23 +322,17 @@ describe('ProfilePanel — Identity row (TODO §31)', () => {
     fireEvent.click(screen.getByText(/The Builder · tap to change/))
     expect(screen.getByRole('dialog', { name: 'Change your identity' })).toBeTruthy()
     expect(screen.getByText(/You're locked in as The Builder/)).toBeTruthy()
+    expect(screen.getByText(/pick a new one, its starter goals get added/i)).toBeTruthy()
     expect(saveConfigNow).not.toHaveBeenCalled(); expect(onChangeIdentity).not.toHaveBeenCalled()
   })
 
-  it('"Same goals list" hands off editGoalsFirst:false', () => {
-    const onChangeIdentity = vi.fn()
-    mount({ onChangeIdentity })
+  it('"Choose new identity" hands off to App; Profile itself never edits config or goals', () => {
+    const onChangeIdentity = vi.fn(); const saveConfigNow = vi.fn()
+    mount({ onChangeIdentity, saveConfigNow })
     fireEvent.click(screen.getByText(/The Builder · tap to change/))
-    fireEvent.click(screen.getByText('Same goals list'))
-    expect(onChangeIdentity).toHaveBeenCalledWith({ editGoalsFirst: false })
-  })
-
-  it('"Edit goals first" hands off editGoalsFirst:true', () => {
-    const onChangeIdentity = vi.fn()
-    mount({ onChangeIdentity })
-    fireEvent.click(screen.getByText(/The Builder · tap to change/))
-    fireEvent.click(screen.getByText('Edit goals first'))
-    expect(onChangeIdentity).toHaveBeenCalledWith({ editGoalsFirst: true })
+    fireEvent.click(screen.getByText('Choose new identity'))
+    expect(onChangeIdentity).toHaveBeenCalledTimes(1)
+    expect(saveConfigNow).not.toHaveBeenCalled()
   })
 
   it('Cancel closes without changing anything', () => {
@@ -349,19 +343,10 @@ describe('ProfilePanel — Identity row (TODO §31)', () => {
     expect(onChangeIdentity).not.toHaveBeenCalled(); expect(saveConfigNow).not.toHaveBeenCalled()
   })
 
-  it('offers no "edit goals" option to a jobless user (their goals are paused and read-only)', () => {
-    mount({ config: { ...cfg, newJobSeasonMode: true }, onChangeIdentity: () => {} })
+  it('offers no edit-first option (the old flow is gone)', () => {
+    mount({ onChangeIdentity: () => {} })
     fireEvent.click(screen.getByText(/The Builder · tap to change/))
     expect(screen.queryByText('Edit goals first')).toBeNull()
-    expect(screen.getByText('Same goals list')).toBeTruthy()
-  })
-
-  it('falls back to an eager identity clear when no handler is supplied', () => {
-    const saveConfigNow = vi.fn()
-    mount({ saveConfigNow })
-    fireEvent.click(screen.getByText(/The Builder · tap to change/))
-    fireEvent.click(screen.getByText('Same goals list'))
-    expect(saveConfigNow).toHaveBeenCalledTimes(1)
-    expect(saveConfigNow.mock.calls[0][0].identity).toBeNull()
+    expect(screen.queryByText('Same goals list')).toBeNull()
   })
 })

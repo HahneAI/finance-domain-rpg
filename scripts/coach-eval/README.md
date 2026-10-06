@@ -389,7 +389,7 @@ retry-on-a-hunch.** Concretely for this file:
   - [x] Repeat-verify passes done 2026-10-06 (12 calls): Job Hunt voice
     holds 6/6 but first-pick is unstable and one draw misstates the gap
     (17 days called "over three weeks"); Résumé Review score-1 not reached
-    (floor ~2–3); Ask Coach tool-available — no metaphor, Axis 2 shift
+    (floor 3–4; natural baseline 13–17 sentences, proposed target 3); Ask Coach tool-available — no metaphor, Axis 2 shift
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and

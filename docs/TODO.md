@@ -2098,7 +2098,7 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     sentences, no metaphor, urgency as content) BUT the "which application first" pick flips
     between draws and one draw states a wrong gap ("over three weeks" for 17 days) — new open
     item, grounding/tiebreak not voice. **Résumé Review score-1:** NOT reached (~15 sentences
-    under a 2–3-sentence override); floor ~2–3, feeds the batch decision. **Ask Coach
+    under a 2–3-sentence override); floor 3–4 (natural baseline measured 2026-10-06: 13–17 sentences / 270–350 words; proposed target score 3, range 3–5), feeds the batch decision. **Ask Coach
     tool-available:** no metaphor, Axis 2 shift confirmed (1 draw/scenario, directional); both
     draws called `navigate_to` unprompted on "How's my week looking?".
   - [ ] Job Hunt Chat: fix the unstable first-pick + wrong-gap finding above (tiebreak rule in the

@@ -760,7 +760,7 @@ Ask Coach only.
 - **Résumé Review rescaled score-1 (`promptfooconfig.phase5d-resume.yaml`, Sonnet): score-1 NOT
   reached.** The 2–3-sentence override produced ~6 paragraphs / ~15 sentences; only the opening
   was shortened. `RESUME_REVIEW_ADDENDUM` mandates weak lines + gaps + strengths + one fix and
-  that outweighs the override. Confirms the earlier hypothesis: this mode's floor is ~2–3, not 1.
+  that outweighs the override. Confirms the earlier hypothesis; on the rescaled Axis 3 the floor is **3–4** (see the natural-length measurement below), not the "~2–3" first written here.
   Score-5 (itemised header/dates/every skill/education) is a clean, far longer sample, so the
   mode has range, just a higher floor. Input for the batch decision: set this mode's target
   range accordingly rather than forcing a 1.
@@ -771,7 +771,21 @@ Ask Coach only.
   draws called `navigate_to({"panel":"Home"})` on "How's my week looking?" unprompted, though the
   numbers were already in context.
 
-## Process For Filling This In
+**Résumé Review natural baseline length, measured 2026-10-06 (`promptfooconfig.phase5c.yaml
+--repeat 3 --no-cache`, Sonnet, no override, 3 calls).** Draws: 16 / 13 / 17 sentences, 7 / 6 / 8
+paragraphs, 346 / 272 / 329 words. For comparison, the rescaled-score-1 override gave 11
+sentences / 6 paragraphs / 310 words (inside the natural range — the override did essentially
+nothing), and score-5 gave 23 / 10 / 631 (~2x natural). **Proposed Axis 3 baseline for this mode:
+score 3 (Elaborated) — natural output sits at 3–4; scores 1–2 are not applicable to this mode;
+usable range 3–5.** Proposed only — the per-mode lock stays with the Phase 5 batch decision.
+Observed inside the natural draws: all three end with the "corner" closing line (by design); two
+of three repeat the leadership-gap advice twice (once as "the real gap", again as "fix first") —
+a redundancy lever if length ever needs trimming without touching the checklist; two of three
+call the résumé's "2021 to 2026" end date a typo / "still in the future", while the fixture's
+today is 2026-03-09 (possible wrong-fact, same class as the Job Hunt "three weeks" miss — I did
+not verify what date, if any, the Résumé Review prompt supplies).
+
+
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through
 "Calibration Methodology" above first, this is the same four steps restated as a per-row checklist:

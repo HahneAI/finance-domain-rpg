@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES, FISCAL_YEAR_START } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet, computeThisWeekActualSpend, getBillsDueOn } from "./lib/finance.js";
-import { getFundedGoalSpend } from "./lib/goalFunding.js";
+import { getFundedGoalSpend, buildGoal } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, saveResourceSnapshot, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
@@ -19,7 +19,7 @@ import { computeClaimDates } from "./lib/claimDate.js";
 import { buildResourceSnapshotPayload, RESOURCE_SNAPSHOT_SCHEMA_VERSION } from "./lib/resourceSnapshot.js";
 import { PaycheckLandedStep } from "./components/PaycheckLandedStep.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
-import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
+import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -797,18 +797,67 @@ export default function App() {
   // React blind spot, hit twice in one change.
   const handleCoachCreateGoal = useCallback(({ label, target, note }) => {
     if (isExpiredReadOnlyRef.current) return;
-    const next = [...goals, {
-      id: `g_${Date.now()}`,
-      label,
-      target: Number(target) || 0,
-      color: GOAL_SYSTEM_COLOR,
-      note: note ?? "",
-      completed: false,
-    }];
+    const next = [...goals, buildGoal({ label, target, note })];
     setGoals(next);
     savePersistedStateNow({ goals: next });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
   }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Identity change flow (TODO §31): PICK FIRST, TIDY SECOND. Profile → Identity →
+  // confirm opens the picker on Home while the OLD identity is still set (so
+  // cancelling or leaving the screen changes nothing). Confirming seeds the new
+  // identity's goals after the existing ones (handleApplyArchetype below) and
+  // raises `identityTidy`: the Goals page then asks the user to remove old goals,
+  // set realistic numbers and reorder, with the new goals already on the list.
+  // Neither flag is persisted. readOnly is refused here, not just in the UI (F176).
+  const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+  const [identityTidy, setIdentityTidy] = useState(false);
+  const handleChangeIdentity = useCallback(() => {
+    if (isExpiredReadOnlyRef.current) return;
+    setIdentityPickerOpen(true);
+    navigateDirect("home");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (currentView === "home") return;
+    if (identityPickerOpen) setIdentityPickerOpen(false);
+    if (identityTidy) setIdentityTidy(false);
+  }, [currentView, identityPickerOpen, identityTidy]);
+
+  // Upkeep's identity suggestions (TODO §31 Phase 2). Add arrives as { expenses,
+  // config } (a real Lifestyle bill + the suggestion marked accepted) and is one
+  // eager write; Not me arrives as { config } only. Same hook-placement/readOnly
+  // rules as the handlers above (F176).
+  const handleResolveSuggestion = useCallback(({ expenses: nextExpenses, config: nextConfig }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    if (nextExpenses) {
+      setExpenses(nextExpenses);
+      logBetaEvent({ isTester, betaCodeUsed, eventType: "expense_created" });
+    }
+    setConfig(nextConfig);
+    savePersistedStateNow(nextExpenses ? { expenses: nextExpenses, config: nextConfig } : { config: nextConfig });
+  }, [setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
+  // goals AND stamps config.identity in ONE eager write — two back-to-back
+  // saves (goals, then config) would let the second merge onto a stale
+  // snapshot. `next` comes pre-built from applyArchetype() (pure, tested); this
+  // only commits it. Same hook-placement rule as handleCoachCreateGoal above:
+  // sits above the auth early returns, paywall read through the ref.
+  const handleApplyArchetype = useCallback(({ goals: nextGoals, config: nextConfig, addedCount }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    setGoals(nextGoals);
+    setConfig(nextConfig);
+    savePersistedStateNow({ goals: nextGoals, config: nextConfig });
+    // One goal_created per seeded goal — same accounting as F176, or beta
+    // analytics under-count goals for anyone who starts from a template.
+    for (let i = 0; i < addedCount; i++) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+    // Switching identity (not first pick): close the picker and, where goals are
+    // editable (not New Job Season — theirs are paused/read-only), start tidy-up.
+    if (identityPickerOpen) {
+      setIdentityPickerOpen(false);
+      if (!config.newJobSeasonMode) setIdentityTidy(true);
+    }
+  }, [setGoals, setConfig, isTester, betaCodeUsed, identityPickerOpen, config.newJobSeasonMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2347,6 +2396,10 @@ export default function App() {
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           goals={goals}
+          onApplyArchetype={handleApplyArchetype}
+          avgWeeklySpend={remainingSpend?.avgWeeklySpend ?? 0}
+          identityPickerOpen={identityPickerOpen}
+          onCloseIdentityPicker={() => setIdentityPickerOpen(false)}
           expenses={expenses}
           effectiveToday={effectiveToday}
           includeBenefits={newJobSeasonIncludeBenefits}
@@ -2372,6 +2425,11 @@ export default function App() {
           goals={goals}
           setGoals={setGoals}
           onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
+          onApplyArchetype={handleApplyArchetype}
+          identityPickerOpen={identityPickerOpen}
+          onCloseIdentityPicker={() => setIdentityPickerOpen(false)}
+          identityTidy={identityTidy}
+          onFinishIdentityTidy={() => setIdentityTidy(false)}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           futureWeeks={futureWeeks}
@@ -2428,6 +2486,7 @@ export default function App() {
         <BudgetPanel
           expenses={expenses} setExpenses={setExpenses}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
+          onResolveSuggestion={handleResolveSuggestion}
           weeklyIncome={weeklyIncome}
           prevWeekNet={prevWeekNet}
           futureWeeks={futureWeeks}
@@ -2480,6 +2539,7 @@ export default function App() {
         config={config}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}
+        onChangeIdentity={handleChangeIdentity}
         onLocalSignOut={handleLocalSignOut}
         allWeeks={allWeeks}
         taxDerived={taxDerived}

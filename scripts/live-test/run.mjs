@@ -138,6 +138,132 @@ try {
     check("§22.B red shows the shortfall before payday, not 'to spare'", /\$300 short before payday/.test(await card.innerText()) && !/to spare/.test(await card.innerText()));
     eq("§22.B no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 identity picker: shows for everyone, previews Claim Dates, ONE eager save, persists
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    const goalsBefore = (row.goals ?? []).length;
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 picker shows on Home for an account with no identity", await vis(page.getByTestId("archetype-picker")));
+    check("§31 all six archetypes offered", (await Promise.all(["The Prepper", "The Heartbeat", "The Builder", "The Polished", "The Family Man", "The Explorer"].map((n) => page.getByText(n, { exact: true }).count()))).every((c) => c > 0));
+    await page.getByText("The Builder").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 preview lists starter goals with Claim Dates", /Starter Emergency Fund/.test(t) && /Claim Date/i.test(t), t.slice(0, 200));
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    check("§31 no horizontal overflow at 390px", noOverflow);
+    await app.shot("s31-preview");
+    const before = app.saves.length;
+    await page.getByLabel("Target for Starter Emergency Fund").fill("1200"); await page.getByLabel("Target for Starter Emergency Fund").blur();
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const sv = app.saves.slice(before).filter((x) => x.config?.identity);
+    // The eager write plus the app's normal post-state debounce may both land (same as every eager-save
+    // action) — what matters is no partial write: every save after confirm carries goals AND identity together.
+    const wrote = app.saves.slice(before);
+    check("§31 confirm writes goals AND config.identity together (never split)", sv.length >= 1 && wrote.every((x) => x.config?.identity?.archetypeId === "builder" && x.goals.length === goalsBefore + 4), wrote.map((x) => [!!x.config?.identity, x.goals?.length]));
+    check("§31 edited target saved", sv[0]?.goals?.some((g) => g.label === "Starter Emergency Fund" && g.target === 1200 && g.templateKey === "builder.starter_emergency"));
+    check("§31 picker gone after confirm", !(await vis(page.getByTestId("archetype-picker"))));
+    await app.reload();
+    check("§31 identity persists across reload (picker stays gone)", !(await vis(page.getByTestId("archetype-picker"))));
+    eq("§31 no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 identity picker on New Job Season Home: jobless-from-day-one users get it too (dates paused)
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })], njsConfig(T));
+    row.goals = [];
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 NJS home shows the picker", await vis(page.getByText("Who are you becoming next?")));
+    await page.getByText("The Prepper").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 NJS preview promises a start, not a date", /Starts with your first paycheck/.test(t) && !/By [A-Z][a-z]{2} \d/.test(t));
+    await app.shot("s31-njs-preview");
+    const before = app.saves.length;
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const wrote = app.saves.slice(before).filter((x) => x.config?.identity);
+    check("§31 NJS confirm saves goals + identity together", wrote.length >= 1 && wrote.every((x) => x.config.identity.archetypeId === "prepper" && x.goals.length === 4), wrote.map((x) => x.goals?.length));
+    check("§31 NJS shows the seeded goals as paused Claim Dates", /claim dates/i.test(await bodyText(page)) && /on hold|paused/i.test(await bodyText(page)) && !(await vis(page.getByText("Who are you becoming next?"))));
+    eq("§31 NJS no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 change-identity flow: PICK FIRST → new goals added after old → tidy up on the Goals page
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const picker = page.getByTestId("archetype-picker"); const banner = page.getByTestId("identity-locked-banner");
+    const oldGoals = (row.goals ?? []).length;
+    check("§31 Goals page shows Identity locked in banner", (await vis(banner)) && /identity locked in/i.test(await banner.innerText()) && /The Builder/.test(await banner.innerText()));
+    // Cancel leaves everything alone
+    await nav(page, "account"); await page.getByText(/The Builder · tap to change/).click(); await settle(page, 600);
+    const dlg = page.getByRole("dialog", { name: "Change your identity" });
+    check("§31 tapping Identity opens the are-you-sure popup, no edit-first option", (await vis(dlg)) && !(await page.getByText("Edit goals first").count()));
+    await app.shot("s31-change-dialog");
+    const before = app.saves.length;
+    await page.getByText("Cancel").click(); await settle(page, 500);
+    check("§31 Cancel writes nothing", app.saves.length === before);
+    // Continue → picker on Home while the old identity is still saved
+    await page.getByText(/The Builder · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    check("§31 Choose new identity lands on Home with the picker (old identity still saved)", (await vis(picker)) && /Choose your new identity/.test(await bodyText(page)) && app.saves.slice(before).length === 0, app.saves.length - before);
+    // Leaving without picking cancels the change
+    await nav(page, "upkeep"); await settle(page, 600); await nav(page, "home"); await settle(page, 1000);
+    check("§31 leaving without picking cancels the change (picker gone, banner back)", !(await vis(picker)) && (await vis(banner)));
+    // Real change: pick The Explorer
+    await nav(page, "account"); await page.getByText(/The Builder · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    await page.getByText("The Explorer").click(); await settle(page, 700);
+    await app.shot("s31-switch-preview");
+    const b4 = app.saves.length;
+    await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 1500);
+    const wrote = app.saves.slice(b4);
+    const last = wrote[wrote.length - 1];
+    check("§31 switch writes identity=explorer + new goals appended after the old ones, in one write", wrote.every((x) => x.config?.identity?.archetypeId === "explorer" && x.goals.length === oldGoals + 4) && last?.goals?.slice(0, oldGoals).every((g, i) => g.id === row.goals[i].id), wrote.map((x) => x.goals?.length));
+    const tb = (await vis(banner)) ? await banner.innerText() : "";
+    check("§31 Goals page now shows the tidy-up banner for the NEW identity", /tidy up your goals/i.test(tb) && /The Explorer/.test(tb), tb);
+    check("§31 picker closed after the switch", !(await vis(picker)));
+    await app.shot("s31-tidy");
+    await page.getByRole("button", { name: "Done", exact: true }).click(); await settle(page, 600);
+    check("§31 Done dismisses tidy mode back to the plain locked banner", /identity locked in/i.test(await banner.innerText()) && /The Explorer/.test(await banner.innerText()));
+    // Tidy mode also ends on leaving the screen
+    await nav(page, "account"); await page.getByText(/The Explorer · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    await page.getByText("The Heartbeat").click(); await settle(page, 500);
+    await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 1500);
+    check("§31 tidy banner shows after a second switch", /tidy up your goals/i.test(await banner.innerText()));
+    await nav(page, "upkeep"); await settle(page, 600); await nav(page, "home"); await settle(page, 1000);
+    check("§31 leaving Goals ends tidy mode (plain banner, Heartbeat)", /identity locked in/i.test(await banner.innerText()) && /The Heartbeat/.test(await banner.innerText()));
+    await app.reload();
+    check("§31 new identity persists across reload", /The Heartbeat/.test(await banner.innerText()));
+    eq("§31 change-identity no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 Phase 2 suggested Lifestyle bills: offered in Upkeep, count for nothing until Add, one eager write
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "heartbeat", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const homeNums = async () => (await bodyText(page)).replace(/Identity locked in[\s\S]*?Every goal here is a step toward it\./i, "");
+    const homeBefore = await homeNums();
+    await nav(page, "upkeep"); await settle(page, 900);
+    const card = page.getByTestId("suggestion-heartbeat.gym");
+    check("§31 P2 Upkeep offers The Heartbeat's suggested bills", (await vis(page.getByTestId("identity-suggestions"))) && /Gym Membership/.test(await page.getByTestId("identity-suggestions").innerText()));
+    await app.shot("s31-suggestions");
+    // Not me on one → config-only write, no expense created
+    let b = app.saves.length;
+    await page.getByLabel("Not me: Supplements & Nutrition").click(); await settle(page, 1500);
+    let w = app.saves.slice(b);
+    check("§31 P2 Not me writes config only (expenses unchanged, suggestion dismissed)", w.length >= 1 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.supplements"] === "dismissed" && x.expenses.length === row.expenses.length), w.map((x) => x.expenses?.length));
+    await nav(page, "home"); await settle(page, 900);
+    check("§31 P2 pending/dismissed suggestions change no Home number", (await homeNums()) === homeBefore);
+    await nav(page, "upkeep"); await settle(page, 900);
+    // Add → real Lifestyle bill, one write with expenses + config
+    b = app.saves.length;
+    await page.getByLabel("Add Gym Membership").click(); await settle(page, 1800);
+    w = app.saves.slice(b); const last = w[w.length - 1];
+    const added = last?.expenses?.find((e) => e.label === "Gym Membership");
+    check("§31 P2 Add saves a real Lifestyle bill AND the accepted flag together", !!added && added.category === "Lifestyle" && added.billingMeta?.amount === 35 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.gym"] === "accepted" && x.expenses.length === row.expenses.length + 1), w.map((x) => [x.expenses?.length, x.config?.identity?.suggestions]));
+    check("§31 P2 suggestion card gone once all are decided", !(await vis(page.getByTestId("identity-suggestions"))));
+    check("§31 P2 the new bill shows up in Upkeep (Lifestyle)", /Gym Membership/.test(await bodyText(page)) || (await page.getByText("Lifestyle").count()) > 0);
+    await app.reload(); await nav(page, "upkeep"); await settle(page, 900);
+    check("§31 P2 decisions persist across reload (no re-offer)", !(await vis(page.getByTestId("identity-suggestions"))) && !(await vis(card)));
+    eq("§31 P2 no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -7,6 +7,9 @@ import { JobHuntChatPanel } from "./JobHuntChatPanel.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlements.js";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
+import { ArchetypePicker } from "./ArchetypePicker.jsx";
+import { IdentityLockedBanner } from "./IdentityLocked.jsx";
+import { applyArchetype } from "../lib/goalArchetypes.js";
 
 /**
  * NewJobSeasonHomePanel — New Job Season's own Home view (TODO §1 mode rebuild).
@@ -42,12 +45,19 @@ export function NewJobSeasonHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, goals = [], effectiveToday, includeBenefits, readOnly = false,
   currentWeek, isAdmin, isAiAdmin, isTester, entitlement,
+  // Archetype picker (TODO §31) — App.handleApplyArchetype + the weekly-spend
+  // figure Home uses for the emergency-fund target. Optional: no handler, no picker.
+  onApplyArchetype: onApplyArchetypeProp, avgWeeklySpend = 0,
+  identityPickerOpen = false, onCloseIdentityPicker,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
   const noop = useCallback(() => {}, []);
   const setConfig = readOnly ? noop : setConfigProp;
   const saveConfigNow = readOnly ? noop : saveConfigNowProp;
+  const onApplyArchetype = readOnly ? noop : onApplyArchetypeProp;
+  const [identitySkipped, setIdentitySkipped] = useState(false);
+  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && (config.identity ? identityPickerOpen : !identitySkipped);
 
   // Goals the visitor had going when the job ended. Priority order is the
   // array's own order, same as HomePanel's — the first one is what they were
@@ -137,6 +147,24 @@ export function NewJobSeasonHomePanel({
   return (
     <div>
       <PanelHero eyebrow="New Job Season">Home</PanelHero>
+
+      {/* Identity picker (TODO §31): sets the direction while there is no
+          paycheck, so the goals are waiting when income returns. Claim Dates are
+          paused here, so the rows promise a start, not a date. */}
+      {showArchetypePicker && (
+        <ArchetypePicker
+          avgWeeklySpend={avgWeeklySpend}
+          existingGoals={goals}
+          datesPaused
+          title="Who are you becoming next?"
+          subtitle="Pick the one you're working toward. These goals start moving the week you're earning again — change any of them."
+          onApply={({ archetypeId, selected }) => {
+            onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
+          }}
+          onSkip={() => (config.identity ? onCloseIdentityPicker?.() : setIdentitySkipped(true))}
+          {...(config.identity ? { title: "Choose your new identity", subtitle: "Your goals stay as they are, paused until you're earning again. The new ones are added after them.", skipLabel: "Keep my current identity" } : {})}
+        />
+      )}
 
       <SectionHeader sub="What you have, what's due, and how many days it covers">
         Your Runway
@@ -354,6 +382,11 @@ export function NewJobSeasonHomePanel({
 
           Read-only by construction: no mutation handler is threaded into this
           panel, so there is nothing for F20's readOnly shadow to cover. */}
+      {config?.identity && (
+        <div style={{ marginTop: "28px" }}>
+          <IdentityLockedBanner identity={config.identity} />
+        </div>
+      )}
       {pausedGoals.length > 0 && (
         <div style={{ marginTop: "28px" }}>
           <SectionHeader sub="Still yours. They start moving again the week you're earning.">

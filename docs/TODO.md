@@ -16,6 +16,7 @@
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
+| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 12 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -39,7 +40,7 @@
 | 4 | 29 | Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach | 16 | 0 |
 | 4 | 28 | Coach over SMS — Twilio prerequisites & sequence | 11 | 0 |
 
-**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off.
+**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off. §31 (Goal Archetypes) is independent of §20–§27 — it only reads existing goal/spend math and can run in parallel.
 
 ---
 
@@ -832,6 +833,66 @@ Open question 3 below decides scope. Default if unanswered: **a static linked re
 Each seam gets a one-line `// Coach root: NJS-JH-…` comment at its export so a grep finds all nine. Add a drift-warden row when built: these functions gain an **AI-context consumer**, so a change to any must re-check `buildJobHuntContext()` (§6/§24 grounding rule).
 
 **Status: scoped and design-locked except the 27.13 questions. No code, schema, or migration written.**
+
+---
+
+## 31. Goal Archetypes — Identity-Based Starter Goal Templates *(new — scoped 2026-10-06 from a research pass, NOT built, no code written)*
+
+**What:** after account creation, the user picks 1–2 identity archetypes ("who are you building toward?")
+and is handed 3–5 starter goals with real dollar targets, each previewed/editable before it lands on the
+Claim Date surface. Fills the empty-goals cold start every new account hits today.
+
+**Why (research, 2026-10-06):**
+- Identity-framed goals get more goal-consistent behavior than outcome-framed ones (healthy-eater identity
+  interventions; Sheldon & Elliot self-concordance → more sustained effort). Purchases serve identity functions:
+  control, distinctiveness, self-esteem, group affiliation, projected status — experiential spend satisfies
+  them best ([Chen/Urminsky/Yu, "We Do What We Are"](https://home.uchicago.edu/ourminsky/WeDoWhatWeAre_Chen_Urminsky_Yu.pdf),
+  [Sussex identity/well-being study](https://sussex.figshare.com/articles/journal_contribution/Identity_changes_and_well-being_gains_of_spending_money_on_material_and_experiential_consumer_products/23467514)).
+- Goal-setting inside the first 3 days of onboarding is reported to lift 12-month retention ~20%
+  ([Amplitude/WeMoney](https://amplitude.com/blog/increasing-retention-wemoney)) — vendor case study, treat as directional.
+- What people actually want (Bankrate 2026): pay down debt 19%, more income 14%, emergency savings 13%, budget 12%,
+  invest 8%, retirement 8%, non-essential purchase 5%, home 3%
+  ([Bankrate](https://www.bankrate.com/personal-finance/personal-finances-outlook-survey)).
+
+**Starter roster (six; names are aspirational on purpose — nobody self-selects a pejorative label like "doomsday prepper"):**
+
+| Archetype | Identity hook | Starter goals (rough $; ⚙ = derived from the user's own data, not fixed) |
+|---|---|---|
+| **The Prepared** (prepper / security) | "Nothing catches me off guard" | ⚙ Emergency fund = N weeks of real spend · 2-week food & water stash ~$400 · Cash-on-hand stash ~$500 · Home readiness kit / generator ~$600–1,000 |
+| **The Vital** (health nut) | "My body is my first asset" | Annual gym / class pass ~$420 · Home gym starter ~$500 · Food-quality upgrade ~$100/mo · Annual checkup + dental out-of-pocket ~$300 · Race/event entry ~$150 |
+| **The Builder** (wealth down the line) | "Future me is rich" | ⚙ Starter emergency $1,000 · ⚙ Kill highest-APR debt · First $1,000 invested · Max the employer match (⚙) · Roth IRA year contribution |
+| **The Polished** (look & feel good) | "I walk in like I belong" | Wardrobe capsule refresh ~$500 · Grooming/skincare routine ~$50/mo · One quality piece (shoes/watch) ~$300 · Smile/dental cosmetic ~$400+ |
+| **The Anchor** (family / home life) | "Home is where I win" | Room/furniture upgrade ~$1,500 · Family trip ~$3,000 · Kids' fund ~$50/mo · ⚙ Home repair reserve (~1% home value/yr or flat $1,000 renter) |
+| **The Explorer** (experiences / social) | "I collect stories, not stuff" | Trip fund ~$2,000 · Concert/events fund ~$600 · Passport ~$165 · Travel gear ~$400 |
+
+$ anchors: wellness ≈ $5.3–6k/person/yr, fitness ≈ $61–155/mo ([HFA](https://www.healthandfitness.org/americans-plan-to-invest-60-billion-in-health-and-fitness-in-2026/),
+[BarBend](https://barbend.com/fitness-spending-survey/)); preppers avg $1,057 savings / $580 home / $468 cash stash
+([Finder](https://www.finder.com/personal-loans/doomsday-prepper-statistics)). Everything else is a rough starting guess — **tune with beta data (31.9), not by gut.**
+Candidate 7th: **The Climber** (career/status: certification, interview wardrobe, relocation fund) — overlaps §27 Job Hunt OS; hold.
+
+### 31.A Data & math
+- [ ] **31.1 Lock the roster + copy** — final names, one-line identity hooks, icon per archetype. Screen each name against existing vocabulary (CLAUDE.md "Runway" rule, warden §8 F178).
+- [ ] **31.2 Template module** `src/constants/goalArchetypes.js` — each template goal = `{ key, label, note, why, targetRule }`; output must match the live goal shape in `HomePanel.addGoal` (`{ id, label, target, color: GOAL_SYSTEM_COLOR, note, completed:false }`). No new goal fields in V1.
+- [ ] **31.3 ⚙ derived targets go through the single-source functions** — emergency fund weeks × the same `avgWeeklySpend` App.jsx already computes; debt targets from real loan balances. **Never a parallel formula** (warden §12 parallel-formula case law). Fixed-$ templates fall back to the table value; round to $50.
+- [ ] **31.4 Income-scaled sanity cap** — a template target that would push the Claim Date (via `resolveGoalFinishInfo()`) past ~12 months is shown scaled down or flagged "stretch," never silently added.
+
+### 31.B Surface
+- [ ] **31.5 Selection surface = post-wizard Home card, NOT a new wizard page** — keeps `SetupWizardAdlib` and its §7.3 gate matrix untouched. Shows when `goals.length === 0` (or never dismissed); multi-select max 2 archetypes.
+- [ ] **31.6 Preview → hand-off** — 3–5 goals listed with toggle + inline-edit target (string draft, parse on commit — Numeric Input Standard); one "Add N goals" action = one batch `setGoals(next)` + `onSaveGoalsNow(next)` (eager-save rule). Never auto-add. `readOnly` shadowed like the rest of HomePanel.
+- [ ] **31.7 Re-entry + dedupe** — "Browse goal ideas" entry from the goals section / Profile; skip templates already added. Needs a `templateKey` on the goal — decide in 31.2 whether that's worth the four-site procedure or label-matching is enough for V1.
+
+### 31.C Persistence, telemetry, AI
+- [ ] **31.8 `config.goalArchetypes` (array)** — four-site persisted-field procedure; decide `HISTORY_SENSITIVE_FIELDS` (likely no).
+- [ ] **31.9 Tuning loop** — `logBetaEvent`: `archetype_selected`, `template_goal_added`, `template_goal_edited` (with Δ target), `template_goal_removed`. This is the data that replaces the table's guessed dollars.
+- [ ] **31.10 Coach seam (later)** — archetype into Coach context only through the §6/§24 grounding rule; Coach can frame nudges in identity language ("that's a Builder move").
+
+### 31.D Done-gate
+- [ ] **31.11 Tests** — template → goal shape, derived-target math matches the source function, dedupe, readOnly no-op, batch eager save fires once.
+- [ ] **31.12 Warden entries** — next free F-number (verify): LEDGER row for derived targets (blast radius: `avgWeeklySpend`, loan balances, `resolveGoalFinishInfo`), GATEWAY row for the Home card (paywall/readOnly/tier).
+
+**Open questions:** (a) single archetype vs. max 2? (b) should the archetype also reorder Home tiles / Upkeep categories later, or stay goals-only? (c) per-month recurring templates (skincare $50/mo) don't fit a one-shot `target` — model as 12-month sinking fund or exclude from V1?
+
+**Status: scoped, no code, no schema, no migration.**
 
 ---
 

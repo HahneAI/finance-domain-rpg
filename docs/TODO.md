@@ -16,7 +16,7 @@
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
-| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 13 | 0 |
+| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 8 | 1 + 9 $ |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -943,10 +943,60 @@ grounding rule. Phase 4.
 - [$] **31.9** Upkeep "Suggested for <identity>" card (a standalone card above the category lanes — NOT rows inside Lifestyle, which would fight the lane collapse/drag code, F175) → **Add** builds a real Lifestyle bill through the shared `buildMonthForwardExpense` (same shape as the add form's From-Month-Forward) + marks the suggestion accepted in ONE eager write; **Not me** = config only; readOnly refused.
 - [$] **31.10** Test: a pending suggestion changes **no** number anywhere (`avgWeeklySpend`, Claim Dates, Cash on Hand, Coach context) — assert before/after equality.
 
-**Phase 3 — Identity-first Home (prototype)**
-- [ ] **31.11** `IdentityHero` above the Next Claim Date hero (`HomePanel.jsx:581`): archetype name + hook + next
-  claim; tile grids (`:1573-1630`) drop below. Behind `config.identity` + an admin/tester flag first; compare beta
-  engagement before making it default. Hero is single-branch (goal cards are the only mobile/desktop split, F177).
+**Phase 3 — Identity-first Home** *(scoped 2026-10-06 against `claude/goal-archetype-templates`; decisions are Anthony's, locked)*
+
+**Locked decisions:** ships to **everyone on day one** (no admin/tester flag, no Profile toggle) · the numbers section
+**starts collapsed** with a summary line always visible · the identity counter counts **all goals**, not just
+template ones · **no streaks** or day counters.
+
+**Target layout (employed `HomePanel`, only when `config.identity` is set):**
+1. **`IdentityHero`** (replaces the plain `IdentityLockedBanner` at `HomePanel.jsx:633`): eyebrow "Identity locked in",
+   archetype name, hook, counter **"N of M goals claimed"**, and **"Next: <goal> · <date>"**.
+   - Counter = `completedGoals.length` of `goals.length` — the exact figures the existing "Goals x/y" tile uses (`:1638`).
+     One source, no second count.
+   - Next line = `nextClaim` from `computeClaimDates()` (`:318`) → `resolveGoalFinishInfo()`. Omitted when there is no
+     dated goal; never a fabricated date (F177).
+   - When `identityTidy` is on, the existing tidy banner takes this slot instead (unchanged).
+2. Next Claim Date hero + queue — **unchanged**.
+3. Cash on Hand card (`:765`) — **unchanged position** (§22 top priority).
+4. Active goals — unchanged.
+5. Due Today card (`:1627`) — **stays visible, outside the collapse** (a bill due today is an alert, not a stat).
+6. **"Your numbers"** — one collapsible section wrapping BOTH the goal-stats grid (`:1628-1645`: Left This Week, Active
+   Goals Total, Checks to Complete All, Goals x/y) AND the "Financial Health" title + tiles (`:1649-1684`: Next Check,
+   Net Worth Trend, Upkeep Health). **Collapsed by default every load** (React state, not persisted).
+   - Always-visible summary line: **"Left this week $X · Saving N%"**.
+     - `$X` = `leftThisWeek * perCheckFactor` with `leftThisCheckLabel` wording — the same value the tile shows.
+     - `N%` = the savings rate `pulseNetWorth` already computes (`annualSavings / (weeklyIncome * activeWeeksThisYear)`).
+       **Extract it to one `savingsRate` const** used by both pulse and summary — no parallel formula (warden §12).
+     - **Negative left-this-week renders in `--color-red` on the summary line** — collapsing must never hide a bad week.
+   - Expanded = today's tiles, untouched (entrance stagger, countups, click-throughs to Log/Income/Upkeep all as-is).
+7. Breakthrough tips / Coach card / footer — unchanged.
+
+**No identity yet** (picker showing, or "Not now"): layout stays exactly as today — numbers NOT collapsed. Collapsing
+numbers for someone with no identity hero above them would just hide the page. **New Job Season Home and
+DemoAccountTree: untouched** (demo accounts have no `config.identity`, so they fall through to today's layout).
+
+**Checked, safe:** Coach's `navigate_to` focus targets only `goal:N` cards (`HomePanel.jsx:833/1051`), never the tiles —
+so collapsing them cannot strand a deep link (the F175 invisible-target class). Re-check if a tile ever gains a
+`data-coach-ref`.
+
+- [ ] **31.11a** Pure helpers in `lib/goalArchetypes.js` (or HomePanel-local if they need its scope): identity counter
+  `{ claimed, total }` and the summary line's inputs. Extract `savingsRate` in HomePanel; point `pulseNetWorth` at it.
+- [ ] **31.11b** `IdentityHero` (extend `IdentityLocked.jsx`): name, hook, counter, optional next-claim line. Single
+  block (not inside the duplicated mobile/desktop goal-card branches — F177 pair rule not triggered). `.text-*` scale +
+  tokens only.
+- [ ] **31.11c** `YourNumbers` collapsible wrapper: header + summary line + chevron; `aria-expanded`; children mounted
+  only when open (so countups fire on open, not off-screen). Press = `scale(0.97)`; fold ≤ 340ms like other folds.
+- [ ] **31.11d** Wire into HomePanel behind `config?.identity` only.
+- [ ] **31.11e** Tests: counter equals the Goals x/y tile; next-claim line matches the Next Claim Date hero; summary `$X`
+  equals the Left This Week tile's value; `N%` equals the Net Worth Trend pulse; negative → red; collapsed by default;
+  expand shows every tile; no-identity → old layout with tiles visible (existing HomePanel tests stay green unchanged);
+  tidy mode still replaces the hero. Then `npm run build` + 390px live-test §31 P3 (collapsed, expand, negative week).
+- [ ] **31.11f** Warden §8 entry (next free F — verify): **[G]** layout gate (`config.identity` → hero + collapsed numbers;
+  absent → legacy layout) + **[L]** the summary line is a VIEW of the tile values, never its own math.
+
+**Risk I still flag:** collapsed-by-default buries the tiles that link to Log/Income/Upkeep — the bottom nav still
+reaches all three, but watch beta feedback for "where did my numbers go."
 
 **Phase 4 — Telemetry + Coach**
 - [ ] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.

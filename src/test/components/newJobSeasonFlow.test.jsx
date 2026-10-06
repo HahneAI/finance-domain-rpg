@@ -1042,3 +1042,37 @@ describe('ReemploymentTracker', () => {
     expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ targetIncomeAnnual: 50000 }))
   })
 })
+
+describe('NewJobSeasonHomePanel — identity picker (TODO §31)', () => {
+  const base = { config: JOB_LOSS_CONFIG, setConfig: () => {}, expenses: [], effectiveToday: '2026-06-15', includeBenefits: true }
+
+  it('shows the picker to a jobless user with no identity, with paused (not dated) rows', () => {
+    render(<NewJobSeasonHomePanel {...base} onApplyArchetype={() => {}} />)
+    expect(screen.getByText('Who are you becoming next?')).toBeTruthy()
+    fireEvent.click(screen.getByText('The Prepper'))
+    expect(screen.getAllByText('Starts with your first paycheck').length).toBeGreaterThanOrEqual(3)
+    expect(screen.queryByText(/By [A-Z][a-z]{2} \d/)).toBeNull()
+  })
+
+  it('hands App the pre-built goals+config payload, using real weekly spend for the emergency fund', () => {
+    const onApplyArchetype = vi.fn()
+    render(<NewJobSeasonHomePanel {...base} avgWeeklySpend={600} onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Prepper'))
+    expect(screen.getByLabelText('Target for Emergency Fund').value).toBe('2400')
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    const p = onApplyArchetype.mock.calls[0][0]
+    expect(p.addedCount).toBe(4)
+    expect(p.config.identity.archetypeId).toBe('prepper')
+  })
+
+  it('hides it when an identity exists, when read-only, or with no handler', () => {
+    const { unmount } = render(<NewJobSeasonHomePanel {...base} config={{ ...JOB_LOSS_CONFIG, identity: { archetypeId: 'builder' } }} onApplyArchetype={() => {}} />)
+    expect(screen.queryByText('Who are you becoming next?')).toBeNull()
+    unmount()
+    const r2 = render(<NewJobSeasonHomePanel {...base} readOnly onApplyArchetype={() => {}} />)
+    expect(screen.queryByText('Who are you becoming next?')).toBeNull()
+    r2.unmount()
+    render(<NewJobSeasonHomePanel {...base} />)
+    expect(screen.queryByText('Who are you becoming next?')).toBeNull()
+  })
+})

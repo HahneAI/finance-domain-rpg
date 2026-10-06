@@ -165,6 +165,23 @@ try {
     check("§31 identity persists across reload (picker stays gone)", !(await vis(page.getByTestId("archetype-picker"))));
     eq("§31 no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 identity picker on New Job Season Home: jobless-from-day-one users get it too (dates paused)
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })], njsConfig(T));
+    row.goals = [];
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 NJS home shows the picker", await vis(page.getByText("Who are you becoming next?")));
+    await page.getByText("The Prepper").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 NJS preview promises a start, not a date", /Starts with your first paycheck/.test(t) && !/By [A-Z][a-z]{2} \d/.test(t));
+    await app.shot("s31-njs-preview");
+    const before = app.saves.length;
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const wrote = app.saves.slice(before).filter((x) => x.config?.identity);
+    check("§31 NJS confirm saves goals + identity together", wrote.length >= 1 && wrote.every((x) => x.config.identity.archetypeId === "prepper" && x.goals.length === 4), wrote.map((x) => x.goals?.length));
+    check("§31 NJS shows the seeded goals as paused Claim Dates", /claim dates/i.test(await bodyText(page)) && /on hold|paused/i.test(await bodyText(page)) && !(await vis(page.getByText("Who are you becoming next?"))));
+    eq("§31 NJS no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

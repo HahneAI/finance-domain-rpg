@@ -960,7 +960,7 @@ parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `e
 (d) ~~who sees the picker~~ → **everyone without `config.identity`** (locked 2026-10-06), regardless of existing goals.
 
 **Status (2026-10-06): Phase 1 BUILT (`[$]`, awaiting Anthony's review) — 1,983+ unit tests, `vite build`, and a 390px real-browser pass (live-test §31) green. Phases 2–4 not started.**
-**Known gap vs. "everyone sees the picker":** New Job Season mode mounts `NewJobSeasonHomePanel`, not `HomePanel` — NJS users do not see the picker yet. Decide whether to add it there (their Claim Dates are paused, so seeded goals would show paused) or wait until they return to work.
+**New Job Season (added 2026-10-06, Anthony's call):** `NewJobSeasonHomePanel` shows the same picker to anyone without `config.identity` — including accounts that start unemployed — to set direction before income returns. Rows say "Starts with your first paycheck" instead of a Claim Date (their dates are paused); seeded goals then appear in the existing paused Claim Dates card. Live-test §31 covers it.
 **Pre-existing, not from §31:** `scripts/live-test/run.mjs` §22.C aborts at the "Confirm Week" button (disabled) on `master` too, so scenarios after it don't run in a full pass — §31 was verified by running it alone. `npx eslint src` also reports 3 pre-existing errors (`expense.js` ×2, `CoachToolUI.jsx`).
 
 ---

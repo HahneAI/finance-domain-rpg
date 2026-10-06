@@ -62,6 +62,11 @@ export function ArchetypePicker({
   projectGoals,
   onApply,
   onSkip,
+  // New Job Season (no income): Claim Dates are paused, so there is nothing
+  // honest to preview — rows say when they start instead of showing a date.
+  datesPaused = false,
+  title = "Who are you becoming?",
+  subtitle = "Pick one. We'll start you with a few goals to make it real — change any of them.",
 }) {
   "use no memo";
   const [archetypeId, setArchetypeId] = useState(null);
@@ -95,7 +100,7 @@ export function ArchetypePicker({
   const selected = rows.filter((r) => r.on && r.target > 0);
 
   const infoByKey = (() => {
-    if (!archetype || !projectGoals || selected.length === 0) return {};
+    if (!archetype || !projectGoals || datesPaused || selected.length === 0) return {};
     return projectGoals(selected.map(({ templateKey, label, target, note }) => ({ templateKey, label, target, note })));
   })();
 
@@ -112,10 +117,10 @@ export function ArchetypePicker({
       <section data-testid="archetype-picker" style={{ marginBottom: "20px" }}>
         <div style={{ textAlign: "center", marginBottom: "14px" }}>
           <div style={{ fontFamily: "var(--font-display)", fontWeight: 900, letterSpacing: "0.04em", lineHeight: 1.15, fontSize: "28px", color: "var(--color-accent-primary)" }}>
-            Who are you becoming?
+            {title}
           </div>
           <div className="text-sm" style={{ color: "var(--color-text-secondary)", marginTop: "6px" }}>
-            Pick one. We'll start you with a few goals to make it real — change any of them.
+            {subtitle}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -185,7 +190,7 @@ export function ArchetypePicker({
                     <div style={{ flex: 1 }}>
                       <div className="text-2xs" style={{ color: "var(--color-text-disabled)", letterSpacing: "2px", textTransform: "uppercase" }}>Claim Date</div>
                       <div className="text-sm" style={{ color: stretch ? "var(--color-warning)" : "var(--color-text-primary)", fontWeight: 600 }}>
-                        {r.target > 0 ? dateLabel(info) : "Enter an amount"}{stretch ? " · stretch" : ""}
+                        {r.target <= 0 ? "Enter an amount" : datesPaused ? "Starts with your first paycheck" : dateLabel(info)}{stretch ? " · stretch" : ""}
                       </div>
                     </div>
                   </div>

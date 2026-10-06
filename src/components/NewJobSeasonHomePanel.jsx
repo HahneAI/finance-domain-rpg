@@ -7,6 +7,8 @@ import { JobHuntChatPanel } from "./JobHuntChatPanel.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlements.js";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
+import { ArchetypePicker } from "./ArchetypePicker.jsx";
+import { applyArchetype } from "../lib/goalArchetypes.js";
 
 /**
  * NewJobSeasonHomePanel — New Job Season's own Home view (TODO §1 mode rebuild).
@@ -42,12 +44,18 @@ export function NewJobSeasonHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, goals = [], effectiveToday, includeBenefits, readOnly = false,
   currentWeek, isAdmin, isAiAdmin, isTester, entitlement,
+  // Archetype picker (TODO §31) — App.handleApplyArchetype + the weekly-spend
+  // figure Home uses for the emergency-fund target. Optional: no handler, no picker.
+  onApplyArchetype: onApplyArchetypeProp, avgWeeklySpend = 0,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
   const noop = useCallback(() => {}, []);
   const setConfig = readOnly ? noop : setConfigProp;
   const saveConfigNow = readOnly ? noop : saveConfigNowProp;
+  const onApplyArchetype = readOnly ? noop : onApplyArchetypeProp;
+  const [identitySkipped, setIdentitySkipped] = useState(false);
+  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && !config.identity && !identitySkipped;
 
   // Goals the visitor had going when the job ended. Priority order is the
   // array's own order, same as HomePanel's — the first one is what they were
@@ -137,6 +145,23 @@ export function NewJobSeasonHomePanel({
   return (
     <div>
       <PanelHero eyebrow="New Job Season">Home</PanelHero>
+
+      {/* Identity picker (TODO §31): sets the direction while there is no
+          paycheck, so the goals are waiting when income returns. Claim Dates are
+          paused here, so the rows promise a start, not a date. */}
+      {showArchetypePicker && (
+        <ArchetypePicker
+          avgWeeklySpend={avgWeeklySpend}
+          existingGoals={goals}
+          datesPaused
+          title="Who are you becoming next?"
+          subtitle="Pick the one you're working toward. These goals start moving the week you're earning again — change any of them."
+          onApply={({ archetypeId, selected }) => {
+            onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
+          }}
+          onSkip={() => setIdentitySkipped(true)}
+        />
+      )}
 
       <SectionHeader sub="What you have, what's due, and how many days it covers">
         Your Runway

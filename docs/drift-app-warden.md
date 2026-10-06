@@ -5869,6 +5869,7 @@ deleted and `BudgetPanel` already hides.
 > `computeClaimDates()` with candidates appended after the user's real goals (the rank `applyArchetype`
 > gives them) — never a second estimate (F177). `weeksOfSpend` targets read `remainingSpend.avgWeeklySpend`,
 > the figure Home already shows, floored at $1,000 (a new account only has the seeded Food bill).
+> **Two Home surfaces, one picker.** `HomePanel` (employed) and `NewJobSeasonHomePanel` (jobless — incl. accounts that START unemployed) both mount `ArchetypePicker` when `!config.identity`; both shadow `onApplyArchetype` with the readOnly `noop`, and both reach the same `handleApplyArchetype`. **IF** a third Home surface appears, **THEN** it needs the picker and the shadow. NJS passes `datesPaused` (no preview — its Claim Dates are paused) and `avgWeeklySpend` from `remainingSpend` so the emergency-fund target stays grounded in the same figure.
 > **Suggested bills (Phase 2) must stay OUT of `expenses`** — see F180: there is no shared active-expense
 > filter, so an expense row with a "suggested" status would leak into ~8 consumers.
 > Check: `goalArchetypes.test.js` (catalog, target rules, dedupe, applyArchetype, buildGoal shape),

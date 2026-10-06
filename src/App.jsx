@@ -2356,6 +2356,8 @@ export default function App() {
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           goals={goals}
+          onApplyArchetype={handleApplyArchetype}
+          avgWeeklySpend={remainingSpend?.avgWeeklySpend ?? 0}
           expenses={expenses}
           effectiveToday={effectiveToday}
           includeBenefits={newJobSeasonIncludeBenefits}

@@ -1,4 +1,5 @@
 import { CashOnHandCard } from "./CashOnHandCard.jsx";
+import { ArchetypePicker } from "./ArchetypePicker.jsx";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -8,6 +9,8 @@ import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
+import { GOAL_SYSTEM_COLOR, buildGoal } from "../lib/goalFunding.js";
+import { applyArchetype } from "../lib/goalArchetypes.js";
 import { FISCAL_YEAR_START, TOTAL_FISCAL_WEEKS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -18,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
 // stamps the same colour a hand-created goal gets, rather than a second copy of
 // the literal drifting away from this one.
-export const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
+export { GOAL_SYSTEM_COLOR };
 
 // Shown on a goal card in place of a Claim date when computeGoalTimeline's
 // avgSurplus is <= 0 — the household isn't clearing its upkeep, so no date
@@ -68,6 +71,9 @@ export function HomePanel({
   goals = [],
   setGoals: setGoalsProp,
   onSaveGoalsNow: onSaveGoalsNowProp,
+  // Archetype picker commit (TODO §31) — App.handleApplyArchetype. Optional:
+  // callers that omit it (DemoAccountTree) simply never show the picker.
+  onApplyArchetype: onApplyArchetypeProp,
   setConfig: setConfigProp,
   saveConfigNow: saveConfigNowProp,
   futureWeeks = [],
@@ -100,6 +106,7 @@ export function HomePanel({
   const setConfig = readOnly ? noop : setConfigProp;
   const onSaveGoalsNow = readOnly ? noop : onSaveGoalsNowProp;
   const saveConfigNow = readOnly ? noop : saveConfigNowProp;
+  const onApplyArchetype = readOnly ? noop : onApplyArchetypeProp;
   // Scale factor: weekly → per-paycheck (1 for weekly, 2 for biweekly/salary, ~4.33 for monthly).
   // All card values shown to the user are scaled by this factor so the amount matches
   // what lands in their bank account each paycheck cycle.
@@ -299,6 +306,9 @@ export function HomePanel({
   const [draggingReorderId, setDraggingReorderId] = useState(null);
   const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [enterAnims, setEnterAnims] = useState({});
+  // "Not now" on the identity picker hides it for this session only — it
+  // returns next load until an identity is chosen (config.identity).
+  const [identitySkipped, setIdentitySkipped] = useState(false);
   const [animPhase, setAnimPhase] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
@@ -319,6 +329,28 @@ export function HomePanel({
     goals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained,
     futureEventDeductions, config, currentWeek, today,
   });
+
+  // Archetype picker preview (TODO §31): the same computeClaimDates() the goal
+  // cards use, with the candidate goals appended AFTER the user's real ones —
+  // the rank applyArchetype() will actually give them. Ids are the templateKey
+  // so each candidate's resolved date can be read back out.
+  const projectArchetypeGoals = (candidates) => {
+    const built = candidates.map((c, i) => ({
+      ...buildGoal({ label: c.label, target: c.target, note: c.note, templateKey: c.templateKey, seq: i }),
+      id: c.templateKey,
+    }));
+    const r = computeClaimDates({
+      goals: [...goals, ...built], futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained,
+      futureEventDeductions, config, currentWeek, today,
+    });
+    const out = {};
+    for (const c of candidates) {
+      const g = r.tl.find((x) => x.id === c.templateKey);
+      out[c.templateKey] = g ? r.resolveGoalFinishInfo(g) : null;
+    }
+    return out;
+  };
+  const showArchetypePicker = !!onApplyArchetypeProp && !readOnly && !!config && !config.identity && !identitySkipped;
 
   const prevMonthStart = resolvePrevMonthStart(today);
 
@@ -427,15 +459,11 @@ export function HomePanel({
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const addGoal = useCallback(() => {
     if (!setGoals) return;
-    const id = `g_${Date.now()}`;
-    const next = [...goals, {
-      id,
+    const next = [...goals, buildGoal({
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
-      color: GOAL_SYSTEM_COLOR,
       note: newGoal.note,
-      completed: false,
-    }];
+    })];
     setGoals(next);
     onSaveGoalsNow?.(next);
     setAddingGoal(false);
@@ -551,7 +579,19 @@ export function HomePanel({
 
   return (
     <div style={{ paddingBottom: "8px" }}>
-      {goals.length === 0 && (
+      {showArchetypePicker && (
+        <ArchetypePicker
+          avgWeeklySpend={avgWeeklySpend}
+          existingGoals={goals}
+          today={todayIso}
+          projectGoals={projectArchetypeGoals}
+          onApply={({ archetypeId, selected }) => {
+            onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
+          }}
+          onSkip={() => setIdentitySkipped(true)}
+        />
+      )}
+      {goals.length === 0 && !showArchetypePicker && (
         <div
           className="text-sm" style={{
             marginBottom: "14px",

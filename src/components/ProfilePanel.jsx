@@ -9,6 +9,7 @@ import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js"
 import { resolveBetaChannel } from "../constants/betaChannels.js";
 import { BetaChannelFullModal } from "./BetaChannelFullModal.jsx";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
+import { getArchetype } from "../constants/goalArchetypes.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -3319,6 +3320,14 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
       {/* App group */}
       <SH>App</SH>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
+        {/* Identity (TODO §31): clearing config.identity re-opens the archetype picker
+            on Home. Goals already added are untouched — the picker skips templates
+            the user already holds. identity is not a history-sensitive field. */}
+        <ListRow
+          label="Identity"
+          summary={config.identity ? `${getArchetype(config.identity.archetypeId)?.name ?? "Chosen"} · tap to change` : "Not chosen · pick one on Home"}
+          onPress={() => { if (config.identity) saveConfigNow({ ...config, identity: null }); }}
+        />
         <ListRow
           label="Account"
           summary={authedUser?.email ?? "—"}

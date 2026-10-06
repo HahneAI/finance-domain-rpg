@@ -858,11 +858,11 @@ Claim Date surface. Fills the empty-goals cold start every new account hits toda
 
 | Archetype | Identity hook | Starter goals (rough $; ⚙ = derived from the user's own data, not fixed) |
 |---|---|---|
-| **The Prepared** (prepper / security) | "Nothing catches me off guard" | ⚙ Emergency fund = N weeks of real spend · 2-week food & water stash ~$400 · Cash-on-hand stash ~$500 · Home readiness kit / generator ~$600–1,000 |
-| **The Vital** (health nut) | "My body is my first asset" | Annual gym / class pass ~$420 · Home gym starter ~$500 · Food-quality upgrade ~$100/mo · Annual checkup + dental out-of-pocket ~$300 · Race/event entry ~$150 |
+| **The Prepper** (security / readiness) | "Nothing catches me off guard" | ⚙ Emergency fund = N weeks of real spend · 2-week food & water stash ~$400 · Cash-on-hand stash ~$500 · Home readiness kit / generator ~$600–1,000 |
+| **The Heartbeat** (health nut) | "My body is my first asset" | Annual gym / class pass ~$420 · Home gym starter ~$500 · Food-quality upgrade ~$100/mo · Annual checkup + dental out-of-pocket ~$300 · Race/event entry ~$150 |
 | **The Builder** (wealth down the line) | "Future me is rich" | ⚙ Starter emergency $1,000 · ⚙ Kill highest-APR debt · First $1,000 invested · Max the employer match (⚙) · Roth IRA year contribution |
 | **The Polished** (look & feel good) | "I walk in like I belong" | Wardrobe capsule refresh ~$500 · Grooming/skincare routine ~$50/mo · One quality piece (shoes/watch) ~$300 · Smile/dental cosmetic ~$400+ |
-| **The Anchor** (family / home life) | "Home is where I win" | Room/furniture upgrade ~$1,500 · Family trip ~$3,000 · Kids' fund ~$50/mo · ⚙ Home repair reserve (~1% home value/yr or flat $1,000 renter) |
+| **The Family Man** (family / home life) | "Home is where I win" | Room/furniture upgrade ~$1,500 · Family trip ~$3,000 · Kids' fund ~$50/mo · ⚙ Home repair reserve (~1% home value/yr or flat $1,000 renter) |
 | **The Explorer** (experiences / social) | "I collect stories, not stuff" | Trip fund ~$2,000 · Concert/events fund ~$600 · Passport ~$165 · Travel gear ~$400 |
 
 $ anchors: wellness ≈ $5.3–6k/person/yr, fitness ≈ $61–155/mo ([HFA](https://www.healthandfitness.org/americans-plan-to-invest-60-billion-in-health-and-fitness-in-2026/),
@@ -903,13 +903,13 @@ Candidate 7th: **The Climber** (career/status: certification, interview wardrobe
 | `src/lib/goalFunding.js` | + `buildGoal()` (decision 3). |
 | `src/components/ArchetypePicker.jsx` *(new)* | Step 1: 6 cards, single select. Step 2: preview 3–5 goals — toggle each, inline-edit target (string draft, parse on blur), live Claim Date per goal. Confirm → `onApplyArchetype`. `"use no memo";` first line (draft-object + save/cancel handlers = the §12.4 compiler trigger). |
 | `src/components/HomePanel.jsx` | Replace the `goals.length===0` empty state (`:554-567`) with the picker when `!config.identity`; otherwise a dismissible "Pick your identity" chip. `readOnly` → `onApplyArchetype` shadowed by the existing `noop` pattern. |
-| `src/components/BudgetPanel.jsx` *(phase 2)* | "Suggested for The Vital" ghost rows under Lifestyle, read from `config.identity.suggestions`. **Add** → the existing `addExpAllQuarters` path (`:737`, via `applyExpenseUpdate`) so the created row is identical to a hand-added one + flips suggestion to `accepted` in the same eager save; **Not me** → `dismissed`. Ghost rows are not in `expenses`, so nothing to filter. |
+| `src/components/BudgetPanel.jsx` *(phase 2)* | "Suggested for The Heartbeat" ghost rows under Lifestyle, read from `config.identity.suggestions`. **Add** → the existing `addExpAllQuarters` path (`:737`, via `applyExpenseUpdate`) so the created row is identical to a hand-added one + flips suggestion to `accepted` in the same eager save; **Not me** → `dismissed`. Ghost rows are not in `expenses`, so nothing to filter. |
 | `src/components/ProfilePanel.jsx` | "Change identity" → reopens picker. Never deletes goals; only offers templates whose `templateKey` isn't already present. |
 | `src/App.jsx` | `handleApplyArchetype` (decision 4); `handleCoachCreateGoal` → `buildGoal`. |
 
 **Target math (⚙ rules) — only what existing data can ground:**
-- **Emergency fund (Prepared, Builder):** `max(1000, round50(weeks × remainingSpend.avgWeeklySpend))` — the same
-  `avgWeeklySpend` HomePanel already reads at `:114`. Prepared = 4 weeks, Builder = $1,000 flat "starter". The floor
+- **Emergency fund (Prepper, Builder):** `max(1000, round50(weeks × remainingSpend.avgWeeklySpend))` — the same
+  `avgWeeklySpend` HomePanel already reads at `:114`. Prepper = 4 weeks, Builder = $1,000 flat "starter". The floor
   matters: a fresh account has only the seeded Food bill, so raw avgWeeklySpend is tiny.
 - **Dropped from ⚙ after reading the code:** "kill highest-APR debt" (loans carry `loanMeta`, **no APR field**) and
   "max the employer match" (no match field). V1 ships these as fixed-$ or omits them; revisit if those fields arrive.
@@ -928,13 +928,13 @@ grounding rule. Phase 4.
 ### 31.P Build phases
 
 **Phase 1 — Seed goals (no migration, no expense changes)**
-- [ ] **31.1 Lock the roster + copy** — names, hooks, icons; vocabulary screen (F178).
-- [ ] **31.2 `goalArchetypes` constants + pure lib** (`resolveTemplateGoals`, derived targets, dedupe).
-- [ ] **31.3 Extract `buildGoal()`**; move `addGoal` + `handleCoachCreateGoal` onto it. Behavior-identical refactor, its own commit.
-- [ ] **31.4 `ArchetypePicker`** (select → preview → confirm) with Claim Date preview via `simulate_new_goal`.
-- [ ] **31.5 `handleApplyArchetype`** single eager write; `readOnly` shadow + independent refusal in the handler.
-- [ ] **31.6 HomePanel wiring** (empty-state swap + chip) and **ProfilePanel "Change identity"**.
-- [ ] **31.7 Tests** — catalog validity (every `cycle` legal, 3–5 goals each); derived-target math incl. floor;
+- [x] **31.1 Roster locked 2026-10-06** — The Prepper · The Heartbeat · The Builder · The Polished · The Family Man · The Explorer (Anthony's call; "Family Man" kept deliberately).
+- [$] **31.2 `goalArchetypes` constants + pure lib** (`resolveTemplateGoals`, derived targets, dedupe).
+- [$] **31.3 Extract `buildGoal()`**; move `addGoal` + `handleCoachCreateGoal` onto it. Behavior-identical refactor, its own commit.
+- [$] **31.4 `ArchetypePicker`** (select → preview → confirm) with Claim Date preview via `simulate_new_goal`.
+- [$] **31.5 `handleApplyArchetype`** single eager write; `readOnly` shadow + independent refusal in the handler.
+- [$] **31.6 HomePanel wiring** (empty-state swap + chip) and **ProfilePanel "Change identity"**.
+- [$] **31.7 Tests** — catalog validity (every `cycle` legal, 3–5 goals each); derived-target math incl. floor;
   dedupe; `buildGoal` parity across the three callers; picker edits are what gets saved; one save call;
   readOnly no-op. Then `npm run build` + 390px browser render (compiler blind spot).
 
@@ -953,13 +953,15 @@ grounding rule. Phase 4.
 - [ ] **31.13** Coach context line for archetype (§6/§24).
 
 **Done-gate (every phase):** warden entries added in the same PR — **F181** `buildGoal` / three-caller goal-write
-parity **[L]+[G]**; **F182** "suggestions live outside `expenses` — never give an expense row a suggested status"
+parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `expenses` — never give an expense row a suggested status"
 **[L]**; Home-hero entry under §8 for phase 3. Verify F-numbers with the collision check first.
 
 **Open questions:** (a) ~~single vs. max 2~~ → single. (b) → Phase 3. (c) recurring → Phase 2 suggested bills.
-(d) Should the picker also appear for existing users who already have goals (as a chip), or only for empty accounts? Spec assumes chip for everyone without `config.identity`.
+(d) ~~who sees the picker~~ → **everyone without `config.identity`** (locked 2026-10-06), regardless of existing goals.
 
-**Status: technical design done, no code. Phase 1 is ready to build once 31.1 copy is approved.**
+**Status (2026-10-06): Phase 1 BUILT (`[$]`, awaiting Anthony's review) — 1,983+ unit tests, `vite build`, and a 390px real-browser pass (live-test §31) green. Phases 2–4 not started.**
+**Known gap vs. "everyone sees the picker":** New Job Season mode mounts `NewJobSeasonHomePanel`, not `HomePanel` — NJS users do not see the picker yet. Decide whether to add it there (their Claim Dates are paused, so seeded goals would show paused) or wait until they return to work.
+**Pre-existing, not from §31:** `scripts/live-test/run.mjs` §22.C aborts at the "Confirm Week" button (disabled) on `master` too, so scenarios after it don't run in a full pass — §31 was verified by running it alone. `npx eslint src` also reports 3 pre-existing errors (`expense.js` ×2, `CoachToolUI.jsx`).
 
 ---
 

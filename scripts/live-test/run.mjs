@@ -138,6 +138,33 @@ try {
     check("§22.B red shows the shortfall before payday, not 'to spare'", /\$300 short before payday/.test(await card.innerText()) && !/to spare/.test(await card.innerText()));
     eq("§22.B no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 identity picker: shows for everyone, previews Claim Dates, ONE eager save, persists
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    const goalsBefore = (row.goals ?? []).length;
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 picker shows on Home for an account with no identity", await vis(page.getByTestId("archetype-picker")));
+    check("§31 all six archetypes offered", (await Promise.all(["The Prepper", "The Heartbeat", "The Builder", "The Polished", "The Family Man", "The Explorer"].map((n) => page.getByText(n, { exact: true }).count()))).every((c) => c > 0));
+    await page.getByText("The Builder").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 preview lists starter goals with Claim Dates", /Starter Emergency Fund/.test(t) && /Claim Date/i.test(t), t.slice(0, 200));
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    check("§31 no horizontal overflow at 390px", noOverflow);
+    await app.shot("s31-preview");
+    const before = app.saves.length;
+    await page.getByLabel("Target for Starter Emergency Fund").fill("1200"); await page.getByLabel("Target for Starter Emergency Fund").blur();
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const sv = app.saves.slice(before).filter((x) => x.config?.identity);
+    // The eager write plus the app's normal post-state debounce may both land (same as every eager-save
+    // action) — what matters is no partial write: every save after confirm carries goals AND identity together.
+    const wrote = app.saves.slice(before);
+    check("§31 confirm writes goals AND config.identity together (never split)", sv.length >= 1 && wrote.every((x) => x.config?.identity?.archetypeId === "builder" && x.goals.length === goalsBefore + 4), wrote.map((x) => [!!x.config?.identity, x.goals?.length]));
+    check("§31 edited target saved", sv[0]?.goals?.some((g) => g.label === "Starter Emergency Fund" && g.target === 1200 && g.templateKey === "builder.starter_emergency"));
+    check("§31 picker gone after confirm", !(await vis(page.getByTestId("archetype-picker"))));
+    await app.reload();
+    check("§31 identity persists across reload (picker stays gone)", !(await vis(page.getByTestId("archetype-picker"))));
+    eq("§31 no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

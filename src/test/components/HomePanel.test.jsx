@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
 // HomePanel pulls in CoachNetWorthCard.jsx → lib/claude.js AND lib/db.js
 // (logBetaEvent) → the real Supabase singleton (created at module load from
@@ -243,5 +243,38 @@ describe('HomePanel', () => {
       render(<HomePanel {...stalemateProps} />)
       expect(screen.queryByText('Next Claim Date')).toBeNull()
     })
+  })
+})
+describe('HomePanel — identity picker (TODO §31)', () => {
+  const cfg = { userPaySchedule: 'weekly' }
+  it('shows the picker to everyone without an identity, even with existing goals', () => {
+    render(<HomePanel {...baseProps} config={cfg} goals={[{ id: 'g1', label: 'Car', target: 500, completed: false }]} onApplyArchetype={() => {}} />)
+    expect(screen.getByTestId('archetype-picker')).toBeTruthy()
+  })
+  it('hides it once config.identity is set, when readOnly, or when the caller supplies no handler', () => {
+    const { unmount } = render(<HomePanel {...baseProps} config={{ ...cfg, identity: { archetypeId: 'builder' } }} onApplyArchetype={() => {}} />)
+    expect(screen.queryByTestId('archetype-picker')).toBeNull()
+    unmount()
+    const r2 = render(<HomePanel {...baseProps} config={cfg} readOnly onApplyArchetype={() => {}} />)
+    expect(screen.queryByTestId('archetype-picker')).toBeNull()
+    r2.unmount()
+    render(<HomePanel {...baseProps} config={cfg} />)
+    expect(screen.queryByTestId('archetype-picker')).toBeNull()
+  })
+  it('hands App one pre-built goals+config payload on confirm', () => {
+    const onApplyArchetype = vi.fn()
+    render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Builder'))
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    expect(onApplyArchetype).toHaveBeenCalledTimes(1)
+    const p = onApplyArchetype.mock.calls[0][0]
+    expect(p.addedCount).toBe(4)
+    expect(p.goals).toHaveLength(4)
+    expect(p.config.identity.archetypeId).toBe('builder')
+  })
+  it('"Not now" hides it for the session', () => {
+    render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={() => {}} />)
+    fireEvent.click(screen.getByText('Not now'))
+    expect(screen.queryByTestId('archetype-picker')).toBeNull()
   })
 })

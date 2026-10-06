@@ -311,3 +311,14 @@ describe('ProfilePanel — App Preferences Résumé row', () => {
     expect(screen.queryByText('Choose File')).toBeNull()
   })
 })
+
+describe('ProfilePanel — Identity row (TODO §31)', () => {
+  it('shows the chosen archetype and clears config.identity (eager) so the Home picker returns', async () => {
+    const saveConfigNow = vi.fn()
+    const cfg = { ...DEFAULT_CONFIG, identity: { archetypeId: 'builder', chosenAt: '2026-10-06T00:00:00.000Z' } }
+    render(<ProfilePanel authedUser={{ email: 'a@b.c' }} config={cfg} setConfig={() => {}} saveConfigNow={saveConfigNow} allWeeks={[]} taxDerived={null} />)
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    expect(saveConfigNow).toHaveBeenCalledTimes(1)
+    expect(saveConfigNow.mock.calls[0][0].identity).toBeNull()
+  })
+})

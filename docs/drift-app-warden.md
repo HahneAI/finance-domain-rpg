@@ -5848,6 +5848,33 @@ deleted and `BudgetPanel` already hides.
 > `simulate_expense_change`, `navigate_to` focus) and `aiContext.test.js`'s count/label case.
 > All four were confirmed red against the unfixed source before being committed.
 
+**F181 · Goal archetype seeding — one goal shape, one write, identity inside `config`** — `lib/goalFunding.js` (`buildGoal`), `lib/goalArchetypes.js`, `constants/goalArchetypes.js`, `ArchetypePicker.jsx`, `HomePanel.jsx`, `App.jsx` (`handleApplyArchetype`) — **[L]+[G]**
+2026-10-06 (TODO §31 Phase 1). The picker seeds 3–5 starter goals from a chosen identity.
+> **One goal shape.** `buildGoal()` is the only place a new goal row is built. `HomePanel.addGoal`,
+> `App.handleCoachCreateGoal` (F176) and archetype seeding all call it — F176's "IF `addGoal` gains a
+> field, THEN this handler needs it too" is now enforced by construction, not by a comment. `templateKey`
+> is the only field it adds and is written only when present. `seq` keeps ids unique when several goals are
+> built in one millisecond — omit it for single creates so the id stays `g_<ts>`.
+> **One write.** `handleApplyArchetype` commits goals AND `config.identity` through a single
+> `savePersistedStateNow({ goals, config })`. Two sequential eager saves would let the second merge onto a
+> stale snapshot. It sits above the auth early returns and reads `isExpiredReadOnlyRef` (F176 hook-placement
+> rule); HomePanel also shadows `onApplyArchetype` with the readOnly `noop`, and the picker is not rendered
+> read-only. The handler logs one `goal_created` per seeded goal (F176 accounting). The live harness asserts
+> every post-confirm save carries goals+identity together; it may land twice (eager + the normal post-state
+> debounce, as with every eager action) — that is not a defect.
+> **Identity lives inside `config`** (`config.identity = { archetypeId, chosenAt }`) — `config` is saved as one
+> blob, so no four-site procedure and no migration. It is deliberately NOT in `HISTORY_SENSITIVE_FIELDS`.
+> Absent/`null` = never chosen = the picker shows. Profile → Identity clears it (eager) to re-open the picker.
+> **Dates are not computed in the picker.** `projectArchetypeGoals` in HomePanel calls the same
+> `computeClaimDates()` with candidates appended after the user's real goals (the rank `applyArchetype`
+> gives them) — never a second estimate (F177). `weeksOfSpend` targets read `remainingSpend.avgWeeklySpend`,
+> the figure Home already shows, floored at $1,000 (a new account only has the seeded Food bill).
+> **Suggested bills (Phase 2) must stay OUT of `expenses`** — see F180: there is no shared active-expense
+> filter, so an expense row with a "suggested" status would leak into ~8 consumers.
+> Check: `goalArchetypes.test.js` (catalog, target rules, dedupe, applyArchetype, buildGoal shape),
+> `ArchetypePicker.test.jsx`, `HomePanel.test.jsx` identity block, `ProfilePanel.test.jsx` Identity row, and
+> live-test §31 (390px render + persistence across reload).
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

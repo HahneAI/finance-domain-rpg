@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES, FISCAL_YEAR_START } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet, computeThisWeekActualSpend, getBillsDueOn } from "./lib/finance.js";
-import { getFundedGoalSpend } from "./lib/goalFunding.js";
+import { getFundedGoalSpend, buildGoal } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, saveResourceSnapshot, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
@@ -19,7 +19,7 @@ import { computeClaimDates } from "./lib/claimDate.js";
 import { buildResourceSnapshotPayload, RESOURCE_SNAPSHOT_SCHEMA_VERSION } from "./lib/resourceSnapshot.js";
 import { PaycheckLandedStep } from "./components/PaycheckLandedStep.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
-import { HomePanel, GOAL_SYSTEM_COLOR } from "./components/HomePanel.jsx";
+import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizardAdlib } from "./components/SetupWizardAdlib.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
@@ -797,18 +797,27 @@ export default function App() {
   // React blind spot, hit twice in one change.
   const handleCoachCreateGoal = useCallback(({ label, target, note }) => {
     if (isExpiredReadOnlyRef.current) return;
-    const next = [...goals, {
-      id: `g_${Date.now()}`,
-      label,
-      target: Number(target) || 0,
-      color: GOAL_SYSTEM_COLOR,
-      note: note ?? "",
-      completed: false,
-    }];
+    const next = [...goals, buildGoal({ label, target, note })];
     setGoals(next);
     savePersistedStateNow({ goals: next });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
   }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
+  // goals AND stamps config.identity in ONE eager write — two back-to-back
+  // saves (goals, then config) would let the second merge onto a stale
+  // snapshot. `next` comes pre-built from applyArchetype() (pure, tested); this
+  // only commits it. Same hook-placement rule as handleCoachCreateGoal above:
+  // sits above the auth early returns, paywall read through the ref.
+  const handleApplyArchetype = useCallback(({ goals: nextGoals, config: nextConfig, addedCount }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    setGoals(nextGoals);
+    setConfig(nextConfig);
+    savePersistedStateNow({ goals: nextGoals, config: nextConfig });
+    // One goal_created per seeded goal — same accounting as F176, or beta
+    // analytics under-count goals for anyone who starts from a template.
+    for (let i = 0; i < addedCount; i++) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+  }, [setGoals, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2372,6 +2381,7 @@ export default function App() {
           goals={goals}
           setGoals={setGoals}
           onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
+          onApplyArchetype={handleApplyArchetype}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           futureWeeks={futureWeeks}

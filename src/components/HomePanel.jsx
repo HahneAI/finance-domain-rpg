@@ -1,5 +1,6 @@
 import { CashOnHandCard } from "./CashOnHandCard.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
+import { IdentityLockedBanner } from "./IdentityLocked.jsx";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -74,6 +75,10 @@ export function HomePanel({
   // Archetype picker commit (TODO §31) — App.handleApplyArchetype. Optional:
   // callers that omit it (DemoAccountTree) simply never show the picker.
   onApplyArchetype: onApplyArchetypeProp,
+  // "Edit goals first" identity-change flow (TODO §31): while pending the banner
+  // offers Done, which clears the identity so the picker returns.
+  identityEditPending = false,
+  onFinishIdentityEdit,
   setConfig: setConfigProp,
   saveConfigNow: saveConfigNowProp,
   futureWeeks = [],
@@ -617,6 +622,9 @@ export function HomePanel({
           Goals
         </div>
       </div>
+      {config?.identity && !showArchetypePicker && (
+        <IdentityLockedBanner identity={config.identity} pending={identityEditPending} onDone={readOnly ? undefined : onFinishIdentityEdit} />
+      )}
 
       {/* ── Next Claim Date ──────────────────────────────────────────────────
           The panel's emotional anchor, and the app-side half of the site's

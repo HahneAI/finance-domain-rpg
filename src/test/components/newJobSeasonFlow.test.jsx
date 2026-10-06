@@ -1075,4 +1075,11 @@ describe('NewJobSeasonHomePanel — identity picker (TODO §31)', () => {
     render(<NewJobSeasonHomePanel {...base} />)
     expect(screen.queryByText('Who are you becoming next?')).toBeNull()
   })
+
+  it('shows the Identity locked banner (no Done/edit controls) once chosen', () => {
+    render(<NewJobSeasonHomePanel {...base} config={{ ...JOB_LOSS_CONFIG, identity: { archetypeId: 'explorer' } }} />)
+    const b = screen.getByTestId('identity-locked-banner')
+    expect(b).toHaveTextContent('The Explorer')
+    expect(screen.queryByText(/Done — choose identity/)).toBeNull()
+  })
 })

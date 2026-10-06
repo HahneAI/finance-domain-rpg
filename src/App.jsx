@@ -803,6 +803,30 @@ export default function App() {
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
   }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Identity change flow (TODO §31). Profile → Identity → "Same goals list"
+  // clears config.identity now (the picker returns on Home). "Edit goals first"
+  // parks the change: the user lands on the Goals page with the identity still
+  // locked, and it is cleared when they tap Done OR leave that screen — either
+  // way the picker is waiting when they come back. One eager write, readOnly
+  // refused here independently of the UI (F176 rule).
+  const [identityEditPending, setIdentityEditPending] = useState(false);
+  const finishIdentityChange = useCallback(() => {
+    setIdentityEditPending(false);
+    if (isExpiredReadOnlyRef.current) return;
+    const next = { ...config, identity: null };
+    setConfig(next);
+    savePersistedStateNow({ config: next });
+  }, [config, setConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleChangeIdentity = useCallback(({ editGoalsFirst }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    if (editGoalsFirst) setIdentityEditPending(true);
+    else finishIdentityChange();
+    navigateDirect("home");
+  }, [finishIdentityChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (identityEditPending && currentView !== "home") finishIdentityChange();
+  }, [identityEditPending, currentView, finishIdentityChange]);
+
   // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
   // goals AND stamps config.identity in ONE eager write — two back-to-back
   // saves (goals, then config) would let the second merge onto a stale
@@ -2384,6 +2408,8 @@ export default function App() {
           setGoals={setGoals}
           onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
           onApplyArchetype={handleApplyArchetype}
+          identityEditPending={identityEditPending}
+          onFinishIdentityEdit={finishIdentityChange}
           setConfig={setConfig}
           saveConfigNow={saveConfigNow}
           futureWeeks={futureWeeks}
@@ -2492,6 +2518,7 @@ export default function App() {
         config={config}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}
+        onChangeIdentity={handleChangeIdentity}
         onLocalSignOut={handleLocalSignOut}
         allWeeks={allWeeks}
         taxDerived={taxDerived}

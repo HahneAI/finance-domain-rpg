@@ -277,4 +277,25 @@ describe('HomePanel — identity picker (TODO §31)', () => {
     fireEvent.click(screen.getByText('Not now'))
     expect(screen.queryByTestId('archetype-picker')).toBeNull()
   })
+  it('shows the Identity locked banner on the Goals page once an identity is chosen', () => {
+    render(<HomePanel {...baseProps} config={{ ...cfg, identity: { archetypeId: 'heartbeat' } }} onApplyArchetype={() => {}} />)
+    const b = screen.getByTestId('identity-locked-banner')
+    expect(b).toHaveTextContent(/Identity locked in/i)
+    expect(b).toHaveTextContent('The Heartbeat')
+  })
+  it('pending edit mode says so and Done calls onFinishIdentityEdit; read-only offers no Done', () => {
+    const onFinishIdentityEdit = vi.fn()
+    const c = { ...cfg, identity: { archetypeId: 'builder' } }
+    const { unmount } = render(<HomePanel {...baseProps} config={c} identityEditPending onFinishIdentityEdit={onFinishIdentityEdit} onApplyArchetype={() => {}} />)
+    expect(screen.getByTestId('identity-locked-banner')).toHaveTextContent(/Editing your goals/i)
+    fireEvent.click(screen.getByText(/Done — choose identity/))
+    expect(onFinishIdentityEdit).toHaveBeenCalledTimes(1)
+    unmount()
+    render(<HomePanel {...baseProps} config={c} identityEditPending readOnly onFinishIdentityEdit={onFinishIdentityEdit} onApplyArchetype={() => {}} />)
+    expect(screen.queryByText(/Done — choose identity/)).toBeNull()
+  })
+  it('shows no banner (the picker instead) when no identity is chosen', () => {
+    render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={() => {}} />)
+    expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
+  })
 })

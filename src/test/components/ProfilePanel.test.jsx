@@ -313,11 +313,54 @@ describe('ProfilePanel — App Preferences Résumé row', () => {
 })
 
 describe('ProfilePanel — Identity row (TODO §31)', () => {
-  it('shows the chosen archetype and clears config.identity (eager) so the Home picker returns', async () => {
-    const saveConfigNow = vi.fn()
-    const cfg = { ...DEFAULT_CONFIG, identity: { archetypeId: 'builder', chosenAt: '2026-10-06T00:00:00.000Z' } }
-    render(<ProfilePanel authedUser={{ email: 'a@b.c' }} config={cfg} setConfig={() => {}} saveConfigNow={saveConfigNow} allWeeks={[]} taxDerived={null} />)
+  const cfg = { ...DEFAULT_CONFIG, identity: { archetypeId: 'builder', chosenAt: '2026-10-06T00:00:00.000Z' } }
+  const mount = (over = {}) => render(<ProfilePanel authedUser={{ email: 'a@b.c' }} config={cfg} setConfig={() => {}} saveConfigNow={() => {}} allWeeks={[]} taxDerived={null} {...over} />)
+
+  it('asks before changing: tapping the row opens the confirm and writes nothing', () => {
+    const saveConfigNow = vi.fn(); const onChangeIdentity = vi.fn()
+    mount({ saveConfigNow, onChangeIdentity })
     fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    expect(screen.getByRole('dialog', { name: 'Change your identity' })).toBeTruthy()
+    expect(screen.getByText(/You're locked in as The Builder/)).toBeTruthy()
+    expect(saveConfigNow).not.toHaveBeenCalled(); expect(onChangeIdentity).not.toHaveBeenCalled()
+  })
+
+  it('"Same goals list" hands off editGoalsFirst:false', () => {
+    const onChangeIdentity = vi.fn()
+    mount({ onChangeIdentity })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Same goals list'))
+    expect(onChangeIdentity).toHaveBeenCalledWith({ editGoalsFirst: false })
+  })
+
+  it('"Edit goals first" hands off editGoalsFirst:true', () => {
+    const onChangeIdentity = vi.fn()
+    mount({ onChangeIdentity })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Edit goals first'))
+    expect(onChangeIdentity).toHaveBeenCalledWith({ editGoalsFirst: true })
+  })
+
+  it('Cancel closes without changing anything', () => {
+    const onChangeIdentity = vi.fn(); const saveConfigNow = vi.fn()
+    mount({ onChangeIdentity, saveConfigNow })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(onChangeIdentity).not.toHaveBeenCalled(); expect(saveConfigNow).not.toHaveBeenCalled()
+  })
+
+  it('offers no "edit goals" option to a jobless user (their goals are paused and read-only)', () => {
+    mount({ config: { ...cfg, newJobSeasonMode: true }, onChangeIdentity: () => {} })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    expect(screen.queryByText('Edit goals first')).toBeNull()
+    expect(screen.getByText('Same goals list')).toBeTruthy()
+  })
+
+  it('falls back to an eager identity clear when no handler is supplied', () => {
+    const saveConfigNow = vi.fn()
+    mount({ saveConfigNow })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Same goals list'))
     expect(saveConfigNow).toHaveBeenCalledTimes(1)
     expect(saveConfigNow.mock.calls[0][0].identity).toBeNull()
   })

@@ -8,6 +8,7 @@ import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlements.js";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
+import { IdentityLockedBanner } from "./IdentityLocked.jsx";
 import { applyArchetype } from "../lib/goalArchetypes.js";
 
 /**
@@ -379,6 +380,11 @@ export function NewJobSeasonHomePanel({
 
           Read-only by construction: no mutation handler is threaded into this
           panel, so there is nothing for F20's readOnly shadow to cover. */}
+      {config?.identity && (
+        <div style={{ marginTop: "28px" }}>
+          <IdentityLockedBanner identity={config.identity} />
+        </div>
+      )}
       {pausedGoals.length > 0 && (
         <div style={{ marginTop: "28px" }}>
           <SectionHeader sub="Still yours. They start moving again the week you're earning.">

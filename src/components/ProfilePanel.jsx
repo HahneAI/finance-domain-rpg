@@ -10,6 +10,7 @@ import { resolveBetaChannel } from "../constants/betaChannels.js";
 import { BetaChannelFullModal } from "./BetaChannelFullModal.jsx";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
 import { getArchetype } from "../constants/goalArchetypes.js";
+import { IdentityChangeDialog } from "./IdentityLocked.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -3196,7 +3197,7 @@ function BetaScoresAdminDetail({ onBack }) {
   );
 }
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, AI admin, or
   // the per-user tax_projections_enabled flag). The setup wizard's "Unlock
   // projections" choice intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -3206,6 +3207,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
+  const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
@@ -3326,7 +3328,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         <ListRow
           label="Identity"
           summary={config.identity ? `${getArchetype(config.identity.archetypeId)?.name ?? "Chosen"} · tap to change` : "Not chosen · pick one on Home"}
-          onPress={() => { if (config.identity) saveConfigNow({ ...config, identity: null }); }}
+          onPress={() => { if (config.identity) setShowIdentityDialog(true); }}
         />
         <ListRow
           label="Account"
@@ -3425,6 +3427,26 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         </svg>
         Sign Out (This Device)
       </Pressable>
+
+      {/* Identity change confirm (TODO §31). Keep = same goals list, picker returns
+          now; Edit first = Goals page with the identity still locked until the
+          user is done. Jobless users have no editable goals, so no edit option.
+          Without a handler (isolated tests) it falls back to a plain eager clear. */}
+      <IdentityChangeDialog
+        open={showIdentityDialog}
+        identity={config.identity}
+        canEditGoals={!config.newJobSeasonMode}
+        onCancel={() => setShowIdentityDialog(false)}
+        onKeep={() => {
+          setShowIdentityDialog(false);
+          if (onChangeIdentity) onChangeIdentity({ editGoalsFirst: false });
+          else saveConfigNow({ ...config, identity: null });
+        }}
+        onEditFirst={() => {
+          setShowIdentityDialog(false);
+          if (onChangeIdentity) onChangeIdentity({ editGoalsFirst: true });
+        }}
+      />
 
       {/* Portaled to document.body so position:fixed resolves against the viewport,
           not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}

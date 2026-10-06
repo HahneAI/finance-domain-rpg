@@ -182,6 +182,44 @@ try {
     check("§31 NJS shows the seeded goals as paused Claim Dates", /claim dates/i.test(await bodyText(page)) && /on hold|paused/i.test(await bodyText(page)) && !(await vis(page.getByText("Who are you becoming next?"))));
     eq("§31 NJS no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 change-identity flow: confirm popup → same list / edit goals first (picker returns on Done or on leaving)
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const picker = page.getByTestId("archetype-picker"); const banner = page.getByTestId("identity-locked-banner");
+    check("§31 Goals page shows Identity locked in banner", (await vis(banner)) && /identity locked in/i.test(await banner.innerText()) && /The Builder/.test(await banner.innerText()));
+    check("§31 no picker while an identity is set", !(await vis(picker)));
+    await nav(page, "account");
+    await page.getByText(/The Builder · tap to change/).click(); await settle(page, 600);
+    const dlg = page.getByRole("dialog", { name: "Change your identity" });
+    check("§31 tapping Identity opens the are-you-sure popup (nothing changed yet)", (await vis(dlg)) && app.saves.every((x) => x.config?.identity));
+    await app.shot("s31-change-dialog");
+    // Edit goals first → Goals page, identity still locked, banner in editing mode
+    await page.getByText("Edit goals first").click(); await settle(page, 1200);
+    const b2 = await vis(banner) ? await banner.innerText() : "";
+    check("§31 Edit goals first lands on Goals with the identity still locked + editing banner", /editing your goals/i.test(b2) && /The Builder/.test(b2) && !(await vis(picker)), b2);
+    await app.shot("s31-edit-first");
+    await page.getByRole("button", { name: /Done — choose identity/i }).click(); await settle(page, 1500);
+    check("§31 Done brings the picker back", await vis(picker));
+    check("§31 Done saved identity cleared, goals untouched", app.lastSave()?.config?.identity == null && (app.lastSave()?.goals?.length ?? 0) === (row.goals ?? []).length, app.lastSave()?.goals?.length);
+    // restore identity and test the leave-the-screen path
+    await page.getByText("The Explorer").click(); await settle(page, 500);
+    await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 1500);
+    await nav(page, "account"); await page.getByText(/The Explorer · tap to change/).click(); await settle(page, 600);
+    await page.getByText("Edit goals first").click(); await settle(page, 1200);
+    check("§31 editing banner again", /editing your goals/i.test(await banner.innerText()));
+    await nav(page, "upkeep"); await settle(page, 800); await nav(page, "home"); await settle(page, 1200);
+    check("§31 leaving the Goals screen brings the picker back without tapping Done", await vis(picker));
+    // Same goals list path
+    await page.getByText("The Heartbeat").click(); await settle(page, 500);
+    await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 1500);
+    await nav(page, "account"); await page.getByText(/The Heartbeat · tap to change/).click(); await settle(page, 600);
+    const goalsBefore = app.lastSave()?.goals?.length;
+    await page.getByText("Same goals list").click(); await settle(page, 1500);
+    check("§31 Same goals list lands on Home with the picker, goals unchanged", (await vis(picker)) && app.lastSave()?.goals?.length === goalsBefore && app.lastSave()?.config?.identity == null);
+    eq("§31 change-identity no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

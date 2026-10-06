@@ -97,6 +97,7 @@ npm run test:run    # Vitest single pass — use this to verify changes
 |---|---|
 | Anything in a mapped area (wizard, 5 panels, auth, paywall, fiscal math, persistence, entitlements, AI, design system, admin) | `docs/drift-app-warden.md` — that section's trigger map |
 | How a live system works | `docs/active-systems.md` (Coach/AI context: §6/§24 grounding rule first) |
+| Coach tuning / eval harness / calibration | `docs/coach-tuning-handoff.md`, then `scripts/coach-eval/README.md` |
 | Setup wizard | warden §7 (gate matrix §7.3); `active-systems.md` §9 |
 | Design tokens / typography | `docs/design-system-source-of-truth.md`, warden §22 |
 | Migrations / schema | `database/migrations/README.md` |

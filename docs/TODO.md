@@ -16,7 +16,7 @@
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
-| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 12 | 0 |
+| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 14 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -877,7 +877,7 @@ Candidate 7th: **The Climber** (career/status: certification, interview wardrobe
 - [ ] **31.4 Income-scaled sanity cap** — a template target that would push the Claim Date (via `resolveGoalFinishInfo()`) past ~12 months is shown scaled down or flagged "stretch," never silently added.
 
 ### 31.B Surface
-- [ ] **31.5 Selection surface = post-wizard Home card, NOT a new wizard page** — keeps `SetupWizardAdlib` and its §7.3 gate matrix untouched. Shows when `goals.length === 0` (or never dismissed); multi-select max 2 archetypes.
+- [ ] **31.5 Selection surface = post-wizard Home card, NOT a new wizard page** — keeps `SetupWizardAdlib` and its §7.3 gate matrix untouched. Shows when `goals.length === 0` (or never dismissed). **Single archetype (locked 2026-10-06)** — it only seeds the goals list; user edits/tunes freely after.
 - [ ] **31.6 Preview → hand-off** — 3–5 goals listed with toggle + inline-edit target (string draft, parse on commit — Numeric Input Standard); one "Add N goals" action = one batch `setGoals(next)` + `onSaveGoalsNow(next)` (eager-save rule). Never auto-add. `readOnly` shadowed like the rest of HomePanel.
 - [ ] **31.7 Re-entry + dedupe** — "Browse goal ideas" entry from the goals section / Profile; skip templates already added. Needs a `templateKey` on the goal — decide in 31.2 whether that's worth the four-site procedure or label-matching is enough for V1.
 
@@ -890,7 +890,18 @@ Candidate 7th: **The Climber** (career/status: certification, interview wardrobe
 - [ ] **31.11 Tests** — template → goal shape, derived-target math matches the source function, dedupe, readOnly no-op, batch eager save fires once.
 - [ ] **31.12 Warden entries** — next free F-number (verify): LEDGER row for derived targets (blast radius: `avgWeeklySpend`, loan balances, `resolveGoalFinishInfo`), GATEWAY row for the Home card (paywall/readOnly/tier).
 
-**Open questions:** (a) single archetype vs. max 2? (b) should the archetype also reorder Home tiles / Upkeep categories later, or stay goals-only? (c) per-month recurring templates (skincare $50/mo) don't fit a one-shot `target` — model as 12-month sinking fund or exclude from V1?
+### 31.E Proposed 2026-10-06 (not locked)
+- [ ] **31.13 Recurring templates → *suggested* Lifestyle expenses** (grooming $50/mo, gym $35/mo, etc.). Must land as a
+  `suggested` status that is **excluded from every finance computation** (runway, NJS, Cash on Hand, Coach context) until
+  the user confirms it — a phantom bill the user doesn't actually pay silently lowers their real surplus and breaks the
+  app's core "tells you when" claim. Needs its own warden LEDGER row; check every `expenses` consumer filters it (see §24 —
+  inactive expenses already leaked once).
+- [ ] **31.14 Identity-first Home** — Home leads with the chosen archetype + next Claim Date ("when"), finance numbers
+  move to secondary. Prototype behind a flag and compare beta engagement vs. current Home before replacing it; Home's
+  goal card is duplicated mobile/desktop (warden §8 F177). Scope as its own § once 31.1–31.6 ship.
+
+**Open questions:** (a) ~~single vs. max 2~~ → single. (b) answered by 31.14 (identity-first Home). (c) one-shot vs.
+recurring → recurring goes to 31.13, not a goal target.
 
 **Status: scoped, no code, no schema, no migration.**
 

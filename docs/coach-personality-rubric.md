@@ -743,6 +743,34 @@ Ask Coach only.
 
 ---
 
+**Phase 5 repeat-verify passes, 2026-10-06 (key restored; 12 calls, ~cents).** Three passes from
+`docs/coach-tuning-handoff.md` §4, all on `AI_ADMIN_COACH_TEST_KEY`, 0 errors.
+
+- **Job Hunt Chat repeat-verify (`promptfooconfig.phase5b.yaml --repeat 3 --no-cache`, Sonnet, 3
+  draws per runway): voice target HOLDS, but a new content-stability gap appeared.** All 6 draws
+  were 3 sentences with zero metaphor — Metaphor target 2 ("trace") and Axis 2 ("urgency as
+  content, not length") both confirmed. NEW: the *recommendation itself* is unstable. Healthy
+  (~70d): 2/3 draws say Cascade Freight first, 1/3 Riverbend first. Tight (~9d): 2/3 Riverbend
+  first, 1/3 Cascade first — and that draw says Riverbend needs no follow-up. Also one healthy
+  draw says Cascade has been silent "over three weeks"; fixture today is 2026-03-09
+  (`effectiveToday`), applied 2026-02-20 = 17 days, so that is a **wrong fact** (the other draws
+  say "over two weeks", which is right). Not a Metaphor/Length issue — a grounding/priority one.
+  Candidate lever: have the addendum state a tiebreak (interview-scheduled outranks silent
+  application) and have the date gap computed in context rather than left to the model.
+- **Résumé Review rescaled score-1 (`promptfooconfig.phase5d-resume.yaml`, Sonnet): score-1 NOT
+  reached.** The 2–3-sentence override produced ~6 paragraphs / ~15 sentences; only the opening
+  was shortened. `RESUME_REVIEW_ADDENDUM` mandates weak lines + gaps + strengths + one fix and
+  that outweighs the override. Confirms the earlier hypothesis: this mode's floor is ~2–3, not 1.
+  Score-5 (itemised header/dates/every skill/education) is a clean, far longer sample, so the
+  mode has range, just a higher floor. Input for the batch decision: set this mode's target
+  range accordingly rather than forcing a 1.
+- **Ask Coach tool-available repeat (`personalityToolLoopLiveTest.mjs`, Haiku, trimmed context +
+  tools, 1 draw per scenario — still directional):** no metaphor in either; Axis 2 shift
+  **confirmed** (default: "tracking ahead"; 98% spend: "tight … nearly every dollar … already
+  spoken for", ends on a goal-setting question) with no length increase. Layer-B side note: both
+  draws called `navigate_to({"panel":"Home"})` on "How's my week looking?" unprompted, though the
+  numbers were already in context.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

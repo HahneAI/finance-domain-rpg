@@ -2093,8 +2093,16 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     identical (`claude-haiku-4-5`, `scripts/coach-eval/promptfooconfig.phase5-amber-refix.yaml`):
     exactly one figurative touch, exactly one named lever, all three runs. Regression test added
     in `coachPrompts.test.js`. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
-  - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
-    no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
+  - [x] Repeat-verify passes (run 2026-10-06, 12 calls, 0 errors; full writeup in
+    `coach-personality-rubric.md` Known Limitations). **Job Hunt Chat:** voice holds 6/6 (3
+    sentences, no metaphor, urgency as content) BUT the "which application first" pick flips
+    between draws and one draw states a wrong gap ("over three weeks" for 17 days) — new open
+    item, grounding/tiebreak not voice. **Résumé Review score-1:** NOT reached (~15 sentences
+    under a 2–3-sentence override); floor ~2–3, feeds the batch decision. **Ask Coach
+    tool-available:** no metaphor, Axis 2 shift confirmed (1 draw/scenario, directional); both
+    draws called `navigate_to` unprompted on "How's my week looking?".
+  - [ ] Job Hunt Chat: fix the unstable first-pick + wrong-gap finding above (tiebreak rule in the
+    addendum / compute the day gap in context), then re-verify.
   - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
     above. This is Phase 5's actual finish line.

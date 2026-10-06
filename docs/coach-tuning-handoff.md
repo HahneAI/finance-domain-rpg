@@ -2,8 +2,10 @@
 
 **Purpose:** let a brand-new chat pick up the Coach personality-calibration / model-selection work
 exactly where it stopped. Written 2026-10-05. This is the *tuning workflow* handoff; for what Coach
-is and where it appears in the app, read `docs/coach-session-handoff.md` and
-`docs/coach-entry-points.md`. Source of truth for phase status is `docs/TODO.md` §2.L; source of
+is and where it appears in the app, read `docs/coach-entry-points.md` (current).
+⚠️ `docs/coach-session-handoff.md` is dated 2026-07-25 and **stale** — it lists Job Hunt
+Assistant and Résumé Review as "not started" (both shipped) and predates Coach's tool layer
+entirely; its entitlement/paywall + prompt-caching background is still accurate, nothing else is. Source of truth for phase status is `docs/TODO.md` §2.L; source of
 truth for scoring is `docs/coach-personality-rubric.md`. This file is the shortcut, not a replacement.
 
 **Branch:** `claude/coach-ai-personality-bmopcx` (in sync with `Version-control`/`master` as of
@@ -75,6 +77,10 @@ Axis 1** (standing instruction, Phase 4 finding).
   4 Expansive · 5 Exhaustive (itemized audit). All older Axis 3 findings used the OLD numbering — the
   rubric has a translation note (old 2→new 1, old 3→2, old 4→3, old 5→4, new 5 = itemized).
 - **Directness/bluntness** and **Warmth/formality** — still **undefined**, no anchor data.
+
+**There is a second layer this file also covers — see §6.** Everything above measures how Coach
+*sounds*. A separate axis measures whether Coach *reaches for the right tool*. Different runners,
+different failure modes, same fixtures and the same budget rules.
 
 **Model decisions so far:** Ask Coach → `claude-haiku-4-5` (**kept**, revisited not reversed);
 special-handling moments (Burnout Sentinel, Heirloom Letters, major goal completion) → `claude-opus-5`
@@ -166,3 +172,77 @@ batch decision. Net Worth Red's addendum fix is the next real prompt bug after A
 
 Commit style: end commits with the `Co-Authored-By` / `Claude-Session` trailers; push to
 `claude/coach-ai-personality-bmopcx`; no PR unless asked.
+
+---
+
+## 6. Layer B — tool selection (the other axis)
+
+Merged in 2026-10-06 from the sister branch `claude/coach-mcp-tools-6ayb5n`, which built Coach's
+tool layer while this branch calibrated its voice. Layer A asks *does Coach sound right*; Layer B
+asks *does Coach reach for the right tool with sensible arguments*. promptfoo has **no hook for a
+tool loop** (emit `tool_use` → execute → feed the result back → real answer), so Layer B is two
+hand-rolled runners rather than a config:
+
+- `scripts/coach-eval/toolLoopLiveTest.mjs` — tool selection. Hard `MAX_CALLS = 26` budget stop.
+  Filter by id group: `adversarial` · `simulation` · `navigate`.
+- `scripts/coach-eval/personalityToolLoopLiveTest.mjs` — this is §4's pass C; it belongs to both
+  layers.
+
+Both read `AI_ADMIN_COACH_TEST_KEY` **directly** (`process.env`), and refuse to start without it —
+so they need **no** `ANTHROPIC_API_KEY=` inline mapping. That mapping is a promptfoo-only
+workaround (§0); do not copy it onto these.
+
+**Shipped: 10 tools** in `src/lib/coachTools.js`, executed **client-side** — `api/` sits at the
+12/12 Vercel Hobby function cap with zero headroom, so a tool route was never an option.
+
+`get_goal_detail` · `get_expense_detail` · `get_week_breakdown` · `list_log_entries` ·
+`navigate_to` · `propose_goal` · `simulate_expense_change` · `simulate_new_goal` ·
+`simulate_overtime_hours` · `simulate_without_logged_event`
+
+Selection measured correct 4/4, then 5/5 as the count grew. UI in `CoachToolUI.jsx` (activity
+line, `CoachNavChip`, `CoachGoalCard`). `propose_goal` is the only write-shaped one and it still
+does not write — it returns a proposal and the user's Confirm calls `handleCoachCreateGoal`.
+
+**The open Layer-B finding — fabricated counterfactuals (3 occurrences, unfixed).** Coach invents
+a plausible-sounding hypothetical impact instead of calling the simulation tool that would compute
+it for real. The third occurrence was **after** `simulate_expense_change` shipped, which is the
+whole lesson: **tool availability does not prevent fabrication; only tool use does.** Pairs with
+DW-19 in §3 — both are "the model won't obey an instruction it has every means to obey," and a
+few-shot worked example is the untried lever for both. Full writeup: `drift-app-warden.md` §21
+F168–F176, `docs/coach-entry-points.md` §1.
+
+**Unbuilt, with decisions already made (don't re-litigate):**
+1. `draft_log_entry` — user chose **prefill-and-hand-off to the Log panel**, not a direct write.
+2. Simulation result strip — a UI treatment for simulation output. Proposed, not selected.
+3. Goal-setting / identity prompt addendum — teaching Coach to draw out who someone wants to be
+   before proposing a goal. User deferred it explicitly ("tool + chip only — prompt work
+   separate"); the tool now exists to land on.
+4. `JOB_HUNT_TOOLS` still exposes **only** `get_expense_detail`; widening needs props threaded
+   through `NewJobSeasonHomePanel`.
+5. Noted, unactioned: `api/coach.js` has no per-surface gate; no per-user cap on tool rounds.
+
+---
+
+## 7. Gotchas that each cost a real debugging cycle
+
+- **Never pipe a live run through `| head`** — SIGPIPE killed a paid run mid-flight.
+- **Read the test FILE count, not the test count.** Import-time failures still report every
+  loaded test as passing (a react/react-dom mismatch once showed `1313 passed, 0 failed` while
+  **32 files** never loaded).
+- **`npm run test:run` cannot catch React Compiler bugs** — `vitest.config.js` omits
+  `@rolldown/plugin-babel`. Only `npm run build` plus a real browser render does (warden §12.4),
+  and there is no top-level error boundary, so one bad render blanks the whole app.
+- **A failed Playwright action does not mean no write happened.** Click-retry succeeded and then
+  reported a timeout, creating 6 duplicate goals on the shared test account. Self-clean every
+  driver and verify the account afterwards.
+- **A deleted bill is still in the array** — zeroed forward, status still `"active"`.
+  `isNjsBillActive()` alone matches it; pair with `!isExpenseRemoved()`. Coach tools go through
+  `visibleExpenses()` (warden F180). The dollar totals never noticed, which is why it hid.
+- **Coach is reachable in the live app only via the mobile bottom nav**, and `WeekConfirmModal`
+  **queues** — loop "Skip for now", never "Confirm Week", or you mutate the test account.
+- **529 overloads are not billed.** The tool runner backs off 5/10/20/40/60s; don't count a 529
+  as a spent call.
+- **Do not run `npm audit fix --force`.** The 7 remaining dev-only advisories are promptfoo's
+  dependency chain and have no upstream fix (node-forge's range is `*`; basic-ftp is blocked by a
+  `get-uri` pin). npm offers promptfoo **0.116.7** as the "fix" — a downgrade of seven minor
+  versions. The pin is `^0.123.1`.

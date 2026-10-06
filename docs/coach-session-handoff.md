@@ -1,5 +1,11 @@
 # Coach / AI Feature — Session Handoff
 
+> ⚠️ **STALE — dated 2026-07-25.** It lists Job Hunt Assistant and Résumé Review as "not
+> started"; both shipped. It also predates Coach's entire tool layer (`src/lib/coachTools.js`,
+> 10 tools) and the whole personality eval harness. For anything about tuning, calibration or
+> testing Coach, read **`docs/coach-tuning-handoff.md`** instead. The entitlement/paywall and
+> prompt-caching background below is still accurate; the "What's next" list is not.
+
 **Purpose of this file:** orient a brand-new session on Coach/AI work only. Deliberately
 scoped — this is not a full app handoff. If a task turns out to need context outside Coach/AI,
 ask the user rather than guessing from the rest of the codebase.

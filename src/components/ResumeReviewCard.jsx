@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, SH } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { RESUME_REVIEW_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
+import { fmtFullDate } from "../lib/finance.js";
 import {
   loadResumeProfile, saveResumeProfile, saveCoachChat,
   uploadResumeFile, getResumeFileUrl, deleteResumeFile,
 } from "../lib/db.js";
 import { validateResumeFile, extractResumeText, formatFileSize } from "../lib/resumeFile.js";
+
+const toLocalIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const labelStyle = {
   fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
@@ -59,7 +62,7 @@ const inputStyle = {
  * `{ hasFile, filename, hasText }` — so an embedding caller can keep its own
  * collapsed-row summary in sync without re-fetching the profile itself.
  */
-export function ResumeReviewCard({ config, showReview = true, embedded = false, onProfileChange }) {
+export function ResumeReviewCard({ config, showReview = true, embedded = false, onProfileChange, effectiveToday }) {
   const [loading, setLoading] = useState(true);
   const [resumeText, setResumeText] = useState("");
   const [targetRoleDraft, setTargetRoleDraft] = useState("");
@@ -197,7 +200,8 @@ export function ResumeReviewCard({ config, showReview = true, embedded = false, 
     setReview("");
     const roleForPrompt = effectiveTargetRole || "(not specified — infer the likely target from the résumé content itself)";
     try {
-      const contextBlock = `Résumé text:\n${resumeText.trim()}\n\nTarget role: ${roleForPrompt}`;
+      const todayIso = effectiveToday || toLocalIso(new Date());
+      const contextBlock = `Today: ${fmtFullDate(todayIso)}\n\nRésumé text:\n${resumeText.trim()}\n\nTarget role: ${roleForPrompt}`;
       const messages = [{ role: "user", content: "Please review my resume against the target role." }];
       let accumulated = "";
       for await (const chunk of chatWithCoach(messages, RESUME_REVIEW_SYSTEM_PROMPT, contextBlock, "sonnet")) {

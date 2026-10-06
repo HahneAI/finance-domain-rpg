@@ -587,7 +587,37 @@ describe("buildJobHuntContext", () => {
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
-    expect(block).toContain("Applications (1 total): Acme Logistics — Warehouse Lead (interview, applied 2026-06-20)");
+    expect(block).toContain("Applications (1 total): Acme Logistics — Warehouse Lead (interview, applied 2026-06-20, 17 days ago)");
+    expect(block).toContain("Today: ");
+  });
+
+  it("states today's date and omits days-ago when no date is available", () => {
+    const withToday = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    expect(withToday).toMatch(/^Today: /);
+    const apps = [{ id: "a1", company: "Acme", role: "Lead", status: "applied", dateApplied: "2026-06-20" }];
+    const noToday = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobApplications: apps },
+      expenses: [essentialExpense],
+    });
+    expect(noToday).toBe("");
+  });
+
+  it("pins the elapsed-days figure to the real calendar gap (1 day singular; never negative)", () => {
+    const apps = [
+      { id: "a1", company: "Yesterday Co", role: "Lead", status: "applied", dateApplied: "2026-07-06" },
+      { id: "a2", company: "Future Co", role: "Lead", status: "applied", dateApplied: "2026-07-09" },
+    ];
+    const block = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobApplications: apps },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    expect(block).toContain("applied 2026-07-06, 1 day ago");
+    expect(block).toContain("(applied, applied 2026-07-09)");
   });
 
   it("shows only the 5 most recent applications and flags the total when there are more", () => {

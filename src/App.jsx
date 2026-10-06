@@ -823,6 +823,20 @@ export default function App() {
     if (identityTidy) setIdentityTidy(false);
   }, [currentView, identityPickerOpen, identityTidy]);
 
+  // Upkeep's identity suggestions (TODO §31 Phase 2). Add arrives as { expenses,
+  // config } (a real Lifestyle bill + the suggestion marked accepted) and is one
+  // eager write; Not me arrives as { config } only. Same hook-placement/readOnly
+  // rules as the handlers above (F176).
+  const handleResolveSuggestion = useCallback(({ expenses: nextExpenses, config: nextConfig }) => {
+    if (isExpiredReadOnlyRef.current) return;
+    if (nextExpenses) {
+      setExpenses(nextExpenses);
+      logBetaEvent({ isTester, betaCodeUsed, eventType: "expense_created" });
+    }
+    setConfig(nextConfig);
+    savePersistedStateNow(nextExpenses ? { expenses: nextExpenses, config: nextConfig } : { config: nextConfig });
+  }, [setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
   // goals AND stamps config.identity in ONE eager write — two back-to-back
   // saves (goals, then config) would let the second merge onto a stale
@@ -2472,6 +2486,7 @@ export default function App() {
         <BudgetPanel
           expenses={expenses} setExpenses={setExpenses}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
+          onResolveSuggestion={handleResolveSuggestion}
           weeklyIncome={weeklyIncome}
           prevWeekNet={prevWeekNet}
           futureWeeks={futureWeeks}

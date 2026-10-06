@@ -63,7 +63,33 @@ export function applyArchetype({ archetypeId, selected = [], goals = [], config 
   const added = valid.map((g, i) => buildGoal({ label: g.label, target: g.target, note: g.note, templateKey: g.templateKey, seq: i }));
   return {
     goals: [...goals, ...added],
-    config: { ...config, identity: { archetypeId, chosenAt: now.toISOString() } },
+    // suggestions carry across a switch: accepted/dismissed state is keyed by templateKey
+    // (archetype-prefixed), so switching back never re-offers what was already decided.
+    config: { ...config, identity: { archetypeId, chosenAt: now.toISOString(), ...(config.identity?.suggestions ? { suggestions: config.identity.suggestions } : {}) } },
     addedCount: added.length,
   };
+}
+
+/**
+ * Lifestyle bills the current identity OFFERS (TODO §31 Phase 2). Pure read: never
+ * touches `expenses`. A suggestion is pending until the user accepts or dismisses
+ * it (config.identity.suggestions[templateKey]); it is also withheld when a bill
+ * with the same label already exists, so it never duplicates something the user
+ * entered by hand. Pending suggestions are deliberately NOT bills: they enter no
+ * total, runway, Claim Date or Coach context (warden F182).
+ */
+export function pendingBillSuggestions({ config, expenses = [] } = {}) {
+  const identity = config?.identity;
+  const archetype = identity ? getArchetype(identity.archetypeId) : null;
+  if (!archetype?.suggestedBills?.length) return [];
+  const resolved = identity.suggestions ?? {};
+  const haveLabels = new Set((expenses ?? []).map((e) => (e?.label ?? "").trim().toLowerCase()));
+  return archetype.suggestedBills
+    .map((b) => ({ templateKey: templateKeyFor(archetype.id, b.key), label: b.label, amount: b.amount, cycle: b.cycle, category: "Lifestyle" }))
+    .filter((b) => !resolved[b.templateKey] && !haveLabels.has(b.label.toLowerCase()));
+}
+
+/** config with one suggestion resolved ("accepted" | "dismissed"). Pure. */
+export function markSuggestion(config, templateKey, state) {
+  return { ...config, identity: { ...config.identity, suggestions: { ...(config.identity?.suggestions ?? {}), [templateKey]: state } } };
 }

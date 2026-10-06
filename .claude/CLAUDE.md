@@ -81,7 +81,7 @@ both pairs are cited from 4+ docs, so renumbering needs its own pass — until t
 qualify which one you mean. The check above reports these every run; that is expected, not a
 new failure.
 
-**Next free numbers (verify, do not trust):** TODO `§32` · migration `048` · warden `F182`.
+**Next free numbers (verify, do not trust):** TODO `§32` · migration `048` · warden `F183`.
 
 ---
 ## Commands

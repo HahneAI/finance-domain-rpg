@@ -14,6 +14,9 @@
 //       "emergency fund" would round to a few dollars.
 // Resolution lives in lib/goalArchetypes.js — never inline a rule here.
 //
+// suggestedBills (Phase 2) are Lifestyle bills OFFERED in Upkeep — they live only here and in
+// config.identity.suggestions, NEVER in the expenses array until the user taps Add (warden F182).
+//
 // templateKey is `<archetypeId>.<goalKey>` and is stamped on the seeded goal
 // (via buildGoal) so a later re-open can skip templates already added.
 
@@ -28,6 +31,9 @@ export const ARCHETYPES = [
       { key: "cash_stash", label: "Cash-on-Hand Stash", note: "Physical cash for when the cards go down.", targetRule: { kind: "fixed", amount: 500 } },
       { key: "home_readiness", label: "Home Readiness Kit", note: "First aid, light, power, and tools.", targetRule: { kind: "fixed", amount: 800 } },
     ],
+    suggestedBills: [
+      { key: "pantry", label: "Pantry Restock", amount: 40, cycle: "every30days" },
+    ],
   },
   {
     id: "heartbeat",
@@ -38,6 +44,10 @@ export const ARCHETYPES = [
       { key: "home_gym", label: "Home Gym Starter", note: "The basics to train without leaving the house.", targetRule: { kind: "fixed", amount: 500 } },
       { key: "checkups", label: "Checkups & Dental Fund", note: "Out-of-pocket care you would otherwise skip.", targetRule: { kind: "fixed", amount: 300 } },
       { key: "race_entry", label: "Race or Event Entry", note: "Something on the calendar to train toward.", targetRule: { kind: "fixed", amount: 150 } },
+    ],
+    suggestedBills: [
+      { key: "gym", label: "Gym Membership", amount: 35, cycle: "every30days" },
+      { key: "supplements", label: "Supplements & Nutrition", amount: 50, cycle: "every30days" },
     ],
   },
   {
@@ -50,6 +60,9 @@ export const ARCHETYPES = [
       { key: "debt_crusher", label: "Debt Crusher Payment", note: "A lump sum aimed at your costliest balance.", targetRule: { kind: "fixed", amount: 1500 } },
       { key: "retirement_kickstart", label: "Retirement Account Kickstart", note: "Open it and put real money in.", targetRule: { kind: "fixed", amount: 2500 } },
     ],
+    suggestedBills: [
+      { key: "learning", label: "Financial Learning", amount: 15, cycle: "every30days" },
+    ],
   },
   {
     id: "polished",
@@ -60,6 +73,10 @@ export const ARCHETYPES = [
       { key: "grooming", label: "Grooming & Skincare Fund", note: "A routine you can actually sustain.", targetRule: { kind: "fixed", amount: 300 } },
       { key: "quality_piece", label: "One Quality Piece", note: "Shoes, a watch, a bag — buy it once.", targetRule: { kind: "fixed", amount: 300 } },
       { key: "smile", label: "Smile Upgrade", note: "Whitening or cosmetic dental work.", targetRule: { kind: "fixed", amount: 400 } },
+    ],
+    suggestedBills: [
+      { key: "grooming", label: "Barber & Grooming", amount: 50, cycle: "every30days" },
+      { key: "skincare", label: "Skincare", amount: 30, cycle: "every30days" },
     ],
   },
   {
@@ -72,6 +89,10 @@ export const ARCHETYPES = [
       { key: "kids_fund", label: "Kids' Fund", note: "A running start for the next generation.", targetRule: { kind: "fixed", amount: 600 } },
       { key: "repair_reserve", label: "Home Repair Reserve", note: "So a broken water heater is an errand, not a crisis.", targetRule: { kind: "fixed", amount: 1000 } },
     ],
+    suggestedBills: [
+      { key: "family_night", label: "Family Night Out", amount: 60, cycle: "every30days" },
+      { key: "kids_activities", label: "Kids' Activities", amount: 40, cycle: "every30days" },
+    ],
   },
   {
     id: "explorer",
@@ -82,6 +103,10 @@ export const ARCHETYPES = [
       { key: "events", label: "Concerts & Events Fund", note: "Live things with people you like.", targetRule: { kind: "fixed", amount: 600 } },
       { key: "passport", label: "Passport", note: "Fees included — the cheapest first step.", targetRule: { kind: "fixed", amount: 165 } },
       { key: "travel_gear", label: "Travel Gear", note: "Bag, boots, and what keeps you moving.", targetRule: { kind: "fixed", amount: 400 } },
+    ],
+    suggestedBills: [
+      { key: "events", label: "Events & Outings", amount: 50, cycle: "every30days" },
+      { key: "adventures", label: "Weekend Adventures", amount: 40, cycle: "every30days" },
     ],
   },
 ];

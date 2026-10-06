@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ARCHETYPES, getArchetype } from "../../constants/goalArchetypes.js";
-import { resolveTargetRule, resolveTemplateGoals, applyArchetype, isStretchDate } from "../../lib/goalArchetypes.js";
+import { resolveTargetRule, resolveTemplateGoals, applyArchetype, isStretchDate, pendingBillSuggestions, markSuggestion } from "../../lib/goalArchetypes.js";
+import { normalizeCycle } from "../../lib/expense.js";
 import { buildGoal, GOAL_SYSTEM_COLOR } from "../../lib/goalFunding.js";
 
 describe("archetype catalog", () => {
@@ -105,4 +106,50 @@ describe("isStretchDate", () => {
 it("getArchetype resolves by id", () => {
   expect(getArchetype("family_man").name).toBe("The Family Man");
   expect(getArchetype("zzz")).toBeNull();
+});
+
+describe("suggested Lifestyle bills (Phase 2)", () => {
+  it("every archetype offers 1–3 bills with a legal cycle and a positive amount", () => {
+    for (const a of ARCHETYPES) {
+      expect(a.suggestedBills.length).toBeGreaterThanOrEqual(1);
+      expect(a.suggestedBills.length).toBeLessThanOrEqual(3);
+      expect(new Set(a.suggestedBills.map((b) => b.key)).size).toBe(a.suggestedBills.length);
+      for (const b of a.suggestedBills) {
+        expect(normalizeCycle(b.cycle)).toBe(b.cycle);
+        expect(b.amount).toBeGreaterThan(0);
+      }
+    }
+  });
+  const cfg = (extra = {}) => ({ identity: { archetypeId: "heartbeat", ...extra } });
+  it("offers the current identity's bills as Lifestyle, templateKey-stamped", () => {
+    const p = pendingBillSuggestions({ config: cfg(), expenses: [] });
+    expect(p.map((x) => x.templateKey)).toEqual(["heartbeat.gym", "heartbeat.supplements"]);
+    expect(p.every((x) => x.category === "Lifestyle")).toBe(true);
+  });
+  it("offers nothing without an identity", () => {
+    expect(pendingBillSuggestions({ config: {}, expenses: [] })).toEqual([]);
+    expect(pendingBillSuggestions({})).toEqual([]);
+  });
+  it("withholds resolved suggestions and any whose label already exists as a bill", () => {
+    const p = pendingBillSuggestions({
+      config: cfg({ suggestions: { "heartbeat.gym": "dismissed" } }),
+      expenses: [{ id: "e1", label: " supplements & NUTRITION " }],
+    });
+    expect(p).toEqual([]);
+  });
+  it("never touches the expenses array (pure read)", () => {
+    const expenses = Object.freeze([Object.freeze({ id: "e1", label: "Rent" })]);
+    expect(() => pendingBillSuggestions({ config: cfg(), expenses })).not.toThrow();
+  });
+  it("markSuggestion is pure and keeps earlier decisions", () => {
+    const c = cfg({ suggestions: { a: "dismissed" } });
+    const n = markSuggestion(c, "heartbeat.gym", "accepted");
+    expect(n.identity.suggestions).toEqual({ a: "dismissed", "heartbeat.gym": "accepted" });
+    expect(c.identity.suggestions).toEqual({ a: "dismissed" });
+  });
+  it("applyArchetype carries decided suggestions across an identity switch", () => {
+    const r = applyArchetype({ archetypeId: "explorer", selected: [{ templateKey: "explorer.passport", label: "Passport", note: "", target: 165 }], goals: [], config: cfg({ suggestions: { "heartbeat.gym": "accepted" } }) });
+    expect(r.config.identity.archetypeId).toBe("explorer");
+    expect(r.config.identity.suggestions).toEqual({ "heartbeat.gym": "accepted" });
+  });
 });

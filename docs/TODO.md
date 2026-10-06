@@ -939,9 +939,9 @@ grounding rule. Phase 4.
   readOnly no-op. Then `npm run build` + 390px browser render (compiler blind spot).
 
 **Phase 2 — Suggested Lifestyle bills**
-- [ ] **31.8** `suggestedBills` in catalog + `pendingSuggestions()`.
-- [ ] **31.9** Upkeep ghost rows → Add (existing `addExpAllQuarters` path) / Not me; eager save; readOnly.
-- [ ] **31.10** Test: a pending suggestion changes **no** number anywhere (`avgWeeklySpend`, Claim Dates, Cash on Hand, Coach context) — assert before/after equality.
+- [$] **31.8** `suggestedBills` in catalog + `pendingSuggestions()`.
+- [$] **31.9** Upkeep "Suggested for <identity>" card (a standalone card above the category lanes — NOT rows inside Lifestyle, which would fight the lane collapse/drag code, F175) → **Add** builds a real Lifestyle bill through the shared `buildMonthForwardExpense` (same shape as the add form's From-Month-Forward) + marks the suggestion accepted in ONE eager write; **Not me** = config only; readOnly refused.
+- [$] **31.10** Test: a pending suggestion changes **no** number anywhere (`avgWeeklySpend`, Claim Dates, Cash on Hand, Coach context) — assert before/after equality.
 
 **Phase 3 — Identity-first Home (prototype)**
 - [ ] **31.11** `IdentityHero` above the Next Claim Date hero (`HomePanel.jsx:581`): archetype name + hook + next
@@ -954,11 +954,12 @@ grounding rule. Phase 4.
 
 **Done-gate (every phase):** warden entries added in the same PR — **F181** `buildGoal` / three-caller goal-write
 parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `expenses` — never give an expense row a suggested status"
-**[L]**; Home-hero entry under §8 for phase 3. Verify F-numbers with the collision check first.
+**[L]** *(written 2026-10-06)*; Home-hero entry under §8 for phase 3. Verify F-numbers with the collision check first.
 
 **Open questions:** (a) ~~single vs. max 2~~ → single. (b) → Phase 3. (c) recurring → Phase 2 suggested bills.
 (d) ~~who sees the picker~~ → **everyone without `config.identity`** (locked 2026-10-06), regardless of existing goals.
 
+**Phase 2 BUILT 2026-10-06 (`[$]`):** 1–2 suggested Lifestyle bills per identity (e.g. Heartbeat: Gym $35/mo, Supplements $50/mo — rough guesses, tune from beta data) shown in Upkeep, count toward nothing until Add. Employed Upkeep only — **New Job Season Upkeep (`NewJobSeasonBudgetPanel`) does not show them yet** (their bills are runway-tracked; adding a suggestion there changes cash-runway math, so it needs its own decision).
 **Status (2026-10-06): Phase 1 BUILT (`[$]`, awaiting Anthony's review) — 1,983+ unit tests, `vite build`, and a 390px real-browser pass (live-test §31) green. Phases 2–4 not started.**
 **Change-identity flow (rebuilt 2026-10-06 to Anthony's order — PICK FIRST, TIDY SECOND):** Profile → Identity opens an "are you sure" popup (Choose new identity / Cancel) → the picker opens on Home **while the old identity is still saved** → confirming appends the new identity's goals **after** the existing ones and swaps `config.identity` in one write → the Goals page shows a **"New identity · tidy up your goals"** banner (remove old goals, set realistic numbers, reorder — with the new goals already on the list) until *Done* or leaving the screen. Cancelling, "Keep my current identity", or leaving Home mid-pick changes nothing. Jobless users go through the same pick; their goals are paused/read-only so there is no tidy step. The Goals page and NJS Home both lead with an **"Identity locked in" banner** (name + hook). *(An earlier build had edit-first-then-pick; it was wrong and is gone.)* Live-test §31 covers it.
 **New Job Season (added 2026-10-06, Anthony's call):** `NewJobSeasonHomePanel` shows the same picker to anyone without `config.identity` — including accounts that start unemployed — to set direction before income returns. Rows say "Starts with your first paycheck" instead of a Claim Date (their dates are paused); seeded goals then appear in the existing paused Claim Dates card. Live-test §31 covers it.

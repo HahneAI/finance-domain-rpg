@@ -233,6 +233,37 @@ try {
     check("§31 new identity persists across reload", /The Heartbeat/.test(await banner.innerText()));
     eq("§31 change-identity no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 Phase 2 suggested Lifestyle bills: offered in Upkeep, count for nothing until Add, one eager write
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "heartbeat", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const homeNums = async () => (await bodyText(page)).replace(/Identity locked in[\s\S]*?Every goal here is a step toward it\./i, "");
+    const homeBefore = await homeNums();
+    await nav(page, "upkeep"); await settle(page, 900);
+    const card = page.getByTestId("suggestion-heartbeat.gym");
+    check("§31 P2 Upkeep offers The Heartbeat's suggested bills", (await vis(page.getByTestId("identity-suggestions"))) && /Gym Membership/.test(await page.getByTestId("identity-suggestions").innerText()));
+    await app.shot("s31-suggestions");
+    // Not me on one → config-only write, no expense created
+    let b = app.saves.length;
+    await page.getByLabel("Not me: Supplements & Nutrition").click(); await settle(page, 1500);
+    let w = app.saves.slice(b);
+    check("§31 P2 Not me writes config only (expenses unchanged, suggestion dismissed)", w.length >= 1 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.supplements"] === "dismissed" && x.expenses.length === row.expenses.length), w.map((x) => x.expenses?.length));
+    await nav(page, "home"); await settle(page, 900);
+    check("§31 P2 pending/dismissed suggestions change no Home number", (await homeNums()) === homeBefore);
+    await nav(page, "upkeep"); await settle(page, 900);
+    // Add → real Lifestyle bill, one write with expenses + config
+    b = app.saves.length;
+    await page.getByLabel("Add Gym Membership").click(); await settle(page, 1800);
+    w = app.saves.slice(b); const last = w[w.length - 1];
+    const added = last?.expenses?.find((e) => e.label === "Gym Membership");
+    check("§31 P2 Add saves a real Lifestyle bill AND the accepted flag together", !!added && added.category === "Lifestyle" && added.billingMeta?.amount === 35 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.gym"] === "accepted" && x.expenses.length === row.expenses.length + 1), w.map((x) => [x.expenses?.length, x.config?.identity?.suggestions]));
+    check("§31 P2 suggestion card gone once all are decided", !(await vis(page.getByTestId("identity-suggestions"))));
+    check("§31 P2 the new bill shows up in Upkeep (Lifestyle)", /Gym Membership/.test(await bodyText(page)) || (await page.getByText("Lifestyle").count()) > 0);
+    await app.reload(); await nav(page, "upkeep"); await settle(page, 900);
+    check("§31 P2 decisions persist across reload (no re-offer)", !(await vis(page.getByTestId("identity-suggestions"))) && !(await vis(card)));
+    eq("§31 P2 no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

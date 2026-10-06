@@ -10,6 +10,8 @@
 scoped — this is not a full app handoff. If a task turns out to need context outside Coach/AI,
 ask the user rather than guessing from the rest of the codebase.
 
+**Picking up the Coach personality-tuning / model-selection work instead? Read `docs/coach-tuning-handoff.md`** (current status, blocker, and next steps for the eval harness).
+
 **Read `docs/coach-entry-points.md` first, in full, before doing anything else.** It's the
 living map of every place Coach shows up today (live or planned), written in plain English,
 and is the actual index this handoff points into. Everything below is context to make that

@@ -587,6 +587,40 @@ export function HomePanel({
     });
   };
 
+  // Year-End Outlook card (surplus/savings figures). Built once; placed either at
+  // the bottom of Home (no identity) or inside "Your numbers" (identity chosen).
+  const yearEndOutlook = (
+    <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
+      <div style={{ marginBottom: "16px" }}>
+        <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
+        <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
+          <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
+        </div>
+        <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+        </div>
+        <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+          <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
+            {fmt$(annualSavings - yearEndGoalDraw)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ paddingBottom: "8px" }}>
       {showArchetypePicker && (
@@ -1709,6 +1743,7 @@ export function HomePanel({
             fmt={fmt$}
           >
             {numbersBlock}
+            {yearEndOutlook}
           </YourNumbers>
         );
       })()}
@@ -1741,35 +1776,9 @@ export function HomePanel({
         />
       )}
 
-      <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
-        <div style={{ marginBottom: "16px" }}>
-          <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
-          <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
-          </div>
-          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
-            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
-          </div>
-          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
-              {fmt$(annualSavings - yearEndGoalDraw)}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Year-End Outlook: legacy position. With an identity it lives inside
+          "Your numbers" instead (TODO §31) — same element, never duplicated. */}
+      {!config?.identity && yearEndOutlook}
     </div>
   );
 }

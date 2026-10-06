@@ -388,6 +388,17 @@ describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
     expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThan(0)
   })
 
+  it('Year-End Outlook lives inside "Your numbers" with an identity (hidden until expanded), at the bottom without one', () => {
+    const { unmount } = render(<HomePanel {...props} />)
+    expect(screen.queryByText('Year-End Outlook')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+    expect(screen.getByText('Surplus after all goals')).toBeTruthy()
+    unmount()
+    render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
+    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+  })
+
   it('tidy mode still takes the hero slot', () => {
     render(<HomePanel {...props} identityTidy onFinishIdentityTidy={() => {}} />)
     expect(screen.queryByTestId('identity-hero')).toBeNull()

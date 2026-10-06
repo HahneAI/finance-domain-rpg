@@ -469,4 +469,19 @@ describe('HomePanel — goal limits (TODO §31, F184)', () => {
     fireEvent.click(screen.getByText(/Add 2 goals/i))
     expect(onApplyArchetype).toHaveBeenCalledTimes(1)
   })
+
+  it('an account already past 6 goals can still choose an identity with no new goals', () => {
+    const onApplyArchetype = vi.fn()
+    const ten = Array.from({ length: 10 }, (_, i) => g(`G${i}`, 100))
+    render(<HomePanel {...baseProps} config={{ userPaySchedule: 'weekly' }} goals={ten} onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Builder'))
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    expect(onApplyArchetype).not.toHaveBeenCalled()
+    for (const cb of screen.getAllByRole('checkbox')) fireEvent.click(cb)
+    fireEvent.click(screen.getByText('Choose identity only'))
+    const p = onApplyArchetype.mock.calls[0][0]
+    expect(p.addedCount).toBe(0)
+    expect(p.goals).toHaveLength(10)
+    expect(p.config.identity.archetypeId).toBe('builder')
+  })
 })

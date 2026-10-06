@@ -324,7 +324,10 @@ export function HomePanel({
   // Goal-limit "no" state (TODO §31, F184): { where: "addButton"|"add"|"edit", reason, message, n }.
   // `n` bumps on every blocked attempt so the halo's jiggle replays (used as a React key).
   const [goalLimitError, setGoalLimitError] = useState(null);
-  const blockWith = (where, err) => setGoalLimitError((prev) => ({ where, ...err, n: (prev?.n ?? 0) + 1 }));
+  const blockWith = useCallback((where, err) => {
+    setGoalLimitError((prev) => ({ where, ...err, n: (prev?.n ?? 0) + 1 }));
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: err.reason }); // migration 048
+  }, [isTester, betaCodeUsed]);
   const [animPhase, setAnimPhase] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
@@ -494,7 +497,7 @@ export function HomePanel({
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed, goalAmountCap]); // eslint-disable-line react-hooks/preserve-manual-memoization
+  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed, goalAmountCap, blockWith]); // eslint-disable-line react-hooks/preserve-manual-memoization
   const deleteGoal = (id) => {
     if (!setGoals) return;
     const next = goals.filter((g) => g.id !== id);
@@ -644,7 +647,11 @@ export function HomePanel({
           existingGoals={goals}
           today={todayIso}
           projectGoals={projectArchetypeGoals}
-          checkLimits={(sel) => checkGoalLimits({ goals, adding: sel.map((g) => g.target), cap: goalAmountCap })}
+          checkLimits={(sel) => {
+            const err = checkGoalLimits({ goals, adding: sel.map((g) => g.target), cap: goalAmountCap });
+            if (err) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: err.reason }); // migration 048
+            return err;
+          }}
           onApply={({ archetypeId, selected }) => {
             onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
           }}

@@ -110,8 +110,9 @@ export function ArchetypePicker({
     return projectGoals(selected.map(({ templateKey, label, target, note }) => ({ templateKey, label, target, note })));
   })();
 
+  // Zero selected is allowed: it chooses the identity without adding goals. An
+  // account already at the goal limit (F184) can still pick or switch identity.
   const confirm = () => {
-    if (selected.length === 0) return;
     const err = checkLimits?.(selected) ?? null;
     if (err) { setLimitError((prev) => ({ ...err, n: (prev?.n ?? 0) + 1 })); return; }
     onApply?.({
@@ -219,11 +220,10 @@ export function ArchetypePicker({
           scale={0.97}
           key={limitError ? `lim-${limitError.n}` : "c"}
           className={limitError ? "text-2xs limit-halo" : "text-2xs"}
-          disabled={selected.length === 0}
-          style={{ ...primaryBtn, opacity: selected.length === 0 ? 0.5 : 1 }}
+          style={primaryBtn}
           onClick={confirm}
         >
-          {selected.length === 0 ? "Pick at least one" : `Add ${selected.length} goal${selected.length === 1 ? "" : "s"}`}
+          {selected.length === 0 ? "Choose identity only" : `Add ${selected.length} goal${selected.length === 1 ? "" : "s"}`}
         </Pressable>
       </div>
     </section>

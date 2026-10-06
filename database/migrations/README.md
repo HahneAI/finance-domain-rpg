@@ -28,7 +28,7 @@ e.g. "DHL employees only," same SECURITY DEFINER pattern as `is_tracked_beta_tes
 (`resume_profile` storage columns — `storage_path`/`original_filename`/`mime_type`/
 `file_size_bytes` — plus the app's first Supabase Storage bucket, `resumes`, private with
 own-folder RLS; §2.E1 v2, drift-app-warden §21 F124) exist —
-047 (`resource_snapshots` — TODO §22.F, the Cyborg Resource snapshot: one own-row jsonb payload per publishing account, computed by `lib/resourceSnapshot.js`, read by the Cyborg app; **not yet applied**) exists — **the next real migration is 048** (042–047 exist: `is_ai_admin`, AI-admin coach cap, `deletion_requested_at`, auth-FK cascades, `auth_purge_pending`, `resource_snapshots`). Verify against the folder before numbering;
+047 (`resource_snapshots` — TODO §22.F, the Cyborg Resource snapshot: one own-row jsonb payload per publishing account, computed by `lib/resourceSnapshot.js`, read by the Cyborg app; **not yet applied**) exists — 048 (`beta_activity_events` CHECK widened with `archetype_selected`/`suggestion_accepted`/`suggestion_dismissed`/`goal_limit_hit` — TODO §31 Phase 4; additive; **not yet applied**) exists — **the next real migration is 049** (042–048 exist: `is_ai_admin`, AI-admin coach cap, `deletion_requested_at`, auth-FK cascades, `auth_purge_pending`, `resource_snapshots`, beta identity events). Verify against the folder before numbering;
 this note has now gone stale five times
 (drift-app-warden §14, across the beta-program migrations, across 031–032, again across 033, and
 again when 032 collided with a second, independently-numbered `032_add_resume_profile.sql` on a

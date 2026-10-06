@@ -646,3 +646,32 @@ describe("buildCoachContext — Cash on Hand (TODO §22)", () => {
     expect(buildCoachContext({ config: {} })).not.toMatch(/Cash on hand/);
   });
 });
+
+describe("buildCoachContext — identity + goal limits (TODO §31 Phase 4)", () => {
+  const base = {
+    weeklyIncome: 5000 / (52 / 12),
+    avgWeeklySpend: 400,
+    goals: [{ completed: false, target: 10000 }, { completed: true, target: 500 }],
+    expenses: [{ label: "Rent", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [2000 / (52 / 12), 2000 / (52 / 12), 2000 / (52 / 12), 2000 / (52 / 12)] }] }],
+    currentWeek: { idx: 27 },
+    today: "2026-07-07",
+    allWeeks: buildAllWeeks(52),
+  };
+  it("names the chosen identity (name + hook only)", () => {
+    const block = buildCoachContext({ ...base, config: { identity: { archetypeId: "heartbeat" } } });
+    expect(block).toContain('Chosen identity: The Heartbeat ("My body is my first asset.")');
+  });
+  it("omits the identity line when none is chosen", () => {
+    expect(buildCoachContext({ ...base, config: {} })).not.toContain("Chosen identity");
+  });
+  it("states the same limits the app enforces: 6 goals and the 5-yr Needs-only cap with room left", () => {
+    const block = buildCoachContext({ ...base, config: {} });
+    expect(block).toContain("at most 6 active goals (1 active now)");
+    expect(block).toMatch(/at most \$180,000 \(five years of the Needs-only surplus\) — \$170,000 of room left/);
+  });
+  it("no income → only the count limit is stated", () => {
+    const block = buildCoachContext({ ...base, weeklyIncome: 0, config: {} });
+    expect(block).toContain("at most 6 active goals");
+    expect(block).not.toContain("Needs-only surplus");
+  });
+});

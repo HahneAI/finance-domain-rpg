@@ -16,7 +16,7 @@
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
-| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 2 | 1 + 15 $ |
+| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -1000,8 +1000,16 @@ so collapsing them cannot strand a deep link (the F175 invisible-target class). 
 reaches all three, but watch beta feedback for "where did my numbers go."
 
 **Phase 4 — Telemetry + Coach**
-- [ ] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.
-- [ ] **31.13** Coach context line for archetype (§6/§24).
+- [$] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.
+- [$] **31.13** Coach context line for archetype (§6/§24).
+
+**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **NOT yet applied to production; run it before the cohort uses this**, until then the new events only `console.warn`) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
+
+**Goal limits (added 2026-10-06, Anthony's spec) `[$]`:**
+- [$] **31.14** Max **6 active goals**; total active goal $ ≤ **(monthly take-home − monthly Needs incl. loans) × 60** (Lifestyle ignored). Monthly take-home = App `weeklyIncome` × 52/12; Needs = `computeNeedsSetAsidePerCheck().weeklyNeeds` × 52/12. No cap when income is 0 or surplus ≤ 0.
+- [$] **31.15** Silent until crossed. A blocked attempt: field turns red + red halo + one ≤360ms jiggle (`.limit-halo`, reduced-motion safe) and a red line — count: *"Goal limit reached — you must not spread yourself too thin in planning alone."*; amount: *"This extends past your realistic, five-year timeline. You should only plan five years ahead — as you claim goals, you'll free up more space. Your limit is $X across all active goals."*
+- [$] **31.16** Enforced at every goal writer through one pure check: Home "+ ADD GOAL" (count), add form (amount), both edit forms (mobile+desktop pair), identity picker (Home + NJS), Coach goal card, and App's write handlers (independent of the UI). Only growth is blocked — an account already over a limit can still lower, claim or delete, and can still choose/switch identity via **"Choose identity only"** (zero goals).
+- **Decided for you, flag if wrong:** (a) "six total" = six **active** goals (claimed goals don't count — matches "as you claim goals, you'll free up more space"); (b) accounts already over 6 (Anthony's has 10 active) keep every goal but can't add until under; (c) surplus ≤ 0 → no $ cap (the stalemate card already covers that; a $0 cap would lock all goals).
 
 **Done-gate (every phase):** warden entries added in the same PR — **F181** `buildGoal` / three-caller goal-write
 parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `expenses` — never give an expense row a suggested status"

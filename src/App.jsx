@@ -804,7 +804,10 @@ export default function App() {
     // Same goal limits as every other goal writer (TODO §31, F184). The cap is
     // computed after the auth early returns, so it is read through a ref.
     const limitErr = checkGoalLimits({ goals, adding: [Number(target) || 0], cap: goalAmountCapRef.current });
-    if (limitErr) return { ok: false, ...limitErr };
+    if (limitErr) {
+      logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: limitErr.reason });
+      return { ok: false, ...limitErr };
+    }
     const next = [...goals, buildGoal({ label, target, note })];
     setGoals(next);
     savePersistedStateNow({ goals: next });
@@ -842,9 +845,14 @@ export default function App() {
       setExpenses(nextExpenses);
       logBetaEvent({ isTester, betaCodeUsed, eventType: "expense_created" });
     }
+    // Tuning loop (TODO §31 Phase 4, migration 048): which suggestion was decided, and how.
+    const prevSug = config.identity?.suggestions ?? {};
+    for (const [key, state] of Object.entries(nextConfig.identity?.suggestions ?? {})) {
+      if (prevSug[key] !== state) logBetaEvent({ isTester, betaCodeUsed, eventType: state === "accepted" ? "suggestion_accepted" : "suggestion_dismissed", note: key });
+    }
     setConfig(nextConfig);
     savePersistedStateNow(nextExpenses ? { expenses: nextExpenses, config: nextConfig } : { config: nextConfig });
-  }, [setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config, setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
   // goals AND stamps config.identity in ONE eager write — two back-to-back
@@ -863,6 +871,7 @@ export default function App() {
     // One goal_created per seeded goal — same accounting as F176, or beta
     // analytics under-count goals for anyone who starts from a template.
     for (let i = 0; i < addedCount; i++) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "archetype_selected", note: nextConfig.identity?.archetypeId });
     // Switching identity (not first pick): close the picker and, where goals are
     // editable (not New Job Season — theirs are paused/read-only), start tidy-up.
     if (identityPickerOpen) {

@@ -264,6 +264,42 @@ try {
     check("§31 P2 decisions persist across reload (no re-offer)", !(await vis(page.getByTestId("identity-suggestions"))) && !(await vis(card)));
     eq("§31 P2 no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 Phase 3 identity-first Home: hero + collapsed "Your numbers" with an always-visible summary
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const hero = page.getByTestId("identity-hero");
+    const total = (row.goals ?? []).length, done = (row.goals ?? []).filter((g) => g.completed).length;
+    check("§31 P3 hero shows identity + all-goals counter", (await vis(hero)) && /The Builder/.test(await hero.innerText()) && new RegExp(`${done} of ${total} goals? claimed`).test(await hero.innerText()), await hero.innerText().catch(() => ""));
+    const nextTxt = (await vis(page.getByTestId("identity-hero-next"))) ? await page.getByTestId("identity-hero-next").innerText() : "";
+    const t0 = await bodyText(page);
+    const heroGoal = (nextTxt.match(/Next: (.+?) ·/) || [])[1];
+    check("§31 P3 hero Next names the same goal as the Next Claim Date hero", !!heroGoal && new RegExp(`NEXT CLAIM DATE\\s*\\n\\s*${heroGoal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(t0), nextTxt);
+    const toggle = page.getByRole("button", { name: /your numbers/i });
+    check("§31 P3 numbers collapsed on load with summary visible", (await toggle.getAttribute("aria-expanded")) === "false" && /Saving -?\d+%/.test(await page.getByTestId("your-numbers-summary").innerText()) && !/Financial Health/i.test(t0));
+    check("§31 P3 Due Today / goals still outside the collapse", /claim date/i.test(t0));
+    await app.shot("s31-p3-collapsed");
+    const leftSummary = await page.getByTestId("your-numbers-left").innerText();
+    await toggle.click(); await settle(page, 1800);
+    const t1 = await bodyText(page);
+    check("§31 P3 expanding shows every tile", /Financial Health/i.test(t1) && /Net Worth Trend/i.test(t1) && /Upkeep Health/i.test(t1) && /Left This Week/i.test(t1));
+    check("§31 P3 summary $ equals the Left This Week tile", new RegExp(`Left This Week[^$]*\\${leftSummary.replace(/[$-]/g, (m) => (m === "$" ? "" : "\\-"))}`, "i").test(t1.replace(/\n/g, " ")) || t1.includes(leftSummary), leftSummary);
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    check("§31 P3 no horizontal overflow at 390px", noOverflow);
+    await app.shot("s31-p3-expanded");
+    await app.reload();
+    check("§31 P3 collapsed again after reload (not persisted)", (await page.getByRole("button", { name: /your numbers/i }).getAttribute("aria-expanded")) === "false");
+    eq("§31 P3 no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 Phase 3: no identity → legacy Home untouched (tiles open, no hero)
+  {
+    const app = await open({ row: rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]), viewport: { width: 390, height: 844 } }); const { page } = app;
+    await page.getByText("Not now").click().catch(() => {}); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 P3 no identity → no hero, no collapse, Financial Health visible", !(await vis(page.getByTestId("identity-hero"))) && !(await vis(page.getByTestId("your-numbers"))) && /Financial Health/i.test(t));
+    eq("§31 P3 legacy no page errors", realErrors(app), []); await app.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

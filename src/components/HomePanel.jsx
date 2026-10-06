@@ -1,6 +1,6 @@
 import { CashOnHandCard } from "./CashOnHandCard.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
-import { IdentityLockedBanner } from "./IdentityLocked.jsx";
+import { IdentityLockedBanner, IdentityHero, YourNumbers } from "./IdentityLocked.jsx";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -212,9 +212,12 @@ export function HomePanel({
     return            { arrow: "flat", delta: `${pct}%`, label: "of paycheck remaining",  variant: "blue" };
   })();
 
+  // One savings-rate figure for the Net Worth Trend pulse AND the identity Home's
+  // "Your numbers" summary line (TODO §31 Phase 3) — never two formulas.
+  const savingsRate = weeklyIncome ? annualSavings / (weeklyIncome * activeWeeksThisYear) : null;
   const pulseNetWorth = (() => {
     if (!weeklyIncome) return undefined;
-    const rate = annualSavings / (weeklyIncome * activeWeeksThisYear);
+    const rate = savingsRate;
     const pct  = Math.round(rate * 100);
     if (rate >= 0.2) return { arrow: "up",   delta: `${pct}%`, label: "savings rate",         variant: "blue" };
     if (rate < 0.05) return { arrow: "down", delta: `${pct}%`, label: "savings velocity low",  variant: "purple" };
@@ -630,7 +633,14 @@ export function HomePanel({
         </div>
       </div>
       {config?.identity && !showArchetypePicker && (
-        <IdentityLockedBanner identity={config.identity} tidy={identityTidy} onDone={readOnly ? undefined : onFinishIdentityTidy} />
+        identityTidy
+          ? <IdentityLockedBanner identity={config.identity} tidy onDone={readOnly ? undefined : onFinishIdentityTidy} />
+          : <IdentityHero
+              identity={config.identity}
+              claimed={completedGoals.length}
+              total={goals.length}
+              next={nextClaim ? { label: nextClaim.goal.label, date: formatGoalFinishDate(nextClaim.info.finishDate) } : null}
+            />
       )}
 
       {/* ── Next Claim Date ──────────────────────────────────────────────────
@@ -1625,6 +1635,12 @@ export function HomePanel({
       </div>
 
       <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
+      {(() => {
+        // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
+        // tiles collapse under "Your numbers" with an always-visible summary line.
+        // Without one, today's layout is untouched. The tiles themselves are one
+        // block either way — never duplicated.
+        const numbersBlock = (<>
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} sub={actualLeftThisWeek != null ? `With this week's bills: ${fmt$(actualLeftThisWeek * perCheckFactor)}` : undefined} />
@@ -1683,6 +1699,19 @@ export function HomePanel({
           />
         ))}
       </div>
+        </>);
+        if (!config?.identity) return numbersBlock;
+        return (
+          <YourNumbers
+            leftLabel={leftThisCheckLabel}
+            leftValue={leftThisWeek * perCheckFactor}
+            savingsPct={savingsRate == null ? null : Math.round(savingsRate * 100)}
+            fmt={fmt$}
+          >
+            {numbersBlock}
+          </YourNumbers>
+        );
+      })()}
 
       {showBreakthroughTips && (
         <NetWorthHealthTips seed={weekNumber ?? 0} />

@@ -277,11 +277,12 @@ describe('HomePanel — identity picker (TODO §31)', () => {
     fireEvent.click(screen.getByText('Not now'))
     expect(screen.queryByTestId('archetype-picker')).toBeNull()
   })
-  it('shows the Identity locked banner on the Goals page once an identity is chosen', () => {
+  it('shows the identity hero (not the plain banner) on the Goals page once an identity is chosen', () => {
     render(<HomePanel {...baseProps} config={{ ...cfg, identity: { archetypeId: 'heartbeat' } }} onApplyArchetype={() => {}} />)
-    const b = screen.getByTestId('identity-locked-banner')
-    expect(b).toHaveTextContent(/Identity locked in/i)
-    expect(b).toHaveTextContent('The Heartbeat')
+    const h = screen.getByTestId('identity-hero')
+    expect(h).toHaveTextContent(/Identity locked in/i)
+    expect(h).toHaveTextContent('The Heartbeat')
+    expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
   })
   it('while switching identity: shows the picker with the OLD identity still set, and "Keep" closes it without writing', () => {
     const onCloseIdentityPicker = vi.fn(); const onApplyArchetype = vi.fn()
@@ -320,5 +321,76 @@ describe('HomePanel — identity picker (TODO §31)', () => {
   it('shows no banner (the picker instead) when no identity is chosen', () => {
     render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={() => {}} />)
     expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
+  })
+})
+
+describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
+  const cfg = { userPaySchedule: 'weekly', identity: { archetypeId: 'builder' } }
+  const futureWeeks = Array.from({ length: 30 }, (_, i) => {
+    const end = new Date(2026, 3, 5 + i * 7)
+    return { idx: 14 + i, active: true, weekEnd: end, weekStart: new Date(end.getTime() - 6 * 864e5) }
+  })
+  const GOALS = [
+    { id: 'g1', label: 'Car Fund', target: 500, completed: false },
+    { id: 'g2', label: 'Trip', target: 900, completed: false },
+    { id: 'g3', label: 'Old Win', target: 200, completed: true },
+  ]
+  const props = { ...baseProps, config: cfg, goals: GOALS, futureWeeks, timelineWeekNets: futureWeeks.map(() => 400), onApplyArchetype: () => {} }
+
+  it('hero counter counts ALL goals and equals the Goals x/y tile', () => {
+    render(<HomePanel {...props} />)
+    expect(screen.getByTestId('identity-hero-count')).toHaveTextContent('1 of 3 goals claimed')
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getByText('1/3')).toBeTruthy()
+  })
+
+  it('hero "Next" line names the same goal + date as the Next Claim Date hero', () => {
+    render(<HomePanel {...props} />)
+    const next = screen.getByTestId('identity-hero-next')
+    expect(next).toHaveTextContent(/Next: Car Fund · [A-Z][a-z]{2} \d{1,2}/)
+  })
+
+  it('numbers start collapsed: summary line visible, tiles not mounted; expanding shows every tile', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 200 }} prevWeekNet={950} />)
+    const btn = screen.getByRole('button', { name: /your numbers/i })
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('your-numbers-left')).toHaveTextContent('$750')
+    expect(screen.queryByText('Financial Health')).toBeNull()
+    expect(screen.queryByText('Next Week Takehome')).toBeNull()
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'true')
+    for (const t of ['Financial Health', 'Next Week Takehome', 'Net Worth Trend', 'Upkeep Health', 'Active Goals Total', 'Left This Week']) {
+      expect(screen.getAllByText(t).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('summary $ equals the Left This Week tile and the % equals the Net Worth Trend pulse', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 200 }} prevWeekNet={950} />)
+    const summary = screen.getByTestId('your-numbers-summary').textContent
+    const pct = summary.match(/Saving (-?\d+)%/)[1]
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getAllByText('Left This Week').length).toBeGreaterThan(0)
+    // the Net Worth Trend pulse renders "<pct>% savings rate" — same savingsRate const
+    expect(document.body.textContent).toMatch(new RegExp(`${pct}%\\s*savings`))
+  })
+
+  it('a negative week is red on the summary line even while collapsed', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 1200 }} prevWeekNet={950} />)
+    const left = screen.getByTestId('your-numbers-left')
+    expect(left).toHaveTextContent('-$250')
+    expect(left.style.color).toBe('var(--color-red)')
+  })
+
+  it('no identity → legacy layout: no hero, no collapse, tiles visible', () => {
+    render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
+    expect(screen.queryByTestId('identity-hero')).toBeNull()
+    expect(screen.queryByTestId('your-numbers')).toBeNull()
+    expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThan(0)
+  })
+
+  it('tidy mode still takes the hero slot', () => {
+    render(<HomePanel {...props} identityTidy onFinishIdentityTidy={() => {}} />)
+    expect(screen.queryByTestId('identity-hero')).toBeNull()
+    expect(screen.getByTestId('identity-locked-banner')).toHaveTextContent(/tidy up your goals/i)
   })
 })

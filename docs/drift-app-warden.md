@@ -5886,6 +5886,15 @@ deleted and `BudgetPanel` already hides.
 > **Gap:** `NewJobSeasonBudgetPanel` does not show suggestions (adding one there moves cash-runway math — needs its own decision).
 > Check: `goalArchetypes.test.js` suggested-bills block, `identitySuggestions.test.jsx` (incl. "a pending suggestion changes NO number on the panel": panel text identical with/without it), and live-test §31 P2 (Home numbers unchanged after dismiss; one write on Add; no re-offer after reload).
 
+**F183 · Identity-first Home — hero + collapsed "Your numbers"** — `HomePanel.jsx` (layout gate, `savingsRate`), `IdentityLocked.jsx` (`IdentityHero`, `YourNumbers`) — **[G]+[L]**
+2026-10-06 (TODO §31 Phase 3). Locked: everyone with an identity, numbers collapsed by default, counter over ALL goals, no streaks.
+> **Gate [G]:** `config.identity` set → `IdentityHero` replaces the plain banner (tidy mode still takes the slot) and BOTH tile groups (goal-stats grid incl. Left This Week + "Financial Health" title/tiles) render inside `YourNumbers`, collapsed every load (React state, not persisted). No identity → today's layout, tiles open. NJS Home and DemoAccountTree are untouched. The tile JSX exists once (`numbersBlock`) and is either wrapped or returned bare — **IF** someone duplicates it per branch, **THEN** it will drift.
+> **Views, not math [L]:** hero counter = `completedGoals.length` / `goals.length` (the Goals x/y tile's own figures); hero Next = `nextClaim` (the Next Claim Date hero's own goal) formatted by `formatGoalFinishDate`; summary $ = `leftThisWeek * perCheckFactor` (the Left This Week tile value); summary % = the single `savingsRate` const that `pulseNetWorth` now also reads. **IF** any of these tiles changes its formula, **THEN** the summary/hero change with it automatically — never re-derive them in the hero or summary.
+> **A collapsed section never hides a bad week:** negative left-this-week renders `--color-red` on the always-visible summary. Due Today and the Claim Date surface stay outside the collapse.
+> **Coach deep links are safe:** `navigate_to` focuses only `goal:N` cards, never tiles. **IF** a tile ever gains a `data-coach-ref`, **THEN** collapsed-by-default strands it (F175 invisible-target class) — open the section first.
+> **Not in scope:** the "Year-End Outlook" card under the goals is not collapsed.
+> Check: `HomePanel.test.jsx` "identity-first Home" block (7 cases) and live-test §31 P3 (390px, expand, reload re-collapses, legacy layout).
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

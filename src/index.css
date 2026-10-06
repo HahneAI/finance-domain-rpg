@@ -645,3 +645,22 @@ code {
   .auth-orb-1, .auth-orb-2, .auth-orb-3, .auth-card-in { animation: none; }
   .auth-submit-btn:hover:not(:disabled) { transform: none; }
 }
+
+/* Goal-limit "no" state (TODO §31, warden F184): the field that tried to cross a
+   limit turns red with a red halo and gives one short horizontal jiggle (≤ 400ms,
+   no bounce/scale — Animation Rules). Re-triggered by remounting via `key`. */
+@keyframes limitJiggle {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.limit-halo {
+  border-color: var(--color-red) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-red) 28%, transparent);
+  animation: limitJiggle 360ms ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .limit-halo { animation: none; }
+}

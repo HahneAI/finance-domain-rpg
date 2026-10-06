@@ -300,6 +300,39 @@ try {
     check("§31 P3 no identity → no hero, no collapse, Financial Health visible", !(await vis(page.getByTestId("identity-hero"))) && !(await vis(page.getByTestId("your-numbers"))) && /Financial Health/i.test(t));
     eq("§31 P3 legacy no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 goal limits: 6 active goals max; total $ ≤ 5 yrs of Needs-only surplus — silent until crossed
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const activeBefore = (row.goals ?? []).filter((g) => !g.completed).length;
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 limits: nothing shown before an attempt", !(await vis(page.getByTestId("goal-limit-note"))));
+    const addBtn = page.getByText("+ ADD GOAL");
+    await addBtn.scrollIntoViewIfNeeded(); await addBtn.click(); await settle(page, 500);
+    const note = page.getByTestId("goal-limit-note");
+    if (activeBefore >= 6) {
+      check("§31 limits: 7th goal blocked with the count message, button red", (await vis(note)) && /Goal limit reached — you must not spread yourself too thin in planning alone\./.test(await note.innerText()) && /limit-halo/.test(await addBtn.getAttribute("class")), activeBefore);
+      await app.shot("s31-limit-count");
+    }
+    await app.close();
+    // amount: a fresh account with room for more goals
+    const row2 = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]); row2.goals = [];
+    row2.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app2 = await open({ row: row2, viewport: { width: 390, height: 844 } }); const p2 = app2.page;
+    await p2.getByText("+ ADD GOAL").click(); await settle(p2, 400);
+    await p2.locator("input[type=text]").first().fill("Mansion");
+    await p2.getByLabel("New goal target").fill("99000000");
+    const before = app2.saves.length;
+    await p2.getByText("ADD GOAL", { exact: true }).click(); await settle(p2, 700);
+    const n2 = p2.getByTestId("goal-limit-note");
+    check("§31 limits: amount over the 5-yr Needs surplus blocked, input red, limit named, nothing saved", (await vis(n2)) && /five-year timeline/.test(await n2.innerText()) && /\$[\d,]+ across all active goals/.test(await n2.innerText()) && /limit-halo/.test(await p2.getByLabel("New goal target").getAttribute("class")) && app2.saves.length === before);
+    await app2.shot("s31-limit-amount");
+    await p2.getByLabel("New goal target").fill("500"); await settle(p2, 200);
+    check("§31 limits: editing the field clears the red state", !(await vis(n2)));
+    await p2.getByText("ADD GOAL", { exact: true }).click(); await settle(p2, 1200);
+    check("§31 limits: a goal that fits saves normally", app2.saves.slice(before).some((x) => x.goals?.some((g) => g.label === "Mansion" && g.target === 500)));
+    eq("§31 limits no page errors", realErrors(app2), []); await app2.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ARCHETYPES, getArchetype } from "../constants/goalArchetypes.js";
 import { resolveTemplateGoals, isStretchDate } from "../lib/goalArchetypes.js";
 import { Pressable, iS } from "./ui.jsx";
+import { GoalLimitNote } from "./GoalLimitNote.jsx";
 
 // Identity picker (TODO §31). Step 1: choose ONE archetype. Step 2: preview the
 // 3–5 starter goals it would seed — toggle any off, edit any target, see the
@@ -65,6 +66,9 @@ export function ArchetypePicker({
   // New Job Season (no income): Claim Dates are paused, so there is nothing
   // honest to preview — rows say when they start instead of showing a date.
   datesPaused = false,
+  // (selected) => null | { reason, message } — the shared goal-limit check
+  // (lib/goalLimits.js, F184). Run on confirm only; nothing shows until then.
+  checkLimits,
   skipLabel = "Not now",
   title = "Who are you becoming?",
   subtitle = "Pick one. We'll start you with a few goals to make it real — change any of them.",
@@ -74,6 +78,7 @@ export function ArchetypePicker({
   // drafts[templateKey] = { on, targetStr } — string draft, parsed at commit
   // (Numeric Input Standard: never coerce on change).
   const [drafts, setDrafts] = useState({});
+  const [limitError, setLimitError] = useState(null);
 
   const archetype = getArchetype(archetypeId);
   const templates = archetype ? resolveTemplateGoals(archetype, { avgWeeklySpend, existingGoals }) : [];
@@ -87,9 +92,9 @@ export function ArchetypePicker({
     setArchetypeId(id);
   };
 
-  const back = () => { setArchetypeId(null); setDrafts({}); };
+  const back = () => { setArchetypeId(null); setDrafts({}); setLimitError(null); };
 
-  const patch = (key, p) => setDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...p } }));
+  const patch = (key, p) => { setLimitError(null); setDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...p } })); };
 
   // Read a draft as a goal. Targets parse here (at render, from the string) —
   // an empty/invalid field yields 0 and is dropped, never seeded as $0.
@@ -107,6 +112,8 @@ export function ArchetypePicker({
 
   const confirm = () => {
     if (selected.length === 0) return;
+    const err = checkLimits?.(selected) ?? null;
+    if (err) { setLimitError((prev) => ({ ...err, n: (prev?.n ?? 0) + 1 })); return; }
     onApply?.({
       archetypeId,
       selected: selected.map(({ templateKey, label, note, target }) => ({ templateKey, label, note, target })),
@@ -185,6 +192,9 @@ export function ArchetypePicker({
                       inputMode="decimal"
                       aria-label={`Target for ${r.label}`}
                       value={r.targetStr}
+                      key={limitError?.reason === "amount" ? `lim-${limitError.n}` : "t"}
+                      className={limitError?.reason === "amount" ? "limit-halo" : undefined}
+                      aria-invalid={limitError?.reason === "amount" || undefined}
                       onChange={(e) => patch(r.templateKey, { targetStr: e.target.value })}
                       style={{ ...iS, width: "110px" }}
                     />
@@ -202,11 +212,13 @@ export function ArchetypePicker({
         </div>
       )}
 
+      {limitError && <div style={{ textAlign: "center", marginTop: "12px" }}><GoalLimitNote error={limitError} /></div>}
       <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "16px" }}>
         <Pressable scale={0.97} className="text-2xs" style={ghostBtn} onClick={back}>Back</Pressable>
         <Pressable
           scale={0.97}
-          className="text-2xs"
+          key={limitError ? `lim-${limitError.n}` : "c"}
+          className={limitError ? "text-2xs limit-halo" : "text-2xs"}
           disabled={selected.length === 0}
           style={{ ...primaryBtn, opacity: selected.length === 0 ? 0.5 : 1 }}
           onClick={confirm}

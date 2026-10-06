@@ -1,6 +1,8 @@
 import { CashOnHandCard } from "./CashOnHandCard.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
 import { IdentityLockedBanner, IdentityHero, YourNumbers } from "./IdentityLocked.jsx";
+import { GoalLimitNote } from "./GoalLimitNote.jsx";
+import { computeGoalAmountCap, checkGoalLimits, MAX_ACTIVE_GOALS } from "../lib/goalLimits.js";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -319,6 +321,10 @@ export function HomePanel({
   // "Not now" on the identity picker hides it for this session only — it
   // returns next load until an identity is chosen (config.identity).
   const [identitySkipped, setIdentitySkipped] = useState(false);
+  // Goal-limit "no" state (TODO §31, F184): { where: "addButton"|"add"|"edit", reason, message, n }.
+  // `n` bumps on every blocked attempt so the halo's jiggle replays (used as a React key).
+  const [goalLimitError, setGoalLimitError] = useState(null);
+  const blockWith = (where, err) => setGoalLimitError((prev) => ({ where, ...err, n: (prev?.n ?? 0) + 1 }));
   const [animPhase, setAnimPhase] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
@@ -328,6 +334,9 @@ export function HomePanel({
   ));
 
   const activeGoals = goals.filter((g) => !g.completed);
+  // Five-year Needs-only surplus cap on total active goal $ (TODO §31, F184) —
+  // null when there is no honest cap (no income / surplus ≤ 0).
+  const goalAmountCap = computeGoalAmountCap({ weeklyIncome, expenses, todayIso, userPaySchedule: config?.userPaySchedule });
 
   // Goal timeline + every Claim Date (F18/F177) — lib/claimDate.js, the one
   // place a Claim Date is derived. App.jsx's Cyborg Resource snapshot (TODO
@@ -460,6 +469,9 @@ export function HomePanel({
   // that shouldn't sit in the ambient debounce window.
   const saveEditGoal = (id) => {
     if (!setGoals) return;
+    const limitErr = checkGoalLimits({ goals, editing: { id, target: parseFloat(editGoalVals.target) || 0 }, cap: goalAmountCap });
+    if (limitErr) { blockWith("edit", limitErr); return; }
+    setGoalLimitError(null);
     const next = goals.map((g) => (g.id === id ? { ...g, ...editGoalVals, target: parseFloat(editGoalVals.target) || 0 } : g));
     setGoals(next);
     onSaveGoalsNow?.(next);
@@ -469,6 +481,9 @@ export function HomePanel({
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const addGoal = useCallback(() => {
     if (!setGoals) return;
+    const limitErr = checkGoalLimits({ goals, adding: [parseFloat(newGoal.target) || 0], cap: goalAmountCap });
+    if (limitErr) { blockWith("add", limitErr); return; }
+    setGoalLimitError(null);
     const next = [...goals, buildGoal({
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
@@ -479,7 +494,7 @@ export function HomePanel({
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/preserve-manual-memoization
+  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed, goalAmountCap]); // eslint-disable-line react-hooks/preserve-manual-memoization
   const deleteGoal = (id) => {
     if (!setGoals) return;
     const next = goals.filter((g) => g.id !== id);
@@ -629,6 +644,7 @@ export function HomePanel({
           existingGoals={goals}
           today={todayIso}
           projectGoals={projectArchetypeGoals}
+          checkLimits={(sel) => checkGoalLimits({ goals, adding: sel.map((g) => g.target), cap: goalAmountCap })}
           onApply={({ archetypeId, selected }) => {
             onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
           }}
@@ -902,7 +918,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "edit" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "edit" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "edit" || undefined} aria-label="Goal target" type="number" value={editGoalVals.target} onChange={(e) => { setEditGoalVals((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /><GoalLimitNote error={goalLimitError?.where === "edit" ? goalLimitError : null} /></div>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
                         </div>
                         <div style={{ display: "flex", gap: "8px" }}>
@@ -1122,7 +1138,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "edit" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "edit" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "edit" || undefined} aria-label="Goal target" type="number" value={editGoalVals.target} onChange={(e) => { setEditGoalVals((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /><GoalLimitNote error={goalLimitError?.where === "edit" ? goalLimitError : null} /></div>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
                         </div>
                         <div style={{ display: "flex", gap: "8px" }}>
@@ -1620,15 +1636,29 @@ export function HomePanel({
             <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "20px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "add" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "add" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "add" || undefined} aria-label="New goal target" type="number" value={newGoal.target} onChange={(e) => { setNewGoal((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /></div>
+                {goalLimitError?.where === "add" && <div style={{ gridColumn: "1/-1" }}><GoalLimitNote error={goalLimitError} /></div>}
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
-                <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
+                <SmBtn onClick={() => { setAddingGoal(false); setGoalLimitError(null); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
               </div>
             </div>
-          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "20px" }}>+ ADD GOAL</Pressable>)}
+          ) : <div style={{ marginBottom: "20px" }}>
+            <Pressable
+              key={goalLimitError?.where === "addButton" ? `lim-${goalLimitError.n}` : "b"}
+              className={goalLimitError?.where === "addButton" ? "text-xs limit-halo" : "text-xs"}
+              onClick={() => {
+                // Count limit: the attempt is opening the form at all (TODO §31, F184).
+                if (activeGoals.length >= MAX_ACTIVE_GOALS) { blockWith("addButton", checkGoalLimits({ goals, adding: [0] })); return; }
+                setGoalLimitError(null);
+                setAddingGoal(true);
+              }}
+              style={{ background: "var(--color-bg-surface)", color: goalLimitError?.where === "addButton" ? "var(--color-red)" : "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >+ ADD GOAL</Pressable>
+            <GoalLimitNote error={goalLimitError?.where === "addButton" ? goalLimitError : null} />
+          </div>)}
 
           {completedGoals.length > 0 && (
             <div style={{ border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "20px" }}>

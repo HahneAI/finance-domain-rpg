@@ -2083,6 +2083,7 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     weighed yet, not a reversal). Remaining: pick and repeat-verify a target per mode (possibly
     Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
     Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
+  - [x] Directness extremes elicited 2026-10-07 (8 calls): Job Hunt/Sonnet full 1→5; Ask Coach + Net Worth Red/Haiku can't cushion (range ~3–4 / floor unreachable); Résumé Review natural ≈ 4; 5 on Net Worth Red collides with 'never catastrophize'. Writeup: rubric Known Limitations. Watch: Job Hunt 'days ago' misread as interview timing under override (n=2).
   - [x] Directness (Axis 4) and Warmth/Formality (Axis 5) DEFINED 2026-10-07 in `coach-personality-rubric.md` (1–5, default 3 each; anchors scored from existing transcripts). Still open: elicit real 1s/5s for Directness; Warmth 4–5 blocked on real shared-history context (else Coach fabricates closeness).
   - [x] **Fix Net Worth Trigger Amber's stacked-touch rule violation — FIXED 2026-09-06.** Was a
     real, already-identified bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`):

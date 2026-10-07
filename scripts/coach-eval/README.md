@@ -393,8 +393,9 @@ retry-on-a-hunch.** Concretely for this file:
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
   - [ ] Remaining before Phase 5 can conclude: Directness (Axis 4) and
-    Warmth/Formality (Axis 5) are DEFINED (2026-10-07); sample Directness
-    1s/5s and Warmth 1–3 (4–5 need real shared-history context) — then the batch decision: lock one
+    Warmth/Formality (Axis 5) are DEFINED (2026-10-07); Directness 1s/5s
+    SAMPLED 2026-10-07 (`promptfooconfig.phase5e-directness-*.yaml`, 8 calls —
+    see rubric); still to sample: Warmth 1–3 (4–5 need real shared-history context) — then the batch decision: lock one
     target number per mode/axis pair across all four modes. (Job Hunt
     first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
     2026-10-06 — see the rubric's Known Limitations.)

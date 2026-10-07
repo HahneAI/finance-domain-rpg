@@ -859,6 +859,30 @@ in the closing line" + "only flag a date after Today". Live re-verify (Sonnet, `
   **Length unchanged:** 13 / 9 / 19 sentences, 318 / 257 / 351 words (before: 13–17, 272–346) —
   no trimming achieved; the Axis 3 proposal (target 3, range 3–5) stands.
 
+**Directness (Axis 4) extremes elicited, 2026-10-07 (Phase 5e; 8 calls, 0 errors, 1 draw each, one
+model per mode, only directness overridden — length/metaphor/grounding held).** Configs:
+`promptfooconfig.phase5e-directness-{askcoach,jobhunt,networth,resume}.yaml`.
+
+| Mode (model) | Directness 1 ("Cushioned") | Directness 5 ("Hard truth") | Read |
+|---|---|---|---|
+| Job Hunt tight (Sonnet) | **Reached cleanly** — "it might be … around Riverbend", "Whenever you get a moment, it could be worth glancing…"; leads with reassurance, never states a priority | **Reached cleanly** — "Riverbend first … a quiet application doesn't pay rent next week and an interval might"-style verdict + the avoided thing (drafting Cascade check-ins instead of prepping) | Full 1→5 range |
+| Ask Coach near-limit (Haiku) | **NOT reached** — opens "You're running on fumes right now"; same plain-to-blunt register as natural | Modest — "You're spending nearly everything you make … that's the number that has to move"; reads ~4, no "thing they're avoiding" | Haiku range compressed to ~3–4 |
+| Net Worth Red (Haiku) | **NOT reached** — "one missed paycheck … away from a real problem" (also longer: 141 words, 5 sentences) | Reached — but via "you're flying blind in the most critical 22 days" and "stop drifting" | Floor unreachable; 5 collides with Red's calm/"never catastrophize" intent |
+| Résumé Review (Sonnet) | **NOT reached** — natural output already names gaps ("weakest line", "zero evidence"); override changed little | Reached — opens "Here's the hard truth: …zero evidence you've ever led anyone" | Natural ≈ 4; usable range 4–5 |
+
+**Findings.** (1) **Haiku's directness range is compressed** (same shape as its Axis 3 finding) —
+it cannot be talked into cushioning on Ask Coach or Net Worth; Sonnet has real range wherever the
+mode's own task doesn't force gap-naming. (2) **Résumé Review's directness floor is structural**,
+like its length floor: the addendum mandates naming gaps, so natural ≈ 4 and a "3 (Plain)" default
+is already exceeded — decide in the batch pass whether this mode's target is 4. (3) **Directness 5
+and Urgency interact on Net Worth Red**: the 5 draw re-uses the known "flying blind" flourish and
+adds "stop drifting", i.e. harsher than the Red addendum intends — directness 5 is not safe to
+assign to Red. (4) **Watch item (grounding), not yet a finding:** both Job Hunt override draws
+read "applied … 8 days ago" as interview timing ("interview … from 8 days ago", "you've got 8 days
+to show up ready"); the data has no interview date. The 6 natural re-verify draws (2026-10-06)
+never did this. If it recurs, label the days-ago figure as "since applying" in `buildJobHuntContext`.
+n=1 per cell — directional, not verified.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

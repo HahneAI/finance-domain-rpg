@@ -277,11 +277,12 @@ describe('HomePanel — identity picker (TODO §31)', () => {
     fireEvent.click(screen.getByText('Not now'))
     expect(screen.queryByTestId('archetype-picker')).toBeNull()
   })
-  it('shows the Identity locked banner on the Goals page once an identity is chosen', () => {
+  it('shows the identity hero (not the plain banner) on the Goals page once an identity is chosen', () => {
     render(<HomePanel {...baseProps} config={{ ...cfg, identity: { archetypeId: 'heartbeat' } }} onApplyArchetype={() => {}} />)
-    const b = screen.getByTestId('identity-locked-banner')
-    expect(b).toHaveTextContent(/Identity locked in/i)
-    expect(b).toHaveTextContent('The Heartbeat')
+    const h = screen.getByTestId('identity-hero')
+    expect(h).toHaveTextContent(/Identity locked in/i)
+    expect(h).toHaveTextContent('The Heartbeat')
+    expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
   })
   it('while switching identity: shows the picker with the OLD identity still set, and "Keep" closes it without writing', () => {
     const onCloseIdentityPicker = vi.fn(); const onApplyArchetype = vi.fn()
@@ -320,5 +321,167 @@ describe('HomePanel — identity picker (TODO §31)', () => {
   it('shows no banner (the picker instead) when no identity is chosen', () => {
     render(<HomePanel {...baseProps} config={cfg} onApplyArchetype={() => {}} />)
     expect(screen.queryByTestId('identity-locked-banner')).toBeNull()
+  })
+})
+
+describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
+  const cfg = { userPaySchedule: 'weekly', identity: { archetypeId: 'builder' } }
+  const futureWeeks = Array.from({ length: 30 }, (_, i) => {
+    const end = new Date(2026, 3, 5 + i * 7)
+    return { idx: 14 + i, active: true, weekEnd: end, weekStart: new Date(end.getTime() - 6 * 864e5) }
+  })
+  const GOALS = [
+    { id: 'g1', label: 'Car Fund', target: 500, completed: false },
+    { id: 'g2', label: 'Trip', target: 900, completed: false },
+    { id: 'g3', label: 'Old Win', target: 200, completed: true },
+  ]
+  const props = { ...baseProps, config: cfg, goals: GOALS, futureWeeks, timelineWeekNets: futureWeeks.map(() => 400), onApplyArchetype: () => {} }
+
+  it('hero counter counts ALL goals and equals the Goals x/y tile', () => {
+    render(<HomePanel {...props} />)
+    expect(screen.getByTestId('identity-hero-count')).toHaveTextContent('1 of 3 goals claimed')
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getByText('1/3')).toBeTruthy()
+  })
+
+  it('hero "Next" line names the same goal + date as the Next Claim Date hero', () => {
+    render(<HomePanel {...props} />)
+    const next = screen.getByTestId('identity-hero-next')
+    expect(next).toHaveTextContent(/Next: Car Fund · [A-Z][a-z]{2} \d{1,2}/)
+  })
+
+  it('numbers start collapsed: summary line visible, tiles not mounted; expanding shows every tile', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 200 }} prevWeekNet={950} />)
+    const btn = screen.getByRole('button', { name: /your numbers/i })
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('your-numbers-left')).toHaveTextContent('$750')
+    expect(screen.queryByText('Financial Health')).toBeNull()
+    expect(screen.queryByText('Next Week Takehome')).toBeNull()
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'true')
+    for (const t of ['Financial Health', 'Next Week Takehome', 'Net Worth Trend', 'Upkeep Health', 'Active Goals Total', 'Left This Week']) {
+      expect(screen.getAllByText(t).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('summary $ equals the Left This Week tile and the % equals the Net Worth Trend pulse', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 200 }} prevWeekNet={950} />)
+    const summary = screen.getByTestId('your-numbers-summary').textContent
+    const pct = summary.match(/Saving (-?\d+)%/)[1]
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getAllByText('Left This Week').length).toBeGreaterThan(0)
+    // the Net Worth Trend pulse renders "<pct>% savings rate" — same savingsRate const
+    expect(document.body.textContent).toMatch(new RegExp(`${pct}%\\s*savings`))
+  })
+
+  it('a negative week is red on the summary line even while collapsed', () => {
+    render(<HomePanel {...props} remainingSpend={{ avgWeeklySpend: 1200 }} prevWeekNet={950} />)
+    const left = screen.getByTestId('your-numbers-left')
+    expect(left).toHaveTextContent('-$250')
+    expect(left.style.color).toBe('var(--color-red)')
+  })
+
+  it('no identity → legacy layout: no hero, no collapse, tiles visible', () => {
+    render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
+    expect(screen.queryByTestId('identity-hero')).toBeNull()
+    expect(screen.queryByTestId('your-numbers')).toBeNull()
+    expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThan(0)
+  })
+
+  it('Year-End Outlook lives inside "Your numbers" with an identity (hidden until expanded), at the bottom without one', () => {
+    const { unmount } = render(<HomePanel {...props} />)
+    expect(screen.queryByText('Year-End Outlook')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+    expect(screen.getByText('Surplus after all goals')).toBeTruthy()
+    unmount()
+    render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
+    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+  })
+
+  it('tidy mode still takes the hero slot', () => {
+    render(<HomePanel {...props} identityTidy onFinishIdentityTidy={() => {}} />)
+    expect(screen.queryByTestId('identity-hero')).toBeNull()
+    expect(screen.getByTestId('identity-locked-banner')).toHaveTextContent(/tidy up your goals/i)
+  })
+})
+
+describe('HomePanel — goal limits (TODO §31, F184)', () => {
+  const g = (id, target, completed = false) => ({ id, label: id, target, completed })
+  const six = Array.from({ length: 6 }, (_, i) => g(`Goal ${i}`, 100))
+  const rent = (monthly) => { const w = monthly / (52 / 12); return { id: 'rent', label: 'Rent', category: 'Needs', history: [{ effectiveFrom: '2026-01-01', weekly: [w, w, w, w] }] } }
+
+  it('says nothing until an attempt: no limit text on render even at 6 goals', () => {
+    render(<HomePanel {...baseProps} goals={six} setGoals={() => {}} />)
+    expect(screen.queryByTestId('goal-limit-note')).toBeNull()
+  })
+
+  it('7th goal: + ADD GOAL turns red with the count message and the form does not open', () => {
+    render(<HomePanel {...baseProps} goals={six} setGoals={() => {}} />)
+    const btn = screen.getByText('+ ADD GOAL')
+    fireEvent.click(btn)
+    expect(screen.getByTestId('goal-limit-note')).toHaveTextContent('Goal limit reached — you must not spread yourself too thin in planning alone.')
+    expect(screen.getByText('+ ADD GOAL').className).toContain('limit-halo')
+    expect(screen.queryByLabelText('New goal target')).toBeNull()
+  })
+
+  it('amount over the five-year Needs surplus: input haloes red, message names the limit, nothing is saved', () => {
+    const setGoals = vi.fn(); const onSaveGoalsNow = vi.fn()
+    // $1,000/mo take-home − $500/mo Needs = $500 × 60 = $30,000 cap
+    render(<HomePanel {...baseProps} weeklyIncome={1000 / (52 / 12)} expenses={[rent(500)]} goals={[g('Car', 29000)]} setGoals={setGoals} onSaveGoalsNow={onSaveGoalsNow} />)
+    fireEvent.click(screen.getByText('+ ADD GOAL'))
+    const labels = screen.getAllByRole('textbox')
+    fireEvent.change(labels[0], { target: { value: 'Trip' } })
+    const input = screen.getByLabelText('New goal target')
+    fireEvent.change(input, { target: { value: '2000' } })
+    fireEvent.click(screen.getByText('ADD GOAL'))
+    const note = screen.getByTestId('goal-limit-note')
+    expect(note).toHaveTextContent(/extends past your realistic, five-year timeline/)
+    expect(note).toHaveTextContent('$30,000')
+    expect(screen.getByLabelText('New goal target').className).toContain('limit-halo')
+    expect(onSaveGoalsNow).not.toHaveBeenCalled() // setGoals also fires from Home's own derived-sync effects, so the eager save is the signal
+    // typing clears the "no" state
+    fireEvent.change(screen.getByLabelText('New goal target'), { target: { value: '500' } })
+    expect(screen.queryByTestId('goal-limit-note')).toBeNull()
+    fireEvent.click(screen.getByText('ADD GOAL'))
+    expect(onSaveGoalsNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('a goal that fits is added with no limit UI at all', () => {
+    const onSaveGoalsNow = vi.fn()
+    render(<HomePanel {...baseProps} weeklyIncome={1000 / (52 / 12)} expenses={[rent(500)]} goals={[g('Car', 1000)]} setGoals={() => {}} onSaveGoalsNow={onSaveGoalsNow} />)
+    fireEvent.click(screen.getByText('+ ADD GOAL'))
+    fireEvent.change(screen.getByLabelText('New goal target'), { target: { value: '2000' } })
+    fireEvent.click(screen.getByText('ADD GOAL'))
+    expect(onSaveGoalsNow).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('goal-limit-note')).toBeNull()
+  })
+
+  it('picker confirm that would exceed 6 goals is refused with the count message', () => {
+    const onApplyArchetype = vi.fn()
+    render(<HomePanel {...baseProps} config={{ userPaySchedule: 'weekly' }} goals={six.slice(0, 4)} onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Builder'))
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    expect(onApplyArchetype).not.toHaveBeenCalled()
+    expect(screen.getByTestId('goal-limit-note')).toHaveTextContent(/Goal limit reached/)
+    // dropping two fits
+    const boxes = screen.getAllByRole('checkbox'); fireEvent.click(boxes[2]); fireEvent.click(boxes[3])
+    fireEvent.click(screen.getByText(/Add 2 goals/i))
+    expect(onApplyArchetype).toHaveBeenCalledTimes(1)
+  })
+
+  it('an account already past 6 goals can still choose an identity with no new goals', () => {
+    const onApplyArchetype = vi.fn()
+    const ten = Array.from({ length: 10 }, (_, i) => g(`G${i}`, 100))
+    render(<HomePanel {...baseProps} config={{ userPaySchedule: 'weekly' }} goals={ten} onApplyArchetype={onApplyArchetype} />)
+    fireEvent.click(screen.getByText('The Builder'))
+    fireEvent.click(screen.getByText(/Add 4 goals/i))
+    expect(onApplyArchetype).not.toHaveBeenCalled()
+    for (const cb of screen.getAllByRole('checkbox')) fireEvent.click(cb)
+    fireEvent.click(screen.getByText('Choose identity only'))
+    const p = onApplyArchetype.mock.calls[0][0]
+    expect(p.addedCount).toBe(0)
+    expect(p.goals).toHaveLength(10)
+    expect(p.config.identity.archetypeId).toBe('builder')
   })
 })

@@ -10,6 +10,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
 import { IdentityLockedBanner } from "./IdentityLocked.jsx";
 import { applyArchetype } from "../lib/goalArchetypes.js";
+import { checkGoalLimits } from "../lib/goalLimits.js";
 
 /**
  * NewJobSeasonHomePanel — New Job Season's own Home view (TODO §1 mode rebuild).
@@ -156,6 +157,8 @@ export function NewJobSeasonHomePanel({
           avgWeeklySpend={avgWeeklySpend}
           existingGoals={goals}
           datesPaused
+          // No income here, so only the count cap can apply (amount cap is null).
+          checkLimits={(sel) => checkGoalLimits({ goals, adding: sel.map((g) => g.target) })}
           title="Who are you becoming next?"
           subtitle="Pick the one you're working toward. These goals start moving the week you're earning again — change any of them."
           onApply={({ archetypeId, selected }) => {

@@ -3,6 +3,7 @@ import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES, FISCAL_YEAR_START } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, resolvePrevWeekNet, computeThisWeekActualSpend, getBillsDueOn } from "./lib/finance.js";
 import { getFundedGoalSpend, buildGoal } from "./lib/goalFunding.js";
+import { checkGoalLimits, computeGoalAmountCap } from "./lib/goalLimits.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, saveResourceSnapshot, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode, fetchBetaChecklistItems, fetchMyChecklistCompletions, fetchBetaSuggestions, fetchMyBetaScore, fetchPublishedChangelogEntries, fetchBaseChecklistItems, fetchMyBaseChecklistCompletions, fetchBaseSuggestions } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
@@ -774,6 +775,9 @@ export default function App() {
   // early returns (see handleCoachCreateGoal). Assigned during render once
   // isExpiredReadOnly is computed, further down.
   const isExpiredReadOnlyRef = useRef(false);
+  // Goal $ cap (TODO §31, F184) for handlers above the early returns — assigned
+  // during render once weeklyIncome exists, same pattern as the ref above.
+  const goalAmountCapRef = useRef(null);
 
   // Writes a goal Coach proposed and the user confirmed on the card
   // (propose_goal → CoachGoalCard). Mirrors HomePanel's own addGoal
@@ -796,11 +800,19 @@ export default function App() {
   // while `vite build` and the full unit suite passed — CLAUDE.md's documented
   // React blind spot, hit twice in one change.
   const handleCoachCreateGoal = useCallback(({ label, target, note }) => {
-    if (isExpiredReadOnlyRef.current) return;
+    if (isExpiredReadOnlyRef.current) return { ok: false };
+    // Same goal limits as every other goal writer (TODO §31, F184). The cap is
+    // computed after the auth early returns, so it is read through a ref.
+    const limitErr = checkGoalLimits({ goals, adding: [Number(target) || 0], cap: goalAmountCapRef.current });
+    if (limitErr) {
+      logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: limitErr.reason });
+      return { ok: false, ...limitErr };
+    }
     const next = [...goals, buildGoal({ label, target, note })];
     setGoals(next);
     savePersistedStateNow({ goals: next });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+    return { ok: true };
   }, [goals, setGoals, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Identity change flow (TODO §31): PICK FIRST, TIDY SECOND. Profile → Identity →
@@ -833,9 +845,14 @@ export default function App() {
       setExpenses(nextExpenses);
       logBetaEvent({ isTester, betaCodeUsed, eventType: "expense_created" });
     }
+    // Tuning loop (TODO §31 Phase 4, migration 048): which suggestion was decided, and how.
+    const prevSug = config.identity?.suggestions ?? {};
+    for (const [key, state] of Object.entries(nextConfig.identity?.suggestions ?? {})) {
+      if (prevSug[key] !== state) logBetaEvent({ isTester, betaCodeUsed, eventType: state === "accepted" ? "suggestion_accepted" : "suggestion_dismissed", note: key });
+    }
     setConfig(nextConfig);
     savePersistedStateNow(nextExpenses ? { expenses: nextExpenses, config: nextConfig } : { config: nextConfig });
-  }, [setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config, setExpenses, setConfig, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Archetype picker confirm (TODO §31): seeds the chosen identity's starter
   // goals AND stamps config.identity in ONE eager write — two back-to-back
@@ -845,19 +862,23 @@ export default function App() {
   // sits above the auth early returns, paywall read through the ref.
   const handleApplyArchetype = useCallback(({ goals: nextGoals, config: nextConfig, addedCount }) => {
     if (isExpiredReadOnlyRef.current) return;
+    // Independent of the picker's own check (F184): the write path enforces the
+    // goal limits too, so no UI can be a back door.
+    if (checkGoalLimits({ goals, adding: nextGoals.slice(goals.length).map((g) => g.target), cap: goalAmountCapRef.current })) return;
     setGoals(nextGoals);
     setConfig(nextConfig);
     savePersistedStateNow({ goals: nextGoals, config: nextConfig });
     // One goal_created per seeded goal — same accounting as F176, or beta
     // analytics under-count goals for anyone who starts from a template.
     for (let i = 0; i < addedCount; i++) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "archetype_selected", note: nextConfig.identity?.archetypeId });
     // Switching identity (not first pick): close the picker and, where goals are
     // editable (not New Job Season — theirs are paused/read-only), start tidy-up.
     if (identityPickerOpen) {
       setIdentityPickerOpen(false);
       if (!config.newJobSeasonMode) setIdentityTidy(true);
     }
-  }, [setGoals, setConfig, isTester, betaCodeUsed, identityPickerOpen, config.newJobSeasonMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [goals, setGoals, setConfig, isTester, betaCodeUsed, identityPickerOpen, config.newJobSeasonMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coach's navigate_to chip (src/lib/coachTools.js). Closes the chat, jumps to
   // the panel, then asks coachFocus to scroll to and flash the specific row.
@@ -2354,6 +2375,7 @@ export default function App() {
   const paywallBypassed = isAdmin || isAiAdmin || isTester || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
   isExpiredReadOnlyRef.current = isExpiredReadOnly;
+  goalAmountCapRef.current = computeGoalAmountCap({ weeklyIncome, expenses, todayIso: effectiveToday, userPaySchedule: config.userPaySchedule });
 
 
   // Beta Homebase / Money Moves badge count+color — single source shared by

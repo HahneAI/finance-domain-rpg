@@ -4579,8 +4579,8 @@ is a full-schema recap (schema state through 021) that exists so a session reads
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
 continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F146), **024** (`user_data` write-
-permission fix — the F69 case law). **The next real migration is 025** — verify against the
-folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
+permission fix — the F69 case law). **Superseded 2026-10-07: production is applied through 048 and the next real migration is 049** — the authoritative
+pointer is `database/migrations/README.md`; verify against the folder before numbering (this note has gone stale before — §14).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
 > (025 now), (b) if it touches `user_data` columns, runs the F69 new-column checklist (RLS
 > grant + service-role route + F67 read mapping + F68 write exclusion + drift-badge column),
@@ -5889,6 +5889,25 @@ deleted and `BudgetPanel` already hides.
 > **Placement:** a standalone card above the category lanes, not rows inside Lifestyle — the lanes own collapse/clipping and drag-reorder (F175), and a non-expense row inside them would fight both.
 > **Gap:** `NewJobSeasonBudgetPanel` does not show suggestions (adding one there moves cash-runway math — needs its own decision).
 > Check: `goalArchetypes.test.js` suggested-bills block, `identitySuggestions.test.jsx` (incl. "a pending suggestion changes NO number on the panel": panel text identical with/without it), and live-test §31 P2 (Home numbers unchanged after dismiss; one write on Add; no re-offer after reload).
+
+**F183 · Identity-first Home — hero + collapsed "Your numbers"** — `HomePanel.jsx` (layout gate, `savingsRate`), `IdentityLocked.jsx` (`IdentityHero`, `YourNumbers`) — **[G]+[L]**
+2026-10-06 (TODO §31 Phase 3). Locked: everyone with an identity, numbers collapsed by default, counter over ALL goals, no streaks.
+> **Gate [G]:** `config.identity` set → `IdentityHero` replaces the plain banner (tidy mode still takes the slot) and BOTH tile groups (goal-stats grid incl. Left This Week + "Financial Health" title/tiles) render inside `YourNumbers`, collapsed every load (React state, not persisted). No identity → today's layout, tiles open. NJS Home and DemoAccountTree are untouched. The tile JSX exists once (`numbersBlock`) and is either wrapped or returned bare — **IF** someone duplicates it per branch, **THEN** it will drift.
+> **Views, not math [L]:** hero counter = `completedGoals.length` / `goals.length` (the Goals x/y tile's own figures); hero Next = `nextClaim` (the Next Claim Date hero's own goal) formatted by `formatGoalFinishDate`; summary $ = `leftThisWeek * perCheckFactor` (the Left This Week tile value); summary % = the single `savingsRate` const that `pulseNetWorth` now also reads. **IF** any of these tiles changes its formula, **THEN** the summary/hero change with it automatically — never re-derive them in the hero or summary.
+> **A collapsed section never hides a bad week:** negative left-this-week renders `--color-red` on the always-visible summary. Due Today and the Claim Date surface stay outside the collapse.
+> **Coach deep links are safe:** `navigate_to` focuses only `goal:N` cards, never tiles. **IF** a tile ever gains a `data-coach-ref`, **THEN** collapsed-by-default strands it (F175 invisible-target class) — open the section first.
+> **Not in scope:** the "Year-End Outlook" card under the goals is not collapsed.
+> Check: `HomePanel.test.jsx` "identity-first Home" block (8 cases, incl. Year-End Outlook inside the collapse) and live-test §31 P3 (390px, expand, reload re-collapses, legacy layout).
+> **Year-End Outlook** is built once as `yearEndOutlook` and placed inside "Your numbers" (identity) or at the bottom (no identity) — never both.
+
+**F184 · Goal limits — 6 active goals, total $ ≤ 5 years of Needs-only surplus** — `lib/goalLimits.js` (`computeGoalAmountCap`, `checkGoalLimits`), `GoalLimitNote.jsx`, `.limit-halo` (`index.css`), `HomePanel.jsx`, `ArchetypePicker.jsx`, `NewJobSeasonHomePanel.jsx`, `CoachToolUI.jsx` (`CoachGoalCard`), `App.jsx` (`handleCoachCreateGoal`, `handleApplyArchetype`, `goalAmountCapRef`), `aiContext.js` — **[L]+[G]**
+2026-10-06 (TODO §31.14–16).
+> **[L] One cap, one check.** Cap = `(weeklyIncome − weeklyNeeds) × 52/12 × 60`, where `weeklyIncome` is App's F14 figure and `weeklyNeeds` is `computeNeedsSetAsidePerCheck()` (Needs + loans, the Cash on Hand set-aside set). Lifestyle is excluded by design. `null` when income ≤ 0 or surplus ≤ 0. **IF** F14 or the Needs set-aside changes, **THEN** the cap moves with it — never re-sum Needs elsewhere. Coach's "Goal limits" context line calls the same function (§6/§24 grounding).
+> **[G] Every goal writer runs `checkGoalLimits`** — Home + ADD GOAL (count), Home add form, BOTH edit forms (mobile/desktop pair, F177), the picker (Home + NJS; NJS has no income → count only), `CoachGoalCard` (shows App's refusal, never "Added ✓"), and App's `handleCoachCreateGoal` / `handleApplyArchetype` independently of the UI. **IF** a new goal writer appears (F181's `buildGoal` callers), **THEN** it must call `checkGoalLimits` too or it is a back door.
+> **Growth-only.** `checkGoalLimits` blocks a change only if it adds goals past 6 or raises the active total past the cap — an over-limit account can still lower, claim, delete, and pick/switch identity with zero goals ("Choose identity only"). **IF** someone "simplifies" to `total > cap`, **THEN** over-limit users can't even lower a target.
+> **Silent until crossed:** no limit copy renders before a blocked attempt; typing clears the red state. `App` reads the cap via `goalAmountCapRef` (assigned during render) because its handlers sit above the auth early returns (F176).
+> **Telemetry:** a block logs `goal_limit_hit` (note = reason) — migration 048 (applied 2026-10-07).
+> Check: `goalLimits.test.js` (incl. $5k/$2k → $180,000), `HomePanel.test.jsx` goal-limits block, `coachToolUI.test.jsx` limits block, `aiContext.test.js` identity/limits block, live-test §31 limits.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

@@ -58,15 +58,15 @@ describe("ArchetypePicker", () => {
     expect(screen.getAllByText(/· stretch/).length).toBeGreaterThan(0);
   });
 
-  it("disables confirm when every goal is toggled off, and Back returns to the list", () => {
+  it("with every goal toggled off, confirm chooses the identity only (no goals), and Back returns to the list", () => {
     const { onApply } = setup();
     fireEvent.click(screen.getByText("The Polished"));
-    for (const cb of screen.getAllByRole("checkbox")) fireEvent.click(cb);
-    const btn = screen.getByText("Pick at least one");
-    fireEvent.click(btn);
-    expect(onApply).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Back"));
     expect(screen.getByText("Who are you becoming?")).toBeTruthy();
+    fireEvent.click(screen.getByText("The Polished"));
+    for (const cb of screen.getAllByRole("checkbox")) fireEvent.click(cb);
+    fireEvent.click(screen.getByText("Choose identity only"));
+    expect(onApply).toHaveBeenCalledWith({ archetypeId: "polished", selected: [] });
   });
 
   it("omits templates the user already has", () => {

@@ -1,6 +1,8 @@
 import { CashOnHandCard } from "./CashOnHandCard.jsx";
 import { ArchetypePicker } from "./ArchetypePicker.jsx";
-import { IdentityLockedBanner } from "./IdentityLocked.jsx";
+import { IdentityLockedBanner, IdentityHero, YourNumbers } from "./IdentityLocked.jsx";
+import { GoalLimitNote } from "./GoalLimitNote.jsx";
+import { computeGoalAmountCap, checkGoalLimits, MAX_ACTIVE_GOALS } from "../lib/goalLimits.js";
 import { DueTodayCard } from "./DueTodayCard.jsx";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -212,9 +214,12 @@ export function HomePanel({
     return            { arrow: "flat", delta: `${pct}%`, label: "of paycheck remaining",  variant: "blue" };
   })();
 
+  // One savings-rate figure for the Net Worth Trend pulse AND the identity Home's
+  // "Your numbers" summary line (TODO §31 Phase 3) — never two formulas.
+  const savingsRate = weeklyIncome ? annualSavings / (weeklyIncome * activeWeeksThisYear) : null;
   const pulseNetWorth = (() => {
     if (!weeklyIncome) return undefined;
-    const rate = annualSavings / (weeklyIncome * activeWeeksThisYear);
+    const rate = savingsRate;
     const pct  = Math.round(rate * 100);
     if (rate >= 0.2) return { arrow: "up",   delta: `${pct}%`, label: "savings rate",         variant: "blue" };
     if (rate < 0.05) return { arrow: "down", delta: `${pct}%`, label: "savings velocity low",  variant: "purple" };
@@ -316,6 +321,13 @@ export function HomePanel({
   // "Not now" on the identity picker hides it for this session only — it
   // returns next load until an identity is chosen (config.identity).
   const [identitySkipped, setIdentitySkipped] = useState(false);
+  // Goal-limit "no" state (TODO §31, F184): { where: "addButton"|"add"|"edit", reason, message, n }.
+  // `n` bumps on every blocked attempt so the halo's jiggle replays (used as a React key).
+  const [goalLimitError, setGoalLimitError] = useState(null);
+  const blockWith = useCallback((where, err) => {
+    setGoalLimitError((prev) => ({ where, ...err, n: (prev?.n ?? 0) + 1 }));
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: err.reason }); // migration 048
+  }, [isTester, betaCodeUsed]);
   const [animPhase, setAnimPhase] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
@@ -325,6 +337,9 @@ export function HomePanel({
   ));
 
   const activeGoals = goals.filter((g) => !g.completed);
+  // Five-year Needs-only surplus cap on total active goal $ (TODO §31, F184) —
+  // null when there is no honest cap (no income / surplus ≤ 0).
+  const goalAmountCap = computeGoalAmountCap({ weeklyIncome, expenses, todayIso, userPaySchedule: config?.userPaySchedule });
 
   // Goal timeline + every Claim Date (F18/F177) — lib/claimDate.js, the one
   // place a Claim Date is derived. App.jsx's Cyborg Resource snapshot (TODO
@@ -457,6 +472,9 @@ export function HomePanel({
   // that shouldn't sit in the ambient debounce window.
   const saveEditGoal = (id) => {
     if (!setGoals) return;
+    const limitErr = checkGoalLimits({ goals, editing: { id, target: parseFloat(editGoalVals.target) || 0 }, cap: goalAmountCap });
+    if (limitErr) { blockWith("edit", limitErr); return; }
+    setGoalLimitError(null);
     const next = goals.map((g) => (g.id === id ? { ...g, ...editGoalVals, target: parseFloat(editGoalVals.target) || 0 } : g));
     setGoals(next);
     onSaveGoalsNow?.(next);
@@ -466,6 +484,9 @@ export function HomePanel({
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const addGoal = useCallback(() => {
     if (!setGoals) return;
+    const limitErr = checkGoalLimits({ goals, adding: [parseFloat(newGoal.target) || 0], cap: goalAmountCap });
+    if (limitErr) { blockWith("add", limitErr); return; }
+    setGoalLimitError(null);
     const next = [...goals, buildGoal({
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
@@ -476,7 +497,7 @@ export function HomePanel({
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
     logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
-  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed]); // eslint-disable-line react-hooks/preserve-manual-memoization
+  }, [setGoals, goals, newGoal, onSaveGoalsNow, isTester, betaCodeUsed, goalAmountCap, blockWith]); // eslint-disable-line react-hooks/preserve-manual-memoization
   const deleteGoal = (id) => {
     if (!setGoals) return;
     const next = goals.filter((g) => g.id !== id);
@@ -584,6 +605,40 @@ export function HomePanel({
     });
   };
 
+  // Year-End Outlook card (surplus/savings figures). Built once; placed either at
+  // the bottom of Home (no identity) or inside "Your numbers" (identity chosen).
+  const yearEndOutlook = (
+    <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
+      <div style={{ marginBottom: "16px" }}>
+        <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
+        <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
+          <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
+        </div>
+        <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+        </div>
+        <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+          <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
+            {fmt$(annualSavings - yearEndGoalDraw)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ paddingBottom: "8px" }}>
       {showArchetypePicker && (
@@ -592,6 +647,11 @@ export function HomePanel({
           existingGoals={goals}
           today={todayIso}
           projectGoals={projectArchetypeGoals}
+          checkLimits={(sel) => {
+            const err = checkGoalLimits({ goals, adding: sel.map((g) => g.target), cap: goalAmountCap });
+            if (err) logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_limit_hit", note: err.reason }); // migration 048
+            return err;
+          }}
           onApply={({ archetypeId, selected }) => {
             onApplyArchetype(applyArchetype({ archetypeId, selected, goals, config }));
           }}
@@ -630,7 +690,14 @@ export function HomePanel({
         </div>
       </div>
       {config?.identity && !showArchetypePicker && (
-        <IdentityLockedBanner identity={config.identity} tidy={identityTidy} onDone={readOnly ? undefined : onFinishIdentityTidy} />
+        identityTidy
+          ? <IdentityLockedBanner identity={config.identity} tidy onDone={readOnly ? undefined : onFinishIdentityTidy} />
+          : <IdentityHero
+              identity={config.identity}
+              claimed={completedGoals.length}
+              total={goals.length}
+              next={nextClaim ? { label: nextClaim.goal.label, date: formatGoalFinishDate(nextClaim.info.finishDate) } : null}
+            />
       )}
 
       {/* ── Next Claim Date ──────────────────────────────────────────────────
@@ -858,7 +925,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "edit" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "edit" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "edit" || undefined} aria-label="Goal target" type="number" value={editGoalVals.target} onChange={(e) => { setEditGoalVals((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /><GoalLimitNote error={goalLimitError?.where === "edit" ? goalLimitError : null} /></div>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
                         </div>
                         <div style={{ display: "flex", gap: "8px" }}>
@@ -1078,7 +1145,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "edit" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "edit" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "edit" || undefined} aria-label="Goal target" type="number" value={editGoalVals.target} onChange={(e) => { setEditGoalVals((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /><GoalLimitNote error={goalLimitError?.where === "edit" ? goalLimitError : null} /></div>
                           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
                         </div>
                         <div style={{ display: "flex", gap: "8px" }}>
@@ -1576,15 +1643,29 @@ export function HomePanel({
             <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "20px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={(e) => setNewGoal((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                <div><label style={lS}>Target ($)</label><input key={goalLimitError?.where === "add" ? `lim-${goalLimitError.n}` : "t"} className={goalLimitError?.where === "add" ? "limit-halo" : undefined} aria-invalid={goalLimitError?.where === "add" || undefined} aria-label="New goal target" type="number" value={newGoal.target} onChange={(e) => { setNewGoal((v) => ({ ...v, target: e.target.value })); if (goalLimitError) setGoalLimitError(null); }} style={iS} /></div>
+                {goalLimitError?.where === "add" && <div style={{ gridColumn: "1/-1" }}><GoalLimitNote error={goalLimitError} /></div>}
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={(e) => setNewGoal((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <SmBtn onClick={addGoal} c="var(--color-green)">ADD GOAL</SmBtn>
-                <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
+                <SmBtn onClick={() => { setAddingGoal(false); setGoalLimitError(null); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
               </div>
             </div>
-          ) : <Pressable onClick={() => setAddingGoal(true)} className="text-xs" style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "20px" }}>+ ADD GOAL</Pressable>)}
+          ) : <div style={{ marginBottom: "20px" }}>
+            <Pressable
+              key={goalLimitError?.where === "addButton" ? `lim-${goalLimitError.n}` : "b"}
+              className={goalLimitError?.where === "addButton" ? "text-xs limit-halo" : "text-xs"}
+              onClick={() => {
+                // Count limit: the attempt is opening the form at all (TODO §31, F184).
+                if (activeGoals.length >= MAX_ACTIVE_GOALS) { blockWith("addButton", checkGoalLimits({ goals, adding: [0] })); return; }
+                setGoalLimitError(null);
+                setAddingGoal(true);
+              }}
+              style={{ background: "var(--color-bg-surface)", color: goalLimitError?.where === "addButton" ? "var(--color-red)" : "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+            >+ ADD GOAL</Pressable>
+            <GoalLimitNote error={goalLimitError?.where === "addButton" ? goalLimitError : null} />
+          </div>)}
 
           {completedGoals.length > 0 && (
             <div style={{ border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "20px" }}>
@@ -1625,6 +1706,12 @@ export function HomePanel({
       </div>
 
       <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
+      {(() => {
+        // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
+        // tiles collapse under "Your numbers" with an always-visible summary line.
+        // Without one, today's layout is untouched. The tiles themselves are one
+        // block either way — never duplicated.
+        const numbersBlock = (<>
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <MetricCard label={leftThisCheckLabel} labelTooltip="A strategic average" val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} sub={actualLeftThisWeek != null ? `With this week's bills: ${fmt$(actualLeftThisWeek * perCheckFactor)}` : undefined} />
@@ -1683,6 +1770,20 @@ export function HomePanel({
           />
         ))}
       </div>
+        </>);
+        if (!config?.identity) return numbersBlock;
+        return (
+          <YourNumbers
+            leftLabel={leftThisCheckLabel}
+            leftValue={leftThisWeek * perCheckFactor}
+            savingsPct={savingsRate == null ? null : Math.round(savingsRate * 100)}
+            fmt={fmt$}
+          >
+            {numbersBlock}
+            {yearEndOutlook}
+          </YourNumbers>
+        );
+      })()}
 
       {showBreakthroughTips && (
         <NetWorthHealthTips seed={weekNumber ?? 0} />
@@ -1712,35 +1813,9 @@ export function HomePanel({
         />
       )}
 
-      <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
-        <div style={{ marginBottom: "16px" }}>
-          <div className="text-2xs" style={{ letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
-          <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "0.02em", lineHeight: 1.15 }}>Year-End Outlook</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
-          </div>
-          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
-            <div className="text-base" style={{ fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
-          </div>
-          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
-              {fmt$(annualSavings - yearEndGoalDraw)}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Year-End Outlook: legacy position. With an identity it lives inside
+          "Your numbers" instead (TODO §31) — same element, never duplicated. */}
+      {!config?.identity && yearEndOutlook}
     </div>
   );
 }

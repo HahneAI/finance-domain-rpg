@@ -19,6 +19,18 @@
 -- CHECK and logBetaEvent only console.warns — nothing user-facing breaks.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Guard (added 2026-10-07): the first production run failed with
+-- "relation beta_activity_events does not exist". That table comes from 026
+-- (+ 030 note column, 031 eligibility trigger). Fail loudly with the fix
+-- instead of a bare 42P01 — never create the table here (it needs 026's RLS
+-- and 031's trigger, which this file must not duplicate).
+do $$
+begin
+  if to_regclass('public.beta_activity_events') is null then
+    raise exception 'beta_activity_events is missing in this database — run 026_add_beta_activity_events.sql, 030_add_beta_feedback.sql and 031_beta_activity_events_eligibility_trigger.sql first (or check you are in the production project), then re-run 048.';
+  end if;
+end $$;
+
 alter table beta_activity_events
   drop constraint if exists beta_activity_events_event_type_check;
 

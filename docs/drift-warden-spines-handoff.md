@@ -103,7 +103,7 @@ Heavily covered: T7 (§14) mapped load/save/flush/boot (F63–F68), eager-save w
 are F8/F35/F46, config-history watcher is F9/F10. **You owe:** the
 `savePersistedStateNow`/debounce/`latestPersistedStateRef` internals in App.jsx +
 SaveFailedBanner retry path, `useLocalStorage.js` (never examined!), migration-folder
-rules (BOOKMARK convention; next real migration was **025** when written — now **049**, production applied through 048 as of 2026-10-07; see `database/migrations/README.md`), and the four-site
+rules (BOOKMARK convention; next real migration was **025** when written — now **049**, production applied through 047 as of 2026-10-07, 048 pending; see `database/migrations/README.md`), and the four-site
 new-field checklist as a named procedure (F68 sketched it).
 
 **Spine C — Entitlements & Gating [G]** (`subscription.js`, `entitlements.js`, tier

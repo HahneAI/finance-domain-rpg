@@ -392,8 +392,9 @@ retry-on-a-hunch.** Concretely for this file:
     (floor 3–4; natural baseline 13–17 sentences, proposed target 3); Ask Coach tool-available — no metaphor, Axis 2 shift
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
-  - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
-    Warmth/formality (still undefined) — then the batch decision: lock one
+  - [ ] Remaining before Phase 5 can conclude: Directness (Axis 4) and
+    Warmth/Formality (Axis 5) are DEFINED (2026-10-07); sample Directness
+    1s/5s and Warmth 1–3 (4–5 need real shared-history context) — then the batch decision: lock one
     target number per mode/axis pair across all four modes. (Job Hunt
     first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
     2026-10-06 — see the rubric's Known Limitations.)

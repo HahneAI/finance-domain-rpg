@@ -76,7 +76,7 @@ Axis 1** (standing instruction, Phase 4 finding).
   1 Concise (2–3 short sentences) · **2 Standard (anchor, = persona default)** · 3 Elaborated ·
   4 Expansive · 5 Exhaustive (itemized audit). All older Axis 3 findings used the OLD numbering — the
   rubric has a translation note (old 2→new 1, old 3→2, old 4→3, old 5→4, new 5 = itemized).
-- **Directness/bluntness** and **Warmth/formality** — still **undefined**, no anchor data.
+- **Axis 4 Directness** and **Axis 5 Warmth/Formality** — DEFINED 2026-10-07 (1–5, default 3; rubric has scales + anchors). Product intent: user as Coach's *student* (Rocky/Karate Kid). Warmth 4–5 can't be sampled until context supplies real shared history — otherwise Coach invents closeness.
 
 **There is a second layer this file also covers — see §6.** Everything above measures how Coach
 *sounds*. A separate axis measures whether Coach *reaches for the right tool*. Different runners,
@@ -103,7 +103,7 @@ Axis 3 defined + rescaled + extremes sampled on all four modes; tool-available A
 restates one-touch cap + one-lever; live-verified 3/3 identical; regression test in
 `coachPrompts.test.js`).
 **Still open:**
-1. Directness/bluntness + Warmth/formality axes — define, then sample.
+1. Directness (Axis 4) + Warmth (Axis 5) — defined; now sample (Directness 1s/5s, Warmth 1–3).
 2. Repeat-verify **Job Hunt Chat** (3 calls so far, no repeat).
 3. Repeat-verify the **Ask Coach tool-available rerun** (2 samples, one Axis 2 shift unconfirmed).
 4. **Fresh Résumé Review score-1 run** under the rescaled target (old result is stale).

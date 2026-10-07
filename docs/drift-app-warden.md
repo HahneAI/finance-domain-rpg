@@ -4579,8 +4579,8 @@ is a full-schema recap (schema state through 021) that exists so a session reads
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
 continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F146), **024** (`user_data` write-
-permission fix — the F69 case law). **The next real migration is 025** — verify against the
-folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
+permission fix — the F69 case law). **Superseded 2026-10-07: production is applied through 048 and the next real migration is 049** — the authoritative
+pointer is `database/migrations/README.md`; verify against the folder before numbering (this note has gone stale before — §14).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
 > (025 now), (b) if it touches `user_data` columns, runs the F69 new-column checklist (RLS
 > grant + service-role route + F67 read mapping + F68 write exclusion + drift-badge column),
@@ -5423,7 +5423,11 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > silent copy-paste of either existing gate function. **IF** `buildJobHuntContext`'s
 > fields are extended, **THEN** they must resolve through the same authoritative function the
 > on-screen New Job Season panels use, per F113's rule — this function is exempt from `buildCoachContext`
-> itself but not from the grounding rule that governs it. **IF** persistence/retention/summary
+> itself but not from the grounding rule that governs it. **IF** a Job Hunt / Résumé Review context field
+> is a *date* or *elapsed time*, **THEN** compute it in the builder (`buildJobHuntContext` emits `Today:` +
+> `N days ago` per application; `ResumeReviewCard` prepends `Today:` — 2026-10-06, found because the model
+> guessed both) and mirror it in `scripts/coach-eval/prompts/resumeReview.js`; never leave the model to infer
+> it. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
 > entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
 > and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags
@@ -5847,6 +5851,63 @@ deleted and `BudgetPanel` already hides.
 > Check: `coachTools.test.js`'s three deleted-bill cases (`get_expense_detail`,
 > `simulate_expense_change`, `navigate_to` focus) and `aiContext.test.js`'s count/label case.
 > All four were confirmed red against the unfixed source before being committed.
+
+**F181 · Goal archetype seeding — one goal shape, one write, identity inside `config`** — `lib/goalFunding.js` (`buildGoal`), `lib/goalArchetypes.js`, `constants/goalArchetypes.js`, `ArchetypePicker.jsx`, `HomePanel.jsx`, `App.jsx` (`handleApplyArchetype`) — **[L]+[G]**
+2026-10-06 (TODO §31 Phase 1). The picker seeds 3–5 starter goals from a chosen identity.
+> **One goal shape.** `buildGoal()` is the only place a new goal row is built. `HomePanel.addGoal`,
+> `App.handleCoachCreateGoal` (F176) and archetype seeding all call it — F176's "IF `addGoal` gains a
+> field, THEN this handler needs it too" is now enforced by construction, not by a comment. `templateKey`
+> is the only field it adds and is written only when present. `seq` keeps ids unique when several goals are
+> built in one millisecond — omit it for single creates so the id stays `g_<ts>`.
+> **One write.** `handleApplyArchetype` commits goals AND `config.identity` through a single
+> `savePersistedStateNow({ goals, config })`. Two sequential eager saves would let the second merge onto a
+> stale snapshot. It sits above the auth early returns and reads `isExpiredReadOnlyRef` (F176 hook-placement
+> rule); HomePanel also shadows `onApplyArchetype` with the readOnly `noop`, and the picker is not rendered
+> read-only. The handler logs one `goal_created` per seeded goal (F176 accounting). The live harness asserts
+> every post-confirm save carries goals+identity together; it may land twice (eager + the normal post-state
+> debounce, as with every eager action) — that is not a defect.
+> **Identity lives inside `config`** (`config.identity = { archetypeId, chosenAt }`) — `config` is saved as one
+> blob, so no four-site procedure and no migration. It is deliberately NOT in `HISTORY_SENSITIVE_FIELDS`.
+> Absent/`null` = never chosen = the picker shows. Profile → Identity clears it (eager) to re-open the picker.
+> **Dates are not computed in the picker.** `projectArchetypeGoals` in HomePanel calls the same
+> `computeClaimDates()` with candidates appended after the user's real goals (the rank `applyArchetype`
+> gives them) — never a second estimate (F177). `weeksOfSpend` targets read `remainingSpend.avgWeeklySpend`,
+> the figure Home already shows, floored at $1,000 (a new account only has the seeded Food bill).
+> **Two Home surfaces, one picker.** `HomePanel` (employed) and `NewJobSeasonHomePanel` (jobless — incl. accounts that START unemployed) both mount `ArchetypePicker` when `!config.identity`; both shadow `onApplyArchetype` with the readOnly `noop`, and both reach the same `handleApplyArchetype`. **IF** a third Home surface appears, **THEN** it needs the picker and the shadow. NJS passes `datesPaused` (no preview — its Claim Dates are paused) and `avgWeeklySpend` from `remainingSpend` so the emergency-fund target stays grounded in the same figure.
+> **Changing identity = pick first, tidy second, and cancel is free.** Profile → Identity → `IdentityChangeDialog` → App `handleChangeIdentity` sets `identityPickerOpen` (App state, NOT persisted) and `navigateDirect("home")`. Home/NJS Home show the picker when `config.identity ? identityPickerOpen : !identitySkipped` — the OLD identity stays saved until a pick is confirmed, so cancel / "Keep my current identity" / leaving Home (the `currentView !== "home"` effect clears both flags) change nothing. Confirming runs the normal `handleApplyArchetype` (one write: new goals appended AFTER existing, `config.identity` swapped); when `identityPickerOpen` and not New Job Season it raises `identityTidy` → `IdentityLockedBanner tidy` asks the user to remove old goals, fix numbers, reorder (Done or leaving Home ends it). Old-identity goals are never auto-removed. Refused read-only in the handler, not just the UI. **IF** a new way to leave Goals is added that does not change `viewStack` (modal-only route), **THEN** re-check that effect. `IdentityLockedBanner` is presentation only on `HomePanel` and `NewJobSeasonHomePanel`.
+> **Suggested bills (Phase 2) must stay OUT of `expenses`** — see F180: there is no shared active-expense
+> filter, so an expense row with a "suggested" status would leak into ~8 consumers.
+> Check: `goalArchetypes.test.js` (catalog, target rules, dedupe, applyArchetype, buildGoal shape),
+> `ArchetypePicker.test.jsx`, `HomePanel.test.jsx` identity block, `ProfilePanel.test.jsx` Identity row, and
+> live-test §31 (390px render + persistence across reload).
+
+**F182 · Identity-suggested Lifestyle bills — offered, never pre-counted** — `constants/goalArchetypes.js` (`suggestedBills`), `lib/goalArchetypes.js` (`pendingBillSuggestions`, `markSuggestion`), `IdentitySuggestions.jsx`, `BudgetPanel.jsx` (`buildMonthForwardExpense`, `acceptSuggestion`), `App.jsx` (`handleResolveSuggestion`) — **[L]+[G]**
+2026-10-06 (TODO §31 Phase 2). A chosen identity offers 1–2 Lifestyle bills in Upkeep to prime the idea before the user knows their real bills.
+> **A suggestion is NOT an expense, by construction.** It lives only in the catalog and `config.identity.suggestions[templateKey]` (`"accepted"|"dismissed"`; absent = pending). It is never a row in `expenses`, so it cannot reach any of the ~8 raw-`expenses` consumers (`computeGoalTimeline` via `claimDate.js`/`aiContext.js`/`coachTools.js`, `computeCashOnHand`, `computeNeedsSetAsidePerCheck`, the resource snapshot, NJS runway) — the F180 failure class (a row that "looks inactive" but every filter has to know about). **IF** anyone is tempted to store a pending suggestion as an expense with a status flag, **THEN** stop: there is no shared active-expense filter (F180) and each of those consumers would need patching.
+> **Add = one real bill, one write.** `acceptSuggestion` builds the row through `buildMonthForwardExpense` — the same builder the add form's From-Month-Forward button now uses (behavior-identical extraction) — so an added suggestion is indistinguishable from a hand-entered bill. It hands App ONE `{ expenses, config }` payload (`handleResolveSuggestion` → one `savePersistedStateNow`); `onSaveExpensesNow` is deliberately NOT also called. Not me = `{ config }` only. Logs `expense_created` on Add. readOnly: `onResolveSuggestion` shadowed with the `noop` AND the handler refuses (F176); the card is not rendered read-only. **IF** `addExpFromMonthForward` changes shape, **THEN** suggestion Add changes with it automatically — keep it that way.
+> **Dedupe by label.** A suggestion whose label matches any existing bill (case-insensitive) is withheld, so it never duplicates a hand-entered one. Decisions persist across an identity switch (`applyArchetype` carries `suggestions`; keys are archetype-prefixed).
+> **Placement:** a standalone card above the category lanes, not rows inside Lifestyle — the lanes own collapse/clipping and drag-reorder (F175), and a non-expense row inside them would fight both.
+> **Gap:** `NewJobSeasonBudgetPanel` does not show suggestions (adding one there moves cash-runway math — needs its own decision).
+> Check: `goalArchetypes.test.js` suggested-bills block, `identitySuggestions.test.jsx` (incl. "a pending suggestion changes NO number on the panel": panel text identical with/without it), and live-test §31 P2 (Home numbers unchanged after dismiss; one write on Add; no re-offer after reload).
+
+**F183 · Identity-first Home — hero + collapsed "Your numbers"** — `HomePanel.jsx` (layout gate, `savingsRate`), `IdentityLocked.jsx` (`IdentityHero`, `YourNumbers`) — **[G]+[L]**
+2026-10-06 (TODO §31 Phase 3). Locked: everyone with an identity, numbers collapsed by default, counter over ALL goals, no streaks.
+> **Gate [G]:** `config.identity` set → `IdentityHero` replaces the plain banner (tidy mode still takes the slot) and BOTH tile groups (goal-stats grid incl. Left This Week + "Financial Health" title/tiles) render inside `YourNumbers`, collapsed every load (React state, not persisted). No identity → today's layout, tiles open. NJS Home and DemoAccountTree are untouched. The tile JSX exists once (`numbersBlock`) and is either wrapped or returned bare — **IF** someone duplicates it per branch, **THEN** it will drift.
+> **Views, not math [L]:** hero counter = `completedGoals.length` / `goals.length` (the Goals x/y tile's own figures); hero Next = `nextClaim` (the Next Claim Date hero's own goal) formatted by `formatGoalFinishDate`; summary $ = `leftThisWeek * perCheckFactor` (the Left This Week tile value); summary % = the single `savingsRate` const that `pulseNetWorth` now also reads. **IF** any of these tiles changes its formula, **THEN** the summary/hero change with it automatically — never re-derive them in the hero or summary.
+> **A collapsed section never hides a bad week:** negative left-this-week renders `--color-red` on the always-visible summary. Due Today and the Claim Date surface stay outside the collapse.
+> **Coach deep links are safe:** `navigate_to` focuses only `goal:N` cards, never tiles. **IF** a tile ever gains a `data-coach-ref`, **THEN** collapsed-by-default strands it (F175 invisible-target class) — open the section first.
+> **Not in scope:** the "Year-End Outlook" card under the goals is not collapsed.
+> Check: `HomePanel.test.jsx` "identity-first Home" block (8 cases, incl. Year-End Outlook inside the collapse) and live-test §31 P3 (390px, expand, reload re-collapses, legacy layout).
+> **Year-End Outlook** is built once as `yearEndOutlook` and placed inside "Your numbers" (identity) or at the bottom (no identity) — never both.
+
+**F184 · Goal limits — 6 active goals, total $ ≤ 5 years of Needs-only surplus** — `lib/goalLimits.js` (`computeGoalAmountCap`, `checkGoalLimits`), `GoalLimitNote.jsx`, `.limit-halo` (`index.css`), `HomePanel.jsx`, `ArchetypePicker.jsx`, `NewJobSeasonHomePanel.jsx`, `CoachToolUI.jsx` (`CoachGoalCard`), `App.jsx` (`handleCoachCreateGoal`, `handleApplyArchetype`, `goalAmountCapRef`), `aiContext.js` — **[L]+[G]**
+2026-10-06 (TODO §31.14–16).
+> **[L] One cap, one check.** Cap = `(weeklyIncome − weeklyNeeds) × 52/12 × 60`, where `weeklyIncome` is App's F14 figure and `weeklyNeeds` is `computeNeedsSetAsidePerCheck()` (Needs + loans, the Cash on Hand set-aside set). Lifestyle is excluded by design. `null` when income ≤ 0 or surplus ≤ 0. **IF** F14 or the Needs set-aside changes, **THEN** the cap moves with it — never re-sum Needs elsewhere. Coach's "Goal limits" context line calls the same function (§6/§24 grounding).
+> **[G] Every goal writer runs `checkGoalLimits`** — Home + ADD GOAL (count), Home add form, BOTH edit forms (mobile/desktop pair, F177), the picker (Home + NJS; NJS has no income → count only), `CoachGoalCard` (shows App's refusal, never "Added ✓"), and App's `handleCoachCreateGoal` / `handleApplyArchetype` independently of the UI. **IF** a new goal writer appears (F181's `buildGoal` callers), **THEN** it must call `checkGoalLimits` too or it is a back door.
+> **Growth-only.** `checkGoalLimits` blocks a change only if it adds goals past 6 or raises the active total past the cap — an over-limit account can still lower, claim, delete, and pick/switch identity with zero goals ("Choose identity only"). **IF** someone "simplifies" to `total > cap`, **THEN** over-limit users can't even lower a target.
+> **Silent until crossed:** no limit copy renders before a blocked attempt; typing clears the red state. `App` reads the cap via `goalAmountCapRef` (assigned during render) because its handlers sit above the auth early returns (F176).
+> **Telemetry:** a block logs `goal_limit_hit` (note = reason) — migration 048 (applied 2026-10-07).
+> Check: `goalLimits.test.js` (incl. $5k/$2k → $180,000), `HomePanel.test.jsx` goal-limits block, `coachToolUI.test.jsx` limits block, `aiContext.test.js` identity/limits block, live-test §31 limits.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

@@ -1229,14 +1229,16 @@ export async function redeemBetaCode(code) {
  * that isn't a tracked beta tester — this is expected to be called
  * unconditionally from UI event handlers, not pre-guarded by callers.
  */
-export async function logBetaEvent({ isTester, betaCodeUsed, eventType }) {
+export async function logBetaEvent({ isTester, betaCodeUsed, eventType, note }) {
   if (!isTrackedBetaTester({ isTester, betaCodeUsed })) return;
   const userId = await getCurrentUserId();
   if (!userId) return;
 
+  // `note` (migration 030) is optional detail — e.g. the archetype id or a
+  // suggestion's templateKey for TODO §31's tuning events (migration 048).
   const { error } = await supabase
     .from("beta_activity_events")
-    .insert({ user_id: userId, event_type: eventType });
+    .insert({ user_id: userId, event_type: eventType, ...(note != null ? { note: String(note).slice(0, 200) } : {}) });
 
   if (error) console.warn("logBetaEvent failed:", error.message);
 }

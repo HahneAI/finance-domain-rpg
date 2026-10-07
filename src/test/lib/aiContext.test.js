@@ -587,7 +587,37 @@ describe("buildJobHuntContext", () => {
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
-    expect(block).toContain("Applications (1 total): Acme Logistics — Warehouse Lead (interview, applied 2026-06-20)");
+    expect(block).toContain("Applications (1 total): Acme Logistics — Warehouse Lead (interview, applied 2026-06-20, 17 days ago)");
+    expect(block).toContain("Today: ");
+  });
+
+  it("states today's date and omits days-ago when no date is available", () => {
+    const withToday = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000 },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    expect(withToday).toMatch(/^Today: /);
+    const apps = [{ id: "a1", company: "Acme", role: "Lead", status: "applied", dateApplied: "2026-06-20" }];
+    const noToday = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobApplications: apps },
+      expenses: [essentialExpense],
+    });
+    expect(noToday).toBe("");
+  });
+
+  it("pins the elapsed-days figure to the real calendar gap (1 day singular; never negative)", () => {
+    const apps = [
+      { id: "a1", company: "Yesterday Co", role: "Lead", status: "applied", dateApplied: "2026-07-06" },
+      { id: "a2", company: "Future Co", role: "Lead", status: "applied", dateApplied: "2026-07-09" },
+    ];
+    const block = buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: 3000, jobApplications: apps },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    });
+    expect(block).toContain("applied 2026-07-06, 1 day ago");
+    expect(block).toContain("(applied, applied 2026-07-09)");
   });
 
   it("shows only the 5 most recent applications and flags the total when there are more", () => {
@@ -644,5 +674,34 @@ describe("buildCoachContext — Cash on Hand (TODO §22)", () => {
   });
   it("omits the lines when Cash on Hand isn't set up", () => {
     expect(buildCoachContext({ config: {} })).not.toMatch(/Cash on hand/);
+  });
+});
+
+describe("buildCoachContext — identity + goal limits (TODO §31 Phase 4)", () => {
+  const base = {
+    weeklyIncome: 5000 / (52 / 12),
+    avgWeeklySpend: 400,
+    goals: [{ completed: false, target: 10000 }, { completed: true, target: 500 }],
+    expenses: [{ label: "Rent", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [2000 / (52 / 12), 2000 / (52 / 12), 2000 / (52 / 12), 2000 / (52 / 12)] }] }],
+    currentWeek: { idx: 27 },
+    today: "2026-07-07",
+    allWeeks: buildAllWeeks(52),
+  };
+  it("names the chosen identity (name + hook only)", () => {
+    const block = buildCoachContext({ ...base, config: { identity: { archetypeId: "heartbeat" } } });
+    expect(block).toContain('Chosen identity: The Heartbeat ("My body is my first asset.")');
+  });
+  it("omits the identity line when none is chosen", () => {
+    expect(buildCoachContext({ ...base, config: {} })).not.toContain("Chosen identity");
+  });
+  it("states the same limits the app enforces: 6 goals and the 5-yr Needs-only cap with room left", () => {
+    const block = buildCoachContext({ ...base, config: {} });
+    expect(block).toContain("at most 6 active goals (1 active now)");
+    expect(block).toMatch(/at most \$180,000 \(five years of the Needs-only surplus\) — \$170,000 of room left/);
+  });
+  it("no income → only the count limit is stated", () => {
+    const block = buildCoachContext({ ...base, weeklyIncome: 0, config: {} });
+    expect(block).toContain("at most 6 active goals");
+    expect(block).not.toContain("Needs-only surplus");
   });
 });

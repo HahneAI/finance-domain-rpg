@@ -311,3 +311,42 @@ describe('ProfilePanel — App Preferences Résumé row', () => {
     expect(screen.queryByText('Choose File')).toBeNull()
   })
 })
+
+describe('ProfilePanel — Identity row (TODO §31)', () => {
+  const cfg = { ...DEFAULT_CONFIG, identity: { archetypeId: 'builder', chosenAt: '2026-10-06T00:00:00.000Z' } }
+  const mount = (over = {}) => render(<ProfilePanel authedUser={{ email: 'a@b.c' }} config={cfg} setConfig={() => {}} saveConfigNow={() => {}} allWeeks={[]} taxDerived={null} {...over} />)
+
+  it('asks before changing: tapping the row opens the confirm and writes nothing', () => {
+    const saveConfigNow = vi.fn(); const onChangeIdentity = vi.fn()
+    mount({ saveConfigNow, onChangeIdentity })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    expect(screen.getByRole('dialog', { name: 'Change your identity' })).toBeTruthy()
+    expect(screen.getByText(/You're locked in as The Builder/)).toBeTruthy()
+    expect(screen.getByText(/pick a new one, its starter goals get added/i)).toBeTruthy()
+    expect(saveConfigNow).not.toHaveBeenCalled(); expect(onChangeIdentity).not.toHaveBeenCalled()
+  })
+
+  it('"Choose new identity" hands off to App; Profile itself never edits config or goals', () => {
+    const onChangeIdentity = vi.fn(); const saveConfigNow = vi.fn()
+    mount({ onChangeIdentity, saveConfigNow })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Choose new identity'))
+    expect(onChangeIdentity).toHaveBeenCalledTimes(1)
+    expect(saveConfigNow).not.toHaveBeenCalled()
+  })
+
+  it('Cancel closes without changing anything', () => {
+    const onChangeIdentity = vi.fn(); const saveConfigNow = vi.fn()
+    mount({ onChangeIdentity, saveConfigNow })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(onChangeIdentity).not.toHaveBeenCalled(); expect(saveConfigNow).not.toHaveBeenCalled()
+  })
+
+  it('offers no edit-first option (the old flow is gone)', () => {
+    mount({ onChangeIdentity: () => {} })
+    fireEvent.click(screen.getByText(/The Builder · tap to change/))
+    expect(screen.queryByText('Edit goals first')).toBeNull()
+    expect(screen.queryByText('Same goals list')).toBeNull()
+  })
+})

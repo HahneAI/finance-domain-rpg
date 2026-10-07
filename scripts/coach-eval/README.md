@@ -386,10 +386,17 @@ retry-on-a-hunch.** Concretely for this file:
     original finding): exactly one figurative touch ("go the distance") and
     exactly one named lever (a single expense line), all three runs.
     Regression test in `coachPrompts.test.js`.
+  - [x] Repeat-verify passes done 2026-10-06 (12 calls): Job Hunt voice
+    holds 6/6 but first-pick is unstable and one draw misstates the gap
+    (17 days called "over three weeks"); Résumé Review score-1 not reached
+    (floor 3–4; natural baseline 13–17 sentences, proposed target 3); Ask Coach tool-available — no metaphor, Axis 2 shift
+    confirmed (directional, 1 draw each). Details:
+    `docs/coach-personality-rubric.md` Known Limitations.
   - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
-    Warmth/formality (still undefined), repeat-verify passes on Job Hunt
-    Chat and the tool-available rerun — then the batch decision: lock one
-    target number per mode/axis pair across all four modes.
+    Warmth/formality (still undefined) — then the batch decision: lock one
+    target number per mode/axis pair across all four modes. (Job Hunt
+    first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
+    2026-10-06 — see the rubric's Known Limitations.)
 - [~] Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to
   remaining flat-default modes" scope). Widen live testing to Coach modes
   beyond the four that exist today, once each is actually built — blocked

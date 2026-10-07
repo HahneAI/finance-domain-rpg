@@ -16,6 +16,7 @@
 | 1 | 22 | Cash on Hand + Pay-Period Check-In — Home Hero Feature (merged w/ NJS runway) | 7 | 13 |
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
+| 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -39,7 +40,7 @@
 | 4 | 29 | Location-Aware Claim Date & "Try Before You Buy" — Mapbox + Coach | 16 | 0 |
 | 4 | 28 | Coach over SMS — Twilio prerequisites & sequence | 11 | 0 |
 
-**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off.
+**Tier 1 build order is dependency-driven, not numeric:** §24 (real-money bug) → §25 (adds the `"paid"` status) → §26 (needs §25) → §23 (same NJS wizard) → §20 (due dates) → §22 (Cash on Hand + Pay-Period Check-In; its per-bill red tier needs §20's due dates, V1 does not) → §21. §22 stays flagged TOP PRIORITY in its own section; ordering here only sequences the prerequisites. §27 (Job Hunt OS) builds on the already-shipped NJS panels and `jobApplications`; it has no dependency on §20–§26 except sharing §20.C's due-today alert surface, and its Coach seams are wired only after its V1 works with Coach off. §31 (Goal Archetypes) is independent of §20–§27 — it only reads existing goal/spend math and can run in parallel.
 
 ---
 
@@ -477,7 +478,7 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
 - [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
-### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **not yet applied**, unchecked until Anthony verifies)*
+### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **applied** (production through 048 confirmed 2026-10-07); still unchecked until Anthony verifies the feature)*
 
 *Decided 2026-10-04 in a side-by-side session with the Cyborg repo (its `docs/resource-track-source.md`
 §5a, TODO §55-0). Cyborg's Resource track shows figures that only this app computes. Rather than Cyborg
@@ -832,6 +833,196 @@ Open question 3 below decides scope. Default if unanswered: **a static linked re
 Each seam gets a one-line `// Coach root: NJS-JH-…` comment at its export so a grep finds all nine. Add a drift-warden row when built: these functions gain an **AI-context consumer**, so a change to any must re-check `buildJobHuntContext()` (§6/§24 grounding rule).
 
 **Status: scoped and design-locked except the 27.13 questions. No code, schema, or migration written.**
+
+---
+
+## 31. Goal Archetypes — Identity-Based Starter Goal Templates *(new — scoped 2026-10-06 from a research pass, NOT built, no code written)*
+
+**What:** after account creation, the user picks 1–2 identity archetypes ("who are you building toward?")
+and is handed 3–5 starter goals with real dollar targets, each previewed/editable before it lands on the
+Claim Date surface. Fills the empty-goals cold start every new account hits today.
+
+**Why (research, 2026-10-06):**
+- Identity-framed goals get more goal-consistent behavior than outcome-framed ones (healthy-eater identity
+  interventions; Sheldon & Elliot self-concordance → more sustained effort). Purchases serve identity functions:
+  control, distinctiveness, self-esteem, group affiliation, projected status — experiential spend satisfies
+  them best ([Chen/Urminsky/Yu, "We Do What We Are"](https://home.uchicago.edu/ourminsky/WeDoWhatWeAre_Chen_Urminsky_Yu.pdf),
+  [Sussex identity/well-being study](https://sussex.figshare.com/articles/journal_contribution/Identity_changes_and_well-being_gains_of_spending_money_on_material_and_experiential_consumer_products/23467514)).
+- Goal-setting inside the first 3 days of onboarding is reported to lift 12-month retention ~20%
+  ([Amplitude/WeMoney](https://amplitude.com/blog/increasing-retention-wemoney)) — vendor case study, treat as directional.
+- What people actually want (Bankrate 2026): pay down debt 19%, more income 14%, emergency savings 13%, budget 12%,
+  invest 8%, retirement 8%, non-essential purchase 5%, home 3%
+  ([Bankrate](https://www.bankrate.com/personal-finance/personal-finances-outlook-survey)).
+
+**Starter roster (six; names are aspirational on purpose — nobody self-selects a pejorative label like "doomsday prepper"):**
+
+| Archetype | Identity hook | Starter goals (rough $; ⚙ = derived from the user's own data, not fixed) |
+|---|---|---|
+| **The Prepper** (security / readiness) | "Nothing catches me off guard" | ⚙ Emergency fund = N weeks of real spend · 2-week food & water stash ~$400 · Cash-on-hand stash ~$500 · Home readiness kit / generator ~$600–1,000 |
+| **The Heartbeat** (health nut) | "My body is my first asset" | Annual gym / class pass ~$420 · Home gym starter ~$500 · Food-quality upgrade ~$100/mo · Annual checkup + dental out-of-pocket ~$300 · Race/event entry ~$150 |
+| **The Builder** (wealth down the line) | "Future me is rich" | ⚙ Starter emergency $1,000 · ⚙ Kill highest-APR debt · First $1,000 invested · Max the employer match (⚙) · Roth IRA year contribution |
+| **The Polished** (look & feel good) | "I walk in like I belong" | Wardrobe capsule refresh ~$500 · Grooming/skincare routine ~$50/mo · One quality piece (shoes/watch) ~$300 · Smile/dental cosmetic ~$400+ |
+| **The Family Man** (family / home life) | "Home is where I win" | Room/furniture upgrade ~$1,500 · Family trip ~$3,000 · Kids' fund ~$50/mo · ⚙ Home repair reserve (~1% home value/yr or flat $1,000 renter) |
+| **The Explorer** (experiences / social) | "I collect stories, not stuff" | Trip fund ~$2,000 · Concert/events fund ~$600 · Passport ~$165 · Travel gear ~$400 |
+
+$ anchors: wellness ≈ $5.3–6k/person/yr, fitness ≈ $61–155/mo ([HFA](https://www.healthandfitness.org/americans-plan-to-invest-60-billion-in-health-and-fitness-in-2026/),
+[BarBend](https://barbend.com/fitness-spending-survey/)); preppers avg $1,057 savings / $580 home / $468 cash stash
+([Finder](https://www.finder.com/personal-loans/doomsday-prepper-statistics)). Everything else is a rough starting guess — **tune with beta data (`templateKey` + `goal_updated` deltas, then 31.12), not by gut.**
+Candidate 7th: **The Climber** (career/status: certification, interview wardrobe, relocation fund) — overlaps §27 Job Hunt OS; hold.
+
+### 31.T Technical design (fleshed out 2026-10-06 against `master` @ `0fa2b26` — re-verify line refs before coding)
+
+**Load-bearing calls (the four decisions everything else hangs on):**
+1. **No migration, no new top-level persisted field in V1.** Archetype state lives **inside `config`** as
+   `config.identity = { archetypeId, chosenAt, suggestions: { [templateKey]: "pending"|"accepted"|"dismissed" } }`.
+   `config` already rides all four persisted-field sites (warden F110), so a nested key needs none of them.
+   Absent `identity` = never chosen (no `DEFAULT_CONFIG` entry → no snapshot churn). **Not** added to
+   `HISTORY_SENSITIVE_FIELDS` — it is not a pay/tax input and must not tag `account_history` rows.
+2. **Suggested bills never enter the `expenses` array until the user confirms them.** There is no shared
+   active-expense filter: `expenses` is consumed raw by `computeGoalTimeline` (via `claimDate.js:61`,
+   `aiContext.js:154`, `coachTools.js:318`), `computeCashOnHand`, `computeNeedsSetAsidePerCheck`, the resource
+   snapshot (`App.jsx:2081`), and filtered only in NJS mode at `App.jsx:1984`. A `suggested` status on an expense
+   row would need ~8 consumers patched and is exactly the F180 failure class. Keeping suggestions in
+   `config.identity` makes them **mathematically invisible by construction** — zero finance-path edits.
+3. **One goal builder, three callers.** `HomePanel.addGoal` (`:428`) and `App.handleCoachCreateGoal` (`:798`)
+   already hand-mirror the goal shape (F176: "IF `addGoal` gains a field, THEN this handler needs it too").
+   Archetype seeding would be a third copy. Extract `buildGoal({ label, target, note, templateKey })` into
+   `src/lib/goalFunding.js` (existing goals lib) and route all three through it. `templateKey` is the only new
+   goal field (optional; goals persist as one array, so no four-site cost) — it powers dedupe + tuning.
+4. **One eager write per gesture.** Seeding writes `goals` AND `config.identity` together. Two back-to-back
+   `onSaveGoalsNow` + `saveConfigNow` calls risk the second merging onto a stale snapshot. Add
+   `handleApplyArchetype({ goals, config })` in `App.jsx` calling `savePersistedStateNow({ goals, config })` once —
+   placed **above** the auth early returns and reading `isExpiredReadOnlyRef` (the F176 hook-placement lesson).
+
+**Files (new / touched):**
+
+| File | Change |
+|---|---|
+| `src/constants/goalArchetypes.js` *(new)* | `ARCHETYPES` = 6 × `{ id, name, hook, icon, goals:[{templateKey,label,note,target \| targetRule}], suggestedBills:[{templateKey,label,amount,cycle,category:"Lifestyle"}] }`. `cycle` ∈ `src/lib/expense.js:6-11` values only. |
+| `src/lib/goalArchetypes.js` *(new, pure)* | `resolveTemplateGoals(archetype, { avgWeeklySpend, existingGoals })` → concrete goals (derived targets, $50 rounding, dedupe by `templateKey`). `pendingSuggestions(config)`. No React, fully unit-testable. |
+| `src/lib/goalFunding.js` | + `buildGoal()` (decision 3). |
+| `src/components/ArchetypePicker.jsx` *(new)* | Step 1: 6 cards, single select. Step 2: preview 3–5 goals — toggle each, inline-edit target (string draft, parse on blur), live Claim Date per goal. Confirm → `onApplyArchetype`. `"use no memo";` first line (draft-object + save/cancel handlers = the §12.4 compiler trigger). |
+| `src/components/HomePanel.jsx` | Replace the `goals.length===0` empty state (`:554-567`) with the picker when `!config.identity`; otherwise a dismissible "Pick your identity" chip. `readOnly` → `onApplyArchetype` shadowed by the existing `noop` pattern. |
+| `src/components/BudgetPanel.jsx` *(phase 2)* | "Suggested for The Heartbeat" ghost rows under Lifestyle, read from `config.identity.suggestions`. **Add** → the existing `addExpAllQuarters` path (`:737`, via `applyExpenseUpdate`) so the created row is identical to a hand-added one + flips suggestion to `accepted` in the same eager save; **Not me** → `dismissed`. Ghost rows are not in `expenses`, so nothing to filter. |
+| `src/components/ProfilePanel.jsx` | "Change identity" → reopens picker. Never deletes goals; only offers templates whose `templateKey` isn't already present. |
+| `src/App.jsx` | `handleApplyArchetype` (decision 4); `handleCoachCreateGoal` → `buildGoal`. |
+
+**Target math (⚙ rules) — only what existing data can ground:**
+- **Emergency fund (Prepper, Builder):** `max(1000, round50(weeks × remainingSpend.avgWeeklySpend))` — the same
+  `avgWeeklySpend` HomePanel already reads at `:114`. Prepper = 4 weeks, Builder = $1,000 flat "starter". The floor
+  matters: a fresh account has only the seeded Food bill, so raw avgWeeklySpend is tiny.
+- **Dropped from ⚙ after reading the code:** "kill highest-APR debt" (loans carry `loanMeta`, **no APR field**) and
+  "max the employer match" (no match field). V1 ships these as fixed-$ or omits them; revisit if those fields arrive.
+- **Claim Date preview reuses Coach's `simulate_new_goal` engine** (`coachTools.js:199/898`) — the same
+  `computeGoalTimeline` append-last projection the confirm card uses (F176). Never a second estimate. Targets whose
+  date lands > 12 months out render a "stretch" badge; user decides.
+
+**Telemetry:** seeding logs one existing `goal_created` per goal (same as F176 — otherwise beta analytics
+under-count). New types (`archetype_selected`, `suggestion_accepted/dismissed`) need **migration 048** to widen
+`beta_activity_events_event_type_check` (`030_add_beta_feedback.sql:29-33`) → deferred to phase 4. Until then the
+archetype is readable in DB Viewer via `config.identity`, and target edits via `templateKey` + `goal_updated`.
+
+**Coach seam:** archetype `name` (never goal names — F114) into `aiContext` as one line, through the §6/§24
+grounding rule. Phase 4.
+
+### 31.P Build phases
+
+**Phase 1 — Seed goals (no migration, no expense changes)**
+- [x] **31.1 Roster locked 2026-10-06** — The Prepper · The Heartbeat · The Builder · The Polished · The Family Man · The Explorer (Anthony's call; "Family Man" kept deliberately).
+- [$] **31.2 `goalArchetypes` constants + pure lib** (`resolveTemplateGoals`, derived targets, dedupe).
+- [$] **31.3 Extract `buildGoal()`**; move `addGoal` + `handleCoachCreateGoal` onto it. Behavior-identical refactor, its own commit.
+- [$] **31.4 `ArchetypePicker`** (select → preview → confirm) with Claim Date preview via `simulate_new_goal`.
+- [$] **31.5 `handleApplyArchetype`** single eager write; `readOnly` shadow + independent refusal in the handler.
+- [$] **31.6 HomePanel wiring** (empty-state swap + chip) and **ProfilePanel "Change identity"**.
+- [$] **31.7 Tests** — catalog validity (every `cycle` legal, 3–5 goals each); derived-target math incl. floor;
+  dedupe; `buildGoal` parity across the three callers; picker edits are what gets saved; one save call;
+  readOnly no-op. Then `npm run build` + 390px browser render (compiler blind spot).
+
+**Phase 2 — Suggested Lifestyle bills**
+- [$] **31.8** `suggestedBills` in catalog + `pendingSuggestions()`.
+- [$] **31.9** Upkeep "Suggested for <identity>" card (a standalone card above the category lanes — NOT rows inside Lifestyle, which would fight the lane collapse/drag code, F175) → **Add** builds a real Lifestyle bill through the shared `buildMonthForwardExpense` (same shape as the add form's From-Month-Forward) + marks the suggestion accepted in ONE eager write; **Not me** = config only; readOnly refused.
+- [$] **31.10** Test: a pending suggestion changes **no** number anywhere (`avgWeeklySpend`, Claim Dates, Cash on Hand, Coach context) — assert before/after equality.
+
+**Phase 3 — Identity-first Home** *(scoped 2026-10-06 against `claude/goal-archetype-templates`; decisions are Anthony's, locked)*
+
+**Locked decisions:** ships to **everyone on day one** (no admin/tester flag, no Profile toggle) · the numbers section
+**starts collapsed** with a summary line always visible · the identity counter counts **all goals**, not just
+template ones · **no streaks** or day counters.
+
+**Target layout (employed `HomePanel`, only when `config.identity` is set):**
+1. **`IdentityHero`** (replaces the plain `IdentityLockedBanner` at `HomePanel.jsx:633`): eyebrow "Identity locked in",
+   archetype name, hook, counter **"N of M goals claimed"**, and **"Next: <goal> · <date>"**.
+   - Counter = `completedGoals.length` of `goals.length` — the exact figures the existing "Goals x/y" tile uses (`:1638`).
+     One source, no second count.
+   - Next line = `nextClaim` from `computeClaimDates()` (`:318`) → `resolveGoalFinishInfo()`. Omitted when there is no
+     dated goal; never a fabricated date (F177).
+   - When `identityTidy` is on, the existing tidy banner takes this slot instead (unchanged).
+2. Next Claim Date hero + queue — **unchanged**.
+3. Cash on Hand card (`:765`) — **unchanged position** (§22 top priority).
+4. Active goals — unchanged.
+5. Due Today card (`:1627`) — **stays visible, outside the collapse** (a bill due today is an alert, not a stat).
+6. **"Your numbers"** — one collapsible section wrapping BOTH the goal-stats grid (`:1628-1645`: Left This Week, Active
+   Goals Total, Checks to Complete All, Goals x/y) AND the "Financial Health" title + tiles (`:1649-1684`: Next Check,
+   Net Worth Trend, Upkeep Health). **Collapsed by default every load** (React state, not persisted).
+   - Always-visible summary line: **"Left this week $X · Saving N%"**.
+     - `$X` = `leftThisWeek * perCheckFactor` with `leftThisCheckLabel` wording — the same value the tile shows.
+     - `N%` = the savings rate `pulseNetWorth` already computes (`annualSavings / (weeklyIncome * activeWeeksThisYear)`).
+       **Extract it to one `savingsRate` const** used by both pulse and summary — no parallel formula (warden §12).
+     - **Negative left-this-week renders in `--color-red` on the summary line** — collapsing must never hide a bad week.
+   - Expanded = today's tiles, untouched (entrance stagger, countups, click-throughs to Log/Income/Upkeep all as-is).
+7. Breakthrough tips / Coach card / footer — unchanged.
+
+**No identity yet** (picker showing, or "Not now"): layout stays exactly as today — numbers NOT collapsed. Collapsing
+numbers for someone with no identity hero above them would just hide the page. **New Job Season Home and
+DemoAccountTree: untouched** (demo accounts have no `config.identity`, so they fall through to today's layout).
+
+**Checked, safe:** Coach's `navigate_to` focus targets only `goal:N` cards (`HomePanel.jsx:833/1051`), never the tiles —
+so collapsing them cannot strand a deep link (the F175 invisible-target class). Re-check if a tile ever gains a
+`data-coach-ref`.
+
+- [$] **31.11a** Pure helpers in `lib/goalArchetypes.js` (or HomePanel-local if they need its scope): identity counter
+  `{ claimed, total }` and the summary line's inputs. Extract `savingsRate` in HomePanel; point `pulseNetWorth` at it.
+- [$] **31.11b** `IdentityHero` (extend `IdentityLocked.jsx`): name, hook, counter, optional next-claim line. Single
+  block (not inside the duplicated mobile/desktop goal-card branches — F177 pair rule not triggered). `.text-*` scale +
+  tokens only.
+- [$] **31.11c** `YourNumbers` collapsible wrapper: header + summary line + chevron; `aria-expanded`; children mounted
+  only when open (so countups fire on open, not off-screen). Press = `scale(0.97)`; fold ≤ 340ms like other folds.
+- [$] **31.11d** Wire into HomePanel behind `config?.identity` only.
+- [$] **31.11e** Tests: counter equals the Goals x/y tile; next-claim line matches the Next Claim Date hero; summary `$X`
+  equals the Left This Week tile's value; `N%` equals the Net Worth Trend pulse; negative → red; collapsed by default;
+  expand shows every tile; no-identity → old layout with tiles visible (existing HomePanel tests stay green unchanged);
+  tidy mode still replaces the hero. Then `npm run build` + 390px live-test §31 P3 (collapsed, expand, negative week).
+- [$] **31.11f** Warden §8 entry (next free F — verify): **[G]** layout gate (`config.identity` → hero + collapsed numbers;
+  absent → legacy layout) + **[L]** the summary line is a VIEW of the tile values, never its own math.
+
+**Phase 3 BUILT 2026-10-06 (`[$]`):** hero + collapsed "Your numbers" live for everyone with an identity; legacy layout otherwise. Verified: unit tests (counter = Goals x/y tile, Next = Next Claim Date hero, summary $ = Left This Week tile, % = Net Worth Trend pulse via one `savingsRate` const, negative → red), `vite build`, live-test §31 P3 at 390px (11 checks). **Not collapsed (outside the two tile groups the plan named):** the "Year-End Outlook" card under the goals still shows surplus/savings figures — decide whether it moves into "Your numbers".
+**Risk I still flag:** collapsed-by-default buries the tiles that link to Log/Income/Upkeep — the bottom nav still
+reaches all three, but watch beta feedback for "where did my numbers go."
+
+**Phase 4 — Telemetry + Coach**
+- [$] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.
+- [$] **31.13** Coach context line for archetype (§6/§24).
+
+**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **applied to production 2026-10-07**, so the new events now record) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
+
+**Goal limits (added 2026-10-06, Anthony's spec) `[$]`:**
+- [$] **31.14** Max **6 active goals**; total active goal $ ≤ **(monthly take-home − monthly Needs incl. loans) × 60** (Lifestyle ignored). Monthly take-home = App `weeklyIncome` × 52/12; Needs = `computeNeedsSetAsidePerCheck().weeklyNeeds` × 52/12. No cap when income is 0 or surplus ≤ 0.
+- [$] **31.15** Silent until crossed. A blocked attempt: field turns red + red halo + one ≤360ms jiggle (`.limit-halo`, reduced-motion safe) and a red line — count: *"Goal limit reached — you must not spread yourself too thin in planning alone."*; amount: *"This extends past your realistic, five-year timeline. You should only plan five years ahead — as you claim goals, you'll free up more space. Your limit is $X across all active goals."*
+- [$] **31.16** Enforced at every goal writer through one pure check: Home "+ ADD GOAL" (count), add form (amount), both edit forms (mobile+desktop pair), identity picker (Home + NJS), Coach goal card, and App's write handlers (independent of the UI). Only growth is blocked — an account already over a limit can still lower, claim or delete, and can still choose/switch identity via **"Choose identity only"** (zero goals).
+- **Decided for you, flag if wrong:** (a) "six total" = six **active** goals (claimed goals don't count — matches "as you claim goals, you'll free up more space"); (b) accounts already over 6 (Anthony's has 10 active) keep every goal but can't add until under; (c) surplus ≤ 0 → no $ cap (the stalemate card already covers that; a $0 cap would lock all goals).
+
+**Done-gate (every phase):** warden entries added in the same PR — **F181** `buildGoal` / three-caller goal-write
+parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `expenses` — never give an expense row a suggested status"
+**[L]** *(written 2026-10-06)*; Home-hero entry under §8 for phase 3. Verify F-numbers with the collision check first.
+
+**Open questions:** (a) ~~single vs. max 2~~ → single. (b) → Phase 3. (c) recurring → Phase 2 suggested bills.
+(d) ~~who sees the picker~~ → **everyone without `config.identity`** (locked 2026-10-06), regardless of existing goals.
+
+**Phase 2 BUILT 2026-10-06 (`[$]`):** 1–2 suggested Lifestyle bills per identity (e.g. Heartbeat: Gym $35/mo, Supplements $50/mo — rough guesses, tune from beta data) shown in Upkeep, count toward nothing until Add. Employed Upkeep only — **New Job Season Upkeep (`NewJobSeasonBudgetPanel`) does not show them yet** (their bills are runway-tracked; adding a suggestion there changes cash-runway math, so it needs its own decision).
+**Status (2026-10-06): Phase 1 BUILT (`[$]`, awaiting Anthony's review) — 1,983+ unit tests, `vite build`, and a 390px real-browser pass (live-test §31) green. Phases 2–4 not started.**
+**Change-identity flow (rebuilt 2026-10-06 to Anthony's order — PICK FIRST, TIDY SECOND):** Profile → Identity opens an "are you sure" popup (Choose new identity / Cancel) → the picker opens on Home **while the old identity is still saved** → confirming appends the new identity's goals **after** the existing ones and swaps `config.identity` in one write → the Goals page shows a **"New identity · tidy up your goals"** banner (remove old goals, set realistic numbers, reorder — with the new goals already on the list) until *Done* or leaving the screen. Cancelling, "Keep my current identity", or leaving Home mid-pick changes nothing. Jobless users go through the same pick; their goals are paused/read-only so there is no tidy step. The Goals page and NJS Home both lead with an **"Identity locked in" banner** (name + hook). *(An earlier build had edit-first-then-pick; it was wrong and is gone.)* Live-test §31 covers it.
+**New Job Season (added 2026-10-06, Anthony's call):** `NewJobSeasonHomePanel` shows the same picker to anyone without `config.identity` — including accounts that start unemployed — to set direction before income returns. Rows say "Starts with your first paycheck" instead of a Claim Date (their dates are paused); seeded goals then appear in the existing paused Claim Dates card. Live-test §31 covers it.
+**Pre-existing, not from §31:** `scripts/live-test/run.mjs` §22.C aborts at the "Confirm Week" button (disabled) on `master` too, so scenarios after it don't run in a full pass — §31 was verified by running it alone. `npx eslint src` also reports 3 pre-existing errors (`expense.js` ×2, `CoachToolUI.jsx`).
 
 ---
 
@@ -2093,8 +2284,20 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     identical (`claude-haiku-4-5`, `scripts/coach-eval/promptfooconfig.phase5-amber-refix.yaml`):
     exactly one figurative touch, exactly one named lever, all three runs. Regression test added
     in `coachPrompts.test.js`. Full writeup: `coach-personality-rubric.md`'s Known Limitations.
-  - [ ] Repeat-verify passes worth locking in before the batch decision: Job Hunt Chat (3 calls,
-    no repeat yet), the Ask Coach tool-available rerun (2 calls, no repeat yet).
+  - [x] Repeat-verify passes (run 2026-10-06, 12 calls, 0 errors; full writeup in
+    `coach-personality-rubric.md` Known Limitations). **Job Hunt Chat:** voice holds 6/6 (3
+    sentences, no metaphor, urgency as content) BUT the "which application first" pick flips
+    between draws and one draw states a wrong gap ("over three weeks" for 17 days) — new open
+    item, grounding/tiebreak not voice. **Résumé Review score-1:** NOT reached (~15 sentences
+    under a 2–3-sentence override); floor 3–4 (natural baseline measured 2026-10-06: 13–17 sentences / 270–350 words; proposed target score 3, range 3–5), feeds the batch decision. **Ask Coach
+    tool-available:** no metaphor, Axis 2 shift confirmed (1 draw/scenario, directional); both
+    draws called `navigate_to` unprompted on "How's my week looking?".
+  - [x] Job Hunt Chat first-pick + wrong-gap — FIXED + re-verified 2026-10-06 (`Today:` + computed
+    `N days ago` in `buildJobHuntContext`, one-pick tiebreak in `JOB_HUNT_ADDENDUM`): 6/6 Riverbend
+    first, 6/6 correct "17 days". Résumé Review: `Today:` now in its context block + no-recap /
+    date-after-Today rules in `RESUME_REVIEW_ADDENDUM` — dates 3/3 fixed, recap partly (2/3 still
+    close on the body's gap, as an action); length intentionally untouched. Residual (minor): loose
+    runway-to-weeks conversion on tight runway. Writeup: rubric Known Limitations.
   - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
     above. This is Phase 5's actual finish line.

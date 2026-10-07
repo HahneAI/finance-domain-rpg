@@ -1,3 +1,5 @@
+import { getArchetype } from "../constants/goalArchetypes.js";
+import { computeGoalAmountCap, MAX_ACTIVE_GOALS } from "./goalLimits.js";
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate, isExpenseRemoved } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
@@ -281,6 +283,19 @@ export function buildCoachContext({
     lines.push(`New Job Season: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
   }
 
+  // TODO §31 Phase 4 — the identity the user chose, by archetype NAME only (goal
+  // names stay withheld, F114). Lets Coach frame advice in the user's own terms.
+  const archetype = config?.identity ? getArchetype(config.identity.archetypeId) : null;
+  if (archetype) {
+    lines.push(`Chosen identity: ${archetype.name} ("${archetype.hook}") — the user picked this; their starter goals came from it. Frame encouragement around becoming this person; never invent goals on its behalf.`);
+  }
+  // Goal limits — the SAME check every goal writer enforces (lib/goalLimits.js,
+  // F184), so Coach never proposes a goal the app will refuse.
+  const goalCap = computeGoalAmountCap({ weeklyIncome, expenses, todayIso: today, userPaySchedule: config?.userPaySchedule });
+  lines.push(`Goal limits: at most ${MAX_ACTIVE_GOALS} active goals (${activeGoals.length} active now)${
+    goalCap != null ? `; active goal targets may total at most ${fmt$(goalCap)} (five years of the Needs-only surplus) — ${fmt$(Math.max(0, goalCap - totalActiveGoalsTarget))} of room left` : ""
+  }. Claiming a goal frees room. Do not propose a goal that would exceed these.`);
+
   return lines.join("\n");
 }
 
@@ -300,8 +315,18 @@ export function buildCoachContext({
  * name would break the feature, not just protect privacy the way it does
  * for goals.
  */
+// Whole days from `fromIso` to `toIso` (both YYYY-MM-DD). Computed here, not
+// left to the model — the 2026-10-06 Job Hunt repeat-verify had Coach call a
+// 17-day silence "over three weeks" when only the applied date was given.
+function wholeDaysBetween(fromIso, toIso) {
+  const parse = (s) => { const [y, m, d] = String(s).split("-").map(Number); return Date.UTC(y, m - 1, d); };
+  const a = parse(fromIso), b = parse(toIso);
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86400000) : null;
+}
+
 export function buildJobHuntContext({ config = null, expenses = [], effectiveToday = null, includeBenefits = true } = {}) {
   const lines = [];
+  if (effectiveToday) lines.push(`Today: ${fmtFullDate(effectiveToday)}`);
   const huntIncome = sumJobHuntIncome(config);
   const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday, extraCash: huntIncome });
   if (!dash) return "";
@@ -320,7 +345,11 @@ export function buildJobHuntContext({ config = null, expenses = [], effectiveTod
   const apps = Array.isArray(config?.jobApplications) ? config.jobApplications : [];
   if (apps.length) {
     const recent = [...apps].sort((a, b) => (b.dateApplied ?? "").localeCompare(a.dateApplied ?? "")).slice(0, 5);
-    const items = recent.map((a) => `${a.company} — ${a.role} (${a.status}, applied ${a.dateApplied})`).join("; ");
+    const items = recent.map((a) => {
+      const ago = effectiveToday ? wholeDaysBetween(a.dateApplied, effectiveToday) : null;
+      const agoText = ago != null && ago >= 0 ? `, ${ago} ${ago === 1 ? "day" : "days"} ago` : "";
+      return `${a.company} — ${a.role} (${a.status}, applied ${a.dateApplied}${agoText})`;
+    }).join("; ");
     lines.push(`Applications (${apps.length} total${recent.length < apps.length ? `, ${recent.length} most recent shown` : ""}): ${items}`);
   } else {
     lines.push("No applications logged yet.");

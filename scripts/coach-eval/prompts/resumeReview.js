@@ -15,7 +15,12 @@
 // whether the shipped default (rubric anchor Metaphor Intensity 3, scored
 // 2026-07-25 but never live-verified) holds on real pasted résumé text.
 import { RESUME_REVIEW_SYSTEM_PROMPT } from "../../../src/lib/coachPrompts.js";
+import { fmtFullDate } from "../../../src/lib/finance.js";
 import { RESUME_REVIEW_TEXT, RESUME_REVIEW_TARGET_ROLE } from "../fixtures/testAccount.js";
+
+// Same fixed "today" every other fixture uses (testAccount.js effectiveToday) — ResumeReviewCard.jsx
+// now prepends a Today line to this context block; the loader mirrors it.
+const FIXTURE_TODAY = "2026-03-09";
 
 // vars.calibrationInstruction is OPTIONAL — added 2026-09-03 for Axis 3
 // (Sentence Economy) extremes-discovery, same pattern as
@@ -27,7 +32,7 @@ import { RESUME_REVIEW_TEXT, RESUME_REVIEW_TARGET_ROLE } from "../fixtures/testA
 // paragraphs"), so a score-1 override has to explicitly suspend that
 // exception too, not just the shared rule.
 export default function ({ vars } = {}) {
-  const contextBlock = `Résumé text:\n${RESUME_REVIEW_TEXT}\n\nTarget role: ${RESUME_REVIEW_TARGET_ROLE}`;
+  const contextBlock = `Today: ${fmtFullDate(FIXTURE_TODAY)}\n\nRésumé text:\n${RESUME_REVIEW_TEXT}\n\nTarget role: ${RESUME_REVIEW_TARGET_ROLE}`;
   const calibrationBlock = vars?.calibrationInstruction ? `\n\n${vars.calibrationInstruction}` : "";
   return [
     { role: "system", content: `${RESUME_REVIEW_SYSTEM_PROMPT}\n\n${contextBlock}${calibrationBlock}` },

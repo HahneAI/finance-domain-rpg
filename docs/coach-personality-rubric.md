@@ -743,6 +743,66 @@ Ask Coach only.
 
 ---
 
+**Phase 5 repeat-verify passes, 2026-10-06 (key restored; 12 calls, ~cents).** Three passes from
+`docs/coach-tuning-handoff.md` §4, all on `AI_ADMIN_COACH_TEST_KEY`, 0 errors.
+
+- **Job Hunt Chat repeat-verify (`promptfooconfig.phase5b.yaml --repeat 3 --no-cache`, Sonnet, 3
+  draws per runway): voice target HOLDS, but a new content-stability gap appeared.** All 6 draws
+  were 3 sentences with zero metaphor — Metaphor target 2 ("trace") and Axis 2 ("urgency as
+  content, not length") both confirmed. NEW: the *recommendation itself* is unstable. Healthy
+  (~70d): 2/3 draws say Cascade Freight first, 1/3 Riverbend first. Tight (~9d): 2/3 Riverbend
+  first, 1/3 Cascade first — and that draw says Riverbend needs no follow-up. Also one healthy
+  draw says Cascade has been silent "over three weeks"; fixture today is 2026-03-09
+  (`effectiveToday`), applied 2026-02-20 = 17 days, so that is a **wrong fact** (the other draws
+  say "over two weeks", which is right). Not a Metaphor/Length issue — a grounding/priority one.
+  Candidate lever: have the addendum state a tiebreak (interview-scheduled outranks silent
+  application) and have the date gap computed in context rather than left to the model.
+- **Résumé Review rescaled score-1 (`promptfooconfig.phase5d-resume.yaml`, Sonnet): score-1 NOT
+  reached.** The 2–3-sentence override produced ~6 paragraphs / ~15 sentences; only the opening
+  was shortened. `RESUME_REVIEW_ADDENDUM` mandates weak lines + gaps + strengths + one fix and
+  that outweighs the override. Confirms the earlier hypothesis; on the rescaled Axis 3 the floor is **3–4** (see the natural-length measurement below), not the "~2–3" first written here.
+  Score-5 (itemised header/dates/every skill/education) is a clean, far longer sample, so the
+  mode has range, just a higher floor. Input for the batch decision: set this mode's target
+  range accordingly rather than forcing a 1.
+- **Ask Coach tool-available repeat (`personalityToolLoopLiveTest.mjs`, Haiku, trimmed context +
+  tools, 1 draw per scenario — still directional):** no metaphor in either; Axis 2 shift
+  **confirmed** (default: "tracking ahead"; 98% spend: "tight … nearly every dollar … already
+  spoken for", ends on a goal-setting question) with no length increase. Layer-B side note: both
+  draws called `navigate_to({"panel":"Home"})` on "How's my week looking?" unprompted, though the
+  numbers were already in context.
+
+**Résumé Review natural baseline length, measured 2026-10-06 (`promptfooconfig.phase5c.yaml
+--repeat 3 --no-cache`, Sonnet, no override, 3 calls).** Draws: 16 / 13 / 17 sentences, 7 / 6 / 8
+paragraphs, 346 / 272 / 329 words. For comparison, the rescaled-score-1 override gave 11
+sentences / 6 paragraphs / 310 words (inside the natural range — the override did essentially
+nothing), and score-5 gave 23 / 10 / 631 (~2x natural). **Proposed Axis 3 baseline for this mode:
+score 3 (Elaborated) — natural output sits at 3–4; scores 1–2 are not applicable to this mode;
+usable range 3–5.** Proposed only — the per-mode lock stays with the Phase 5 batch decision.
+Observed inside the natural draws: all three end with the "corner" closing line (by design); two
+of three repeat the leadership-gap advice twice (once as "the real gap", again as "fix first") —
+a redundancy lever if length ever needs trimming without touching the checklist; two of three
+call the résumé's "2021 to 2026" end date a typo / "still in the future", while the fixture's
+today is 2026-03-09 (possible wrong-fact, same class as the Job Hunt "three weeks" miss — I did
+not verify what date, if any, the Résumé Review prompt supplies).
+
+**Fix + re-verify, 2026-10-06 (Job Hunt first-pick / wrong-gap; Résumé Review date + recap).**
+Root causes found in code, not the model: `buildJobHuntContext()` gave applied *dates* but no
+"Today" and no elapsed days (so Coach guessed the gap), and the Résumé Review context block had
+no date at all (so Coach guessed "today" and called 2026 a typo) — confirming the open question
+just above: it supplied none. Fix: `buildJobHuntContext` now emits `Today:` and a computed
+`N days ago` per application; `ResumeReviewCard` prepends `Today:` (eval loader mirrors it);
+`JOB_HUNT_ADDENDUM` gained a one-pick tiebreak (live conversation outranks a quiet application) +
+"never estimate elapsed time"; `RESUME_REVIEW_ADDENDUM` gained "don't restate a gap already named
+in the closing line" + "only flag a date after Today". Live re-verify (Sonnet, `--repeat 3
+--no-cache`, 9 calls, 0 errors):
+- **Job Hunt: FIXED.** 6/6 draws pick Riverbend first (was 2/3 flipping); 6/6 state "17 days"
+  correctly (was one "over three weeks"). Still 3–4 sentences, no metaphor. Residual: two tight
+  draws convert 9 days of runway loosely ("a little under two weeks"; actually ~1.3 weeks).
+- **Résumé Review dates: FIXED** (3/3 no typo flag). **Recap: only partly fixed** — 2 of 3 still
+  close on the same leadership item the body names, now as an action rather than a re-description.
+  **Length unchanged:** 13 / 9 / 19 sentences, 318 / 257 / 351 words (before: 13–17, 272–346) —
+  no trimming achieved; the Axis 3 proposal (target 3, range 3–5) stands.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

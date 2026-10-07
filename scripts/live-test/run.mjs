@@ -138,6 +138,216 @@ try {
     check("§22.B red shows the shortfall before payday, not 'to spare'", /\$300 short before payday/.test(await card.innerText()) && !/to spare/.test(await card.innerText()));
     eq("§22.B no page errors", realErrors(app), []); await app.close();
   }
+  // ── §31 identity picker: shows for everyone, previews Claim Dates, ONE eager save, persists
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.goals = (row.goals ?? []).filter((g) => !g.completed).slice(0, 2); // room under the 6-goal limit (F184) for a 4-goal pick
+    const goalsBefore = (row.goals ?? []).length;
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 picker shows on Home for an account with no identity", await vis(page.getByTestId("archetype-picker")));
+    check("§31 all six archetypes offered", (await Promise.all(["The Prepper", "The Heartbeat", "The Builder", "The Polished", "The Family Man", "The Explorer"].map((n) => page.getByText(n, { exact: true }).count()))).every((c) => c > 0));
+    await page.getByText("The Builder").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 preview lists starter goals with Claim Dates", /Starter Emergency Fund/.test(t) && /Claim Date/i.test(t), t.slice(0, 200));
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    check("§31 no horizontal overflow at 390px", noOverflow);
+    await app.shot("s31-preview");
+    const before = app.saves.length;
+    await page.getByLabel("Target for Starter Emergency Fund").fill("1200"); await page.getByLabel("Target for Starter Emergency Fund").blur();
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const sv = app.saves.slice(before).filter((x) => x.config?.identity);
+    // The eager write plus the app's normal post-state debounce may both land (same as every eager-save
+    // action) — what matters is no partial write: every save after confirm carries goals AND identity together.
+    const wrote = app.saves.slice(before);
+    check("§31 confirm writes goals AND config.identity together (never split)", sv.length >= 1 && wrote.every((x) => x.config?.identity?.archetypeId === "builder" && x.goals.length === goalsBefore + 4), wrote.map((x) => [!!x.config?.identity, x.goals?.length]));
+    check("§31 edited target saved", sv[0]?.goals?.some((g) => g.label === "Starter Emergency Fund" && g.target === 1200 && g.templateKey === "builder.starter_emergency"));
+    check("§31 picker gone after confirm", !(await vis(page.getByTestId("archetype-picker"))));
+    await app.reload();
+    check("§31 identity persists across reload (picker stays gone)", !(await vis(page.getByTestId("archetype-picker"))));
+    eq("§31 no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 identity picker on New Job Season Home: jobless-from-day-one users get it too (dates paused)
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })], njsConfig(T));
+    row.goals = [];
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 NJS home shows the picker", await vis(page.getByText("Who are you becoming next?")));
+    await page.getByText("The Prepper").click(); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 NJS preview promises a start, not a date", /Starts with your first paycheck/.test(t) && !/By [A-Z][a-z]{2} \d/.test(t));
+    await app.shot("s31-njs-preview");
+    const before = app.saves.length;
+    await page.getByRole("button", { name: /Add 4 goals/i }).click(); await settle(page, 1500);
+    const wrote = app.saves.slice(before).filter((x) => x.config?.identity);
+    check("§31 NJS confirm saves goals + identity together", wrote.length >= 1 && wrote.every((x) => x.config.identity.archetypeId === "prepper" && x.goals.length === 4), wrote.map((x) => x.goals?.length));
+    check("§31 NJS shows the seeded goals as paused Claim Dates", /claim dates/i.test(await bodyText(page)) && /on hold|paused/i.test(await bodyText(page)) && !(await vis(page.getByText("Who are you becoming next?"))));
+    eq("§31 NJS no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 change-identity flow: PICK FIRST → new goals added after old → tidy up on the Goals page
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.goals = (row.goals ?? []).filter((g) => !g.completed).slice(0, 2); // room under the 6-goal limit (F184) for a 4-goal pick
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const picker = page.getByTestId("archetype-picker"); const banner = page.getByTestId("identity-locked-banner"); const hero = page.getByTestId("identity-hero");
+    const oldGoals = (row.goals ?? []).length;
+    check("§31 Goals page shows the Identity locked in hero", (await vis(hero)) && /identity locked in/i.test(await hero.innerText()) && /The Builder/.test(await hero.innerText()));
+    // Cancel leaves everything alone
+    await nav(page, "account"); await page.getByText(/The Builder · tap to change/).click(); await settle(page, 600);
+    const dlg = page.getByRole("dialog", { name: "Change your identity" });
+    check("§31 tapping Identity opens the are-you-sure popup, no edit-first option", (await vis(dlg)) && !(await page.getByText("Edit goals first").count()));
+    await app.shot("s31-change-dialog");
+    const before = app.saves.length;
+    await page.getByText("Cancel").click(); await settle(page, 500);
+    check("§31 Cancel writes nothing", app.saves.length === before);
+    // Continue → picker on Home while the old identity is still saved
+    await page.getByText(/The Builder · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    check("§31 Choose new identity lands on Home with the picker (old identity still saved)", (await vis(picker)) && /Choose your new identity/.test(await bodyText(page)) && app.saves.slice(before).length === 0, app.saves.length - before);
+    // Leaving without picking cancels the change
+    await nav(page, "upkeep"); await settle(page, 600); await nav(page, "home"); await settle(page, 1000);
+    check("§31 leaving without picking cancels the change (picker gone, hero back)", !(await vis(picker)) && (await vis(hero)));
+    // Real change: pick The Explorer
+    await nav(page, "account"); await page.getByText(/The Builder · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    await page.getByText("The Explorer").click(); await settle(page, 700);
+    await app.shot("s31-switch-preview");
+    const b4 = app.saves.length;
+    await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 1500);
+    const wrote = app.saves.slice(b4);
+    const last = wrote[wrote.length - 1];
+    check("§31 switch writes identity=explorer + new goals appended after the old ones, in one write", wrote.every((x) => x.config?.identity?.archetypeId === "explorer" && x.goals.length === oldGoals + 4) && last?.goals?.slice(0, oldGoals).every((g, i) => g.id === row.goals[i].id), wrote.map((x) => x.goals?.length));
+    const tb = (await vis(banner)) ? await banner.innerText() : "";
+    check("§31 Goals page now shows the tidy-up banner for the NEW identity", /tidy up your goals/i.test(tb) && /The Explorer/.test(tb), tb);
+    check("§31 picker closed after the switch", !(await vis(picker)));
+    await app.shot("s31-tidy");
+    await page.getByRole("button", { name: "Done", exact: true }).click(); await settle(page, 600);
+    check("§31 Done dismisses tidy mode back to the hero", /identity locked in/i.test(await hero.innerText()) && /The Explorer/.test(await hero.innerText()));
+    // Tidy mode also ends on leaving the screen
+    await nav(page, "account"); await page.getByText(/The Explorer · tap to change/).click(); await settle(page, 500);
+    await page.getByText("Choose new identity").click(); await settle(page, 1200);
+    await page.getByText("The Heartbeat").click(); await settle(page, 500);
+    // 6 goals active now (2 + 4) — the limit (F184) leaves room for none, so switch identity-only
+    for (const cb of await page.getByRole("checkbox").all()) await cb.uncheck();
+    await page.getByRole("button", { name: "Choose identity only" }).click(); await settle(page, 1500);
+    check("§31 tidy banner shows after a second (identity-only) switch", /tidy up your goals/i.test(await banner.innerText()));
+    await nav(page, "upkeep"); await settle(page, 600); await nav(page, "home"); await settle(page, 1000);
+    check("§31 leaving Goals ends tidy mode (hero, Heartbeat)", /identity locked in/i.test(await hero.innerText()) && /The Heartbeat/.test(await hero.innerText()));
+    await app.reload();
+    check("§31 new identity persists across reload", /The Heartbeat/.test(await hero.innerText()));
+    eq("§31 change-identity no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 Phase 2 suggested Lifestyle bills: offered in Upkeep, count for nothing until Add, one eager write
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "heartbeat", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const homeNums = async () => (await bodyText(page)).replace(/Identity locked in[\s\S]*?Every goal here is a step toward it\./i, "");
+    const homeBefore = await homeNums();
+    await nav(page, "upkeep"); await settle(page, 900);
+    const card = page.getByTestId("suggestion-heartbeat.gym");
+    check("§31 P2 Upkeep offers The Heartbeat's suggested bills", (await vis(page.getByTestId("identity-suggestions"))) && /Gym Membership/.test(await page.getByTestId("identity-suggestions").innerText()));
+    await app.shot("s31-suggestions");
+    // Not me on one → config-only write, no expense created
+    let b = app.saves.length;
+    await page.getByLabel("Not me: Supplements & Nutrition").click(); await settle(page, 1500);
+    let w = app.saves.slice(b);
+    check("§31 P2 Not me writes config only (expenses unchanged, suggestion dismissed)", w.length >= 1 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.supplements"] === "dismissed" && x.expenses.length === row.expenses.length), w.map((x) => x.expenses?.length));
+    await nav(page, "home"); await settle(page, 900);
+    check("§31 P2 pending/dismissed suggestions change no Home number", (await homeNums()) === homeBefore);
+    await nav(page, "upkeep"); await settle(page, 900);
+    // Add → real Lifestyle bill, one write with expenses + config
+    b = app.saves.length;
+    await page.getByLabel("Add Gym Membership").click(); await settle(page, 1800);
+    w = app.saves.slice(b); const last = w[w.length - 1];
+    const added = last?.expenses?.find((e) => e.label === "Gym Membership");
+    check("§31 P2 Add saves a real Lifestyle bill AND the accepted flag together", !!added && added.category === "Lifestyle" && added.billingMeta?.amount === 35 && w.every((x) => x.config?.identity?.suggestions?.["heartbeat.gym"] === "accepted" && x.expenses.length === row.expenses.length + 1), w.map((x) => [x.expenses?.length, x.config?.identity?.suggestions]));
+    check("§31 P2 suggestion card gone once all are decided", !(await vis(page.getByTestId("identity-suggestions"))));
+    check("§31 P2 the new bill shows up in Upkeep (Lifestyle)", /Gym Membership/.test(await bodyText(page)) || (await page.getByText("Lifestyle").count()) > 0);
+    await app.reload(); await nav(page, "upkeep"); await settle(page, 900);
+    check("§31 P2 decisions persist across reload (no re-offer)", !(await vis(page.getByTestId("identity-suggestions"))) && !(await vis(card)));
+    eq("§31 P2 no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 Phase 3 identity-first Home: hero + collapsed "Your numbers" with an always-visible summary
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    const hero = page.getByTestId("identity-hero");
+    const total = (row.goals ?? []).length, done = (row.goals ?? []).filter((g) => g.completed).length;
+    check("§31 P3 hero shows identity + all-goals counter", (await vis(hero)) && /The Builder/.test(await hero.innerText()) && new RegExp(`${done} of ${total} goals? claimed`).test(await hero.innerText()), await hero.innerText().catch(() => ""));
+    const nextTxt = (await vis(page.getByTestId("identity-hero-next"))) ? await page.getByTestId("identity-hero-next").innerText() : "";
+    const t0 = await bodyText(page);
+    const heroGoal = (nextTxt.match(/Next: (.+?) ·/) || [])[1];
+    check("§31 P3 hero Next names the same goal as the Next Claim Date hero", !!heroGoal && new RegExp(`NEXT CLAIM DATE\\s*\\n\\s*${heroGoal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(t0), nextTxt);
+    const toggle = page.getByRole("button", { name: /your numbers/i });
+    check("§31 P3 numbers collapsed on load with summary visible", (await toggle.getAttribute("aria-expanded")) === "false" && /Saving -?\d+%/.test(await page.getByTestId("your-numbers-summary").innerText()) && !/Financial Health/i.test(t0));
+    check("§31 P3 Due Today / goals still outside the collapse", /claim date/i.test(t0));
+    await app.shot("s31-p3-collapsed");
+    const leftSummary = await page.getByTestId("your-numbers-left").innerText();
+    await toggle.click(); await settle(page, 1800);
+    const t1 = await bodyText(page);
+    check("§31 P3 expanding shows every tile", /Financial Health/i.test(t1) && /Net Worth Trend/i.test(t1) && /Upkeep Health/i.test(t1) && /Left This Week/i.test(t1));
+    check("§31 P3 summary $ equals the Left This Week tile", new RegExp(`Left This Week[^$]*\\${leftSummary.replace(/[$-]/g, (m) => (m === "$" ? "" : "\\-"))}`, "i").test(t1.replace(/\n/g, " ")) || t1.includes(leftSummary), leftSummary);
+    const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    check("§31 P3 no horizontal overflow at 390px", noOverflow);
+    await app.shot("s31-p3-expanded");
+    await app.reload();
+    check("§31 P3 collapsed again after reload (not persisted)", (await page.getByRole("button", { name: /your numbers/i }).getAttribute("aria-expanded")) === "false");
+    eq("§31 P3 no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 Phase 3: no identity → legacy Home untouched (tiles open, no hero)
+  {
+    const app = await open({ row: rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]), viewport: { width: 390, height: 844 } }); const { page } = app;
+    await page.getByText("Not now").click().catch(() => {}); await settle(page, 600);
+    const t = await bodyText(page);
+    check("§31 P3 no identity → no hero, no collapse, Financial Health visible", !(await vis(page.getByTestId("identity-hero"))) && !(await vis(page.getByTestId("your-numbers"))) && /Financial Health/i.test(t));
+    eq("§31 P3 legacy no page errors", realErrors(app), []); await app.close();
+  }
+  // ── §31 goal limits: 6 active goals max; total $ ≤ 5 yrs of Needs-only surplus — silent until crossed
+  {
+    const row = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]);
+    row.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const activeBefore = (row.goals ?? []).filter((g) => !g.completed).length;
+    const app = await open({ row, viewport: { width: 390, height: 844 } }); const { page } = app;
+    check("§31 limits: nothing shown before an attempt", !(await vis(page.getByTestId("goal-limit-note"))));
+    const addBtn = page.getByText("+ ADD GOAL");
+    await addBtn.scrollIntoViewIfNeeded(); await addBtn.click(); await settle(page, 500);
+    const note = page.getByTestId("goal-limit-note");
+    if (activeBefore >= 6) {
+      check("§31 limits: 7th goal blocked with the count message, button red", (await vis(note)) && /Goal limit reached — you must not spread yourself too thin in planning alone\./.test(await note.innerText()) && /limit-halo/.test(await addBtn.getAttribute("class")), activeBefore);
+      await app.shot("s31-limit-count");
+      // over the limit, an identity switch still works — with no new goals
+      await nav(page, "account"); await page.getByText(/The Builder · tap to change/).click(); await settle(page, 500);
+      await page.getByText("Choose new identity").click(); await settle(page, 1200);
+      await page.getByText("The Explorer").click(); await settle(page, 500);
+      await page.getByRole("button", { name: /Add \d+ goals?/i }).click(); await settle(page, 600);
+      check("§31 limits: over-limit picker confirm is refused with the count message", /Goal limit reached/.test(await bodyText(page)));
+      for (const cb of await page.getByRole("checkbox").all()) await cb.uncheck();
+      const b0 = app.saves.length;
+      await page.getByRole("button", { name: "Choose identity only" }).click(); await settle(page, 1500);
+      const w0 = app.saves.slice(b0);
+      check("§31 limits: 'Choose identity only' switches identity without adding goals", w0.length >= 1 && w0.every((x) => x.config?.identity?.archetypeId === "explorer" && x.goals.length === row.goals.length), w0.map((x) => x.goals?.length));
+    }
+    await app.close();
+    // amount: a fresh account with room for more goals
+    const row2 = rowWith([bill({ id: "t_rent", label: "Test Rent", amount: 900 })]); row2.goals = [];
+    row2.config.identity = { archetypeId: "builder", chosenAt: "2026-10-06T00:00:00.000Z" };
+    const app2 = await open({ row: row2, viewport: { width: 390, height: 844 } }); const p2 = app2.page;
+    await p2.getByText("+ ADD GOAL").click(); await settle(p2, 400);
+    await p2.locator("input[type=text]").first().fill("Mansion");
+    await p2.getByLabel("New goal target").fill("99000000");
+    const before = app2.saves.length;
+    await p2.getByText("ADD GOAL", { exact: true }).click(); await settle(p2, 700);
+    const n2 = p2.getByTestId("goal-limit-note");
+    check("§31 limits: amount over the 5-yr Needs surplus blocked, input red, limit named, nothing saved", (await vis(n2)) && /five-year timeline/.test(await n2.innerText()) && /\$[\d,]+ across all active goals/.test(await n2.innerText()) && /limit-halo/.test(await p2.getByLabel("New goal target").getAttribute("class")) && app2.saves.length === before);
+    await app2.shot("s31-limit-amount");
+    await p2.getByLabel("New goal target").fill("500"); await settle(p2, 200);
+    check("§31 limits: editing the field clears the red state", !(await vis(n2)));
+    await p2.getByText("ADD GOAL", { exact: true }).click(); await settle(p2, 1200);
+    check("§31 limits: a goal that fits saves normally", app2.saves.slice(before).some((x) => x.goals?.some((g) => g.label === "Mansion" && g.target === 500)));
+    eq("§31 limits no page errors", realErrors(app2), []); await app2.close();
+  }
 } catch (e) { fail++; console.log(`FAIL  harness error: ${e.message}`); }
 finally { stop(); }
 console.log(`\n${pass} passed, ${fail} failed`);

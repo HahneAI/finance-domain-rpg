@@ -883,6 +883,35 @@ to show up ready"); the data has no interview date. The 6 natural re-verify draw
 never did this. If it recurs, label the days-ago figure as "since applying" in `buildJobHuntContext`.
 n=1 per cell — directional, not verified.
 
+**Warmth/Formality (Axis 5) scores 1–2 elicited, 2026-10-07 (Phase 5f; 9 calls, 0 errors, 1 draw
+each, one model per mode, only warmth overridden, calm scenarios so urgency doesn't confound).**
+Configs: `promptfooconfig.phase5f-warmth-{askcoach,jobhunt,networth,resume}.yaml`. Score 3 = the
+natural default, already sampled; scores 4–5 deliberately not sampled (see Axis 5 grounding
+constraint) except one probe.
+
+| Mode (model) | Warmth 1 ("Clinical") | Warmth 2 ("Professional") | Read |
+|---|---|---|---|
+| Job Hunt healthy (Sonnet) | **Reached** — "priority is preparation, not follow-up contact … Action: open the Riverbend … entry" (52 words, no second-person care) | **Reached** — imperative, impersonal ("Prioritize Riverbend Logistics …") | Full 1–3 range |
+| Résumé Review (Sonnet) | **NOT reached** — opens "Marcus, here's the straight read", "you weren't bouncing around" (warmer than the 2) | **Reached** — "Your experience entry for DHL … does not specify …", neutral throughout | 2–3 range; the "1" override came out *warmer* than the "2" |
+| Ask Coach default (Haiku) | ~2 — report-like but keeps "so the app can show you exactly how fast you can fund it" | ~3 — "you're tracking well … turns into real progress"; indistinguishable from natural | Haiku range compressed to ~2–3 |
+| Net Worth Green (Haiku) | **NOT reached** — "a clean turnaround … the momentum is real" | ~3–4 — "the corner work is paying off … That number is yours to own" | Floor unreachable on a celebratory tier |
+
+**Findings.** (1) **Only Job Hunt (Sonnet) yields a clean 1→2→3 ladder.** Haiku can't go clinical
+on Ask Coach or Net Worth — the same compressed-range shape as its Axis 3 and Axis 4 findings,
+now on three axes: Haiku's range is narrow on every axis tested. (2) **Warmth and directness are
+entangled in practice**: Résumé's "clinical" draw leaned on "the straight read" (a directness cue),
+and Job Hunt's clinical draw also shrank to 52 words (a length confound — warmth overrides cut
+length ~30% there). Axis 5 scores from a single draw need that caveat. (3) **Net Worth Green's
+tier addendum is itself celebratory**, so a score below 3 there conflicts with the tier's job —
+treat Green's target as ≥3, not a tunable 1–5. (4) **Grounding probe (Warmth 4, Ask Coach/Haiku,
+no real history in context): 1 draw, did NOT invent a shared past** — it reached only ~3 ("pick
+something real … watch the app show you exactly when you'll hit it") and stayed inside the data.
+That is weak evidence: Haiku couldn't *reach* 4, so it never needed to fabricate. The real test
+is a stronger model that will comply — one Sonnet probe (Job Hunt) is the cheapest next call.
+(5) Watch item from the Directness pass (Job Hunt "days ago" misread as interview timing): **0 of 2
+recurrences** here — both warmth draws stated "applied 8 days ago" / omitted it. n is still tiny.
+n=1 per cell — directional, not verified.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

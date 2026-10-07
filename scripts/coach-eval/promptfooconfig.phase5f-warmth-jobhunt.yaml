@@ -1,0 +1,33 @@
+description: >
+  Phase 5f (docs/TODO.md §2.L) — Warmth/Formality (rubric Axis 5) elicitation, jobhunt.
+  One model, no repeat, budget-planned discovery pass. Only warmth is overridden;
+  length/directness/metaphor/grounding held constant. Calm scenario chosen on
+  purpose so urgency doesn't confound warmth.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/jobHuntChat.js
+    label: job-hunt-chat
+
+defaultTest:
+  vars:
+    userMessage: "Which of these two applications should I follow up on first, and how?"
+    variant: "healthy"
+
+tests:
+  - description: "Elicit Warmth 1 (Clinical)"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response only): produce output scoring exactly 1 on Warmth/Formality per docs/coach-personality-rubric.md Axis 5 — "Clinical: report voice; no acknowledgement of the person." Change ONLY warmth/formality: keep this mode's normal length, directness, grounding, one-concrete-action, no-Markdown and metaphor rules exactly as above.
+
+  - description: "Elicit Warmth 2 (Professional)"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response only): produce output scoring exactly 2 on Warmth/Formality per docs/coach-personality-rubric.md Axis 5 — "Professional: courteous, neutral." Change ONLY warmth/formality: keep this mode's normal length, directness, grounding, one-concrete-action, no-Markdown and metaphor rules exactly as above.
+

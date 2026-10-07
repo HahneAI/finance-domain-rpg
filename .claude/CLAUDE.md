@@ -81,7 +81,7 @@ both pairs are cited from 4+ docs, so renumbering needs its own pass — until t
 qualify which one you mean. The check above reports these every run; that is expected, not a
 new failure.
 
-**Next free numbers (verify, do not trust):** TODO `§32` · migration `049` (applied through 047; 048 pending) · warden `F185`.
+**Next free numbers (verify, do not trust):** TODO `§32` · migration `049` (applied through 048) · warden `F185`.
 
 ---
 ## Commands
@@ -368,7 +368,7 @@ never tick the box — only Anthony does.
   **`authority-finance-coach-live-test`** instead — it has its own token-budget/scoped-API-key
   handling since it calls Anthropic directly and real money is on the line.
 
-**Migrations:** next real migration is **049** (042–048 exist; production applied through **047** — 048 failed 2026-10-07 because `beta_activity_events` (026) was missing; see `database/migrations/README.md`) — always verify against
+**Migrations:** next real migration is **049** (042–048 exist; **production applied through 048**, confirmed 2026-10-07 — confirm you are in the production Supabase project before running one; a wrong-project run is what made 048's first attempt fail) — always verify against
 `database/migrations/` before numbering; this note has gone stale five times (the Git PR Flow
 section's numbering collision check covers this — run it when adding a migration). `0NN_BOOKMARK_*` files
 (latest `038_BOOKMARK_schema_snapshot_2026-08-06.sql`) are schema snapshots, **never** a pending

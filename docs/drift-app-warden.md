@@ -4579,7 +4579,7 @@ is a full-schema recap (schema state through 021) that exists so a session reads
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
 continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F146), **024** (`user_data` write-
-permission fix — the F69 case law). **Superseded 2026-10-07: production is applied through 047 (048 pending) and the next real migration is 049** — the authoritative
+permission fix — the F69 case law). **Superseded 2026-10-07: production is applied through 048 and the next real migration is 049** — the authoritative
 pointer is `database/migrations/README.md`; verify against the folder before numbering (this note has gone stale before — §14).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
 > (025 now), (b) if it touches `user_data` columns, runs the F69 new-column checklist (RLS
@@ -5902,7 +5902,7 @@ deleted and `BudgetPanel` already hides.
 > **[G] Every goal writer runs `checkGoalLimits`** — Home + ADD GOAL (count), Home add form, BOTH edit forms (mobile/desktop pair, F177), the picker (Home + NJS; NJS has no income → count only), `CoachGoalCard` (shows App's refusal, never "Added ✓"), and App's `handleCoachCreateGoal` / `handleApplyArchetype` independently of the UI. **IF** a new goal writer appears (F181's `buildGoal` callers), **THEN** it must call `checkGoalLimits` too or it is a back door.
 > **Growth-only.** `checkGoalLimits` blocks a change only if it adds goals past 6 or raises the active total past the cap — an over-limit account can still lower, claim, delete, and pick/switch identity with zero goals ("Choose identity only"). **IF** someone "simplifies" to `total > cap`, **THEN** over-limit users can't even lower a target.
 > **Silent until crossed:** no limit copy renders before a blocked attempt; typing clears the red state. `App` reads the cap via `goalAmountCapRef` (assigned during render) because its handlers sit above the auth early returns (F176).
-> **Telemetry:** a block logs `goal_limit_hit` (note = reason) — migration 048 (**pending**: first run failed 2026-10-07, `beta_activity_events` missing — needs 026/030/031).
+> **Telemetry:** a block logs `goal_limit_hit` (note = reason) — migration 048 (applied 2026-10-07).
 > Check: `goalLimits.test.js` (incl. $5k/$2k → $180,000), `HomePanel.test.jsx` goal-limits block, `coachToolUI.test.jsx` limits block, `aiContext.test.js` identity/limits block, live-test §31 limits.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**

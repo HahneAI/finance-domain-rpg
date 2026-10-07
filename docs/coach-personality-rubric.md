@@ -912,6 +912,28 @@ is a stronger model that will comply — one Sonnet probe (Job Hunt) is the chea
 recurrences** here — both warmth draws stated "applied 8 days ago" / omitted it. n is still tiny.
 n=1 per cell — directional, not verified.
 
+**Warmth 4 grounding probe on Sonnet + deeper look at the Job Hunt "days ago" watch item, 2026-10-07
+(Phase 5f/5g; 4 calls, 0 errors).**
+- **Probe (Sonnet, Job Hunt healthy, Warmth 4, no real history in context): did NOT invent a shared
+  past.** It reached ~3.5 by praising something *in the data*: "You applied 8 days ago, which is solid
+  momentum". So even a model that complies with the override stayed grounded — but the data happened to
+  contain something to praise; not yet tested where it contains nothing. n=1.
+- **"Days ago" misread, base rate:** 2 misreads (both on the original Directness pair, tight runway:
+  "interview … from 8 days ago", "8 days to show up ready") vs 0 of 3 on a same-config rerun
+  (`promptfooconfig.phase5g-daysago-armA.yaml`, Directness-5 pressure, tight), 0/2 Warmth draws, 0/1
+  probe, 0/6 natural draws → roughly 2 of 5 under override pressure on tight runway, 0 of 9 otherwise.
+  Likely cause: the line reads `Interview scheduled, applied 2026-03-01, 8 days ago` — status and day
+  count adjacent, no interview date exists — **plus a fixture coincidence: tight runway is 9 days and
+  Riverbend is 8 days**, so the model can tie them together. A relabel ("N days since applying") is
+  cheap insurance but a before/after test would hit a floor effect (arm A is already 0/3), so it was
+  not run.
+- **More frequent finding from the same draws: runway → weeks conversion is wrong on tight runway.**
+  9 days came out as "maybe two more weeks of searching" and "two rounds of burn" (2 clear errors in
+  arm A; 9 days ≈ 1.3 weeks), plus the earlier "a little under two weeks" (loose). ~3 of the 6 tight
+  draws that convert it get it wrong or loose. `JOB_HUNT_ADDENDUM` asks the model to do this
+  arithmetic itself; same class as the days-ago and Today fixes — **compute it in
+  `buildJobHuntContext` (e.g. "~9 days (≈1.3 weeks of searching)")** rather than ask. Proposed, not built.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

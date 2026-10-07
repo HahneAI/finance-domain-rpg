@@ -395,7 +395,7 @@ retry-on-a-hunch.** Concretely for this file:
   - [ ] Remaining before Phase 5 can conclude: Directness (Axis 4) and
     Warmth/Formality (Axis 5) are DEFINED (2026-10-07); Directness 1s/5s
     SAMPLED 2026-10-07 (`promptfooconfig.phase5e-directness-*.yaml`, 8 calls —
-    see rubric); Warmth 1–2 SAMPLED 2026-10-07 (`promptfooconfig.phase5f-warmth-*.yaml`, 9 calls); still open: a Sonnet warmth-4 fabrication probe (4–5 need real shared-history context) — then the batch decision: lock one
+    see rubric); Warmth 1–2 SAMPLED 2026-10-07 (`promptfooconfig.phase5f-warmth-*.yaml`, 9 calls); Sonnet warmth-4 probe DONE (no fabrication, n=1); Job Hunt weeks-of-runway/days-ago grounding fix proposed (see rubric) (4–5 need real shared-history context) — then the batch decision: lock one
     target number per mode/axis pair across all four modes. (Job Hunt
     first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
     2026-10-06 — see the rubric's Known Limitations.)

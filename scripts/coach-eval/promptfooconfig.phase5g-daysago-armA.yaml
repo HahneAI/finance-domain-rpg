@@ -1,0 +1,28 @@
+description: >
+  Phase 5e (docs/TODO.md §2.L) — Directness (rubric Axis 4) extremes elicitation, jobhunt.
+  2 calls (score 1, score 5), ONE model, no repeat — a budget-planned
+  discovery pass (scripts/coach-eval/README.md); repeat-verify only a target
+  being locked. Only directness is overridden; length/metaphor/grounding rules
+  are held constant so any shift is attributable to this axis.
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5
+    label: sonnet
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1536
+
+prompts:
+  - id: file://prompts/jobHuntChat.js
+    label: job-hunt-chat
+
+defaultTest:
+  vars:
+    userMessage: "Which of these two applications should I follow up on first, and how?"
+    variant: "tight"
+
+tests:
+  - description: "Directness-5 pressure, tight runway — days-ago misread check"
+    vars:
+      calibrationInstruction: >
+        CALIBRATION OVERRIDE (test harness only — for this one response only): produce output scoring exactly 5 on Directness per docs/coach-personality-rubric.md Axis 4 — "Hard truth: the verdict plus the thing the user is avoiding, stated in one line with no cushioning, the way a corner man says what the student doesn't want to hear." Change ONLY directness: keep this mode's normal length, grounding, one-concrete-action, no-Markdown and metaphor rules exactly as above, and never shame or call any individual expense or résumé line wasteful or embarrassing — be blunt about the situation and the pattern, not contemptuous of a single line item.

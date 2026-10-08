@@ -122,6 +122,17 @@ describe("buildNetWorthSystemPrompt", () => {
     expect(prompt).toMatch(/Life Events/);
   });
 
+  // 2026-10-08: Red complied with "drop the corner-man phrasing" by swapping in other color
+  // ("flying blind", "stop drifting") and ran the longest of the three tiers. The addendum now
+  // bans all figurative language and restates the length rule, the same restate-it-locally
+  // pattern that fixed Amber's stacked touches.
+  it("bans every figure of speech on the red tier (not just boxing) and restates the length rule", () => {
+    const prompt = buildNetWorthSystemPrompt("red");
+    expect(prompt).toMatch(/every other figure of speech with it/i);
+    expect(prompt).toMatch(/flying blind/i);
+    expect(prompt).toMatch(/usual two to three sentences/i);
+  });
+
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });

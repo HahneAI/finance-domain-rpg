@@ -965,6 +965,25 @@ elapsed time.
   coincidence (tight runway 9, Riverbend 8) is still in `testAccount.js` and may be worth breaking
   before any locking decision.
 
+**Net Worth Red flourish fix + Job Hunt fixture de-coincidence, 2026-10-08 (Phase 5h; 7 calls, 0 errors).**
+- **Red: FIXED (3/3).** `TIER_ADDENDA.red` now bans every figure of speech, not just corner-man
+  phrasing (names "flying blind", "running on fumes", "the clock is ticking" as examples), and
+  restates the two-to-three-sentence rule — the same restate-it-locally pattern that fixed Amber.
+  Natural Haiku draws (`promptfooconfig.phase5h-red-refix.yaml --repeat 3`): 0/3 flourishes, all
+  3 sentences / 81–95 words (Red was previously the longest tier, up to ~141 words). Residual
+  wording to watch: "survive the next three weeks" (one draw) — literal, but leans dramatic for
+  "never catastrophize". Separate fixture-fidelity note, not a prompt bug: the Red fixture shows a
+  $900 next paycheck during New Job Season, so draws speculate about "the new job settling".
+- **Job Hunt fixture:** Riverbend's applied date moved 2026-03-01 → **2026-03-04** (5 days ago) so
+  no figure sits next to the ~9-day tight runway. 4 draws (`phase5b --repeat 2`): Riverbend first
+  4/4, "17 days" correct, "≈1.3 weeks" correct in both tight draws, no days-as-interview misread.
+- **Still open — application-date mix-up:** 1 of 4 told the user to email Cascade "referencing your
+  March 4th application" (Riverbend's date; Cascade's is Feb 20). Seen before: 2/3 in the reverted
+  relabel round, 0/6 in the round after, now 1/4 — so it is a low-rate background error, not
+  caused by the relabel alone. Likely cause: the context lists applications newest-first and the
+  model grabs the first date. Not fixed yet; candidates: tell the addendum to cite an
+  application's own date only, or drop dates from the advice and keep "N days ago".
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

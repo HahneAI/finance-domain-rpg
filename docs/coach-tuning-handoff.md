@@ -117,6 +117,11 @@ deliberately not faked (no streak/OT data source exists).
 **Phase 7 — model selection close-out:** Ask Coach/Haiku and special-handling/Opus locked; everything
 else undecided until Phase 5's batch decision lands.
 
+**Phase 8 — combined-axis tuning (recorded 2026-10-08, the user's "Phase 2 testing"):** post-launch,
+only after every open item above closes. Score three axes on the same reply and tune their 1–5
+settings as a set per mode — Phase 5 showed the axes pull on each other. Method not decided.
+Shareable readout of everything measured so far: https://claude.ai/artifact/5voFyhrLG7aHem3AoiBrN8
+
 ---
 
 ## 3. Findings to carry in your head (don't over-generalize)

@@ -2237,6 +2237,20 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Review already have their own model choices from earlier work (§2.E/§2.E1, Sonnet — unrelated
     to this calibration effort, don't relitigate without new evidence), the rest have no
     calibration data yet. Don't read "two modes locked" as "the model question is closed."
+- [ ] **Phase 8 — Combined-axis tuning ("Phase 2 testing" in the user's words), recorded 2026-10-08.
+  Starts only after (a) every open item above is closed — Phase 5's batch decision, the Net Worth Red
+  flourish gap, the Job Hunt fixture's 8-vs-9-day coincidence, the Warmth 4–5 history dependency —
+  and (b) Coach is live after this testing.** Phases 1–5 tuned each axis one at a time. Phase 8
+  tests them **together**: monitor three axes in one shot on the same reply (e.g. Ask Coach
+  near-limit → Urgency 4 · Directness 3 · Warmth 3) and tune the set of 1–5 settings jointly, per
+  mode. Why it is its own phase: Phase 5 already found the axes pull on each other (a "clinical"
+  warmth override also cut length ~30%; a "direct" override shifted warmth; Directness 5 on Net
+  Worth Red collided with Urgency), so a per-axis lock can drift once the others are set.
+  Open design questions for when it starts, not decided now: which three axes per mode (likely the
+  three that mode's locked targets make most fragile); whether to score with fixed calibration
+  overrides or the shipped prompt alone; a combined pass/fail rule per reply; keep the Phase 5
+  budget discipline (small planned call sets, `--no-cache`, no `llm-rubric` judge calls unless the
+  judge is never one of the models under test — see the constraint below).
 - [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
   grade with a judge model that is never one of the candidates being compared (avoids a model
   favoring its own output); use deterministic code assertions (not another LLM call) for any rule

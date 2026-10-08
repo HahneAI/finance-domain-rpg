@@ -423,3 +423,8 @@ retry-on-a-hunch.** Concretely for this file:
   Phase-3-verified. Everything else in the table (Job Hunt Assistant,
   Résumé Review, Statement Summary, Net Worth Trigger's tiers, the rest)
   is still undecided.
+- [ ] Phase 8 — Combined-axis tuning (recorded 2026-10-08; the user's
+  "Phase 2 testing"). Post-launch, after every Phase 5 open item closes:
+  score three axes on the same reply and tune their 1–5 settings jointly
+  per mode, because Phase 5 showed the axes pull on each other. Method not
+  decided — see `docs/TODO.md` §2.L Phase 8.

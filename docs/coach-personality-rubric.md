@@ -466,6 +466,15 @@ the person. **No clean 1, 2, 4 or 5 samples.**
 
 ---
 
+## Combined-Axis Tuning — planned, post-launch (`docs/TODO.md` §2.L Phase 8, recorded 2026-10-08)
+
+Everything above scores one axis at a time. Once Phase 5's targets are locked, the open issues are
+closed and Coach is live, the next pass scores **three axes on the same reply** and tunes their
+1–5 settings as a set per mode. Reason, from this file's own data: the axes are not independent
+(Warmth overrides moved length, Directness overrides moved warmth, Directness 5 collided with
+Urgency on Net Worth Red). A target that holds alone can slip once its neighbours are also set.
+Nothing about method is decided yet — see the TODO entry for the open questions.
+
 ## Known Limitations (live-tested, not yet resolved)
 
 **Ask Coach broad-question number cap doesn't hold in live model output (2026-08-26, DW-19,

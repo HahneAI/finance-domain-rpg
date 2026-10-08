@@ -300,6 +300,14 @@ export function buildCoachContext({
  * name would break the feature, not just protect privacy the way it does
  * for goals.
  */
+// Runway days → weeks, computed here for the same reason as wholeDaysBetween:
+// the 2026-10-07 probes had Coach turn a 9-day runway into "two more weeks" in
+// ~3 of 6 tight-runway draws when JOB_HUNT_ADDENDUM left the arithmetic to it.
+function runwayWeeksText(days) {
+  const weeks = Math.round((days / 7) * 10) / 10;
+  return `≈${Number.isInteger(weeks) ? weeks : weeks.toFixed(1)} ${weeks === 1 ? "week" : "weeks"} of searching`;
+}
+
 // Whole days from `fromIso` to `toIso` (both YYYY-MM-DD). Computed here, not
 // left to the model — the 2026-10-06 Job Hunt repeat-verify had Coach call a
 // 17-day silence "over three weeks" when only the applied date was given.
@@ -317,7 +325,7 @@ export function buildJobHuntContext({ config = null, expenses = [], effectiveTod
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);
-  lines.push(`Cash Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
+  lines.push(`Cash Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days (${runwayWeeksText(runwayDays)})` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
   if (dash.lifestyleWeeklySpend > 0) {
     lines.push(`Lifestyle spend still tracked (not counted in runway above): ${fmt$(dash.lifestyleWeeklySpend)}/wk`);
   }

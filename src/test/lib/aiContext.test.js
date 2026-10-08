@@ -498,7 +498,7 @@ describe("buildJobHuntContext", () => {
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
-    expect(block).toMatch(/Cash Runway: ~\d+ days · weekly essential burn \$300 across 1 tracked expense/);
+    expect(block).toMatch(/Cash Runway: ~\d+ days \(≈[\d.]+ weeks? of searching\) · weekly essential burn \$300 across 1 tracked expense/);
   });
 
   it("omits the lifestyle line when there's no active lifestyle spend", () => {
@@ -618,6 +618,19 @@ describe("buildJobHuntContext", () => {
     });
     expect(block).toContain("applied 2026-07-06, 1 day ago");
     expect(block).toContain("(applied, applied 2026-07-09)");
+  });
+
+  it("converts runway days to weeks in the builder (9 days → ≈1.3 weeks; 70 → ≈10 weeks), never left to the model", () => {
+    const runway = (cash) => buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: cash },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    }).match(/Cash Runway: ~(\d+) days \((≈[\d.]+ weeks? of searching)\)/);
+    const m = runway(1800);
+    expect(m).not.toBeNull();
+    const days = Number(m[1]);
+    const expected = Math.round((days / 7) * 10) / 10;
+    expect(m[2]).toBe(`≈${Number.isInteger(expected) ? expected : expected.toFixed(1)} ${expected === 1 ? "week" : "weeks"} of searching`);
   });
 
   it("shows only the 5 most recent applications and flags the total when there are more", () => {

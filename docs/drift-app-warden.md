@@ -5427,7 +5427,7 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > is a *date* or *elapsed time*, **THEN** compute it in the builder (`buildJobHuntContext` emits `Today:` +
 > `N days ago` per application; `ResumeReviewCard` prepends `Today:` — 2026-10-06, found because the model
 > guessed both) and mirror it in `scripts/coach-eval/prompts/resumeReview.js`; never leave the model to infer
-> it. **IF** persistence/retention/summary
+> it (runway days → weeks is computed there too: `runwayWeeksText`). Do NOT relabel "N days ago" to "since applying" — tried 2026-10-08, made the misread worse. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
 > entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
 > and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags

@@ -934,6 +934,28 @@ n=1 per cell — directional, not verified.
   arithmetic itself; same class as the days-ago and Today fixes — **compute it in
   `buildJobHuntContext` (e.g. "~9 days (≈1.3 weeks of searching)")** rather than ask. Proposed, not built.
 
+**Job Hunt runway-weeks fix applied + re-verified; relabel tried and REVERTED, 2026-10-08 (Phase 5g;
+18 calls over two verify rounds, 0 errors).** `buildJobHuntContext` now emits
+`Cash Runway: ~9 days (≈1.3 weeks of searching)` (computed in the builder, `runwayWeeksText`), and
+`JOB_HUNT_ADDENDUM` says to use that weeks figure and the "N days ago" figure and never estimate
+elapsed time.
+- **Round 1 (also relabelled applied-days to "N days since applying" + a prompt clause saying it counts
+  from the application date, not an interview): FAILED on its own target.** The "8 days ago → interview
+  timing" misread went from 0/3 to **2/3** under directness-5 pressure ("it's 8 days out, not 17"), and
+  2/3 natural tight draws mixed up the two applications' dates ("your March 1 — sorry, February 20
+  application"). Runway also stopped being cited at all in natural draws (0/6). The weeks conversion
+  itself was fine whenever cited. **Lesson: a label tweak plus an explanatory clause made things
+  worse; the relabel and the clause were reverted** (back to "N days ago").
+- **Round 2 (weeks computed + light prompt clause, "N days ago" kept): holds.** Misread 0/9 draws;
+  weeks conversion correct in 5/5 draws that cite the runway ("1.3 weeks", "10 weeks"); first pick
+  Riverbend 9/9; no date mix-ups; one draw correctly derived "by March 18" (today + 9 days). Natural
+  draws cite the runway only 2 of 6 — optional by the addendum's wording, varies run to run, not
+  treated as a defect.
+- **Net Job Hunt status (this session's fixes together):** first-pick stable, elapsed days correct,
+  weeks correct. Remaining known: n is small everywhere (3–9 draws per cell); the 8-vs-9-day fixture
+  coincidence (tight runway 9, Riverbend 8) is still in `testAccount.js` and may be worth breaking
+  before any locking decision.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

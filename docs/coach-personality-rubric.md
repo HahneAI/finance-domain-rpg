@@ -984,6 +984,13 @@ elapsed time.
   model grabs the first date. Not fixed yet; candidates: tell the addendum to cite an
   application's own date only, or drop dates from the advice and keep "N days ago".
 
+**Job Hunt application-date mix-up — own-date rule added, 2026-10-08 (6 calls, 0 errors).**
+`JOB_HUNT_ADDENDUM` now says each application's applied date is on its own line and must never be
+borrowed from another application's line. Verify (`phase5b --repeat 3`): 0/6 mix-ups, first pick
+6/6 Riverbend, "17 days" correct throughout. **Weak evidence:** only 1 of 6 draws cited a calendar
+date at all (correctly, "February 20th" for Cascade) — most now say "17 days" instead — so this
+shows no recurrence, not a measured fix. Treat as closed-pending: reopen if a mix-up reappears.
+
 ## Process For Filling This In
 
 Work through the Interaction Modes table one row at a time, per axis — each row now runs through

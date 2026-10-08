@@ -195,5 +195,7 @@ describe("JOB_HUNT_SYSTEM_PROMPT", () => {
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/scheduled interview or other live conversation outranks/i);
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never estimate elapsed time yourself/i);
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/use the weeks figure given with the Cash Runway line/i);
+    // 2026-10-08: ~1 in 4 draws cited Riverbend's applied date for Cascade (context lists newest first).
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never one from another application's line/i);
   });
 });

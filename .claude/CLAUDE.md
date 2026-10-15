@@ -4,7 +4,7 @@
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*
 **This app:** Authority Finance (A:Fin) — personal finance dashboard: income modeling, budgeting, goals, event logging.
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
-**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §1.
+**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/premium-ui-TODO.md` §4; `purpose` whitelist in `docs/active-systems.md` §15.
 
 ---
 
@@ -20,7 +20,7 @@
 
 **No standalone backend server** — but no longer "pure frontend": `api/` holds 12 Vercel
 serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
-subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
+subscription-lifecycle cron + email engine, delete-account, revival-lookup, `admin-beta-report.js`, admin-changelog for
 the "What's New" authoring surface, `admin-beta-hub.js` for the Beta Homebase's checklist/
 suggestion content + rubric scores (dispatched on `entity`: "content" | "score"), plus
 `api/seed.js` — a single route dispatched on `body.type` ("beta" | "investor" | "trial") that
@@ -133,7 +133,7 @@ src/
 │   ├── rollingTimeline.js   — deriveRollingIncomeWeeks, deriveRollingTimelineMonths
 │   ├── fiscalWeek.js        — FISCAL_WEEKS_PER_YEAR, week index helpers
 │   ├── configHistory.js     — §3 sensitive-field whitelist + diff gating account_history capture
-│   ├── db.js                — localStorage persistence
+│   ├── db.js                — Supabase persistence (eager-save writes, snapshot publish)
 │   └── supabase.js          — Supabase client
 └── test/                    — Vitest tests
 docs/                        — project documentation

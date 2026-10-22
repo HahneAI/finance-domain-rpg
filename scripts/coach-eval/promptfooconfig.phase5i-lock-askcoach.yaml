@@ -1,0 +1,23 @@
+description: >
+  Phase 5i (2026-10-22, shotgun Phase 5 lock) — Ask Coach natural default on the locked model
+  (Haiku), no override, "How's my week looking?", default account. Confirms the locked row
+  (Metaphor 3 / Length 2 / Directness 3 / Warmth 3). Run with --repeat 3.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/askCoachComposed.js
+    label: ask-coach-composed
+
+defaultTest:
+  vars:
+    userMessage: "How's my week looking?"
+
+tests:
+  - description: "Ask Coach natural default — lock check"
+    vars: {}

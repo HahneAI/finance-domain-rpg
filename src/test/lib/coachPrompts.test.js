@@ -133,6 +133,15 @@ describe("buildNetWorthSystemPrompt", () => {
     expect(prompt).toMatch(/usual two to three sentences/i);
   });
 
+  // 2026-10-22 (shotgun, Phase 5 lock): Red directness locked at 4 — natural draws opened on the
+  // runway figure but softened it ("that's real, but…"). Verdict first, cause named, no softener.
+  it("leads the red tier with the runway figure and its biggest driver, no reassurance first", () => {
+    expect(buildNetWorthSystemPrompt("red")).toMatch(/lead with the runway figure and the single biggest thing driving it/i);
+  });
+
+  // 2026-10-22: production's Green context (CoachNetWorthCard → buildCoachContext) carries only the
+  // current numbers — no earlier figure — yet the old addendum asked Coach to "name the specific
+  // improvement", so it invented deltas ("a real shift from where you were").
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });

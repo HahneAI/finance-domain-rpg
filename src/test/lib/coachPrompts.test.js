@@ -142,6 +142,21 @@ describe("buildNetWorthSystemPrompt", () => {
   // 2026-10-22: production's Green context (CoachNetWorthCard → buildCoachContext) carries only the
   // current numbers — no earlier figure — yet the old addendum asked Coach to "name the specific
   // improvement", so it invented deltas ("a real shift from where you were").
+  // 2026-10-22: Green stacked two touches ("the corner work paid off" + "765 left to roll with") and
+  // both Amber and Green invented panel names ("Expenses panel", "Goals panel").
+  it.each(["amber", "green"])("caps tier %s at one corner-man touch and ends on a real, on-screen panel name", (tier) => {
+    const prompt = buildNetWorthSystemPrompt(tier);
+    expect(prompt).toMatch(/at most one light corner-man phrase/i);
+    expect(prompt).toMatch(/Home \(where goals and Claim Dates live\), Income, Upkeep \(expenses and loans\), or Log/);
+    expect(prompt).not.toMatch(/Budget panel|Expenses panel|Goals panel/i);
+  });
+
+  it("tells the green tier it has no 'before' figure and must not size the change", () => {
+    const prompt = buildNetWorthSystemPrompt("green");
+    expect(prompt).toMatch(/shows only where things stand now, not where they were/i);
+    expect(prompt).toMatch(/never quote a "before" figure or size the change/i);
+  });
+
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });

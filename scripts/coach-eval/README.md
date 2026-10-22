@@ -392,7 +392,13 @@ retry-on-a-hunch.** Concretely for this file:
     (floor 3–4; natural baseline 13–17 sentences, proposed target 3); Ask Coach tool-available — no metaphor, Axis 2 shift
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
-  - [ ] Remaining before Phase 5 can conclude: Directness (Axis 4) and
+  - [$] Phase 5 batch decision LOCKED (shotgun 2026-10-22, awaiting
+    Anthony's review): mode × axis matrix in `docs/coach-personality-rubric.md`
+    "Locked Targets". Lock check 27 calls (`promptfooconfig.phase5.yaml`,
+    `promptfooconfig.phase5i-lock-askcoach.yaml`); fixed Green's invented
+    "before" figure, invented panel names (Amber/Green), Green stacked
+    touches, Red Directness 4. Rerun those two configs after any prompt edit.
+  - [x] (superseded by the lock above) Remaining before Phase 5 could conclude: Directness (Axis 4) and
     Warmth/Formality (Axis 5) are DEFINED (2026-10-07); Directness 1s/5s
     SAMPLED 2026-10-07 (`promptfooconfig.phase5e-directness-*.yaml`, 8 calls —
     see rubric); Warmth 1–2 SAMPLED 2026-10-07 (`promptfooconfig.phase5f-warmth-*.yaml`, 9 calls); Sonnet warmth-4 probe DONE (no fabrication, n=1); Job Hunt weeks-of-runway grounding fix BUILT + verified 2026-10-08 (relabel tried, reverted — see rubric); Net Worth Red flourish FIXED + Job Hunt fixture date de-coincided 2026-10-08 (`promptfooconfig.phase5h-red-refix.yaml`); Job Hunt application-date own-date rule added 2026-10-08 (0/6, weak evidence) (4–5 need real shared-history context) — then the batch decision: lock one

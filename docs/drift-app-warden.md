@@ -1553,7 +1553,11 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 > (Spine A), now including the admin Live State Inspector via the shared `newJobSeasonDash`
 > memo. **IF** the gate changes, **THEN** note it must stay `canAccessAskCoachGeneral` —
 > `isInvestor` now **is** folded in via `hasPrivilegedAccess` (2026-07-25), superseding
-> this entry's older "never fold in isInvestor" language; see F111. Check:
+> this entry's older "never fold in isInvestor" language; see F111. **IF** a tier addendum in
+> `coachPrompts.js` (`TIER_ADDENDA`) asks Coach to describe a *change* ("improvement", "turnaround",
+> "dropped from"), **THEN** the card must first pass the earlier figure into `buildCoachContext` — today it
+> passes only current numbers, so Green was told never to quote a before figure (2026-10-22, shotgun lock).
+> Amber/Green action names come from `NET_WORTH_PANEL_ACTION`; keep them equal to the on-screen nav (F178). Check:
 > `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
 **F142 · `estimateGoalNextYear(remainingAmount, cfg, expenses)`** — `finance.js:64–124`, consumed

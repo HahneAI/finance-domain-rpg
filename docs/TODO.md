@@ -2112,9 +2112,17 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     date-after-Today rules in `RESUME_REVIEW_ADDENDUM` — dates 3/3 fixed, recap partly (2/3 still
     close on the body's gap, as an action); length intentionally untouched. Residual (minor): loose
     runway-to-weeks conversion on tight runway. Writeup: rubric Known Limitations.
-  - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
+  - [$] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
-    above. This is Phase 5's actual finish line.
+    above. This is Phase 5's actual finish line. *(shotgun 2026-10-22 — matrix in
+    `coach-personality-rubric.md` "Locked Targets"; journal: `docs/shotgun-coding.md`)*
+  - [$] Net Worth Green grounding — stop inventing a "before" figure the card never passes; Amber/Green
+    end on a real on-screen panel (`NET_WORTH_PANEL_ACTION`); Green one-touch cap. *(shotgun 2026-10-22)*
+  - [$] Net Worth Red Directness 4 — lead with the runway figure and its biggest driver, no
+    reassurance first. *(shotgun 2026-10-22)*
+  - [ ] Carried from the lock check: Ask Coach overshoots Length 2 (~4 sentences, 3/3) and closes on a
+    weak action ("Ask me about your goals") — lever is Phase 7 per-message routing or a few-shot
+    example, not another rule; Red's action names are spec names, not rendered buttons.
 
 - [x] **Coach terminology/flow drift audit (2026-09-05), triggered by pulling down a sibling
   branch's homepage/goals redesign (`claude/homepage-goals-redesign-l249t1`, merged

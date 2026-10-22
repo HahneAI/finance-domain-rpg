@@ -103,6 +103,41 @@ devices cannot be tested.
 
 <!-- NEW ENTRIES GO HERE, NEWEST FIRST -->
 
+## Run — 2026-10-22 16:17 UTC  ·  branch: claude/coach-ai-personality-bmopcx  ·  scope: 3 of 3 open §2.L Phase 5 items (user-directed Coach close-out, not the usual 25% of Tier 1)
+
+### §2.L Phase 5 lock — mode × axis matrix
+1. Built: the locked 6-row × 5-axis target matrix ("Locked Targets" in `coach-personality-rubric.md`, now the source of truth) plus a reusable Ask Coach lock-check config.
+2. Chose: Ask Coach Length 2, Green Warmth 3, Red Warmth 3, and raised Job Hunt Directness to 4 to match 20+ verdict-first draws.
+3. Other options: Ask Coach Length 3 (what Haiku actually writes) / Green Warmth 4 / Red Warmth 2 (professional in a crisis).
+4. Built off: every Phase 5 finding since 2026-09 by scoring a fresh natural draw of each Haiku cell against the proposal (27 calls).
+5. Trade-off: Ask Coach overshoots its own Length 2 (~4 sentences) and closes on a weak action; left for Phase 7 routing, not another rule.
+- [ ] Test: open Ask Coach on a healthy week and ask "How's my week looking?" → a plain, warm reply with at most one light figure of speech and no fight talk.
+- [ ] Test: read the "Locked Targets" table in `docs/coach-personality-rubric.md` and change any cell you disagree with — that is the review.
+- [ ] Test: from `scripts/coach-eval`, run `ANTHROPIC_API_KEY="$AI_ADMIN_COACH_TEST_KEY" npx promptfoo eval -c promptfooconfig.phase5.yaml --no-cache` → three tier messages, each ending on a real panel (Red: its own action list).
+
+### §2.L Net Worth Green grounding + real panel actions
+1. Built: Green no longer claims a change it can't see, Amber and Green end on a real panel, and Green gets the one-corner-man cap.
+2. Chose: a prompt-only fix telling Green the data shows only the present, over threading the last-fired tier and its numbers into the card's context.
+3. Other options: pass the earlier tier and numbers into `buildCoachContext` (would unlock Warmth 4) / count every idiom toward the cap (tried, reverted: Amber got longer and more figurative).
+4. Built off: `CoachNetWorthCard` → `buildNetWorthSystemPrompt` by adding `NET_WORTH_PANEL_ACTION` to the Amber/Green addenda, names matching the bottom nav (F178).
+5. Risk: Green can't celebrate a specific improvement until the card passes a real before figure.
+- [ ] Test: on an account in Amber (spend above ~90% of take-home), let the Coach card fire → its last sentence sends you to Upkeep (or Home/Income/Log), never an "Expenses panel".
+- [ ] Test: lower spend so the account leaves Amber and reload → the Green card says you're back on solid ground using today's numbers, with no "down from" or "up X%" figure.
+- [ ] Test: the same Green card uses at most one boxing phrase ("your corner", "a round").
+
+### §2.L Net Worth Red Directness 4
+1. Built: Red opens with the runway figure and its single biggest driver, with no reassurance first.
+2. Chose: one added sentence in the Red addendum, keeping "direct and calm — never catastrophize" and the 10-08 ban on every figure of speech.
+3. Other options: lock Red Directness at 3 to match the old draws / Directness 5 (sampled 10-07: too harsh, brought back "flying blind").
+4. Built off: the 2026-10-08 Red fix by inserting the verdict-first rule ahead of the figure-of-speech ban.
+- [ ] Test: put an account in New Job Season with under 30 days of runway → the Red card's first sentence states the days left and what is eating them (e.g. rent's share of spend).
+- [ ] Test: the same card has no metaphors, stays at 2–3 sentences, and doesn't sound alarmed.
+- [ ] Test: it ends on one of Triage Expenses, Review Goals, or Life Events.
+
+Skipped: none. Pre-existing `newJobSeasonFlow.test.jsx` failure (2 tests can't find the "Activate" button; fails on the untouched branch too, likely date-dependent) left alone — outside this run.
+Verification: 1964/1966 tests (the 2 are that pre-existing file), lint clean, `vite build` ok; 27 live calls, 0 errors.
+Drift entries consulted: F24 (extended with the Green before-figure rule), F178 (Upkeep naming).
+
 ## Run — 2026-10-02 18:34 UTC  ·  branch: claude/shotgun-journal-format  ·  scope: 6 of 22 open Tier-1 tasks (§20.B2, B3, B4, C1, C2, D)
 
 ### §20.B2–B4 Second "with this week's bills" figure (one source)

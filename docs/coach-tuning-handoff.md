@@ -94,7 +94,11 @@ end of all feature testing. Speculative paid "Coach Upgrade" tier (~$5–10/mo) 
 
 ## 2. Phase status (TODO §2.L)
 
-**Phase 5 — axis coverage across the 4 built modes → batch decision.** *In progress, near done.*
+**Phase 5 — axis coverage across the 4 built modes → batch decision.** ***Locked (shotgun 2026-10-22),
+awaiting Anthony's review.*** The live matrix is the "Locked Targets" section of
+`docs/coach-personality-rubric.md`; the "Still open" list below is historical — all five items closed
+(2026-10-06 → 10-22). What carries forward: Ask Coach's Length 2 overshoot + weak closing action,
+and Phase 8 (combined-axis tuning) after launch.
 Done: Metaphor + Urgency across all four modes; Net Worth tiers live-verified; Job Hunt/Résumé first
 pass; Résumé Review metaphor gap fixed (closing-line "corner" sentence now in
 `RESUME_REVIEW_ADDENDUM`); fixture fidelity fix (all fixtures share one real `buildYear()` calendar);

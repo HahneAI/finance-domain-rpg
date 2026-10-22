@@ -431,6 +431,41 @@ the person. **No clean 1, 2, 4 or 5 samples.**
 
 ---
 
+## Locked Targets — Phase 5 batch decision *(shotgun run 2026-10-22, `[$]` until Anthony reviews)*
+
+**This table is the source of truth for every mode × axis target.** The Interaction Modes table below
+keeps the per-mode history and anchor quotes; where a number there differs, this table wins. Each cell
+is `target · confidence`. Confidence: **H** = 3+ matching live draws; **M** = several single draws
+agreeing; **L** = one draw or inferred. Haiku is near-deterministic on these prompts (repeat draws
+often word-for-word identical), so an H on a Haiku cell means "stable", not "independently sampled".
+Length targets describe the baseline-severity reply; Urgency governs how far severity may stretch it.
+
+| Mode (model) | Metaphor | Urgency | Length | Directness | Warmth |
+|---|---|---|---|---|---|
+| Ask Coach (Haiku) | 3 · H | 3 · H | **2** · M ⚠ | 3 · H | 3 · H |
+| Net Worth — Amber (Haiku) | 3 · H | **4 · M** — one value for the whole card | 2 · H | 3 · H | 3 · H |
+| Net Worth — Red (Haiku) | **1** · H | ↑ | 2 · H | **4** · H | 3 · H |
+| Net Worth — Green (Haiku) | 3 · H | ↑ | **2–3** · H | 3 · H | **3** · H |
+| Job Hunt Chat (Sonnet) | **2** · H | 3 · H | 2 · H | **4** · H | 3 · M |
+| Résumé Review (Sonnet) | 3 · H | n/a | **3** · H | **4** · M | 3 · M |
+
+**Decisions made in the run (each was open going in):**
+- **Ask Coach Length 2**, not 3 — 2 is the persona's own "two to three sentences" rule. ⚠ Natural
+  Haiku runs ~4 sentences / ~96 words (3/3), so this cell is a known overshoot, deliberately NOT fixed
+  by editing `ASK_COACH_SYSTEM_PROMPT` (largest blast radius; per-message Haiku/Sonnet routing,
+  §2.L Phase 7, is the planned lever). Same draws close on a weak action ("Ask me about your goals")
+  instead of a panel — logged, not fixed.
+- **Green Warmth 3**, not 4 — Warmth 4 means naming the user's specific progress, and production's
+  Green context carries no earlier figure to name (see the Green grounding fix below). Revisit when
+  the card passes a real before/after.
+- **Red Warmth 3**, not 2 — a corner man stays on your side when it's serious; draws read steady
+  ("so we can see what stays and what moves"), not clinical.
+- **Job Hunt Directness 4**, revised up from the proposed 3 — 20+ natural draws open verdict-first
+  with the reason ("Riverbend first — you've got an interview scheduled"), which is the Axis 4 test
+  for 4, and is what a job search under runway pressure needs.
+- **Red Directness 4** made real by a prompt line (lead with the runway figure and its biggest
+  driver, no reassurance first); before it, Red opened on the runway but softened it.
+
 ## Interaction Modes — Target Scores
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
@@ -990,6 +1025,30 @@ borrowed from another application's line. Verify (`phase5b --repeat 3`): 0/6 mix
 6/6 Riverbend, "17 days" correct throughout. **Weak evidence:** only 1 of 6 draws cited a calendar
 date at all (correctly, "February 20th" for Cascade) — most now say "17 days" instead — so this
 shows no recurrence, not a measured fix. Treat as closed-pending: reopen if a mix-up reappears.
+
+**Phase 5 lock check + alignment fixes, shotgun run 2026-10-22 (27 calls, 0 errors, all Haiku).**
+Natural draws on every Haiku cell against the proposed matrix (`promptfooconfig.phase5.yaml`,
+`promptfooconfig.phase5i-lock-askcoach.yaml`):
+- **Green grounding bug (production):** `CoachNetWorthCard` passes only current numbers, but the
+  addendum said "name the specific improvement" — Coach invented a delta ("a real shift from where you
+  were"). Fixed: Green names what is healthy now and never quotes a before figure. Verified: "You're
+  back on solid ground — your surplus is holding steady at 760 a week…", no before figure.
+- **Invented panel names:** Amber said "Expenses panel", Green "Goals panel" — neither exists (Red was
+  fine: it has its own action list). Fixed with a shared `NET_WORTH_PANEL_ACTION` (Home / Income /
+  Upkeep / Log, on-screen names, warden F178). Verified: Amber → "Upkeep", Green → "Home".
+- **Green stacked two corner-man touches** ("the corner work paid off" + "765 left to roll with").
+  Fixed with the Amber-style one-touch cap.
+- **Tried and reverted — counting every idiom toward the one-touch cap:** Amber went from two light
+  touches to four and from 92 to 131 words ("tailwind", "breathing room", "moves the needle"). Quoting
+  example idioms in the rule ("eating up") also got that exact idiom used. Third time this project has
+  seen a tighter or more explained rule backfire on Haiku (see the "since applying" relabel). Amber stays
+  on the plain corner-man cap: one corner-man phrase plus at most one everyday idiom reads as 3.
+- **Red Directness 4:** verdict-first line added; verified "You have 22 days of runway left and your
+  rent is carrying 57% of your weekly spend" (57% = 400/700, correct).
+- **Carried, not fixed:** Ask Coach length overshoot + weak closing action (see the locked table);
+  the Red fixture shows a $900 paycheck during New Job Season, so draws mention "when your paycheck
+  changes"; Red's three action names (Triage Expenses / Review Goals / Life Events) are spec names —
+  `CoachNetWorthCard` renders no buttons, so they are plain text the user has to map to a panel.
 
 ## Process For Filling This In
 

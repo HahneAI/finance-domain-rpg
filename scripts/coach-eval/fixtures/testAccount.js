@@ -135,7 +135,7 @@ const REAL_ALL_WEEKS = buildYear(TOOL_ACCOUNT_CONFIG);
 // and invalidates Phase 4/5's word-for-word repeat comparisons. Tool-shaped
 // data belongs in buildToolTestAccount() at the bottom of this file.
 export function buildTestAccountArgs({
-  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null,
+  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null, earlierCheckIn = null,
 } = {}) {
   const config = {
     firstActiveIdx: 0,
@@ -159,6 +159,7 @@ export function buildTestAccountArgs({
     currentWeek,
     today: "2026-03-09",
     runwayDays,
+    earlierCheckIn,
     logs: [],
     futureWeeks: [],
     timelineWeekNets: [],

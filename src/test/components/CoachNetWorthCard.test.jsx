@@ -132,6 +132,28 @@ describe("CoachNetWorthCard", () => {
     expect(mocks.chatWithCoach).toHaveBeenCalledTimes(1);
   });
 
+  it("persists the headline figures when a tier fires and hands them to the Green recovery as its real 'before'", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["amber message"]));
+    const firstProps = baseProps();
+    const { unmount } = render(<CoachNetWorthCard {...firstProps} />);
+    await waitFor(() => expect(screen.getByText("amber message")).toBeTruthy());
+    const persistedConfig = firstProps.saveConfigNow.mock.calls[0][0];
+    // 900 income / 500 spend: the same figures buildCoachContext prints, rounded.
+    expect(persistedConfig.coachSignalState.lastFiredSnapshot).toMatchObject({ spendRatioPct: 56, weeklySurplus: 400 });
+    expect(mocks.chatWithCoach.mock.calls[0][2]).not.toMatch(/Earlier check-in/);
+    expect(mocks.chatWithCoach.mock.calls[0][1]).not.toMatch(/Earlier check-in/);
+    unmount();
+
+    mocks.chatWithCoach.mockClear();
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["green message"]));
+    render(<CoachNetWorthCard {...baseProps({
+      config: persistedConfig, avgWeeklySpend: 300, netWorthHealth: { belowThreshold: false }, currentWeek: { idx: 11 },
+    })} />);
+    await waitFor(() => expect(screen.getByText("green message")).toBeTruthy());
+    expect(mocks.chatWithCoach.mock.calls[0][2]).toMatch(/Earlier check-in \(amber, .*\): savings rate -?\d+%, spend ratio 56%, weekly surplus \$400/);
+    expect(mocks.chatWithCoach.mock.calls[0][1]).toMatch(/"Earlier check-in" line in the data below holds the real figures/);
+  });
+
   it("does not throw and simply skips persistence when setConfig/saveConfigNow are omitted", async () => {
     mocks.chatWithCoach.mockImplementation(chunkGenerator(["no persistence needed"]));
     render(<CoachNetWorthCard {...baseProps({ setConfig: undefined, saveConfigNow: undefined })} />);

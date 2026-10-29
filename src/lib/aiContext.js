@@ -72,6 +72,37 @@ function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx, 
  * when config.newJobSeasonMode is set) so the block prompt-caches across a
  * session even as the underlying numbers change.
  */
+/**
+ * The headline figures Coach quotes (surplus, annual savings, savings rate, spend ratio) — extracted
+ * 2026-10-29 so CoachNetWorthCard can snapshot the SAME numbers when a tier fires (Green's
+ * "earlier check-in" line) instead of re-deriving them. buildCoachContext calls this too.
+ */
+export function computeCoachHeadlineFigures({ config = null, weeklyIncome = 0, avgWeeklySpend = 0, fundedGoalSpend = 0 } = {}) {
+  const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
+  // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
+  // so the Coach's stated annual savings/net-worth figures can't drift from
+  // the Home tile they're described as matching — a flat 52 here double-
+  // diluted weeklyIncome's own already-per-active-week average for any
+  // account that didn't start at fiscal week 0 (TODO §1, 2026-07-19).
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
+  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
+  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
+  // Matches HomePanel.jsx's "Upkeep Health" tile exactly: spendRatio =
+  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
+  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  return { avgWeeklySurplus, activeWeeksThisYear, annualSavings, netWorthHealth, spendRatio };
+}
+
+/** The compact snapshot CoachNetWorthCard persists when a tier fires — all from computeCoachHeadlineFigures. */
+export function netWorthCheckInSnapshot(args) {
+  const f = computeCoachHeadlineFigures(args);
+  return {
+    savingsRatePct: f.netWorthHealth.rate != null ? Math.round(f.netWorthHealth.rate * 100) : null,
+    spendRatioPct: Math.round(f.spendRatio * 100),
+    weeklySurplus: Math.round(f.avgWeeklySurplus),
+  };
+}
+
 export function buildCoachContext({
   config = null,
   weeklyIncome = 0,
@@ -110,20 +141,12 @@ export function buildCoachContext({
   // names outright would have forced a wrong-label tool call just to discover
   // what exists.
   detailAvailableViaTools = false,
+  // CoachNetWorthCard's persisted snapshot from the tier that fired before this one (Green only):
+  // { tier, weekIdx, savingsRatePct, spendRatioPct, weeklySurplus }. Lets Green name a real change.
+  earlierCheckIn = null,
 } = {}) {
-  const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
-  // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
-  // so the Coach's stated annual savings/net-worth figures can't drift from
-  // the Home tile they're described as matching — a flat 52 here double-
-  // diluted weeklyIncome's own already-per-active-week average for any
-  // account that didn't start at fiscal week 0 (TODO §1, 2026-07-19).
-  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
-  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
-  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
-
-  // Matches HomePanel.jsx's "Upkeep Health" tile exactly: spendRatio =
-  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
-  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  const { avgWeeklySurplus, annualSavings, netWorthHealth, spendRatio } =
+    computeCoachHeadlineFigures({ config, weeklyIncome, avgWeeklySpend, fundedGoalSpend });
   const budgetHealthLabel = spendRatio < 0.5 ? "well-managed" : spendRatio < 0.75 ? "healthy range" : "watch spend";
 
   const completedGoals = goals.filter((g) => g.completed);
@@ -295,6 +318,19 @@ export function buildCoachContext({
   lines.push(`Goal limits: at most ${MAX_ACTIVE_GOALS} active goals (${activeGoals.length} active now)${
     goalCap != null ? `; active goal targets may total at most ${fmt$(goalCap)} (five years of the Needs-only surplus) — ${fmt$(Math.max(0, goalCap - totalActiveGoalsTarget))} of room left` : ""
   }. Claiming a goal frees room. Do not propose a goal that would exceed these.`);
+
+  // Green's real "before" (2026-10-29): the snapshot CoachNetWorthCard saved when the previous tier
+  // fired, computed by computeCoachHeadlineFigures at that time — so a turnaround can be named
+  // with figures that actually existed, not inferred.
+  if (earlierCheckIn && earlierCheckIn.tier) {
+    const when = Number.isInteger(earlierCheckIn.weekIdx) ? formatPeriodWithDate(earlierCheckIn.weekIdx, allWeeks, checksPerYear) : "an earlier period";
+    const parts = [
+      earlierCheckIn.savingsRatePct != null ? `savings rate ${earlierCheckIn.savingsRatePct}%` : null,
+      earlierCheckIn.spendRatioPct != null ? `spend ratio ${earlierCheckIn.spendRatioPct}%` : null,
+      earlierCheckIn.weeklySurplus != null ? `weekly surplus ${fmt$(earlierCheckIn.weeklySurplus)}` : null,
+    ].filter(Boolean);
+    if (parts.length) lines.push(`Earlier check-in (${earlierCheckIn.tier}, ${when}): ${parts.join(", ")}`);
+  }
 
   return lines.join("\n");
 }

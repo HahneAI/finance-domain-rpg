@@ -22,8 +22,15 @@ const TIER_ADDENDA = {
   green: `This is a green (recovery) check-in: this account was flagged in an earlier check-in and is now back out of the warning zone. The data below shows only where things stand now, not where they were — so never quote a "before" figure or size the change ("down from…", "up X%"); name what is healthy now, using the real numbers below, and acknowledge plainly that it's back on solid ground — earned, not hyped. Use at most one light corner-man phrase in this message, never two. ${NET_WORTH_PANEL_ACTION}`,
 };
 
-export function buildNetWorthSystemPrompt(tier) {
-  const addendum = TIER_ADDENDA[tier];
+// Green with a persisted "before" (2026-10-29): CoachNetWorthCard passes `{ hasEarlierCheckIn: true }`
+// only when it also hands buildCoachContext the snapshot that prints the "Earlier check-in" line.
+// Built as a separate addendum, not a branch inside the plain Green one, so a Green without history
+// keeps the exact prompt that was live-verified — folding both cases into one addendum made Haiku
+// misquote an unrelated figure ("+$55" → "five dollars") on every run.
+const GREEN_WITH_HISTORY_ADDENDUM = `This is a green (recovery) check-in: this account was flagged in an earlier check-in and is now back out of the warning zone. The "Earlier check-in" line in the data below holds the real figures from that check-in. Name what improved by setting those figures against the current ones, quoting both exactly as written (for example "savings rate from 9% to 38%") — never compute a percentage change, a difference or any figure that isn't written in the data. Acknowledge plainly that it's back on solid ground — earned, not hyped. Use at most one light corner-man phrase in this message, never two. ${NET_WORTH_PANEL_ACTION}`;
+
+export function buildNetWorthSystemPrompt(tier, { hasEarlierCheckIn = false } = {}) {
+  const addendum = tier === "green" && hasEarlierCheckIn ? GREEN_WITH_HISTORY_ADDENDUM : TIER_ADDENDA[tier];
   if (!addendum) throw new Error(`Unknown net worth signal tier: ${tier}`);
   return `${COACH_PERSONA_PROMPT}\n\n${addendum}`;
 }

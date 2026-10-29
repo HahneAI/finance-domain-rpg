@@ -191,6 +191,18 @@ describe("buildNetWorthSystemPrompt", () => {
     expect(prompt).toMatch(/never quote a "before" figure or size the change/i);
   });
 
+  it("gives Green a grounded comparison only when the card has a persisted 'before' (2026-10-29)", () => {
+    const withHistory = buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: true });
+    expect(withHistory).toMatch(/"Earlier check-in" line in the data below holds the real figures/);
+    expect(withHistory).toMatch(/never compute a percentage change, a difference or any figure that isn't written in the data/);
+    expect(withHistory).not.toMatch(/never quote a "before" figure/);
+    // Without history the prompt is the plain, live-verified Green addendum, byte for byte.
+    expect(buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: false })).toBe(buildNetWorthSystemPrompt("green"));
+    expect(buildNetWorthSystemPrompt("green")).not.toMatch(/Earlier check-in/);
+    // The flag only ever changes Green.
+    expect(buildNetWorthSystemPrompt("amber", { hasEarlierCheckIn: true })).toBe(buildNetWorthSystemPrompt("amber"));
+  });
+
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });

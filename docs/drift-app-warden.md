@@ -1558,8 +1558,14 @@ from that same memo, isAdmin-gated diagnostic display only, no new call site.
 > `isInvestor` now **is** folded in via `hasPrivilegedAccess` (2026-07-25), superseding
 > this entry's older "never fold in isInvestor" language; see F111. **IF** a tier addendum in
 > `coachPrompts.js` (`TIER_ADDENDA`) asks Coach to describe a *change* ("improvement", "turnaround",
-> "dropped from"), **THEN** the card must first pass the earlier figure into `buildCoachContext` — today it
-> passes only current numbers, so Green was told never to quote a before figure (2026-10-22, shotgun lock).
+> "dropped from"), **THEN** the card must first pass the earlier figure into `buildCoachContext`. Done for
+> Green (2026-10-29, shotgun): each fire persists `coachSignalState.lastFiredSnapshot` =
+> `netWorthCheckInSnapshot()` (same `computeCoachHeadlineFigures()` the context block prints — never a
+> parallel formula); a Green after Amber/Red passes it as `earlierCheckIn` (→ "Earlier check-in" line) AND
+> calls `buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: true })`. **IF** you change either half,
+> **THEN** change both — the with-history addendum and the context line are one unit, and a Green with no
+> snapshot (older accounts) must keep the plain, no-before-figure addendum byte for byte (folding both
+> cases into one addendum made Haiku misquote "+$55" as "five dollars"; Known Limitations, rubric).
 > Amber/Green action names come from `NET_WORTH_PANEL_ACTION`; keep them equal to the on-screen nav (F178). Check:
 > `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 

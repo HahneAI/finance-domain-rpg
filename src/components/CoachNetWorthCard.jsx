@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
-import { buildCoachContext } from "../lib/aiContext.js";
+import { buildCoachContext, netWorthCheckInSnapshot } from "../lib/aiContext.js";
 import { buildNetWorthSystemPrompt } from "../lib/coachPrompts.js";
 import { resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
 import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
@@ -22,6 +22,9 @@ const DEFAULT_SIGNAL_STATE = {
   lastFiredTier: null,
   lastFiredWeekIdx: null,
   lastMessage: "",
+  // 2026-10-29: the headline figures at the moment the last tier fired (netWorthCheckInSnapshot).
+  // Green reads it as its real "before"; absent on accounts whose last fire predates this field.
+  lastFiredSnapshot: null,
   dismissedTier: null,
   dismissedWeekIdx: null,
 };
@@ -106,9 +109,14 @@ export function CoachNetWorthCard({
       setErrored(false);
       setLiveMessage("");
       try {
-        const systemPrompt = buildNetWorthSystemPrompt(tier);
+        const prevSnap = signalState.lastFiredSnapshot;
+        const earlierCheckIn = tier === "green" && prevSnap && (signalState.lastFiredTier === "amber" || signalState.lastFiredTier === "red")
+          ? { tier: signalState.lastFiredTier, weekIdx: signalState.lastFiredWeekIdx, ...prevSnap }
+          : null;
+        const systemPrompt = buildNetWorthSystemPrompt(tier, { hasEarlierCheckIn: Boolean(earlierCheckIn) });
         const contextBlock = buildCoachContext({
           config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays,
+          earlierCheckIn,
         });
         let accumulated = "";
         for await (const chunk of chatWithCoach(
@@ -123,7 +131,10 @@ export function CoachNetWorthCard({
           setLiveMessage(accumulated);
         }
         if (!cancelled) {
-          updateSignalState({ lastFiredTier: tier, lastFiredWeekIdx: weekIdx, lastMessage: accumulated });
+          updateSignalState({
+            lastFiredTier: tier, lastFiredWeekIdx: weekIdx, lastMessage: accumulated,
+            lastFiredSnapshot: netWorthCheckInSnapshot({ config, weeklyIncome, avgWeeklySpend, fundedGoalSpend }),
+          });
         }
       } catch {
         if (!cancelled) setErrored(true);

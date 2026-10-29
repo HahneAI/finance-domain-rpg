@@ -31,6 +31,12 @@ const TIER_CONTEXT = {
   // logic itself, which lives in coachTriggers.js and isn't what this
   // harness tests.
   green: () => buildTestContext({ weeklyIncome: 845, avgWeeklySpend: 85 }),
+  // 2026-10-29: Green as the card now fires it — with the Amber check-in's persisted snapshot
+  // (netWorthCheckInSnapshot of the amber fixture above: 9% / 91% / $75, four weeks earlier).
+  greenWithHistory: () => buildTestContext({
+    weeklyIncome: 845, avgWeeklySpend: 85,
+    earlierCheckIn: { tier: "amber", weekIdx: 6, savingsRatePct: 9, spendRatioPct: 91, weeklySurplus: 75 },
+  }),
 };
 
 // vars.calibrationInstruction is OPTIONAL — added 2026-09-03 for Axis 3
@@ -39,8 +45,9 @@ const TIER_CONTEXT = {
 // for all three tiers, Phase 5's first slice); passing it forces a
 // deliberate length extreme for this one response.
 export default function ({ vars }) {
-  const systemPrompt = buildNetWorthSystemPrompt(vars.tier);
-  const context = TIER_CONTEXT[vars.tier]();
+  const withHistory = vars.tier === "green" && Boolean(vars.withHistory);
+  const systemPrompt = buildNetWorthSystemPrompt(vars.tier, { hasEarlierCheckIn: withHistory });
+  const context = withHistory ? TIER_CONTEXT.greenWithHistory() : TIER_CONTEXT[vars.tier]();
   const calibrationBlock = vars.calibrationInstruction ? `\n\n${vars.calibrationInstruction}` : "";
   return [
     { role: "system", content: `${systemPrompt}\n\n${context}${calibrationBlock}` },

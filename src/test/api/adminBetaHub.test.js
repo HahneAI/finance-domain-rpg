@@ -1,9 +1,9 @@
-// api/admin-beta-hub.js — admin write surface for the Beta Homebase
+// api/_adminBetaHub.js — admin write surface for the Beta Homebase
 // (database/migrations/037_add_beta_homebase.sql): beta_content_items
 // (checklist + suggestion, entity: "content") and beta_scores
 // (entity: "score"), dispatched in one route to stay under Vercel's Hobby
 // 12-function cap (same idiom as api/seed.js). Auth pattern and the
-// content CRUD shape mirror api/admin-changelog.js — see
+// content CRUD shape mirror api/_adminChangelog.js — see
 // src/test/api/adminChangelog.test.js for the sibling suite this borrows
 // its scaffolding from.
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -25,7 +25,7 @@ globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 
-const { default: handler } = await import("../../../api/admin-beta-hub.js");
+const { default: handler } = await import("../../../api/_adminBetaHub.js");
 
 function mkRes() {
   return {

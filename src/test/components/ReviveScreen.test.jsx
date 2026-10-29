@@ -46,7 +46,7 @@ describe('ReviveScreen — identity + checkout', () => {
     fetch.mockResolvedValue({ ok: true, json: async () => ({ url: 'https://checkout.stripe.com/c/revive_1' }) })
     render(<ReviveScreen revival={REVIVAL} checkoutReturn={null} />)
     fireEvent.click(screen.getByText('Monthly'))
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe-revive-checkout', expect.objectContaining({
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe/revive-checkout', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
       body: JSON.stringify({ plan: 'monthly' }),

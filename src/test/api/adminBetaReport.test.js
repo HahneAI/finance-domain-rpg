@@ -1,4 +1,4 @@
-// api/admin-beta-report.js — beta cohort usage report. This suite covers the
+// api/_adminBetaReport.js — beta cohort usage report. This suite covers the
 // docs/TODO.md §12 Beta Homebase extension only (?format=json, the
 // beta_scores/beta_checklist_completions/beta_content_items joins) — the
 // pre-existing CSV/?format=feedback behavior had no prior test file and is
@@ -22,7 +22,7 @@ globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 
-const { default: handler } = await import("../../../api/admin-beta-report.js");
+const { default: handler } = await import("../../../api/_adminBetaReport.js");
 
 function mkRes() {
   return {

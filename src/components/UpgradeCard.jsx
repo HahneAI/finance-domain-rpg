@@ -21,7 +21,7 @@ export function UpgradeCard({ onClose, tagline } = {}) {
     }
 
     try {
-      const res = await fetch("/api/stripe-create-checkout", {
+      const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

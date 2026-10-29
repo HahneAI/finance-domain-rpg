@@ -24,7 +24,7 @@ globalThis.process.env.STRIPE_SECRET_KEY_TEST = "sk_test_dummy";
 globalThis.process.env.STRIPE_PRICE_MONTHLY_TEST = "price_month_test";
 globalThis.process.env.STRIPE_PRICE_ANNUAL_TEST = "price_annual_test";
 
-const { default: handler } = await import("../../../api/stripe-create-checkout.js");
+const { default: handler } = await import("../../../api/_stripeCreateCheckout.js");
 
 function mkReq(overrides = {}) {
   return {

@@ -65,7 +65,7 @@ describe('fetchLatestPublishedChangelog', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// Admin authoring functions — all go through api/admin-changelog.js with a
+// Admin authoring functions — all go through api/_adminChangelog.js with a
 // bearer token from the current session.
 // ─────────────────────────────────────────────────────────────
 
@@ -77,7 +77,7 @@ describe('fetchAllChangelogEntries', () => {
 
     const result = await fetchAllChangelogEntries()
 
-    expect(fetch).toHaveBeenCalledWith('/api/admin-changelog', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/changelog', expect.objectContaining({
       method: 'GET',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
     }))
@@ -111,7 +111,7 @@ describe('saveChangelogEntry', () => {
 
     const result = await saveChangelogEntry({ id: 'e1', versionLabel: '2026.07.26', title: 'Updated title', body: 'Body text', published: true })
 
-    expect(fetch).toHaveBeenCalledWith('/api/admin-changelog', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/changelog', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123', 'Content-Type': 'application/json' }),
       body: JSON.stringify({ id: 'e1', versionLabel: '2026.07.26', title: 'Updated title', body: 'Body text', published: true }),
@@ -141,7 +141,7 @@ describe('deleteChangelogEntry', () => {
 
     const result = await deleteChangelogEntry('e1')
 
-    expect(fetch).toHaveBeenCalledWith('/api/admin-changelog?id=e1', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/changelog?id=e1', expect.objectContaining({
       method: 'DELETE',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
     }))

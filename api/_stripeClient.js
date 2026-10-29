@@ -45,7 +45,7 @@ export const PLAN_BY_PRICE_ID = {
 export const STRIPE_CLIENTS = (MODE === "live" ? [stripeLive, stripeTest] : [stripeTest, stripeLive]).filter(Boolean);
 
 // Cancels a subscription immediately (not at period end) across modes.
-// Shared by api/delete-account.js (user-initiated hard delete) and the §17.I
+// Shared by api/_deleteAccount.js (user-initiated hard delete) and the §17.I
 // non-payment archive-then-delete in the lifecycle cron. "resource_missing"
 // means wrong mode or already gone — both safe to move past; anything else
 // throws so the caller can abort rather than leave a still-billed user.

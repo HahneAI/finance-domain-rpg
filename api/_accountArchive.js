@@ -1,6 +1,6 @@
 // Shared archive-then-delete primitive (§17.I / migration 017's deleted_accounts
 // tombstone). Originally lived only inside cron-subscription-lifecycle.js for the
-// day-21+7 non-payment path; factored out (migration 044) so api/delete-account.js
+// day-21+7 non-payment path; factored out (migration 044) so api/_deleteAccount.js
 // can reuse the exact same tombstone-then-purge sequence for user-initiated
 // deletion instead of the old plain hard-delete-with-no-archive it used to run —
 // one function, never allowed to diverge between the two callers (CLAUDE.md's

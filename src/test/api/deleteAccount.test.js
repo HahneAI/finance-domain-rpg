@@ -36,7 +36,7 @@ globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 
-const { default: handler } = await import("../../../api/delete-account.js");
+const { default: handler } = await import("../../../api/_deleteAccount.js");
 
 // resource_missing is how Stripe reports "no such object in this mode".
 const missingErr = () => Object.assign(new Error("No such subscription"), { code: "resource_missing" });

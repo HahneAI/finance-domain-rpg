@@ -13,7 +13,7 @@ const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 // service_role — used ONLY for the is_ai_admin daily usage cap below (a
 // service-role client is required because ai_admin_coach_calls_* are not in
 // migration 019's client column-grant list, same as every other privileged
-// column). Same env var api/delete-account.js already relies on.
+// column). Same env var api/_deleteAccount.js already relies on.
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 // Rudimentary daily cap on Coach calls for is_ai_admin accounts specifically
 // (see the block below). Override via env for a looser/tighter cap without a

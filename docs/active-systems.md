@@ -38,7 +38,7 @@ since: Claim Date, Ad-Lib wizard, DHL Warehouse, Beta Homebase, Money Moves, Ré
 | 24 | AI Layer — Coach | `api/coach.js`, `coachPrompts.js`, `aiContext.js`, `AskCoachPanel.jsx` | Live, paid-tier gated |
 | 25 | Beta Homebase & Money Moves | `BetaHomebase.jsx`, `ProductivityHub.jsx`, `api/admin-beta-hub.js` | Live |
 | 26 | Résumé / Career Document Center | `ProfilePanel.jsx`, `resume_profile`, Storage `resumes` | v1+v2 live; v3+ ahead |
-| 27 | Serverless functions & Vercel cap | `api/` | 12/12 — zero headroom |
+| 27 | Serverless functions & Vercel cap | `api/` | 7/12 — 3 routers + 4 standalone (2026-10-29) |
 
 ---
 
@@ -261,9 +261,9 @@ server. Unbuilt AI surfaces stay on `canAccessAiFeatures`.
 `BetaHomebase.jsx` (tracked beta testers only; nav-stack view): rubric score, feature checklist,
 suggestion feed, changelog recap. `ProductivityHub.jsx` ("Money Moves") is the base-user twin — same
 sections minus scoring, reusing Homebase components. Content/scores are authored through
-`api/admin-beta-hub.js` (`entity`: content | score | base_content); completions/feedback write directly
-under RLS (migrations 037, 039; 040 adds `employer_preset` targeting). "What's New" is
-`changelog_entries` (032) via `api/admin-changelog.js`.
+`/api/admin/beta-hub` (`api/_adminBetaHub.js`; `entity`: content | score | base_content); completions/feedback
+write directly under RLS (migrations 037, 039; 040 adds `employer_preset` targeting). "What's New" is
+`changelog_entries` (032) via `/api/admin/changelog` (`api/_adminChangelog.js`).
 
 ## 26. Résumé / Career Document Center
 
@@ -273,8 +273,11 @@ v1 (`resume_profile`, `resume_review` chat type; migration 036) and v2 (any-file
 
 ## 27. Serverless Functions & the Vercel Hobby Cap
 
-12 functions max (one per non-`_` file in `api/`). **Currently 12/12.** Merge candidates if another is
-needed: the three `stripe-*.js` routes; `admin-beta-hub.js`/`admin-changelog.js` dispatch on a body field
-as precedent (`api/seed.js` already merged three seeds). A build failing on "No more than 12 Serverless
+12 functions max (one per non-`_` file anywhere under `api/`). **Currently 7/12** (2026-10-29). Three
+routers — `api/admin/[route].js`, `api/stripe/[route].js`, `api/account/[route].js` — each serve several
+handlers as one function, picked by the dynamic path segment (`req.query.route`); handlers live unchanged
+in `_`-prefixed modules. Standalone: `coach.js`, `stripe-webhook.js` (raw body), the lifecycle cron,
+`seed.js`. Old URLs are `vercel.json` rewrites for cached clients. Add a route to a router; take a new
+slot only for a route needing its own function config. A build failing on "No more than 12 Serverless
 Functions" is this, not an outage. Next migration number is **049** — production applied through **048** as of 2026-10-07 (verify against `database/migrations/`;
 `038_BOOKMARK_*` is a snapshot, not a migration).

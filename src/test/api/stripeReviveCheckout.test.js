@@ -33,7 +33,7 @@ globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 globalThis.process.env.APP_URL = "https://app.example.com";
 
-const { default: handler } = await import("../../../api/stripe-revive-checkout.js");
+const { default: handler } = await import("../../../api/_stripeReviveCheckout.js");
 
 function setupAdmin(tombstone) {
   const maybeSingle = vi.fn().mockResolvedValue({ data: tombstone, error: null });

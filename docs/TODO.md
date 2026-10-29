@@ -5707,9 +5707,9 @@ shown the channel is worth it.***
 **Sequence:** (1) PWA push reminders (`§8.C` weekly pre-game briefing) → (2) opt-in one-way SMS
 reminders with **no dollar figures** → (3) two-way Coach over SMS. Each step is a decision gate.
 
-- [ ] **Free a serverless slot first** — `api/` is **12/12** (Hobby cap). A Twilio inbound webhook
-  needs a route: merge the three `stripe-*.js` routes (same shape) or dispatch the webhook from an
-  existing route on a body/path field, as `api/seed.js` / `admin-beta-hub.js` already do.
+- [ ] **Free a serverless slot first** — *unblocked 2026-10-29: `api/` is now 7/12* (admin, Stripe
+  user-facing and account routes merged into three routers). A Twilio inbound webhook needs its own
+  signature check on the raw body, so give it its own slot like `stripe-webhook.js`.
 - [ ] **US A2P 10DLC registration** — brand → campaign → numbers. Campaigns fail review when the
   opt-in/opt-out method is inadequate; new campaigns require privacy-policy and terms URLs from
   2026-06-30 (Twilio changelog). **Review times and fees were not confirmed — verify with Twilio

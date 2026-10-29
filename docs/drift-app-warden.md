@@ -173,7 +173,7 @@ nothing is orphaned).
 | T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§9 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §2 · §9 | B, C |
-| T8 | **Login System** | G | `LoginScreen.jsx`, `ReviveScreen.jsx`, `TrialExplainerScreen.jsx`, `api/revival-lookup.js` | §17 (auth entry) · §8 (revival detection at sign-in) | B, C |
+| T8 | **Login System** | G | `LoginScreen.jsx`, `ReviveScreen.jsx`, `TrialExplainerScreen.jsx`, `api/_revivalLookup.js` (`/api/account/revival-lookup`) | §17 (auth entry) · §8 (revival detection at sign-in) | B, C |
 | T9 | **Paywall System** | G | `App.jsx` (entitlement resolution + `readOnly` fencing), `UpgradeCard/Modal/Panel.jsx`, `TrialBanner.jsx`, `api/stripe-*.js`, `api/cron-subscription-lifecycle.js` + `_lifecycle*.js`, `_email.js` | §8 · §4 | B, C |
 | T10 | **UI-UX** | G | `ui.jsx`, `LiquidGlass.jsx`, `index.css` (`@theme`), `useSwipeStack.js`, `PwaInstallModal.jsx`, animation rules | §1 · §16 (primitives) · §3 | E |
 
@@ -2998,13 +2998,13 @@ everyone locked, since `taxExemptOptIn` without the unlock is ignored by the mat
 **F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
 password `:171` (hidden for Google-only accounts — no email identity, `6e123e8`,
 `:113–117`), link Google `:198`, global sign-out `:186–193`, **delete account**
-`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token
+`:317–345` (type-DELETE confirmation → `POST /api/account/delete` with bearer token
 → goodbye state → sign-out) — **[G]**
 **Migration 044 (2026-08-30) redefined this path — the prior "true, unrecoverable,
 no-archive" invariant below is gone.** A raw `auth.admin.deleteUser` failure used to
 surface as a scary "Failed to delete auth account" error to the user (screenshot-driven
 fix) *after* `user_data` had already been wiped — a request to leave must never come
-back as an infra error. `api/delete-account.js` now (1) stamps `deletion_requested_at`
+back as an infra error. `api/_deleteAccount.js` (`/api/account/delete`) now (1) stamps `deletion_requested_at`
 on the row first — a single-column UPDATE that should never fail, and locking on it is
 enough to honor the request from the user's perspective — then (2) attempts the exact
 same `archiveAndDeleteAccount()` (`api/_accountArchive.js`, factored out of the cron in
@@ -3030,7 +3030,7 @@ distinguishing the two in the tombstone row.
 > fallback to `DEFAULT_SUBSCRIPTION`) and `src/App.jsx`'s goodbye gate
 > (`subscription?.deletionRequestedAt`) still runs before the paywall/dashboard checks.
 > The confirmation text contract (`confirmationText` body field) must still match
-> `api/delete-account`'s server-side check. **IF** identity-gating changes, **THEN**
+> `/api/account/delete`'s server-side check. **IF** identity-gating changes, **THEN**
 > re-walk the Google-only × email-only × linked matrix — the password form must never
 > show where re-auth can't succeed.
 
@@ -3077,8 +3077,8 @@ session goes through checkout again, it opens a genuinely new Stripe customer/su
 > unretryable orphan is exactly this incident again.
 
 **F53 · Subscription card + checkout/portal** — `:206–315`: `handleCheckout:210`
-(→ `/api/stripe-create-checkout`), `handleManageSubscription:241` (→
-`/api/stripe-portal`), status resolution `:269–315` — **[G]**
+(→ `/api/stripe/checkout`), `handleManageSubscription:241` (→
+`/api/stripe/portal`), status resolution `:269–315` — **[G]**
 §17.F surface. Status resolution order is deliberate: raw Stripe `past_due`/`canceled`
 take display precedence over the resolved entitlement, and `getEntitlement` is called
 with **real wall-clock `new Date()`** — never `effectiveToday`/Lock Date (same rule as
@@ -3100,7 +3100,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
 | Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
 | Freedom Allowance cap/default | F51 + wizard Wrap Up (§7 F5) + `freedomAllowancePerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
-| `api/delete-account` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
+| `/api/account/delete` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
 | New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
@@ -3534,7 +3534,7 @@ machine instead of a hardcoded bypass.
 | `user_data` column set (any migration) | F67 mapping, F68 both writers + drift badge + `latestPersistedStateRef`, BOOKMARK freshness, CLAUDE.md migration-number note | The F69 new-column checklist; regenerate/append bookmark | D2/D5 |
 | `DEFAULT_CONFIG` shape (`constants/config.js`) | F67's merge (new fields flow to existing rows), snapshot tests, wizard `formData` spread (§7 F2) | `config.test.js.snap` update is *expected* — an unchanged snapshot after adding a field means the merge missed it | D1 |
 | Load-time migration steps (F67) | Idempotency + ordering; `db.test.js` migration cases; the §5 read slice (`extractBaseRateHistory` runs in the same load) | Load a legacy-shaped fixture twice; identical output both times | D2 |
-| `checkRevival`/`revival-lookup` contract | F65 ordering, T8's ReviveScreen inputs, T5 F52's hard-delete invariant (user-deleted emails must NOT be revivable) | Three-signup walk (F71) + user-deleted email returns `revivable: false` | D4 |
+| `checkRevival`/`account/revival-lookup` contract | F65 ordering, T8's ReviveScreen inputs, T5 F52's hard-delete invariant (user-deleted emails must NOT be revivable) | Three-signup walk (F71) + user-deleted email returns `revivable: false` | D4 |
 | Trial seeding (`/api/seed-trial`, migration 021 trigger) | F71 → `getEntitlement` inputs (T9), tester 6-month window semantics (§9), lifecycle cron's skip list | New signup shows 14-day countdown; `is_tester` flip seeds 6-month window once | D1/D4 |
 | Investor code/demo storage | F70 isolation contract + investor exemptions (config-history, cron) | Demo edit writes demo rows only; investor account generates no `account_history` rows | D4 |
 
@@ -3583,7 +3583,7 @@ machine instead of a hardcoded bypass.
 moment SIGNED_IN fires, T7's boot chain (§14 F65) owns the flow.
 
 **Scope:** `LoginScreen.jsx` (570 lines, 6 modes), `ReviveScreen.jsx`,
-`TrialExplainerScreen.jsx`, `api/revival-lookup.js`, and App.jsx's pre-session render
+`TrialExplainerScreen.jsx`, `api/_revivalLookup.js` (`/api/account/revival-lookup`), and App.jsx's pre-session render
 ladder (`:1429–1478`).
 
 ### 15.1 Block 1 — Critical inventory (function by function)
@@ -3665,10 +3665,10 @@ checkbox gates entry into setup, `3fd8896`).
 > fresh trial signups (never life-event re-entries — `wizardEntry === false` is that
 > discriminator, §7 F8's source/tagging depends on the same value).
 
-**F79 · Revival lookup + ReviveScreen contract** — `api/revival-lookup.js` (dual-mode:
+**F79 · Revival lookup + ReviveScreen contract** — `api/_revivalLookup.js` (`/api/account/revival-lookup`) (dual-mode:
 unauthenticated email probe for F73, session-verified probe for T7's `checkRevival`;
 only `revived_at IS NULL` tombstones count); `ReviveScreen.jsx:24–51`
-(`stripe-revive-checkout`, restore only via webhook after a real charge) — **[G]**
+(`/api/stripe/revive-checkout`, restore only via webhook after a real charge) — **[G]**
 **Documented accepted risk:** the unauthenticated path is deliberately an existence
 oracle ("this email had an account deleted for non-payment") — the file's own comment
 owns that trade-off; it returns flags + provider, never archived data.
@@ -3792,8 +3792,9 @@ variant (`:603–609`) clears ReviveScreen only when the restored subscription r
 > without it a revived user lands in setup over their restored data.
 
 **F84 · Stripe server routes** — `_stripeClient.js#resolveAppOrigin:118` (redirects
-derive from the requesting deployment — `1a12dd6`); `stripe-create-checkout` /
-`stripe-portal` / `stripe-revive-checkout` (bearer-token pattern);
+derive from the requesting deployment — `1a12dd6`); `/api/stripe/checkout` /
+`/api/stripe/portal` / `/api/stripe/revive-checkout` (`_stripeCreateCheckout.js` /
+`_stripePortal.js` / `_stripeReviveCheckout.js` behind the F185 router; bearer-token pattern);
 `stripe-webhook.js`: signature verification + **idempotency via
 `stripe_webhook_events`** (migration 018, `:122`), event cases (`:134–181`), and
 `restoreRevivedAccount:42–86` (matches tombstone `revived_at IS NULL`, upserts the
@@ -3840,6 +3841,23 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 > nudge from a resend.dev address lands in spam or looks like phishing. Check:
 > `EMAIL_FROM` set to the verified domain in prod env.
 
+**F185 · API routers — three functions serve eight routes** — `api/admin/[route].js`,
+`api/stripe/[route].js`, `api/account/[route].js`, `vercel.json` `rewrites`,
+`src/test/api/apiRouters.test.js` — 2026-10-29 — **[G]**
+> Vercel Hobby counts one function per non-`_` file under `api/` (cap 12). Each router picks a handler
+> from its map by the dynamic path segment (`req.query.route`) and passes the request through untouched;
+> the handlers live unchanged in `_`-prefixed modules. 12/12 → **7/12**.
+> **IF** a route is added, **THEN** add a `_` module + one map entry in the matching router (not a new
+> file), add it to `apiRouters.test.js`'s dispatch list, and call it at `/api/<group>/<route>`. Take a
+> new slot only for a route needing its own function config (raw body, cron path, long `maxDuration`).
+> **IF** a router's map key or a handler module is renamed, **THEN** update the client callers
+> (`db.js`, `ProfilePanel.jsx`, `App.jsx`, `LoginScreen.jsx`, `UpgradeCard.jsx`, `ReviveScreen.jsx`)
+> and the matching `vercel.json` rewrite in the same commit — the rewrites keep pre-2026-10-29 URLs
+> alive for cached PWA clients, and a stale one 404s silently.
+> **NEVER** move or rewrite `stripe-webhook.js` (`bodyParser: false`; URL registered in Stripe) or
+> `cron-subscription-lifecycle.js` (path registered in `vercel.json` `crons`). Check:
+> `apiRouters.test.js` (dispatch, 404, function list, rewrites) + each handler's own test file.
+
 ### 16.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -3851,6 +3869,7 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 | Webhook event set / Stripe API version | F84 cases + idempotency table + revival restore path | Replay-twice test; Stripe CLI fixture run | D2 |
 | `deleted_accounts` restore blob shape | F84's `restoreRevivedAccount` upsert vs `archiveAndDeleteAccount`'s archive write (F86) — writer and reader of one shape in two files | Archive → revive round-trip restores every field (config/expenses/goals/logs/weekConfirmations/ptoGoal) | D1 |
 | Redirect/origin handling | `resolveAppOrigin` candidates; checkout/portal/revive all three routes | Checkout from a preview deployment returns to that deployment | D4 |
+| A route added to / renamed in an `api/<group>/[route].js` map (F185) | Client callers, the `vercel.json` rewrite for its old URL, the function count | `apiRouters.test.js`; on a preview deployment, hit both the new path and the old URL | D4 |
 
 ### 16.3 Block 3 — Gate matrix
 
@@ -4841,7 +4860,7 @@ entry).
 > automated test spans both today.
 
 **F123 · Beta Homebase — three tables, three different write postures, don't blur them** —
-`database/migrations/037_add_beta_homebase.sql`, `api/admin-beta-hub.js`, `db.js`,
+`database/migrations/037_add_beta_homebase.sql`, `api/_adminBetaHub.js`, `db.js`,
 `App.jsx`/`ProfilePanel.jsx`/`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for the
 rubric scores as a source of truth for the tester's own displayed total**
 Introduced with the Beta Tester Homebase (docs/TODO.md §12) — the icon next to the
@@ -4849,7 +4868,7 @@ notification bell, gated `isTrackedBetaTester` (F122's predicate reused as-is, n
 re-derived). Three new tables, three DIFFERENT write postures — conflating any two of them
 is the drift this entry exists to prevent:
 - **`beta_content_items`** (checklist items + suggestion prompts) — admin-write-only via
-  `api/admin-beta-hub.js`'s service-role client (`entity: "content"`). Tester read is a direct
+  `api/_adminBetaHub.js`'s service-role client (`entity: "content"`). Tester read is a direct
   RLS-scoped client select (`published_at IS NOT NULL AND is_tracked_beta_tester(auth.uid())`)
   — no API round trip, same posture `changelog_entries` (F-adjacent, migration 032) already
   established for this exact "read is safe direct, write is admin-only" split.
@@ -4858,7 +4877,7 @@ is the drift this entry exists to prevent:
   SECURITY DEFINER `BEFORE INSERT` trigger re-checking `is_tracked_beta_tester(NEW.user_id)`,
   mirroring migration 031's `check_beta_activity_event_eligibility` pattern exactly — same
   reasoning: RLS alone proves "this row is mine," not "I'm actually a tracked beta tester").
-- **`beta_scores`** — admin-write-only via `api/admin-beta-hub.js` (`entity: "score"`).
+- **`beta_scores`** — admin-write-only via `api/_adminBetaHub.js` (`entity: "score"`).
   **Deliberately NOT auto-computed** — docs/TODO.md §12.L's "scoring stays manual, reviewed by
   a human" decision (Call Attendance in particular has zero in-app data source). `admin_notes`
   on this table must NEVER be selected by a tester-facing query — it's admin's own reasoning,
@@ -4959,7 +4978,7 @@ is the drift this entry exists to prevent:
 
 **F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
 Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,
-`api/admin-beta-hub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
+`api/_adminBetaHub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
 `BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for nothing — there is no
 score/ledger half here, unlike F123**
 Added 2026-08-08 as the base-user counterpart to the Beta Tester Homebase (F123) — same
@@ -4979,9 +4998,9 @@ next time either surface changes:
   own `user_id = auth.uid()` check is the whole gate. `base_feedback_events` is its own table
   rather than a second event_type on `beta_activity_events` (030's pattern) for the same
   reason F123's `beta_scores.admin_notes` rule protects tester-only data: that table
-  specifically feeds `api/admin-beta-report.js`'s scoring aggregation, and mixing non-cohort
+  specifically feeds `api/_adminBetaReport.js`'s scoring aggregation, and mixing non-cohort
   rows in would corrupt its "~40 known testers" scope.
-- **Admin route IS shared — `api/admin-beta-hub.js` grew an `entity: "base_content"` branch**
+- **Admin route IS shared — `api/_adminBetaHub.js` grew an `entity: "base_content"` branch**
   instead of a new file, the opposite call from the tables above. `CONTENT_TABLES` maps
   `content` → `beta_content_items` and `base_content` → `base_content_items`; every handler
   (`handleContentGet`/`Save`/`Delete`) is parametrized on `table` and shared by both. This
@@ -5006,7 +5025,7 @@ next time either surface changes:
   boolean in opposite directions** (`isTrackedTester &&` for the beta icon, `!isTrackedTester
   &&` for the Money Moves icon) — a user is never shown both, and never shown neither.
 > **IF** `base_content_items`'s shape diverges from `beta_content_items`'s (a field added to
-> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/admin-beta-hub.js`
+> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/_adminBetaHub.js`
 > break silently for whichever entity lacks the field — either add it to both tables or split
 > the handlers, don't patch around a mismatch inline. **IF** a new field is added to
 > `base_content_items`/a new base-only content kind is introduced, **THEN** decide whether
@@ -5023,7 +5042,7 @@ next time either surface changes:
 > flags for its own badge.
 
 **F126 · Content employer-preset targeting — RLS-enforced, not a client-side filter** —
-`database/migrations/040_add_content_employer_targeting.sql`, `api/admin-beta-hub.js`,
+`database/migrations/040_add_content_employer_targeting.sql`, `api/_adminBetaHub.js`,
 `db.js`, `ProfilePanel.jsx` (`ContentAdminDetail`'s DHL checkbox, `UserCommunicationAdminDetail`)
 — **[G] — routes admin content to the right employer's users, drift = wrong/no content shown
 to the wrong/right employer**
@@ -5139,7 +5158,7 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 | `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
 | A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
-| `beta_content_items` shape changes (column added/renamed, F125) | `api/admin-beta-hub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
+| `beta_content_items` shape changes (column added/renamed, F125) | `api/_adminBetaHub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
 | `isTrackedBetaTester`'s eligibility condition, again (F125) | `App.jsx`'s Beta Homebase icon (`isTrackedTester &&`) and Money Moves icon (`!isTrackedTester &&`) are two ends of the same boolean — a user must never see both or neither | Toggle a test account's tracked-tester status; confirm exactly one icon renders | D4 |
 | `config.employerPreset`'s storage key/location (F126) | `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction — silently returns null (reads as "no targeting") rather than erroring | Publish a DHL-only item; confirm it's still invisible to a non-DHL test account and visible to a DHL one | D1 |
 | `ContentAdminDetail`/`ChangelogAdminDetail`'s list-view BackBar (F127) | Both are now embedded-only (mounted exclusively via `UserCommunicationAdminDetail`) — `embedded` must stay `true` at every call site or a stray back button reappears | Grep `ProfilePanel.jsx` for `<ContentAdminDetail`/`<ChangelogAdminDetail` call sites; confirm all pass `embedded` | D1 |

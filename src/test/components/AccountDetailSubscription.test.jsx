@@ -88,11 +88,11 @@ describe('AccountDetail — Subscription card actions', () => {
     expect(screen.queryByText('Monthly — $14.99')).not.toBeInTheDocument()
   })
 
-  it('Manage Subscription posts the bearer token to api/stripe-portal and redirects to the portal URL', async () => {
+  it('Manage Subscription posts the bearer token to api/stripe/portal and redirects to the portal URL', async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => ({ url: 'https://billing.stripe.com/session_1' }) })
     renderAccount({ status: 'active', currentPeriodEnd: '2026-08-01T00:00:00.000Z', stripeCustomerId: 'cus_1' })
     fireEvent.click(screen.getByText('Manage Subscription'))
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe-portal', expect.objectContaining({
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe/portal', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
     })))

@@ -2470,6 +2470,17 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Job Hunt and Résumé are privileged-only, Net Worth is Haiku-only, a client can't pick a model its surface
     doesn't allow, and tool rounds are capped at 4. Live: Sonnet grounds the goal-setting turns that Haiku
     couldn't (13 calls). Next: flip the audience to "all" once the cost is accepted (§2.G). *(shotgun 2026-10-29)*
+  - [ ] **Claude Haiku 5.5 baseline TAKEN 2026-10-29; switch NOT made.** Every promptfoo config was re-run on its
+    own model and on `claude-haiku-5-5` with the same prompts (`scripts/coach-eval/modelCompare.mjs`, 220 + 96
+    calls), plus all 30 tool-loop cases on Haiku 4.5 / Haiku 5.5 low / Haiku 5.5 default (production request
+    shape, thinking stripped like `lib/claude.js`). Haiku 5.5 is ~4× cheaper per call than Haiku 4.5 and
+    ~15× cheaper than Sonnet 5, matches Sonnet 5 on Job Hunt and Résumé quality, widens every axis Haiku 4.5
+    couldn't reach, and picks tools as well (27/30 each). It is 2–3× slower than Haiku 4.5 (it thinks first).
+    **Before any switch:** (1) it answers twice around write tools (`propose_goal`, `draft_log_entry`: 7 of 10
+    runs); (2) once it claimed "I've drafted" with no tool call; (3) natural Metaphor drops to ~1–2 against a
+    target of 3; (4) it invents a "Goals panel"; (5) Ask Coach status checks cite ~6 numbers against the worked
+    example's 3. Default effort beats `low` on rule-following (Red: ~48 words vs ~85). Full scoring: rubric
+    Known Limitations, "Claude Haiku 5.5 baseline".
 - [ ] **Phase 8 — Combined-axis tuning ("Phase 2 testing" in the user's words), recorded 2026-10-08.
   Starts only after (a) every open item above is closed — Phase 5's batch decision, the Net Worth Red
   flourish gap, the Job Hunt fixture's 8-vs-9-day coincidence, the Warmth 4–5 history dependency —

@@ -159,6 +159,12 @@ doesn't repeat their reasoning.
   `goalset` · `logset` · `jobhunt`. `jobhunt` runs Job Hunt's own prompt, context and
   tools on Sonnet. `COACH_EVAL_MODEL=sonnet` overrides the model for the
   other groups; `history` on a case replays a two-turn conversation.
+- `modelCompare.mjs` (2026-10-29) — replays every `promptfooconfig*.yaml` on its own
+  model(s) AND a candidate model, side by side, by importing each config's prompt
+  builder and tests and calling the API directly (exact request control: `effort`,
+  max_tokens, usage incl. thinking tokens, stop_reason, cost). Built for the Haiku 5.5
+  baseline because the 5.x models think by default and promptfoo's effort handling
+  was unclear. Reads `AI_ADMIN_COACH_TEST_KEY` directly; no retries; `--max-calls` cap.
 - `personalityToolLoopLiveTest.mjs` (2026-09-03) — this harness's own tool-loop-capable
   sibling, same reason as `toolLoopLiveTest.mjs` above (promptfoo can't drive a tool round). A
   DIRECTIONAL rerun of the Phase 1-4 Ask Coach baseline under `AskCoachPanel.jsx`'s real
@@ -442,6 +448,14 @@ retry-on-a-hunch.** Concretely for this file:
   Amber snapshot, the before/after figures are exact; without it, Green still
   gives no before figure. Rerun it after any edit to the Green addenda or
   the "Earlier check-in" line.
+- [ ] Claude Haiku 5.5 baseline TAKEN 2026-10-29, switch not made. Results:
+  rubric Known Limitations, "Claude Haiku 5.5 baseline". Re-run:
+  `node modelCompare.mjs --repeat 2` (all configs, original model +
+  `claude-haiku-5-5`; `--effort low`, `--candidate`, `--only`,
+  `--candidate-only` available; results/ is gitignored) and
+  `COACH_EVAL_MODEL=claude-haiku-5-5 COACH_EVAL_JOBHUNT_MODEL=claude-haiku-5-5
+  COACH_EVAL_STRIP_THINKING=1 COACH_EVAL_MAX_CALLS=120 node toolLoopLiveTest.mjs
+  <all 30 ids>` (the runner's no-argument default is only the first 5 cases).
 - [ ] Phase 8 — Combined-axis tuning (recorded 2026-10-08; the user's
   "Phase 2 testing"). Post-launch, after every Phase 5 open item closes:
   score three axes on the same reply and tune their 1–5 settings jointly

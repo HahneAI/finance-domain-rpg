@@ -29,8 +29,15 @@ import { buildToolTestAccount, buildJobHuntTestAccount, buildJobHuntTestContext 
 const MODEL = process.env.COACH_EVAL_MODEL || "claude-haiku-4-5"; // api/coach.js's MODEL_IDS
 const MAX_TOKENS = 1024;                    // api/coach.js
 const MAX_TOOL_ROUNDS = 4;                  // lib/claude.js
-const MAX_CALLS = 26;                       // hard budget stop for the whole run
-const PRICE = MODEL.includes("sonnet") ? { input: 3.00, output: 15.00 } : { input: 1.00, output: 5.00 }; // $/Mtok, api/coach.js's PRICE_PER_MTOK
+const MAX_CALLS = Number(process.env.COACH_EVAL_MAX_CALLS || 26); // hard budget stop for the whole run
+// 2026-10-29 model comparison (Haiku 5.5): Job Hunt cases default to Sonnet 5 as shipped;
+// COACH_EVAL_JOBHUNT_MODEL moves them too. COACH_EVAL_EFFORT sets output_config.effort on the
+// 5.x models (omitted = the model's default). COACH_EVAL_STRIP_THINKING=1 mimics lib/claude.js,
+// which keeps only text + tool_use blocks when it sends the assistant turn back.
+const JOBHUNT_MODEL = process.env.COACH_EVAL_JOBHUNT_MODEL || "claude-sonnet-5";
+const EFFORT = process.env.COACH_EVAL_EFFORT || null;
+const STRIP_THINKING = process.env.COACH_EVAL_STRIP_THINKING === "1";
+const PRICES = { "claude-haiku-4-5": { input: 1, output: 5 }, "claude-haiku-5-5": { input: 0.1, output: 0.5 }, "claude-sonnet-5": { input: 2, output: 10 }, "claude-sonnet-5-5": { input: 2, output: 10 } }; // $/Mtok
 
 const KEY = process.env.AI_ADMIN_COACH_TEST_KEY;
 if (!KEY) {
@@ -179,12 +186,12 @@ function setupFor(prompt) {
     contextBlock: buildJobHuntTestContext({ variant: prompt.variant ?? "tight" }),
     tools: JOB_HUNT_TOOLS,
     bag: { config: a.config, expenses: a.expenses, today: a.effectiveToday, includeBenefits: true },
-    model: "claude-sonnet-5",
+    model: JOBHUNT_MODEL,
   };
 }
 
 let calls = 0;
-const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
 async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
   if (++calls > MAX_CALLS) throw new Error(`Budget stop: exceeded ${MAX_CALLS} calls`);
@@ -199,6 +206,7 @@ async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
       i !== messages.length - 1 ? m : withBreakpoint(m)
     ),
     ...(offerTools ? { tools: setup.tools } : {}),
+    ...(EFFORT ? { output_config: { effort: EFFORT } } : {}),
   };
   let res, lastErr;
   // Longer than a typical client backoff on purpose: a 529 capacity dip on this
@@ -225,6 +233,9 @@ async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
   }
   if (!res.ok) throw new Error(`Anthropic ${lastErr ?? res.status}: gave up after retries`);
   const json = await res.json();
+  const price = PRICES[setup.model] ?? PRICES["claude-haiku-4-5"];
+  usage.cost += ((json.usage?.input_tokens ?? 0) * price.input + (json.usage?.cache_read_input_tokens ?? 0) * price.input * 0.1
+    + (json.usage?.cache_creation_input_tokens ?? 0) * price.input * 1.25 + (json.usage?.output_tokens ?? 0) * price.output) / 1e6;
   usage.input += json.usage?.input_tokens ?? 0;
   usage.output += json.usage?.output_tokens ?? 0;
   usage.cacheRead += json.usage?.cache_read_input_tokens ?? 0;
@@ -261,7 +272,7 @@ async function runConversation(prompt) {
     const uses = reply.content.filter((b) => b.type === "tool_use");
     if (!offerTools || reply.stop_reason !== "tool_use" || !uses.length) break;
 
-    convo.push({ role: "assistant", content: reply.content });
+    convo.push({ role: "assistant", content: STRIP_THINKING ? reply.content.filter((b) => b.type === "text" || b.type === "tool_use") : reply.content });
     convo.push({
       role: "user",
       content: uses.map((u) => {
@@ -274,7 +285,7 @@ async function runConversation(prompt) {
   return { toolCalls, text, rounds };
 }
 
-console.log(`MODEL ${MODEL} · ${PLANNED.length} planned prompts · budget cap ${MAX_CALLS} calls\n`);
+console.log(`MODEL ${MODEL} (Job Hunt: ${JOBHUNT_MODEL})${EFFORT ? ` · effort ${EFFORT}` : ""}${STRIP_THINKING ? " · thinking stripped" : ""} · ${PLANNED.length} planned prompts · budget cap ${MAX_CALLS} calls\n`);
 console.log("=== CONTEXT BLOCK SENT ===\n" + contextBlock + "\n");
 
 for (const p of PLANNED) {
@@ -290,6 +301,5 @@ for (const p of PLANNED) {
   console.log(`\nANSWER:\n${text}\n`);
 }
 
-const cost = (usage.input * PRICE.input + usage.cacheRead * PRICE.input * 0.1
-  + usage.cacheWrite * PRICE.input * 1.25 + usage.output * PRICE.output) / 1e6;
+const cost = usage.cost;
 console.log(`\n${"=".repeat(72)}\nCALLS ${calls}/${MAX_CALLS} · in ${usage.input} cache_r ${usage.cacheRead} cache_w ${usage.cacheWrite} out ${usage.output} · est $${cost.toFixed(4)}`);

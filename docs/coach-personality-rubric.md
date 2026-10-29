@@ -523,6 +523,32 @@ Nothing about method is decided yet — see the TODO entry for the open question
 
 ## Known Limitations (live-tested, not yet resolved)
 
+**Claude Haiku 5.5 baseline (2026-10-29) — the same tests, both models, same prompts.**
+`scripts/coach-eval/modelCompare.mjs` re-ran all 25 promptfoo configs on each config's own model and on
+`claude-haiku-5-5` (default effort, ×2; then Haiku 5.5 at `low` ×2). `toolLoopLiveTest.mjs` ran all 30 tool
+cases three ways in production's request shape. The old transcripts weren't reused; prompts have changed
+since. Per call: Haiku 4.5 $0.0023, Haiku 5.5 $0.0006, Sonnet 5 $0.009. Latency: Haiku 4.5 ~1.8s, Haiku 5.5
+~4.4s (thinks ~350–1,500 tokens first; low effort ~3.3s), Sonnet 5 ~3–14s.
+
+| Mode (target M/L/D/W) | Haiku 4.5 (or Sonnet 5) natural | Haiku 5.5 natural |
+|---|---|---|
+| Ask Coach (3/2/3/3) | M 2–3 · L2 · D3 · W3; said "on track" at a 98% spend ratio | M 1–2 (literal) · L2 but ~6 numbers · D3–4 (calls 98% what it is) · W2–3 |
+| Net Worth Amber (3/2/3/3) | ~100 words, idioms | ~65 words, accurate, M 1–2 |
+| Net Worth Red (1/2/4/3) | ~80 words, "buys you a week" | **on target**: verdict first, ~48 words, no figures of speech |
+| Net Worth Green (3/2–3/3/3) | correct | correct, before/after exact, M 1–2 |
+| Job Hunt (2/2/4/3), vs Sonnet 5 | first pick 100%, invents "Applications panel" | **equal**: first pick 100%, own dates right, ~20% longer, invents "Job Hunt panel" |
+| Résumé (3/3/4/3), vs Sonnet 5 | ~290 words | **equal quality**, ~340 words; treats the harness's calibration override as an injected instruction and ignores it |
+
+**Range (extremes asked for by override):** Haiku 5.5 reaches Directness 1 and Warmth 1 on Ask Coach, which
+Haiku 4.5 never did, and Length 4 (129 words vs 68). Metaphor 5 reaches ~3–4 (~4–5 at `low`), still short of
+Opus. Warmth-4 probe: no invented shared history.
+**Tool loop (30 cases):** expected tool 27/30 for each setting. Every figure and date was identical to the tools'.
+Better than Haiku 4.5: broad answers use no tools; no "let me pull that up" narration. **New failures:**
+answers before AND after a write tool (7 of 10 write-tool runs) and one "I've drafted 8 hours of PTO" with no
+tool call (default effort). Fewer `navigate_to` chips. A missed shift is drafted as unpaid instead of asking first.
+**Effort:** default beats `low` on discipline (`low` Red ~85 words, softer; Amber ~90). Low effort only buys speed.
+**Production shape:** stripping thinking blocks from the tool round (as `lib/claude.js` does) caused no error.
+
 **2026-10-29 shotgun run: findings carried forward (live, scoped test key).**
 - **A conditional branch inside one prompt perturbed unrelated figure quoting on Haiku.** Folding Green's
   "with history / without history" cases into one addendum made Haiku misquote "+$55 vs your average" as

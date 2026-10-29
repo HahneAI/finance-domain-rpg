@@ -442,7 +442,7 @@ Length targets describe the baseline-severity reply; Urgency governs how far sev
 
 | Mode (model) | Metaphor | Urgency | Length | Directness | Warmth |
 |---|---|---|---|---|---|
-| Ask Coach (Haiku) | 3 · H | 3 · H | **2** · M ⚠ | 3 · H | 3 · H |
+| Ask Coach (Haiku; Sonnet on range turns) | 3 · H | 3 · H | **2** · M | 3 · H | 3 · H |
 | Net Worth — Amber (Haiku) | 3 · H | **4 · M** — one value for the whole card | 2 · H | 3 · H | 3 · H |
 | Net Worth — Red (Haiku) | **1** · H | ↑ | 2 · H | **4** · H | 3 · H |
 | Net Worth — Green (Haiku) | 3 · H | ↑ | **2–3** · H | 3 · H | **3** · H |
@@ -465,6 +465,17 @@ Length targets describe the baseline-severity reply; Urgency governs how far sev
   for 4, and is what a job search under runway pressure needs.
 - **Red Directness 4** made real by a prompt line (lead with the runway figure and its biggest
   driver, no reassurance first); before it, Red opened on the runway but softened it.
+
+**Updates from the 2026-10-29 shotgun run (targets unchanged, levers built):**
+- **Ask Coach Length 2: the ⚠ is cleared.** Five worked examples now close `ASK_COACH_SYSTEM_PROMPT`. The
+  lock check gives 2 sentences ending on Home, and broad answers use 0 tools and 3–4 numbers (the cap is 3,
+  so this is still slightly over). Confidence stays M because the result comes from one deterministic Haiku draw per case.
+- **Ask Coach model.** Turns that need range (what-ifs, decisions, goal-setting, long messages) now go to
+  Sonnet for privileged accounts (`coachPolicy.js`). The same targets apply to both models; Sonnet holds
+  the full range, so it hits them more easily.
+- **Green Warmth.** Green now has a real "before" when the card saved a snapshot at the Amber/Red fire.
+  Live, Haiku names the exact turnaround ("savings rate from 9% to 90%") and reads warm 3–4 ("you've earned
+  it"). The lock stays **3** for Anthony's review; 4 is now grounded for the with-history case if wanted.
 
 ## Interaction Modes — Target Scores
 
@@ -511,6 +522,28 @@ Urgency on Net Worth Red). A target that holds alone can slip once its neighbour
 Nothing about method is decided yet — see the TODO entry for the open questions.
 
 ## Known Limitations (live-tested, not yet resolved)
+
+**2026-10-29 shotgun run: findings carried forward (live, scoped test key).**
+- **A conditional branch inside one prompt perturbed unrelated figure quoting on Haiku.** Folding Green's
+  "with history / without history" cases into one addendum made Haiku misquote "+$55 vs your average" as
+  "five dollars ahead" on all 3 no-history draws. This is new: the earlier Green draws quoted "55 dollars"
+  correctly. It was fixed by keeping two separate addenda, so the no-history prompt is byte-identical to
+  the verified one. The lesson fits the earlier ones (priming examples, idiom-counting): on Haiku, prefer
+  separate prompts over in-prompt branching.
+- **Goal-setting on Haiku still guesses timing.** In 2 of 3 two-turn draws, Haiku writes its lead-in before
+  calling `propose_goal`, including an ungrounded "you'd hit it by…" claim. The card itself is correct.
+  These turns now route to Sonnet, which grounded them in 13 calls. Accounts outside the Sonnet audience
+  still get the Haiku behaviour.
+- **Job Hunt (Sonnet), noted but not fixed:**
+  - It converts runway days to weeks itself. The maths has been correct, but the context already gives
+    "≈N weeks".
+  - It names panels that may not exist on screen: "Runway panel", "Expenses panel", "Applications panel".
+    These are unverified against New Job Season's real labels, so check them before launch.
+- **Sonnet (Job Hunt, and Ask Coach range turns):** after a tool call it sometimes repeats its closing sentence.
+- **Ask Coach (Haiku), noted but not fixed:**
+  - Mechanics ("how does X work") answers still run long with stacked idioms.
+  - One broad answer gave a goal date as "late August" instead of the paired date and week.
+  Both are candidates for one more worked example, not another rule.
 
 **Ask Coach broad-question number cap doesn't hold in live model output (2026-08-26, DW-19,
 `drift-app-warden.md` F160).** First-ever live test of Coach against a real model this session

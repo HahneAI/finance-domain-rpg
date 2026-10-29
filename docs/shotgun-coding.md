@@ -103,6 +103,80 @@ devices cannot be tested.
 
 <!-- NEW ENTRIES GO HERE, NEWEST FIRST -->
 
+## Run — 2026-10-29 04:34 UTC  ·  branch: claude/coach-ai-personality-bmopcx  ·  scope: the rest of the Coach tuning plan, 7 items (user-directed close-out of §2.L + `coach-tuning-handoff.md` §6, not the usual 25% of Tier 1)
+
+### §2.L Ask Coach worked examples + computed shift size
+1. Built: five worked examples close Ask Coach's prompt (status check, one expense, what-if, tool timing, broad question), and every simulation result now carries a computed "about N days sooner".
+2. Chose: examples over more prose rules, because rules never stopped the invented what-ifs, the ~10-number broad answer or the weak closing action.
+3. Other options: Sonnet for every Ask Coach turn / another rule / trimming the context. Two drafts were reverted: a date-to-date example made Coach invent a date, and "call every tool first" fanned out to 8 tools.
+4. Built off: `ASK_COACH_SYSTEM_PROMPT` plus `describeShift()` in `coachTools.js`; Haiku had turned 0.08 weeks into "five days".
+5. Trade-off: broad answers still land 3–4 numbers against a cap of 3.
+- [ ] Test: ask Coach "How's my week looking?" → about 2 sentences, at most 3 numbers, ending on a panel (Home).
+- [ ] Test: ask "What if I dropped my Phone bill to 20 a week?" → it quotes the dates the simulation gave. If nothing moves, it says the date doesn't move.
+- [ ] Test: ask "Give me a full breakdown of everything" → no lookups, about 3 numbers, and an invitation to ask about one area.
+
+### §2.L Goal-setting as an identity conversation
+1. Built: "I want to start saving for something" now gets one question about what it's for; the answer becomes a goal card named in the user's own words.
+2. Chose: one question then propose (or propose straight away when the amount and purpose are given), and no date in Coach's words because the card shows the real one.
+3. Other options: a multi-question interview / leaving goal-setting to the Home form.
+4. Built off: the existing `propose_goal` tool and its confirm card (nothing new writes); uses the chosen identity when the account has one.
+5. Trade-off: Haiku still guesses timing before the card in 2 of 3 two-turn draws, so these turns route to Sonnet (next item).
+- [ ] Test: ask "I want to start saving for something" → one short question back, no card yet.
+- [ ] Test: answer "so I can visit my mom twice a year" → a goal card with that reason as its note, and Coach's message names no date.
+- [ ] Test: ask "add a 1,000 dollar emergency fund" → the card appears straight away, with no question first.
+
+### §2.L Phase 7 per-message routing + server gate + tool cap
+1. Built: Ask Coach sends what-if, decision, goal-setting and long messages to Sonnet; everything else stays on Haiku. The server now decides which model each Coach surface may use.
+2. Chose: Sonnet for admin/tester/investor accounts only, behind one switch (`ASK_COACH_SONNET_AUDIENCE`) to flip to everyone once the cost is accepted.
+3. Other options: Sonnet for all Ask Coach turns (~4× cost) / a model picker / routing by question count (dropped: Haiku handles two-part lookups fine).
+4. Built off: a new shared `src/lib/coachPolicy.js` used by the browser and `api/coach.js` (no new `api/` file; still 12/12). Job Hunt/Résumé are now refused server-side for other accounts, and tool rounds stop at 4.
+5. Trade-off: trial/paid accounts keep Haiku's goal-setting residual until the switch flips.
+- [ ] Test: as an admin, ask "What if I cut Groceries to 60?" → the answer quotes the simulation; Network tab shows `model: "sonnet"`.
+- [ ] Test: as an admin, ask "How's my week?" → Network tab shows `model: "haiku"`.
+- [ ] Test: on a non-tester trial account, the same what-if → `model: "haiku"`.
+
+### Handoff §6.2 Simulation result strip
+1. Built: a small strip under a what-if answer showing each goal's current → new finish date and the shift ("Goal 1 · about 4 days sooner").
+2. Chose: data straight from the tool result (never parsed from Coach's words), goals by rank only.
+3. Other options: no strip (prose only) / a full before-after chart.
+4. Built off: `CoachToolUI.jsx` next to the nav chip and goal card; tokens and `.text-*` classes only.
+- [ ] Test: ask a what-if that moves a goal → the strip shows "X → Y" dates matching the Home goal card after the same change.
+- [ ] Test: ask a what-if that moves nothing → the strip says "date unchanged".
+- [ ] Test: check the strip at 390px width → it doesn't overflow.
+
+### Handoff §6.1 `draft_log_entry`
+1. Built: Coach can draft a log entry; a "Review in Log" chip opens Log's own add form, pre-filled, and you save it yourself.
+2. Chose: prefill-and-hand-off (your earlier decision), never a direct write.
+3. Other options: Coach writes the entry after a confirm button in chat.
+4. Built off: Log's existing add form and `addLog` eager save; the draft's fields mirror that form.
+5. Trade-off: if the Log form gains a field, the draft must gain it too (warden F176 IF/THEN).
+- [ ] Test: tell Coach "I got a 250 dollar bonus this week" → chip "Review in Log · Bonus / Extra Pay"; tap → Log's form is open with 250 filled in.
+- [ ] Test: save that form → the entry appears in Log and survives a reload.
+- [ ] Test: tell Coach "I missed a shift Tuesday" → it asks whether it was approved before drafting.
+
+### Handoff §6.4 Job Hunt runway what-if
+1. Built: Job Hunt chat can answer "what if I cut Utilities?" with the real runway change ("9 to 11 days, about 2 days more").
+2. Chose: a runway simulation (the question Job Hunt actually asks) over threading goal tools into the New Job Season panel.
+3. Other options: give Job Hunt the goal simulations / leave it to `get_expense_detail` only.
+4. Built off: the same runway functions the Cash Runway tile uses (one expense swapped), computed in code.
+- [ ] Test: in New Job Season, ask Job Hunt "what if I cut my phone bill to 10 a week?" → it states current vs new runway days.
+- [ ] Test: the new days figure matches the Cash Runway tile after making the same change in Upkeep.
+- [ ] Test: ask "which application should I chase first?" → still picks one application and gives its own date.
+
+### §2.L Net Worth Green names the real turnaround
+1. Built: when the Coach card fires, it remembers that moment's savings rate, spend ratio and surplus; the later Green card can say "savings rate from 9% to 90%".
+2. Chose: a separate Green prompt for the with-history case; the no-history Green prompt is unchanged byte for byte.
+3. Other options: one combined prompt (tried: Haiku then misquoted "+$55" as "five dollars" 3/3) / leave Green present-only.
+4. Built off: `coachSignalState` (existing eager save, no schema change) and one shared figures helper in `aiContext.js`, so the remembered and current numbers can't drift apart.
+5. Trade-off: accounts whose last warning fired before today have no saved figures, so their Green stays present-only.
+- [ ] Test: put an account in Amber, let the card fire, then lower spend so it recovers → Green quotes the Amber figures exactly against today's.
+- [ ] Test: the Green card computes no "up X%" figure of its own.
+- [ ] Test: an account with no earlier snapshot → Green gives no "before" figure at all.
+
+Skipped: Phase 6 (blocked until those modes ship) · Phase 8 (post-launch by design) · Red's action names (spec names, not rendered buttons) · Job Hunt's unverified panel names (rubric Known Limitations).
+Verification: 2092/2092 tests, `vite build` ok, `api/` still 12/12; lint shows 3 pre-existing errors (`expense.js` ×2 since 10-01, `CoachToolUI.jsx:15`), none from this run; ~120 live calls (5 discarded: half-applied runner patch).
+Drift entries consulted: F24 (updated: Green snapshot unit), F111/F124 + `canAccessAiFeatures` gate row (closed), F114, F169/F170, F173, F174, F176 (extended), F178, F180, §6/§24 grounding rule.
+
 ## Run — 2026-10-22 16:17 UTC  ·  branch: claude/coach-ai-personality-bmopcx  ·  scope: 3 of 3 open §2.L Phase 5 items (user-directed Coach close-out, not the usual 25% of Tier 1)
 
 ### §2.L Phase 5 lock — mode × axis matrix

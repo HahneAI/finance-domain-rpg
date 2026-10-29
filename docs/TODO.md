@@ -2311,9 +2311,17 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     end on a real on-screen panel (`NET_WORTH_PANEL_ACTION`); Green one-touch cap. *(shotgun 2026-10-22)*
   - [$] Net Worth Red Directness 4 — lead with the runway figure and its biggest driver, no
     reassurance first. *(shotgun 2026-10-22)*
-  - [ ] Carried from the lock check: Ask Coach overshoots Length 2 (~4 sentences, 3/3) and closes on a
-    weak action ("Ask me about your goals") — lever is Phase 7 per-message routing or a few-shot
-    example, not another rule; Red's action names are spec names, not rendered buttons.
+  - [$] Carried from the lock check: Ask Coach overshoots Length 2 (~4 sentences, 3/3) and closes on a
+    weak action ("Ask me about your goals"). Fixed with five WORKED EXAMPLES at the end of
+    `ASK_COACH_SYSTEM_PROMPT` (status check, one expense, what-if, tool timing, broad question): the lock
+    check now gives 2 sentences ending on Home, and broad answers use 0 tools and 3–4 numbers. *(shotgun 2026-10-29)*
+  - [ ] Still carried: Red's action names (Triage Expenses / Review Goals / Life Events) are spec names, not
+    rendered buttons. Untouched by the 2026-10-29 run.
+  - [$] Net Worth Green names the real turnaround. Each time a tier fires, the card saves
+    `coachSignalState.lastFiredSnapshot` (`netWorthCheckInSnapshot()`). A Green after Amber/Red gets an
+    "Earlier check-in" context line plus its own addendum; a Green with no snapshot keeps the plain addendum
+    byte for byte. Live: 9→90%, 91→10% and $75→$760 were exact, with no computed deltas. This grounds Green
+    Warmth 4; the lock stays at 3 until reviewed. *(shotgun 2026-10-29)*
 
 - [x] **Coach terminology/flow drift audit (2026-09-05), triggered by pulling down a sibling
   branch's homepage/goals redesign (`claude/homepage-goals-redesign-l249t1`, merged
@@ -2351,6 +2359,23 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   mentioned in `COACH_FEATURE_GUIDE`, and the guide's goal description doesn't use the new "Claim
   Date" term Home now leads with.** Neither is wrong, just incomplete — worth a follow-up pass,
   not treated as a bug the way the Budget/Upkeep leftover was.
+
+- [$] **Layer B unbuilt list closed (`docs/coach-tuning-handoff.md` §6, 2026-10-29 shotgun).** Each item
+  has code, passing tests and a live check; the journal is in `docs/shotgun-coding.md`, 2026-10-29.
+  - [$] Fabricated counterfactuals: worked examples 2–4 make Coach quote the tool's figure first and size
+    a what-if only by a `simulate_` tool's own `differenceInWords` (computed in code by `describeShift()`;
+    Haiku had turned 0.08 weeks into "five days").
+  - [$] Goal-setting as an identity conversation (GOAL-SETTING block): when the purpose is missing, Coach asks
+    one question; it then calls `propose_goal` in the user's own words and puts no date in its prose. Haiku
+    still guesses timing in 2 of 3 two-turn draws, so these turns route to Sonnet, where they are grounded.
+  - [$] Simulation result strip: `CoachSimulationStrip` under what-if answers shows the tool's own dates and shift size.
+  - [$] `draft_log_entry`, prefill-and-hand-off: Coach drafts the entry, Log opens it in its own add form, and
+    the user saves through `addLog`. The tool never writes.
+  - [$] `JOB_HUNT_TOOLS` widened with `simulate_runway_change` (Spine A runway with one expense changed).
+    Live on Sonnet: 9 → 11 days ("about 2 days more") and 70 → 86 days.
+  - [$] Per-surface server gate plus a 4-round tool cap in `api/coach.js` (see Phase 7).
+  - Decided, not built: Ask Coach calling `navigate_to` Home on a closing "open Home" action is by design.
+    The tool's own contract is to make the closing action tappable, so it isn't a selection error.
 
 - [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
   modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
@@ -2438,6 +2463,13 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Review already have their own model choices from earlier work (§2.E/§2.E1, Sonnet — unrelated
     to this calibration effort, don't relitigate without new evidence), the rest have no
     calibration data yet. Don't read "two modes locked" as "the model question is closed."
+  - [$] **Per-message routing BUILT (2026-10-29).** `src/lib/coachPolicy.js` `chooseCoachModel()` sends
+    Ask Coach turns that need range (what-ifs, decisions, goal-setting, messages over 220 characters) to Sonnet
+    and keeps everything else on Haiku. The rollout is one switch: `ASK_COACH_SONNET_AUDIENCE = "privileged"`
+    (admin/tester/investor/AI admin). `api/coach.js` enforces it server-side through `resolveCoachRequest()`:
+    Job Hunt and Résumé are privileged-only, Net Worth is Haiku-only, a client can't pick a model its surface
+    doesn't allow, and tool rounds are capped at 4. Live: Sonnet grounds the goal-setting turns that Haiku
+    couldn't (13 calls). Next: flip the audience to "all" once the cost is accepted (§2.G). *(shotgun 2026-10-29)*
 - [ ] **Phase 8 — Combined-axis tuning ("Phase 2 testing" in the user's words), recorded 2026-10-08.
   Starts only after (a) every open item above is closed — Phase 5's batch decision, the Net Worth Red
   flourish gap, the Job Hunt fixture's 8-vs-9-day coincidence, the Warmth 4–5 history dependency —

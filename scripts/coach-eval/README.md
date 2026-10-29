@@ -151,9 +151,14 @@ doesn't repeat their reasoning.
   `REAL_ALL_WEEKS` above); a "fabricated counterfactual" pattern found three
   times (Coach inventing a plausible-sounding hypothetical impact instead of
   calling the simulation tool that would answer it for real) — tool
-  *availability* doesn't prevent this, only tool *use* does, still open.
-  Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
-  F168-F174.
+  *availability* doesn't prevent this, only tool *use* does. Addressed
+  2026-10-29 with worked examples in `ASK_COACH_SYSTEM_PROMPT` plus a computed
+  `differenceInWords` in every simulation result (what-ifs then quoted tool
+  numbers only). Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
+  F168-F176. Groups (id filter): `adversarial` · `simulation` · `navigate` ·
+  `goalset` · `logset` · `jobhunt`. `jobhunt` runs Job Hunt's own prompt, context and
+  tools on Sonnet. `COACH_EVAL_MODEL=sonnet` overrides the model for the
+  other groups; `history` on a case replays a two-turn conversation.
 - `personalityToolLoopLiveTest.mjs` (2026-09-03) — this harness's own tool-loop-capable
   sibling, same reason as `toolLoopLiveTest.mjs` above (promptfoo can't drive a tool round). A
   DIRECTIONAL rerun of the Phase 1-4 Ask Coach baseline under `AskCoachPanel.jsx`'s real
@@ -429,6 +434,14 @@ retry-on-a-hunch.** Concretely for this file:
   Phase-3-verified. Everything else in the table (Job Hunt Assistant,
   Résumé Review, Statement Summary, Net Worth Trigger's tiers, the rest)
   is still undecided.
+  - [$] Per-message routing BUILT 2026-10-29 (shotgun): Ask Coach turns that need
+    range go to Sonnet for privileged accounts (`src/lib/coachPolicy.js`),
+    enforced server-side together with a per-surface gate and a 4-round tool cap.
+- [$] Net Worth Green with a real "before" (2026-10-29, shotgun):
+  `promptfooconfig.phase5j-green-history.yaml` (6 calls, $0.018). With the
+  Amber snapshot, the before/after figures are exact; without it, Green still
+  gives no before figure. Rerun it after any edit to the Green addenda or
+  the "Earlier check-in" line.
 - [ ] Phase 8 — Combined-axis tuning (recorded 2026-10-08; the user's
   "Phase 2 testing"). Post-launch, after every Phase 5 open item closes:
   score three axes on the same reply and tune their 1–5 settings jointly

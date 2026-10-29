@@ -118,8 +118,10 @@ Statement Summary, Burnout Sentinel, Heirloom Letters, Council of Future Selves)
 features shipping**, not on the harness. Weekly-Briefing fixture is pre-built. Burnout Sentinel
 deliberately not faked (no streak/OT data source exists).
 
-**Phase 7 — model selection close-out:** Ask Coach/Haiku and special-handling/Opus locked; everything
-else undecided until Phase 5's batch decision lands.
+**Phase 7 — model selection close-out:** Ask Coach/Haiku and special-handling/Opus locked. **Per-message
+routing built 2026-10-29 (shotgun, `[$]`):** `src/lib/coachPolicy.js` sends Ask Coach's range turns to
+Sonnet for privileged accounts, and `api/coach.js` enforces it with a per-surface gate and a 4-round tool
+cap. Open: when to flip `ASK_COACH_SONNET_AUDIENCE` to `"all"` (a cost decision, §2.G).
 
 **Phase 8 — combined-axis tuning (recorded 2026-10-08, the user's "Phase 2 testing"):** post-launch,
 only after every open item above closes. Score three axes on the same reply and tune their 1–5
@@ -201,12 +203,13 @@ Both read `AI_ADMIN_COACH_TEST_KEY` **directly** (`process.env`), and refuse to 
 so they need **no** `ANTHROPIC_API_KEY=` inline mapping. That mapping is a promptfoo-only
 workaround (§0); do not copy it onto these.
 
-**Shipped: 10 tools** in `src/lib/coachTools.js`, executed **client-side** — `api/` sits at the
+**Shipped: 12 tools** (10 + `draft_log_entry` and `simulate_runway_change`, 2026-10-29) in `src/lib/coachTools.js`, executed **client-side** — `api/` sits at the
 12/12 Vercel Hobby function cap with zero headroom, so a tool route was never an option.
 
 `get_goal_detail` · `get_expense_detail` · `get_week_breakdown` · `list_log_entries` ·
 `navigate_to` · `propose_goal` · `simulate_expense_change` · `simulate_new_goal` ·
-`simulate_overtime_hours` · `simulate_without_logged_event`
+`simulate_overtime_hours` · `simulate_without_logged_event` · `draft_log_entry` ·
+`simulate_runway_change` (Job Hunt only)
 
 Selection measured correct 4/4, then 5/5 as the count grew. UI in `CoachToolUI.jsx` (activity
 line, `CoachNavChip`, `CoachGoalCard`). `propose_goal` is the only write-shaped one and it still
@@ -220,15 +223,18 @@ DW-19 in §3 — both are "the model won't obey an instruction it has every mean
 few-shot worked example is the untried lever for both. Full writeup: `drift-app-warden.md` §21
 F168–F176, `docs/coach-entry-points.md` §1.
 
-**Unbuilt, with decisions already made (don't re-litigate):**
-1. `draft_log_entry` — user chose **prefill-and-hand-off to the Log panel**, not a direct write.
-2. Simulation result strip — a UI treatment for simulation output. Proposed, not selected.
-3. Goal-setting / identity prompt addendum — teaching Coach to draw out who someone wants to be
-   before proposing a goal. User deferred it explicitly ("tool + chip only — prompt work
-   separate"); the tool now exists to land on.
-4. `JOB_HUNT_TOOLS` still exposes **only** `get_expense_detail`; widening needs props threaded
-   through `NewJobSeasonHomePanel`.
-5. Noted, unactioned: `api/coach.js` has no per-surface gate; no per-user cap on tool rounds.
+**The list below was all built in the 2026-10-29 shotgun run (`[$]`, awaiting Anthony's review;
+journal: `docs/shotgun-coding.md`).** The fabricated-counterfactual finding above is addressed by
+worked examples plus a computed `differenceInWords`. Re-check it live after any Ask Coach prompt edit.
+1. `draft_log_entry`: **prefill-and-hand-off to the Log panel** (`CoachLogDraftChip` → `LogPanel`
+   add form). Never a direct write.
+2. Simulation result strip: `CoachSimulationStrip` (tool-driven, F174).
+3. Goal-setting / identity addendum: the GOAL-SETTING block in `ASK_COACH_SYSTEM_PROMPT`. Haiku's
+   timing residual is routed to Sonnet.
+4. `JOB_HUNT_TOOLS` = `get_expense_detail` + `simulate_runway_change`. Chosen over threading goal props
+   through `NewJobSeasonHomePanel`, because a runway what-if is Job Hunt's real question.
+5. `api/coach.js` per-surface gate and 4-round tool cap: `resolveCoachRequest()` /
+   `countTrailingToolRounds()` in `src/lib/coachPolicy.js`.
 
 ---
 

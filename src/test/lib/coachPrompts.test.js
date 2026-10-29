@@ -54,6 +54,19 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT.indexOf("WORKED EXAMPLES")).toBeLessThan(ASK_COACH_SYSTEM_PROMPT.indexOf("FEATURE REFERENCE"));
   });
 
+  // 2026-10-29 (shotgun, §2.L / handoff §6 item 3): goal-setting as an identity conversation —
+  // one question when the purpose is missing, never when it's already given.
+  it("asks one identity question before proposing an open-ended goal, but not when the user gave what and how much", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/GOAL-SETTING/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/ask one short question about what reaching it would make possible/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never ask a question they've already answered/i);
+    // live 2026-10-29: Coach guessed "week 34" / "week 29" while the tool returned week 49 — twice,
+    // even when told to call first. The card already shows the real date, so the text states none.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/your message must not state a finish date or say what it does to their other goals/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Always make the proposal yourself with propose_goal/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/If the snapshot shows a chosen identity/i);
+  });
+
   it("instructs leading with real personal data over restating the guide, across all panels", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/applies across all five panels/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not a script to repeat near-verbatim/i);

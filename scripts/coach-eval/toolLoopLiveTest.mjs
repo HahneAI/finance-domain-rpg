@@ -109,7 +109,22 @@ const NAVIGATE = [
     text: "What does Upkeep Health actually measure?" },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE];
+// 2026-10-29 — goal-setting as an identity conversation (coachPrompts.js GOAL-SETTING).
+// `history` replays earlier turns so a two-turn exchange can be tested in this single-turn runner.
+const GOALSET = [
+  { id: "goalopen", expect: "purpose missing — ONE question about who/what it's for, no propose_goal yet",
+    text: "I want to start saving for something." },
+  { id: "goalanswer", expect: "purpose now given — propose_goal named in the user's words, reason as note",
+    history: [
+      { role: "user", content: "I want to start saving for something." },
+      { role: "assistant", content: "Good instinct. What would hitting it make possible for you — or who would it make you?" },
+    ],
+    text: "I want to be the kind of person who could cover three months of rent if work dried up." },
+  { id: "goaldirect", expect: "what + how much already given — propose_goal immediately, no question",
+    text: "Add a $1,000 emergency fund goal for me." },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -119,6 +134,7 @@ const PLANNED = only.length
   ? (only[0] === "adversarial" ? ADVERSARIAL
     : only[0] === "simulation" ? SIMULATION
     : only[0] === "navigate" ? NAVIGATE
+    : only[0] === "goalset" ? GOALSET
     : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }
@@ -193,7 +209,7 @@ function withBreakpoint(m) {
 }
 
 async function runConversation(prompt) {
-  const convo = [{ role: "user", content: prompt.text }];
+  const convo = [...(prompt.history ?? []), { role: "user", content: prompt.text }];
   const toolCalls = [];
   let text = "";
   let rounds = 0;

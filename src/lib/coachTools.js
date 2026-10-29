@@ -165,7 +165,7 @@ export const COACH_TOOLS = [
   {
     name: "propose_goal",
     description:
-      "Offer the user a new goal to add, with a name you write and a target amount. The app renders it as an editable card under your message — they can reword the name, adjust the amount, and confirm; nothing is saved unless they do. Use this when a conversation lands on something they want to become or achieve, rather than telling them to go add it themselves. Name it the way THEY described it, in their words. Call at most once per message.",
+      "Offer the user a new goal to add, with a name you write and a target amount. The app renders it as an editable card under your message — they can reword the name, adjust the amount, and confirm; nothing is saved unless they do. Use this when a conversation lands on something they want to become or achieve, rather than telling them to go add it themselves. Name it the way THEY described it, in their words. Call at most once per message. The card shows the projected finish date and its priority rank — do not state a date or an effect on other goals in your message; the card is the source of those.",
     input_schema: {
       type: "object",
       properties: {

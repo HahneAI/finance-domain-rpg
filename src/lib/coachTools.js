@@ -360,6 +360,23 @@ function summarizeGoal(g, data) {
   };
 }
 
+// Plain-language size of a simulated shift, computed here so Coach never converts fractional
+// periods itself — live 2026-10-29 Haiku turned 0.08 weeks (about half a day) into "five days
+// sooner". Days per period come from the pay schedule (365 / checks per year).
+function describeShift(periodsSooner, checksPerYear) {
+  if (periodsSooner == null) return { daysSooner: null, differenceInWords: null };
+  const days = periodsSooner * (365 / checksPerYear);
+  const abs = Math.abs(days);
+  const direction = days > 0 ? "sooner" : "later";
+  let words;
+  if (abs < 0.05) words = "no change";
+  else if (abs < 1) words = `less than a day ${direction}`;
+  else if (abs < 1.5) words = `about a day ${direction}`;
+  else if (abs < 10.5) words = `about ${Math.round(abs)} days ${direction}`;
+  else words = `about ${Math.round(abs / 7)} weeks ${direction}`;
+  return { daysSooner: Math.round(days * 10) / 10, differenceInWords: words };
+}
+
 // Pairs each goal's real timeline against its simulated one. `periodsSooner` is
 // positive when the change helps and negative when it hurts, so the model never
 // has to infer direction from two dates.
@@ -373,13 +390,17 @@ function diffGoals(baseTimeline, simTimeline, data) {
     const sooner = current.periodsUntilFinish != null && simulated?.periodsUntilFinish != null
       ? round2(current.periodsUntilFinish - simulated.periodsUntilFinish)
       : null;
+    const checksPerYear = checksPerYearFor(data.config);
     return {
       rank: i + 1,
       targetAmount: round2(g.target),
       current,
       simulated,
       periodsSooner: sooner,
-      payPeriodUnit: payPeriodUnit(checksPerYearFor(data.config), "lower"),
+      ...describeShift(sooner, checksPerYear),
+      // false when both runs land in the same period — the answer is "the date doesn't move".
+      finishDateMoves: simulated ? current.finishPeriodNumber !== simulated.finishPeriodNumber : null,
+      payPeriodUnit: payPeriodUnit(checksPerYear, "lower"),
     };
   });
 }

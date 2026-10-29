@@ -5662,7 +5662,9 @@ Caught in test, before any live call.
 > never `periodsToFund` (`wN`) — duration and completion move independently for every goal except
 > rank 1, where `sW = 0` makes them coincidentally equal, which is exactly why a rank-1-only test
 > would have passed. **IF** a new field is added to `summarizeGoal`, **THEN** state which of the
-> two it is. Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
+> two it is. **IF** Coach must describe the *size* of a shift, **THEN** it quotes `differenceInWords` /
+> `daysSooner` / `finishDateMoves`, computed in `diffGoals` from the pay schedule — never converts periods itself
+> (2026-10-29: Haiku turned 0.08 weeks into "five days sooner"). Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
 > and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
 > ranks, which is what fails under the `wN` comparison.
 

@@ -33,6 +33,27 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/FEATURE REFERENCE/);
   });
 
+  // 2026-10-29 (shotgun, §2.L): prose rules alone never stopped the fabricated counterfactual
+  // (3 live occurrences), the ~10-number broad answer (DW-19), the weak closing action, or a
+  // mid-sentence navigate_to call. Worked examples are the lever the rubric called for.
+  it("carries worked examples for status, expense, what-if and tool-timing turns, marked illustrative", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/WORKED EXAMPLES/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/illustrative only; never reuse them/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/must come from a simulate_ tool called in this same turn/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never stopping mid-sentence to call a tool/i);
+    // live 2026-10-29: the first draft's "from <date> to <date>" example made Coach invent a second
+    // date when the simulation showed none — the same-date case is now spelled out.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never write a second date that isn't in the result/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/before you write any of your answer/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Exactly three numbers, one takeaway/i);
+    // live 2026-10-29: "call every tool first" made a broad answer fan out to 8 tools.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/A status check or a broad question needs no lookup tools at all/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/quote the tool's differenceInWords exactly/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never reply with only a link/i);
+    // the examples sit before the feature guide, which stays last
+    expect(ASK_COACH_SYSTEM_PROMPT.indexOf("WORKED EXAMPLES")).toBeLessThan(ASK_COACH_SYSTEM_PROMPT.indexOf("FEATURE REFERENCE"));
+  });
+
   it("instructs leading with real personal data over restating the guide, across all panels", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/applies across all five panels/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not a script to repeat near-verbatim/i);

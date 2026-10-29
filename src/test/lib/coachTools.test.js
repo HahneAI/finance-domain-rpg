@@ -669,3 +669,25 @@ describe("executeCoachTool — failure handling", () => {
     }
   });
 });
+
+// 2026-10-29: Haiku converted periodsSooner 0.08 weeks into "five days sooner". The size is now
+// computed in the tool (days from the pay schedule + words), so the model only has to quote it.
+describe("simulation payloads carry a computed, plain-language shift", () => {
+  it("states a sub-day shift as 'less than a day' and flags an unchanged finish date", async () => {
+    const { buildToolTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const r = executeCoachTool("simulate_without_logged_event", { type: "missed_unpaid" }, buildToolTestAccount());
+    const g1 = r.goals[0];
+    expect(g1.periodsSooner).toBeCloseTo(0.08, 2);
+    expect(g1.daysSooner).toBeCloseTo(0.6, 1);
+    expect(g1.differenceInWords).toBe("less than a day sooner");
+    expect(g1.finishDateMoves).toBe(false);
+  });
+
+  it("reports a later finish in days or weeks with direction 'later'", async () => {
+    const { buildToolTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const r = executeCoachTool("simulate_new_goal", { target: 3000, insertAtRank: 1 }, buildToolTestAccount());
+    const pushed = r.existingGoals.filter((g) => g.periodsSooner < 0);
+    expect(pushed.length).toBeGreaterThan(0);
+    for (const g of pushed) expect(g.differenceInWords).toMatch(/later$/);
+  });
+});

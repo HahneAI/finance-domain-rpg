@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { CoachNavChip, CoachToolActivity, CoachGoalCard, TOOL_ACTIVITY_LABELS } from "../../components/CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, TOOL_ACTIVITY_LABELS, CoachSimulationStrip } from "../../components/CoachToolUI.jsx";
 import { focusCoachTarget, describeCoachRef } from "../../lib/coachFocus.js";
 import { COACH_TOOL_NAMES } from "../../lib/coachTools.js";
 
@@ -316,3 +316,40 @@ describe('CoachGoalCard — goal limits (TODO §31, F184)', () => {
     expect(screen.getByText(/Added to your goals/)).toBeTruthy()
   })
 })
+
+// 2026-10-29 (§2.L / handoff §6 item 2): the simulation result strip renders the tool's own
+// dates and computed difference, by goal rank only.
+describe("CoachSimulationStrip", () => {
+  const expenseResult = {
+    expenseLabel: "Groceries", currentWeeklyCost: 90, simulatedWeeklyCost: 0,
+    goals: [
+      { rank: 1, current: { finishDate: "the week of April 27th, 2026" }, simulated: { finishDate: "the week of April 20th, 2026" }, periodsSooner: 1.21, differenceInWords: "about 8 days sooner", finishDateMoves: true },
+      { rank: 2, current: { finishDate: "the week of August 10th, 2026" }, simulated: { finishDate: "the week of August 10th, 2026" }, periodsSooner: 0, differenceInWords: "no change", finishDateMoves: false },
+    ],
+  };
+
+  it("shows each goal's current → simulated date and the tool's own wording", () => {
+    render(<CoachSimulationStrip name="simulate_expense_change" result={expenseResult} />);
+    expect(screen.getByText("If Groceries were $0/wk")).toBeTruthy();
+    expect(screen.getByText("April 27th → April 20th")).toBeTruthy();
+    expect(screen.getByText(/about 8 days sooner/)).toBeTruthy();
+    expect(screen.getByText("August 10th · date unchanged")).toBeTruthy();
+  });
+
+  it("adds the new goal's own landing date for simulate_new_goal", () => {
+    render(<CoachSimulationStrip name="simulate_new_goal" result={{
+      newGoal: { insertedAtRank: 3, targetAmount: 3000, finishDate: "the week of October 12th, 2026" },
+      existingGoals: [{ rank: 1, current: { finishDate: "the week of April 27th, 2026" }, simulated: { finishDate: "the week of April 27th, 2026" }, periodsSooner: 0, differenceInWords: "no change", finishDateMoves: false }],
+    }} />);
+    expect(screen.getByText("If you added a $3,000 goal")).toBeTruthy();
+    expect(screen.getByText("New goal · lands as goal 3")).toBeTruthy();
+    expect(screen.getByText("October 12th")).toBeTruthy();
+  });
+
+  it("renders nothing for a non-simulation tool or an error result", () => {
+    const { container } = render(<CoachSimulationStrip name="get_goal_detail" result={expenseResult} />);
+    expect(container.innerHTML).toBe("");
+    const { container: c2 } = render(<CoachSimulationStrip name="simulate_expense_change" result={{ error: "No expense named Netflix" }} />);
+    expect(c2.innerHTML).toBe("");
+  });
+});

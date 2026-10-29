@@ -3,7 +3,7 @@ import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
-import { CoachNavChip, CoachToolActivity, CoachGoalCard } from "./CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { chooseCoachModel } from "../lib/coachPolicy.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
@@ -148,6 +148,9 @@ export function AskCoachPanel({
   // plain text, so a resumed conversation shows the words without a stale,
   // unconfirmed card whose numbers may no longer be true.
   const [goalDrafts, setGoalDrafts] = useState({});
+  // simulate_* results, same live-turn-only keying — rendered as CoachSimulationStrip so the tool's
+  // own dates sit under Coach's words (2026-10-29).
+  const [simStrips, setSimStrips] = useState({});
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -176,7 +179,7 @@ export function AskCoachPanel({
   // underneath the fixed composer with its confirm button unclickable.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, navChips, goalDrafts, activeTool]);
+  }, [messages, navChips, goalDrafts, simStrips, activeTool]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +264,7 @@ export function AskCoachPanel({
     // decorate index 3 of the new one.
     setNavChips({});
     setGoalDrafts({});
+    setSimStrips({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -282,6 +286,7 @@ export function AskCoachPanel({
     // so it starts with no chips rather than inheriting the live turn's.
     setNavChips({});
     setGoalDrafts({});
+    setSimStrips({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -354,6 +359,9 @@ export function AskCoachPanel({
         }
         if (event.name === "propose_goal" && event.result?.ok) {
           setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
+        if (event.name?.startsWith("simulate_") && !event.result?.error) {
+          setSimStrips((prev) => ({ ...prev, [assistantIdx]: [...(prev[assistantIdx] ?? []), { name: event.name, result: event.result }] }));
         }
       };
       const turnModel = chooseCoachModel(apiMessages[apiMessages.length - 1]?.content, { privileged });
@@ -585,6 +593,9 @@ export function AskCoachPanel({
                   {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
                     <CoachToolActivity toolName={activeTool} />
                   )}
+                  {m.role === "assistant" && simStrips[i]?.map((s, k) => (
+                    <CoachSimulationStrip key={k} name={s.name} result={s.result} />
+                  ))}
                   {m.role === "assistant" && navChips[i] && (
                     <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
                   )}

@@ -24,11 +24,13 @@ import { COACH_TOOLS, executeCoachTool } from "../../src/lib/coachTools.js";
 import { buildCoachContext } from "../../src/lib/aiContext.js";
 import { buildToolTestAccount } from "./fixtures/testAccount.js";
 
-const MODEL = "claude-haiku-4-5";          // api/coach.js's MODEL_IDS.haiku
+// COACH_EVAL_MODEL=claude-sonnet-5 runs the same cases on Sonnet (2026-10-29: checks the
+// per-message routing premise in src/lib/coachPolicy.js). Default stays the locked Haiku.
+const MODEL = process.env.COACH_EVAL_MODEL || "claude-haiku-4-5"; // api/coach.js's MODEL_IDS
 const MAX_TOKENS = 1024;                    // api/coach.js
 const MAX_TOOL_ROUNDS = 4;                  // lib/claude.js
 const MAX_CALLS = 26;                       // hard budget stop for the whole run
-const PRICE = { input: 1.00, output: 5.00 }; // $/Mtok, api/coach.js's PRICE_PER_MTOK
+const PRICE = MODEL.includes("sonnet") ? { input: 3.00, output: 15.00 } : { input: 1.00, output: 5.00 }; // $/Mtok, api/coach.js's PRICE_PER_MTOK
 
 const KEY = process.env.AI_ADMIN_COACH_TEST_KEY;
 if (!KEY) {

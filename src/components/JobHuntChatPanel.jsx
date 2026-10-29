@@ -63,7 +63,7 @@ export function JobHuntChatPanel({
       // This mode offers only get_expense_detail — see JOB_HUNT_TOOLS in
       // lib/coachTools.js for why the other three are withheld here.
       const toolData = { config, expenses, today: effectiveToday };
-      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet", { tools: JOB_HUNT_TOOLS, toolData })) {
+      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet", { tools: JOB_HUNT_TOOLS, toolData, surface: "job_hunt" })) {
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { canAccessAskCoachGeneral } from "../src/lib/entitlements.js";
+import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../src/lib/entitlements.js";
+import { resolveCoachRequest, countTrailingToolRounds, MAX_SERVER_TOOL_ROUNDS } from "../src/lib/coachPolicy.js";
 import { getEntitlement } from "../src/lib/subscription.js";
 
 // §18.G — proxies Claude API calls through a Vercel function so
@@ -162,11 +163,20 @@ export default async function handler(req, res) {
     }
   }
 
-  const { messages, systemPrompt, contextBlock, model, tools } = req.body ?? {};
+  const { messages, systemPrompt, contextBlock, model, tools, surface } = req.body ?? {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "messages must be a non-empty array" });
   }
-  const modelId = MODEL_IDS[model] ?? MODEL_IDS.haiku;
+  // Per-surface gate + model policy (src/lib/coachPolicy.js, 2026-10-29) — closes the known gap
+  // noted above: Job Hunt / Résumé Review are now privileged-only here too, each surface may only
+  // run its own models, and a client can no longer pick Sonnet for itself. A request without a
+  // `surface` (a cached older client) still works, on Haiku unless the account is privileged.
+  const privileged = canAccessAiFeatures({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, isInvestor: userRow?.is_investor, isAiAdmin: userRow?.is_ai_admin });
+  const policy = resolveCoachRequest({ surface, model, privileged });
+  if (!policy.ok) {
+    return res.status(policy.status).json({ error: policy.error });
+  }
+  const modelId = MODEL_IDS[policy.model] ?? MODEL_IDS.haiku;
   // Coach's drill-down tools (src/lib/coachTools.js) EXECUTE IN THE BROWSER,
   // not here — this route only forwards the declarations and streams the
   // model's tool_use blocks back for the client to run. That's deliberate:
@@ -181,10 +191,13 @@ export default async function handler(req, res) {
   // something, against data that caller already has. Shape-checked only, so a
   // malformed body fails here with a clear 400 instead of an opaque 400 from
   // Anthropic.
-  const hasTools = Array.isArray(tools) && tools.length > 0;
   if (tools !== undefined && !Array.isArray(tools)) {
     return res.status(400).json({ error: "tools must be an array when provided" });
   }
+  // Server-side tool-round cap: lib/claude.js already stops offering tools after 4 rounds, but
+  // that's client code. Past the cap the tool list is dropped, so the model has to answer.
+  const toolRoundCapReached = countTrailingToolRounds(messages) >= MAX_SERVER_TOOL_ROUNDS;
+  const hasTools = Array.isArray(tools) && tools.length > 0 && !toolRoundCapReached;
 
   const system = [];
   if (systemPrompt) system.push({ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } });

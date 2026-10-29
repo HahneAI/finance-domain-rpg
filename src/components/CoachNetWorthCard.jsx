@@ -115,7 +115,8 @@ export function CoachNetWorthCard({
           [{ role: "user", content: "Write my check-in message now." }],
           systemPrompt,
           contextBlock,
-          "haiku"
+          "haiku",
+          { surface: "net_worth" }
         )) {
           if (cancelled) return;
           accumulated += chunk;

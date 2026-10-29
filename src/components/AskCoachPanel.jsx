@@ -5,6 +5,7 @@ import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
 import { CoachNavChip, CoachToolActivity, CoachGoalCard } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
+import { chooseCoachModel } from "../lib/coachPolicy.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
 import coachLineartMono from "../assets/coach-avatar-lineart-mono.png";
@@ -106,6 +107,10 @@ export function AskCoachPanel({
   onCreateGoal = null,
   readOnly = false,
   isExiting = false,
+  // Admin/tester/investor/AI-admin. Decides whether a turn that needs range (what-if, decision,
+  // goal-setting) is routed to Sonnet — lib/coachPolicy.js ASK_COACH_SONNET_AUDIENCE. The server
+  // re-checks this independently; this only stops the browser asking for what it won't get.
+  privileged = false,
   config,
   expenses = [],
   goals = [],
@@ -228,7 +233,7 @@ export function AskCoachPanel({
         { role: "user", content: "Summarize this conversation for the saved chat history entry." },
       ];
       let summary = "";
-      for await (const chunk of chatWithCoach(summaryMessages, COACH_CHAT_SUMMARY_PROMPT, null, "haiku")) {
+      for await (const chunk of chatWithCoach(summaryMessages, COACH_CHAT_SUMMARY_PROMPT, null, "haiku", { surface: "ask_coach" })) {
         summary += chunk;
       }
       if (summary.trim()) {
@@ -351,7 +356,8 @@ export function AskCoachPanel({
           setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
       };
-      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData, onToolEvent })) {
+      const turnModel = chooseCoachModel(apiMessages[apiMessages.length - 1]?.content, { privileged });
+      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, turnModel, { tools: ASK_COACH_TOOLS, toolData, onToolEvent, surface: "ask_coach" })) {
         if (toolRoundOpen) {
           toolRoundOpen = false;
           setActiveTool(null);

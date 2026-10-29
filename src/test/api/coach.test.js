@@ -588,3 +588,66 @@ describe("coach — cost telemetry (DW-9)", () => {
     globalThis.process.env.VERCEL_ENV = prevEnv;
   });
 });
+
+// 2026-10-29 (shotgun, §2.L Phase 7 + coach-tuning-handoff §6 item 5): per-surface gate,
+// server-owned model choice, and a server-side tool-round cap (src/lib/coachPolicy.js).
+describe("coach — per-surface gate, model policy and tool-round cap", () => {
+  function trialUser() {
+    const now = Date.now();
+    stubAccess({
+      subscriptionStatus: "trialing",
+      trialEndsAt: new Date(now + 5 * 86400000).toISOString(),
+      accessEndsAt: new Date(now + 20 * 86400000).toISOString(),
+    });
+  }
+
+  it("rejects a non-privileged trial user on job_hunt with 403 before calling Anthropic", async () => {
+    trialUser();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "hi" }], surface: "job_hunt", model: "sonnet" } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("downgrades a trial user's Sonnet request on ask_coach to Haiku", async () => {
+    trialUser();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "what if" }], surface: "ask_coach", model: "sonnet" } }), res);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-haiku-4-5");
+  });
+
+  it("lets a privileged account run Sonnet on ask_coach, but never on net_worth", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface: "ask_coach", model: "sonnet" } }), mkRes());
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface: "net_worth", model: "sonnet" } }), mkRes());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-sonnet-5");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("claude-haiku-4-5");
+  });
+
+  it("rejects an unknown surface with 400", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface: "anything" } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("drops the tool list once the conversation is 4 tool rounds deep", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const tools = [{ name: "get_goal_detail", description: "d", input_schema: { type: "object", properties: {} } }];
+    const messages = [{ role: "user", content: "q" }];
+    for (let i = 0; i < 4; i++) {
+      messages.push({ role: "assistant", content: [{ type: "tool_use", id: `t${i}`, name: "get_goal_detail", input: {} }] });
+      messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: `t${i}`, content: "{}" }] });
+    }
+    await handler(mkReq({ body: { messages, tools, surface: "ask_coach" } }), mkRes());
+    expect("tools" in JSON.parse(fetchMock.mock.calls[0][1].body)).toBe(false);
+  });
+});

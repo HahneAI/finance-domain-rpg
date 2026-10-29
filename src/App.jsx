@@ -53,7 +53,7 @@ import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { focusCoachTarget } from "./lib/coachFocus.js";
-import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
+import { isTrackedBetaTester, canAccessAskCoachGeneral, canAccessAiFeatures } from "./lib/entitlements.js";
 import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome, isNjsBillActive } from "./lib/newJobSeasonRunway.js";
 
 // Website/flyer-QR-code signup funnel — a link shaped like
@@ -4733,6 +4733,7 @@ export default function App() {
           onCreateGoal={handleCoachCreateGoal}
           readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
+          privileged={canAccessAiFeatures({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin })}
           config={config}
           expenses={expenses}
           goals={goals}

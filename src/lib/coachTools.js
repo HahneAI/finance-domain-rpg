@@ -48,7 +48,7 @@ import {
   weekNumToPaycheckNum,
 } from "./fiscalWeek.js";
 import { getNextDueDate, getExpenseDisplayAmount, getExpenseDisplaySuffix, normalizeCycle } from "./expense.js";
-import { isNjsBillActive } from "./newJobSeasonRunway.js";
+import { isNjsBillActive, computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
 
 // Every tool that looks up a bill by name resolves its candidate set through
 // this, never through a bare status check. isNjsBillActive alone is not enough:
@@ -296,7 +296,26 @@ export const ASK_COACH_TOOLS = COACH_TOOLS;
 // household numbers (see JOB_HUNT_ADDENDUM in coachPrompts.js). Widening this
 // set means threading the missing props through NewJobSeasonHomePanel first;
 // do that deliberately, not by adding a name to this array.
-export const JOB_HUNT_TOOLS = COACH_TOOLS.filter((t) => t.name === "get_expense_detail");
+// Job Hunt's own what-if (2026-10-29, coach-tuning-handoff §6 item 4): the question that mode
+// actually gets is "what can I cut to stretch my runway?", which the goal simulations can't answer.
+// Kept out of COACH_TOOLS (Ask Coach) — it only makes sense in New Job Season.
+export const RUNWAY_TOOLS = [
+  {
+    name: "simulate_runway_change",
+    description:
+      "Recalculate the user's New Job Season cash runway as if one tracked expense cost a different amount per week (0 = cut it entirely). Answers \"how much longer could I hold out if I cut this?\" Returns current and simulated runway in days plus a ready-made differenceInWords — quote that, never convert days to weeks yourself.",
+    input_schema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "The expense's label, e.g. \"Utilities\". Matched case-insensitively." },
+        newWeeklyCost: { type: "number", description: "The new cost per week in dollars. 0 means cutting it entirely." },
+      },
+      required: ["label", "newWeeklyCost"],
+    },
+  },
+];
+
+export const JOB_HUNT_TOOLS = [...COACH_TOOLS.filter((t) => t.name === "get_expense_detail"), ...RUNWAY_TOOLS];
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 
@@ -1011,7 +1030,47 @@ function toolDraftLogEntry({ type, weekOffset = 0, shifts, hours, amount, note }
   };
 }
 
+// Same single-change pattern as toolSimulateExpenseChange, but measured through the runway functions
+// the New Job Season panels and buildJobHuntContext use (warden F22/F44) — never a parallel formula.
+function toolSimulateRunwayChange({ label, newWeeklyCost }, data) {
+  const { config = null, expenses = [], today = null, includeBenefits = true } = data;
+  if (!config?.newJobSeasonMode) return { error: "Runway only exists in New Job Season." };
+  const needle = String(label ?? "").trim().toLowerCase();
+  const active = visibleExpenses(data);
+  const target = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
+    ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
+  if (!target) return { error: `No tracked expense matching "${label}".`, availableLabels: active.map((e) => e.label ?? "Unnamed") };
+  const next = Number(newWeeklyCost);
+  if (!Number.isFinite(next) || next < 0) return { error: "newWeeklyCost must be a number of dollars, 0 or more." };
+  const runway = (exps) => {
+    const dash = computeNewJobSeasonRunway({ config, expenses: exps, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
+    return dash ? { days: resolvePrimaryRunwayDays(dash, config, includeBenefits), weeklyBurn: dash.weeklyBurn } : null;
+  };
+  const simExpenses = expenses.map((e) => (e === target
+    ? { ...e, monthlyOverrides: undefined, history: [{ effectiveFrom: "1970-01-01", weekly: [next, next, next, next] }] }
+    : e));
+  const cur = runway(expenses);
+  const sim = runway(simExpenses);
+  if (!cur || !sim) return { error: "No runway could be computed for this account." };
+  const gained = cur.days != null && sim.days != null ? sim.days - cur.days : null;
+  const abs = Math.abs(gained ?? 0);
+  const words = gained == null ? "runway becomes open-ended"
+    : abs < 0.5 ? "no real change"
+    : abs < 10.5 ? `about ${Math.round(abs)} ${Math.round(abs) === 1 ? "day" : "days"} ${gained > 0 ? "more" : "less"} runway`
+    : `about ${Math.round(abs / 7)} ${Math.round(abs / 7) === 1 ? "week" : "weeks"} ${gained > 0 ? "more" : "less"} runway`;
+  return {
+    simulated: `${target.label ?? "Unnamed"} at ${next === 0 ? "$0/wk (cut)" : `$${next}/wk`}`,
+    expenseLabel: target.label ?? "Unnamed",
+    currentWeeklyBurn: round2(cur.weeklyBurn),
+    simulatedWeeklyBurn: round2(sim.weeklyBurn),
+    currentRunwayDays: cur.days != null ? Math.round(cur.days) : null,
+    simulatedRunwayDays: sim.days != null ? Math.round(sim.days) : null,
+    differenceInWords: words,
+  };
+}
+
 const HANDLERS = {
+  simulate_runway_change: toolSimulateRunwayChange,
   draft_log_entry: toolDraftLogEntry,
   navigate_to: toolNavigateTo,
   propose_goal: toolProposeGoal,

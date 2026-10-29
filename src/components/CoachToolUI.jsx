@@ -24,6 +24,7 @@ export const TOOL_ACTIVITY_LABELS = {
   simulate_overtime_hours: "Working out what those hours are worth",
   simulate_without_logged_event: "Comparing against a version without it",
   draft_log_entry: "Filling in that log entry",
+  simulate_runway_change: "Working out what that does to your runway",
 };
 
 /**

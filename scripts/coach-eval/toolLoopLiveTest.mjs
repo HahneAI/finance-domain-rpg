@@ -19,10 +19,10 @@
 // MAX_CALLS below is the only thing standing between a test pass and an
 // open-ended spend. One conversation per planned prompt, no retries — a
 // disappointing answer is a finding to write down, not a reason to re-roll.
-import { ASK_COACH_SYSTEM_PROMPT } from "../../src/lib/coachPrompts.js";
-import { COACH_TOOLS, executeCoachTool } from "../../src/lib/coachTools.js";
+import { ASK_COACH_SYSTEM_PROMPT, JOB_HUNT_SYSTEM_PROMPT } from "../../src/lib/coachPrompts.js";
+import { COACH_TOOLS, JOB_HUNT_TOOLS, executeCoachTool } from "../../src/lib/coachTools.js";
 import { buildCoachContext } from "../../src/lib/aiContext.js";
-import { buildToolTestAccount } from "./fixtures/testAccount.js";
+import { buildToolTestAccount, buildJobHuntTestAccount, buildJobHuntTestContext } from "./fixtures/testAccount.js";
 
 // COACH_EVAL_MODEL=claude-sonnet-5 runs the same cases on Sonnet (2026-10-29: checks the
 // per-message routing premise in src/lib/coachPolicy.js). Default stays the locked Haiku.
@@ -136,7 +136,18 @@ const LOGSET = [
     text: "I took 8 hours of PTO this week, put that in." },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET];
+// 2026-10-29 — Job Hunt runs its own prompt/context/tools on Sonnet (JobHuntChatPanel), so these cases
+// carry `surface: "job_hunt"` and a runway `variant`; see setupFor() below.
+const JOBHUNT = [
+  { id: "jhcut", surface: "job_hunt", variant: "tight", expect: "simulate_runway_change Utilities 0 — quotes 9 -> 11 days, never estimates",
+    text: "If I cut my Utilities completely, how much longer could I hold out?" },
+  { id: "jhtrim", surface: "job_hunt", variant: "healthy", expect: "simulate_runway_change with a partial cost — quotes the tool's words",
+    text: "What would trimming Rent to 250 a week do for my runway?" },
+  { id: "jhfollow", surface: "job_hunt", variant: "tight", expect: "no tool needed — still Riverbend first, 1.3 weeks, no regression",
+    text: "Which of these two applications should I follow up on first, and how?" },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET, ...JOBHUNT];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -148,6 +159,7 @@ const PLANNED = only.length
     : only[0] === "navigate" ? NAVIGATE
     : only[0] === "goalset" ? GOALSET
     : only[0] === "logset" ? LOGSET
+    : only[0] === "jobhunt" ? JOBHUNT
     : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }
@@ -157,23 +169,36 @@ const bag = buildToolTestAccount();
 // tools, so the block must be the trimmed one the panel actually ships, not the
 // fuller version CoachNetWorthCard gets.
 const contextBlock = buildCoachContext({ ...bag, detailAvailableViaTools: true });
+const ASK_SETUP = { system: ASK_COACH_SYSTEM_PROMPT, contextBlock, tools: COACH_TOOLS, bag, model: MODEL };
+
+function setupFor(prompt) {
+  if (prompt.surface !== "job_hunt") return ASK_SETUP;
+  const a = buildJobHuntTestAccount({ variant: prompt.variant ?? "tight" });
+  return {
+    system: JOB_HUNT_SYSTEM_PROMPT,
+    contextBlock: buildJobHuntTestContext({ variant: prompt.variant ?? "tight" }),
+    tools: JOB_HUNT_TOOLS,
+    bag: { config: a.config, expenses: a.expenses, today: a.effectiveToday, includeBenefits: true },
+    model: "claude-sonnet-5",
+  };
+}
 
 let calls = 0;
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-async function callAnthropic(messages, offerTools) {
+async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
   if (++calls > MAX_CALLS) throw new Error(`Budget stop: exceeded ${MAX_CALLS} calls`);
   const body = {
-    model: MODEL,
+    model: setup.model,
     max_tokens: MAX_TOKENS,
     system: [
-      { type: "text", text: ASK_COACH_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: contextBlock, cache_control: { type: "ephemeral" } },
+      { type: "text", text: setup.system, cache_control: { type: "ephemeral" } },
+      { type: "text", text: setup.contextBlock, cache_control: { type: "ephemeral" } },
     ],
     messages: messages.map((m, i) =>
       i !== messages.length - 1 ? m : withBreakpoint(m)
     ),
-    ...(offerTools ? { tools: COACH_TOOLS } : {}),
+    ...(offerTools ? { tools: setup.tools } : {}),
   };
   let res, lastErr;
   // Longer than a typical client backoff on purpose: a 529 capacity dip on this
@@ -222,6 +247,7 @@ function withBreakpoint(m) {
 }
 
 async function runConversation(prompt) {
+  const setup = setupFor(prompt);
   const convo = [...(prompt.history ?? []), { role: "user", content: prompt.text }];
   const toolCalls = [];
   let text = "";
@@ -230,7 +256,7 @@ async function runConversation(prompt) {
   for (let round = 0; ; round++) {
     rounds = round + 1;
     const offerTools = round < MAX_TOOL_ROUNDS;
-    const reply = await callAnthropic(convo, offerTools);
+    const reply = await callAnthropic(convo, offerTools, setup);
     text += reply.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const uses = reply.content.filter((b) => b.type === "tool_use");
     if (!offerTools || reply.stop_reason !== "tool_use" || !uses.length) break;
@@ -239,7 +265,7 @@ async function runConversation(prompt) {
     convo.push({
       role: "user",
       content: uses.map((u) => {
-        const result = executeCoachTool(u.name, u.input, bag);
+        const result = executeCoachTool(u.name, u.input, setup.bag);
         toolCalls.push({ name: u.name, input: u.input, result });
         return { type: "tool_result", tool_use_id: u.id, content: JSON.stringify(result) };
       }),

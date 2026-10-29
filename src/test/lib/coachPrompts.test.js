@@ -246,6 +246,10 @@ describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {
 });
 
 describe("JOB_HUNT_SYSTEM_PROMPT", () => {
+  it("routes runway what-ifs to simulate_runway_change instead of estimating", () => {
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/call simulate_runway_change and quote its differenceInWords/i);
+  });
+
   // 2026-10-06 repeat-verify: the "follow up on first" pick flipped between
   // draws on identical data, and one draw invented elapsed time.
   it("commits to one pick (live conversation outranks a quiet application) and forbids estimating elapsed time", () => {

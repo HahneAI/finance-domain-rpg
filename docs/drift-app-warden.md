@@ -1548,6 +1548,9 @@ derives from a shared `newJobSeasonDash` memo (one `computeNewJobSeasonRunway()`
 not two) — the Live State Inspector's three new New Job Season rows (`New Job Season Date`,
 `Unemployment Wkly`, `Unemployment Wks Left`) read `newJobSeasonDash.benefitsRemainingWeeks`
 from that same memo, isAdmin-gated diagnostic display only, no new call site.
+> **2026-10-29:** Job Hunt Coach's `simulate_runway_change` (`coachTools.js`) re-runs this same
+> `computeNewJobSeasonRunway()` + `resolvePrimaryRunwayDays()` pair with one expense changed — it is a consumer of
+> Spine A, not a new formula; it inherits every IF/THEN here.
 > **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
 > formula — everything routes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`
 > (Spine A), now including the admin Live State Inspector via the shared `newJobSeasonDash`

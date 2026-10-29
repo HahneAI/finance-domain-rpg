@@ -143,7 +143,7 @@ describe("COACH_TOOLS schemas", () => {
   // would keep invalidating the cache behind it.
   it("exposes stable module-level per-surface sets", () => {
     expect(ASK_COACH_TOOLS).toBe(COACH_TOOLS);
-    expect(JOB_HUNT_TOOLS.map((t) => t.name)).toEqual(["get_expense_detail"]);
+    expect(JOB_HUNT_TOOLS.map((t) => t.name)).toEqual(["get_expense_detail", "simulate_runway_change"]);
   });
 });
 
@@ -719,5 +719,33 @@ describe("executeCoachTool — draft_log_entry", () => {
     const data = await bag();
     expect(executeCoachTool("draft_log_entry", { type: "pto", hours: 8 }, data).draft).toMatchObject({ ptoHours: 8, hoursLost: 0, amount: 0 });
     expect(executeCoachTool("draft_log_entry", { type: "bonus", amount: 250 }, data).draft).toMatchObject({ amount: 250, ptoHours: 0 });
+  });
+});
+
+// 2026-10-29 (coach-tuning-handoff §6 item 4): Job Hunt's runway what-if, measured through the same
+// computeNewJobSeasonRunway/resolvePrimaryRunwayDays the panels use.
+describe("executeCoachTool — simulate_runway_change", () => {
+  const jh = async (variant) => {
+    const { buildJobHuntTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const a = buildJobHuntTestAccount({ variant });
+    return { config: a.config, expenses: a.expenses, today: a.effectiveToday, includeBenefits: true };
+  };
+
+  it("cutting a $75/wk bill on a $500 cushion moves runway 9 -> 11 days", async () => {
+    const r = executeCoachTool("simulate_runway_change", { label: "Utilities", newWeeklyCost: 0 }, await jh("tight"));
+    expect(r).toMatchObject({ currentWeeklyBurn: 400, simulatedWeeklyBurn: 325, currentRunwayDays: 9, simulatedRunwayDays: 11 });
+    expect(r.differenceInWords).toBe("about 2 days more runway");
+  });
+
+  it("states a longer gain in weeks", async () => {
+    const r = executeCoachTool("simulate_runway_change", { label: "utilities", newWeeklyCost: 0 }, await jh("healthy"));
+    expect(r.differenceInWords).toBe("about 2 weeks more runway");
+  });
+
+  it("refuses outside New Job Season and for an unknown bill", async () => {
+    const data = await jh("tight");
+    expect(executeCoachTool("simulate_runway_change", { label: "Netflix", newWeeklyCost: 0 }, data).error).toMatch(/No tracked expense/);
+    expect(executeCoachTool("simulate_runway_change", { label: "Rent", newWeeklyCost: 0 },
+      { ...data, config: { ...data.config, newJobSeasonMode: false } }).error).toMatch(/only exists in New Job Season/);
   });
 });

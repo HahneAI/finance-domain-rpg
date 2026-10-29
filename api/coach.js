@@ -42,7 +42,7 @@ const MODEL_IDS = {
 // docs/BUG_FIX_TODO.md DW-9 if pricing changes.
 const PRICE_PER_MTOK = {
   [MODEL_IDS.haiku]: { input: 1.00, output: 5.00 },
-  [MODEL_IDS.sonnet]: { input: 3.00, output: 15.00 },
+  [MODEL_IDS.sonnet]: { input: 2.00, output: 10.00 }, // claude-sonnet-5 (was logged at Sonnet 4.x's $3/$15 until 2026-10-29)
 };
 
 export default async function handler(req, res) {
@@ -244,7 +244,7 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 1024,
+      max_tokens: policy.maxTokens,
       system,
       messages: cachedMessages,
       ...(hasTools ? { tools } : {}),

@@ -13,14 +13,21 @@
 // (~3.6–4.5× Haiku, docs/TODO.md §2.G) is accepted for trial/paid users; "none" = Haiku only.
 export const ASK_COACH_SONNET_AUDIENCE = "privileged";
 
-// Each Coach surface, its server-side gate and the models it may run on. The first model in
-// the list is the fallback when a client asks for one the surface doesn't allow.
+// Each Coach surface, its server-side gate, the models it may run on and its max_tokens. The
+// first model in the list is the fallback when a client asks for one the surface doesn't allow.
+// maxTokens (2026-10-29): Sonnet 5 thinks by default and the thinking counts toward max_tokens,
+// so the old flat 1024 cut Résumé reviews off mid-sentence (1 of 2 production-shaped calls; the
+// harness averaged 1,123 output tokens per review, ~575 of them thinking). The cap only bounds
+// a reply; unused headroom costs nothing.
 export const COACH_SURFACES = {
-  ask_coach: { privilegedOnly: false, models: ["haiku", "sonnet"] },
-  net_worth: { privilegedOnly: false, models: ["haiku"] },
-  job_hunt: { privilegedOnly: true, models: ["sonnet"] },
-  resume_review: { privilegedOnly: true, models: ["sonnet"] },
+  ask_coach: { privilegedOnly: false, models: ["haiku", "sonnet"], maxTokens: 2048 },
+  net_worth: { privilegedOnly: false, models: ["haiku"], maxTokens: 1024 },
+  job_hunt: { privilegedOnly: true, models: ["sonnet"], maxTokens: 2048 },
+  resume_review: { privilegedOnly: true, models: ["sonnet"], maxTokens: 4096 },
 };
+
+// Cached older clients send no surface; their requests get Ask Coach's cap.
+const DEFAULT_MAX_TOKENS = COACH_SURFACES.ask_coach.maxTokens;
 
 // Mirrors lib/claude.js's MAX_TOOL_ROUNDS, enforced again on the server so a modified
 // client can't loop tool rounds without limit.
@@ -64,7 +71,7 @@ export function chooseCoachModel(text, { privileged = false, audience = ASK_COAC
 export function resolveCoachRequest({ surface, model, privileged }) {
   if (surface === undefined || surface === null) {
     const allowed = privileged && (model === "haiku" || model === "sonnet");
-    return { ok: true, model: allowed ? model : "haiku" };
+    return { ok: true, model: allowed ? model : "haiku", maxTokens: DEFAULT_MAX_TOKENS };
   }
   const policy = COACH_SURFACES[surface];
   if (!policy) return { ok: false, status: 400, error: `Unknown Coach surface: ${String(surface)}` };
@@ -73,7 +80,7 @@ export function resolveCoachRequest({ surface, model, privileged }) {
   }
   let resolved = policy.models.includes(model) ? model : policy.models[0];
   if (surface === "ask_coach" && resolved === "sonnet" && !canUseSonnetOnAskCoach(privileged)) resolved = "haiku";
-  return { ok: true, model: resolved };
+  return { ok: true, model: resolved, maxTokens: policy.maxTokens };
 }
 
 // How many tool rounds the conversation is already into: assistant turns carrying a tool_use

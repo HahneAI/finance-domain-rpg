@@ -47,17 +47,17 @@ describe("chooseCoachModel — per-message routing (§2.L Phase 7)", () => {
 describe("resolveCoachRequest — server-side surface gate", () => {
   it("gates Job Hunt and Résumé Review to privileged accounts", () => {
     expect(resolveCoachRequest({ surface: "job_hunt", model: "sonnet", privileged: false })).toMatchObject({ ok: false, status: 403 });
-    expect(resolveCoachRequest({ surface: "resume_review", model: "sonnet", privileged: true })).toEqual({ ok: true, model: "sonnet" });
+    expect(resolveCoachRequest({ surface: "resume_review", model: "sonnet", privileged: true })).toMatchObject({ ok: true, model: "sonnet" });
   });
 
   it("falls back to the surface's first model when a client asks for one it doesn't allow", () => {
-    expect(resolveCoachRequest({ surface: "net_worth", model: "sonnet", privileged: true })).toEqual({ ok: true, model: "haiku" });
-    expect(resolveCoachRequest({ surface: "ask_coach", model: "opus", privileged: true })).toEqual({ ok: true, model: "haiku" });
+    expect(resolveCoachRequest({ surface: "net_worth", model: "sonnet", privileged: true })).toMatchObject({ ok: true, model: "haiku" });
+    expect(resolveCoachRequest({ surface: "ask_coach", model: "opus", privileged: true })).toMatchObject({ ok: true, model: "haiku" });
   });
 
   it("refuses Sonnet on Ask Coach for accounts outside the rollout audience", () => {
-    expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: false })).toEqual({ ok: true, model: "haiku" });
-    expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: true })).toEqual({ ok: true, model: "sonnet" });
+    expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: false })).toMatchObject({ ok: true, model: "haiku" });
+    expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: true })).toMatchObject({ ok: true, model: "sonnet" });
   });
 
   it("rejects an unknown surface with 400", () => {
@@ -65,8 +65,16 @@ describe("resolveCoachRequest — server-side surface gate", () => {
   });
 
   it("keeps cached older clients (no surface) working, on Haiku unless privileged", () => {
-    expect(resolveCoachRequest({ model: "sonnet", privileged: false })).toEqual({ ok: true, model: "haiku" });
-    expect(resolveCoachRequest({ model: "sonnet", privileged: true })).toEqual({ ok: true, model: "sonnet" });
+    expect(resolveCoachRequest({ model: "sonnet", privileged: false })).toMatchObject({ ok: true, model: "haiku" });
+    expect(resolveCoachRequest({ model: "sonnet", privileged: true })).toMatchObject({ ok: true, model: "sonnet" });
+  });
+
+  it("gives every surface a max_tokens with room for Sonnet's default thinking (Résumé cut off at 1024)", () => {
+    expect(resolveCoachRequest({ surface: "resume_review", model: "sonnet", privileged: true }).maxTokens).toBe(4096);
+    expect(resolveCoachRequest({ surface: "job_hunt", model: "sonnet", privileged: true }).maxTokens).toBe(2048);
+    expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: true }).maxTokens).toBe(2048);
+    expect(resolveCoachRequest({ surface: "net_worth", model: "haiku", privileged: false }).maxTokens).toBe(1024);
+    expect(resolveCoachRequest({ model: "haiku", privileged: false }).maxTokens).toBe(2048);
   });
 
   it("lists exactly the four live Coach surfaces", () => {

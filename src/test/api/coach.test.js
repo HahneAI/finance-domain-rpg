@@ -629,6 +629,15 @@ describe("coach — per-surface gate, model policy and tool-round cap", () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("claude-haiku-4-5");
   });
 
+  it("sends each surface's own max_tokens — Résumé gets room for Sonnet's thinking (2026-10-29)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    for (const surface of ["resume_review", "job_hunt", "ask_coach", "net_worth"]) {
+      await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface, model: "sonnet" } }), mkRes());
+    }
+    expect(fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).max_tokens)).toEqual([4096, 2048, 2048, 1024]);
+  });
+
   it("rejects an unknown surface with 400", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
     vi.stubGlobal("fetch", fetchMock);

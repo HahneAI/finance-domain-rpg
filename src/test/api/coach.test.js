@@ -410,7 +410,8 @@ describe("coach — Anthropic proxy", () => {
       expect.objectContaining({ method: "POST" })
     );
     const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sentBody.model).toBe("claude-haiku-4-5");
+    expect(sentBody.model).toBe("claude-haiku-5-5");
+    expect(sentBody.output_config).toBeUndefined();
     expect(sentBody.stream).toBe(true);
     expect(res.headers["Content-Type"]).toBe("text/event-stream");
     expect(res.writes.length).toBe(3);
@@ -428,7 +429,9 @@ describe("coach — Anthropic proxy", () => {
     );
 
     const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(sentBody.model).toBe("claude-sonnet-5");
+    expect(sentBody.model).toBe("claude-sonnet-5-5");
+    // Sonnet 5.5 runs at effort "low" for now; Haiku 5.5 keeps its default (no output_config).
+    expect(sentBody.output_config).toEqual({ effort: "low" });
     expect(sentBody.system).toEqual([
       { type: "text", text: "sys", cache_control: { type: "ephemeral" } },
       { type: "text", text: "ctx", cache_control: { type: "ephemeral" } },
@@ -581,8 +584,8 @@ describe("coach — cost telemetry (DW-9)", () => {
     expect(usageLine).toContain("cache_read=500");
     expect(usageLine).toContain("cache_write=200");
     expect(usageLine).toContain("output=100");
-    // 1000*1.00 + 500*1.00*0.1 + 200*1.00*1.25 + 100*5.00 = 1000+50+250+500 = 1800 -> $0.0018
-    expect(usageLine).toContain("est_cost_usd=0.001800");
+    // Haiku 5.5: 1000*0.10 + 500*0.10*0.1 + 200*0.10*1.25 + 100*0.50 = 100+5+25+50 = 180 -> $0.00018
+    expect(usageLine).toContain("est_cost_usd=0.000180");
 
     logSpy.mockRestore();
     globalThis.process.env.VERCEL_ENV = prevEnv;
@@ -617,7 +620,7 @@ describe("coach — per-surface gate, model policy and tool-round cap", () => {
     vi.stubGlobal("fetch", fetchMock);
     const res = mkRes();
     await handler(mkReq({ body: { messages: [{ role: "user", content: "what if" }], surface: "ask_coach", model: "sonnet" } }), res);
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-haiku-4-5");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-haiku-5-5");
   });
 
   it("lets a privileged account run Sonnet on ask_coach, but never on net_worth", async () => {
@@ -625,8 +628,8 @@ describe("coach — per-surface gate, model policy and tool-round cap", () => {
     vi.stubGlobal("fetch", fetchMock);
     await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface: "ask_coach", model: "sonnet" } }), mkRes());
     await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface: "net_worth", model: "sonnet" } }), mkRes());
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-sonnet-5");
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("claude-haiku-4-5");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("claude-sonnet-5-5");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("claude-haiku-5-5");
   });
 
   it("sends each surface's own max_tokens — Résumé gets room for Sonnet's thinking (2026-10-29)", async () => {

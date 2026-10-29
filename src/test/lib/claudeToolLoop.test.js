@@ -66,6 +66,29 @@ describe("chatWithCoach — no tools (unchanged legacy path)", () => {
 });
 
 describe("chatWithCoach — tool loop", () => {
+  it("sends the 5.5 models' thinking blocks back unchanged with the tool round, and never shows them (2026-10-29)", async () => {
+    const thinkingThenTool = sse([
+      { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "", signature: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "sig-abc" } },
+      { type: "content_block_stop", index: 0 },
+      { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "tu_9", name: "get_goal_detail" } },
+      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"rank":1}' } },
+      { type: "content_block_stop", index: 1 },
+      { type: "message_delta", delta: { stop_reason: "tool_use" } },
+    ]);
+    const fetchMock = vi.fn().mockResolvedValueOnce(thinkingThenTool).mockResolvedValueOnce(textTurn("Done."));
+    vi.stubGlobal("fetch", fetchMock);
+    const data = { goals: [{ id: "g1", label: "x", target: 1000, completed: false }], futureWeeks: [], timelineWeekNets: [], expenses: [], config: {} };
+
+    const out = await drain(chatWithCoach([{ role: "user", content: "goal?" }], "sys", "ctx", "haiku", { tools: TOOLS, toolData: data }));
+
+    expect(out).toBe("Done.");
+    const assistantTurn = bodyOf(fetchMock, 1).messages[1].content;
+    expect(assistantTurn[0]).toEqual({ type: "thinking", thinking: "", signature: "sig-abc" });
+    expect(assistantTurn[1]).toMatchObject({ type: "tool_use", id: "tu_9" });
+  });
+
   it("executes a requested tool and feeds the result back for a second turn", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(toolTurn("get_goal_detail", ['{"ra', 'nk":', "1}"]))

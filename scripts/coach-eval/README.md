@@ -448,7 +448,11 @@ retry-on-a-hunch.** Concretely for this file:
   Amber snapshot, the before/after figures are exact; without it, Green still
   gives no before figure. Rerun it after any edit to the Green addenda or
   the "Earlier check-in" line.
-- [ ] Claude Haiku 5.5 baseline TAKEN 2026-10-29, switch not made. Results:
+- [ ] Model switch 2026-10-29: Haiku 5.5 base + Sonnet 5.5 (effort low). The runners
+  default to that pairing (toolLoopLiveTest: Haiku 5.5, Job Hunt on Sonnet 5.5 low).
+  The older promptfoo configs keep their original providers as dated records;
+  re-run any of them on the new pairing with `modelCompare.mjs --candidate-only`.
+- Record: Claude Haiku 5.5 baseline taken 2026-10-29. Results:
   rubric Known Limitations, "Claude Haiku 5.5 baseline". Re-run:
   `node modelCompare.mjs --repeat 2` (all configs, original model +
   `claude-haiku-5-5`; `--effort low`, `--candidate`, `--only`,

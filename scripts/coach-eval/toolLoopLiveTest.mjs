@@ -26,7 +26,7 @@ import { buildToolTestAccount, buildJobHuntTestAccount, buildJobHuntTestContext 
 
 // COACH_EVAL_MODEL=claude-sonnet-5 runs the same cases on Sonnet (2026-10-29: checks the
 // per-message routing premise in src/lib/coachPolicy.js). Default stays the locked Haiku.
-const MODEL = process.env.COACH_EVAL_MODEL || "claude-haiku-4-5"; // api/coach.js's MODEL_IDS
+const MODEL = process.env.COACH_EVAL_MODEL || "claude-haiku-5-5"; // api/coach.js's MODEL_IDS.haiku (base model since 2026-10-29)
 const MAX_TOKENS = 1024;                    // api/coach.js
 const MAX_TOOL_ROUNDS = 4;                  // lib/claude.js
 const MAX_CALLS = Number(process.env.COACH_EVAL_MAX_CALLS || 26); // hard budget stop for the whole run
@@ -34,7 +34,7 @@ const MAX_CALLS = Number(process.env.COACH_EVAL_MAX_CALLS || 26); // hard budget
 // COACH_EVAL_JOBHUNT_MODEL moves them too. COACH_EVAL_EFFORT sets output_config.effort on the
 // 5.x models (omitted = the model's default). COACH_EVAL_STRIP_THINKING=1 mimics lib/claude.js,
 // which keeps only text + tool_use blocks when it sends the assistant turn back.
-const JOBHUNT_MODEL = process.env.COACH_EVAL_JOBHUNT_MODEL || "claude-sonnet-5";
+const JOBHUNT_MODEL = process.env.COACH_EVAL_JOBHUNT_MODEL || "claude-sonnet-5-5";
 const EFFORT = process.env.COACH_EVAL_EFFORT || null;
 const STRIP_THINKING = process.env.COACH_EVAL_STRIP_THINKING === "1";
 const PRICES = { "claude-haiku-4-5": { input: 1, output: 5 }, "claude-haiku-5-5": { input: 0.1, output: 0.5 }, "claude-sonnet-5": { input: 2, output: 10 }, "claude-sonnet-5-5": { input: 2, output: 10 } }; // $/Mtok
@@ -206,7 +206,8 @@ async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
       i !== messages.length - 1 ? m : withBreakpoint(m)
     ),
     ...(offerTools ? { tools: setup.tools } : {}),
-    ...(EFFORT ? { output_config: { effort: EFFORT } } : {}),
+    // Mirrors api/coach.js MODEL_EFFORT: Sonnet runs at "low", Haiku at its default.
+    ...((EFFORT || (setup.model.includes("sonnet") ? "low" : null)) ? { output_config: { effort: EFFORT || "low" } } : {}),
   };
   let res, lastErr;
   // Longer than a typical client backoff on purpose: a 529 capacity dip on this

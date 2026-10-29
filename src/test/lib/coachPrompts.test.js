@@ -28,6 +28,13 @@ describe("COACH_PERSONA_PROMPT", () => {
 });
 
 describe("ASK_COACH_SYSTEM_PROMPT", () => {
+  it("Haiku 5.5 tuning (2026-10-29): one write after a write tool, no claimed action, real panel names, three figures", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/call the tool first and write your message once, after its result/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Never say you've drafted, proposed, logged or saved anything unless you called that tool in this same turn/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/There is no Goals panel and no Expenses panel/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/The current week's date is not one of the numbers a status check needs/);
+  });
+
   it("includes the shared persona and the feature guide", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toContain(COACH_PERSONA_PROMPT);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/FEATURE REFERENCE/);
@@ -258,6 +265,11 @@ describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {
 });
 
 describe("JOB_HUNT_SYSTEM_PROMPT", () => {
+  it("names only real places in the New Job Season view (2026-10-29)", () => {
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/Application Tracker in the Job Search section/);
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never an "Applications panel"/);
+  });
+
   it("routes runway what-ifs to simulate_runway_change instead of estimating", () => {
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/call simulate_runway_change and quote its differenceInWords/i);
   });

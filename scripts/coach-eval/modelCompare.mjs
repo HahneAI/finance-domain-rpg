@@ -39,6 +39,7 @@ const CANDIDATE = flag("candidate", "claude-haiku-5-5");
 const EFFORT = flag("effort", null);
 const REPEAT = Number(flag("repeat", "1"));
 const ONLY = flag("only", null);
+const MATCH = flag("match", null) ? new RegExp(flag("match", null)) : null; // regex on the config file name
 const CONCURRENCY = Number(flag("concurrency", "4"));
 const MAX_CALLS = Number(flag("max-calls", "600"));
 const CANDIDATE_ONLY = args.includes("--candidate-only");
@@ -123,7 +124,7 @@ async function callModel({ model, maxTokens, messages, effort }) {
 }
 
 async function main() {
-  const files = fs.readdirSync(here).filter((f) => /^promptfooconfig.*\.yaml$/.test(f) && (!ONLY || f.includes(ONLY))).sort();
+  const files = fs.readdirSync(here).filter((f) => /^promptfooconfig.*\.yaml$/.test(f) && (!ONLY || f.includes(ONLY)) && (!MATCH || MATCH.test(f))).sort();
   const jobs = [];
   for (const f of files) {
     const cfg = await loadConfig(f);

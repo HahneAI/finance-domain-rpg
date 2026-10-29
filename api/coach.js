@@ -31,9 +31,17 @@ const anthropicApiKey = MODE === "live" ? env.ANTHROPIC_API_KEY : (env.ANTHROPIC
 
 console.log(`[coach] outbound calls use ${MODE.toUpperCase()} Anthropic key`);
 
+// 2026-10-29: Claude Haiku 5.5 is Coach's base model and Claude Sonnet 5.5 the heavier one
+// (retired: claude-haiku-4-5, claude-sonnet-5). The client keys ("haiku"/"sonnet") are unchanged.
+// Both 5.5 models think by default; Sonnet runs at effort "low" for now, Haiku at its default
+// ("medium" — measured to follow the prompt's length/figure-of-speech rules better than "low",
+// docs/coach-personality-rubric.md "Claude Haiku 5.5 baseline").
 const MODEL_IDS = {
-  haiku: "claude-haiku-4-5",
-  sonnet: "claude-sonnet-5",
+  haiku: "claude-haiku-5-5",
+  sonnet: "claude-sonnet-5-5",
+};
+const MODEL_EFFORT = {
+  sonnet: "low",
 };
 
 // §18.G / DW-9 cost telemetry — $ per million tokens, current published
@@ -41,8 +49,8 @@ const MODEL_IDS = {
 // numbers in the log line below; never sent to Anthropic. Keep in sync with
 // docs/BUG_FIX_TODO.md DW-9 if pricing changes.
 const PRICE_PER_MTOK = {
-  [MODEL_IDS.haiku]: { input: 1.00, output: 5.00 },
-  [MODEL_IDS.sonnet]: { input: 2.00, output: 10.00 }, // claude-sonnet-5 (was logged at Sonnet 4.x's $3/$15 until 2026-10-29)
+  [MODEL_IDS.haiku]: { input: 0.10, output: 0.50 }, // prompts up to 100K tokens; every Coach prompt is far below
+  [MODEL_IDS.sonnet]: { input: 2.00, output: 10.00 },
 };
 
 export default async function handler(req, res) {
@@ -245,6 +253,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       model: modelId,
       max_tokens: policy.maxTokens,
+      ...(MODEL_EFFORT[policy.model] ? { output_config: { effort: MODEL_EFFORT[policy.model] } } : {}),
       system,
       messages: cachedMessages,
       ...(hasTools ? { tools } : {}),

@@ -75,12 +75,22 @@ async function* streamTurn(res, collected) {
           partialJson[event.index] = "";
         } else if (cb?.type === "text") {
           blocks[event.index] = { type: "text", text: "" };
+        } else if (cb?.type === "thinking") {
+          // The 5.5 models think by default. A tool round must send the assistant turn back
+          // with its thinking blocks unchanged (signature included), so they are kept here.
+          blocks[event.index] = { type: "thinking", thinking: cb.thinking ?? "", signature: cb.signature ?? "" };
+        } else if (cb?.type === "redacted_thinking") {
+          blocks[event.index] = { ...cb };
         }
       } else if (event.type === "content_block_delta") {
         if (event.delta?.type === "text_delta") {
           const text = event.delta.text;
           if (blocks[event.index]) blocks[event.index].text += text;
           yield text;
+        } else if (event.delta?.type === "thinking_delta") {
+          if (blocks[event.index]) blocks[event.index].thinking += event.delta.thinking ?? "";
+        } else if (event.delta?.type === "signature_delta") {
+          if (blocks[event.index]) blocks[event.index].signature = (blocks[event.index].signature ?? "") + (event.delta.signature ?? "");
         } else if (event.delta?.type === "input_json_delta") {
           partialJson[event.index] = (partialJson[event.index] ?? "") + (event.delta.partial_json ?? "");
         }

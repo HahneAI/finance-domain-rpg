@@ -466,6 +466,12 @@ Length targets describe the baseline-severity reply; Urgency governs how far sev
 - **Red Directness 4** made real by a prompt line (lead with the runway figure and its biggest
   driver, no reassurance first); before it, Red opened on the runway but softened it.
 
+**Model switch 2026-10-29 (after the shotgun run below):** "Haiku" in this table now means Claude Haiku 5.5
+and "Sonnet" means Claude Sonnet 5.5 at effort `low`; Haiku 4.5 and Sonnet 5 are retired. Targets are
+unchanged. Known gaps on the new pairing: natural Metaphor ~1–2 on Ask Coach/Amber/Green (TODO §32 A5 —
+re-lock or accept), Job Hunt on Sonnet 5.5 low ~122 words vs ~75 (Length 2 overshoot). Red, Directness and
+Warmth hold. See Known Limitations, "Claude Haiku 5.5 baseline" and "Tuning pass".
+
 **Updates from the 2026-10-29 shotgun run (targets unchanged, levers built):**
 - **Ask Coach Length 2: the ⚠ is cleared.** Five worked examples now close `ASK_COACH_SYSTEM_PROMPT`. The
   lock check gives 2 sentences ending on Home, and broad answers use 0 tools and 3–4 numbers (the cap is 3,
@@ -522,6 +528,17 @@ Urgency on Net Worth Red). A target that holds alone can slip once its neighbour
 Nothing about method is decided yet — see the TODO entry for the open questions.
 
 ## Known Limitations (live-tested, not yet resolved)
+
+**Tuning pass + switch (2026-10-29, after the baseline below).** Prompt fixes: write tools (`propose_goal`,
+`draft_log_entry`) are called first and answered once; no "I've drafted" without the tool; a PANEL NAMES list
+in Ask Coach ("there is no Goals panel"); Job Hunt names only the Application Tracker / Cash Runway / Weekly
+Burn / Upkeep; status checks skip the week's date as a "number". Live after (Haiku 5.5, Sonnet 5.5 low on Job
+Hunt): duplicate answers 0/5 write cases (was 7/10), claimed-without-tool 0/5, every write tool called,
+`navigate_to` chip back on the goal question, Job Hunt real names 20/20 with Riverbend first 19/20, lock
+check down to ~3 numbers. **Not fixed:** Metaphor — two wording changes (persona "most messages carry one",
+Ask Coach "use exactly one") moved it 0/22 → 3/22 and were reverted; recorded as TODO §32 A5.
+Client fix shipped with the switch: `lib/claude.js` now keeps thinking blocks (with signatures) and sends them
+back on tool rounds, as the 5.5 models expect.
 
 **Claude Haiku 5.5 baseline (2026-10-29) — the same tests, both models, same prompts.**
 `scripts/coach-eval/modelCompare.mjs` re-ran all 25 promptfoo configs on each config's own model and on

@@ -118,7 +118,8 @@ Statement Summary, Burnout Sentinel, Heirloom Letters, Council of Future Selves)
 features shipping**, not on the harness. Weekly-Briefing fixture is pre-built. Burnout Sentinel
 deliberately not faked (no streak/OT data source exists).
 
-**Phase 7 — model selection close-out:** Ask Coach/Haiku and special-handling/Opus locked. **Per-message
+**Phase 7 — model selection close-out:** **Switched 2026-10-29 to Haiku 5.5 (base) + Sonnet 5.5 effort low
+(heavier turns, Job Hunt, Résumé); Haiku 4.5 / Sonnet 5 retired.** Special-handling/Opus lock unchanged. **Per-message
 routing built 2026-10-29 (shotgun, `[$]`):** `src/lib/coachPolicy.js` sends Ask Coach's range turns to
 Sonnet for privileged accounts, and `api/coach.js` enforces it with a per-surface gate and a 4-round tool
 cap. Open: when to flip `ASK_COACH_SONNET_AUDIENCE` to `"all"` (a cost decision, §2.G).

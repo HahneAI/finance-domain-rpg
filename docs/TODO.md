@@ -17,6 +17,7 @@
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
 | 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
+| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 13 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -1027,6 +1028,73 @@ parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `e
 ---
 
 # TIER 2 — ACTIVE WORKSTREAMS (partly built; open items remain)
+
+---
+
+## 32. AI-First Coach — Woven Into the App → Memory → Routines → Command Center *(new — scoped 2026-10-29, nothing built)*
+
+*Origin: the Eden-style "AI underneath everything" direction (2026-10-29 chat). Order agreed: weave Coach into
+the panels that exist (A), give it memory (B), let it run on a schedule (C), and only then build a command-center
+hub (D). Boards are out of scope. Base model is Claude Haiku 5.5; Claude Sonnet 5.5 (effort "low") handles the
+heavier turns (`api/coach.js`, `src/lib/coachPolicy.js`; switch made 2026-10-29). Each item lists the Drift
+Warden entries to read BEFORE building it — a change counts as done only after those checks pass.*
+
+**Standing prerequisites for every item in this section**
+- Grounding rule: every figure Coach states resolves through the function the UI uses (`active-systems.md` §6/§24; warden F113). Nothing computed in a prompt.
+- Tool-driven UI only (F174): chips, cards and strips render from a tool result, never parsed prose.
+- Goal privacy (F114): goals are referenced by rank, never by name, in anything sent to the model.
+- Eager-save rule + `readOnly` shadowing for every new Save/Confirm handler (CLAUDE.md "Persistence").
+- Design tokens + `.text-*` scale; `textUtilityClassAudit.test.js` stays green (warden §22).
+- Re-run `scripts/coach-eval` (`modelCompare.mjs` + `toolLoopLiveTest.mjs`) after any prompt or tool change.
+
+### A. Coach woven into the existing UI (no new server route)
+- [ ] **A1 · "Ask Coach about this" on goal cards and expense rows** (first two surfaces). Opens Ask Coach with
+  that item preloaded as the first turn's focus (goal by rank, expense by label).
+  Warden first: F174 (chip/focus refs, `data-coach-ref`), F177 (goal card body is duplicated mobile/desktop —
+  edit as a pair), F114 (rank only), F178 (`PANEL_VIEW_KEYS` + `navigate_to` enum are one unit), the
+  `canAccessAskCoachGeneral` gate row (entry points must hide for non-entitled accounts).
+- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** Warden first: §9 Income map
+  (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
+- [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
+  starter prompts). Warden first: F113 (a new context line must match its UI tile), F178 (labels via `VIEW_LABELS`).
+- [ ] **A4 · One-line Coach notes per panel, cached weekly.** Decide AI-written vs computed copy first (open
+  question from 2026-10-29). If AI-written: one call per panel per fiscal week, cached like
+  `coachSignalState` (eager save, no schema change). Warden first: F24 (the Net Worth card's
+  fire-once-per-week throttle is the pattern to copy, `shouldFireForTier`), F113, F120 (nothing sensitive cached).
+- [ ] **A5 · Haiku 5.5 voice decision** — natural Metaphor lands ~1–2 vs the locked 3; two prompt nudges moved
+  nothing (2026-10-29). Decide: re-lock Ask Coach / Amber / Green Metaphor at 2, or accept a Sonnet-voiced
+  route for those. Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
+
+### B. Coach memory
+- [ ] **B1 · `coach_memory` table** — short user-confirmed facts (why each goal matters, decisions, things to
+  avoid, the user's own instructions). Migration **049** (verify the next number with the CLAUDE.md
+  collision check), `user_id references user_data(user_id) on delete cascade` like `coach_chats` (023), RLS own-row
+  only (migration 019 pattern). Warden first: F120 (encryption trigger — memory is free text about money and life;
+  run the sensitive-data check before shipping), §16.2 "`deleted_accounts` restore blob shape" row (decide whether
+  memory is archived on deletion or dropped — and say so in the privacy copy), F146 (retention pattern to mirror).
+- [ ] **B2 · "What Coach knows about me" page** (Account panel) — view, edit, delete each memory; global
+  memory-off switch. Warden first: §12 Account map, eager-save rule, `readOnly` shadow.
+- [ ] **B3 · Memory into context** — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
+  Warden first: F113/F114 (no goal names; memory text must not smuggle them back in), prompt-cache prefix order
+  (memory goes after the frozen system prompt).
+- [ ] **B4 · Coach proposes a memory, user confirms** — a write-shaped tool on the `propose_goal` pattern
+  (card + Confirm, never a silent write). Warden first: F176 (write-shaped tool contract), F174.
+
+### C. Routines (scheduled Coach)
+- [ ] **C1 · Merge `claude/api-consolidation` first** (12/12 → 7/12 functions) and verify on a preview
+  deployment: one route per router + one old URL. Warden first: F185 (on that branch — router rules; never move
+  `stripe-webhook.js` or the cron path).
+- [ ] **C2 · Weekly Pre-Game Briefing** (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
+  into the existing daily cron over a new slot. Warden first: F86 (cron shell: SELECT must cover every field the
+  job reads — DW-7 class), lifecycle exemption row, F87 (email disclosure rule if it emails), the per-surface
+  `maxTokens` IF/THEN in the `canAccessAiFeatures` gate row (a new surface needs a cap sized for thinking).
+- [ ] **C3 · Goal-date drift alert** — fires when a goal's Claim Date slips past a threshold. Warden first: F177
+  (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
+
+### D. Command center hub (after A–C work)
+- [ ] **D1 · Scope the hub** — one Coach-first home that surfaces memory, routines' output and panel notes.
+  Warden first: §8 Home map (F183 identity-first Home layout gate), F178 naming screen (grep the new name against
+  existing vocabulary first), design system §22.
 
 ---
 
@@ -2470,7 +2538,11 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Job Hunt and Résumé are privileged-only, Net Worth is Haiku-only, a client can't pick a model its surface
     doesn't allow, and tool rounds are capped at 4. Live: Sonnet grounds the goal-setting turns that Haiku
     couldn't (13 calls). Next: flip the audience to "all" once the cost is accepted (§2.G). *(shotgun 2026-10-29)*
-  - [ ] **Claude Haiku 5.5 baseline TAKEN 2026-10-29; switch NOT made.** Every promptfoo config was re-run on its
+  - [ ] **Switch MADE 2026-10-29 (Anthony's call): Haiku 5.5 is the base model, Sonnet 5.5 (effort `low`) the
+    heavier one; Haiku 4.5 / Sonnet 5 retired** (`api/coach.js` `MODEL_IDS`/`MODEL_EFFORT`; `lib/claude.js`
+    keeps thinking blocks on tool rounds). Tuning pass fixed blockers 1, 2 and 4 below; 3 (Metaphor) is §32 A5.
+    Awaiting review + a live check on a preview deployment.
+  - Record: **Claude Haiku 5.5 baseline taken 2026-10-29** (superseded by the switch above). Every promptfoo config was re-run on its
     own model and on `claude-haiku-5-5` with the same prompts (`scripts/coach-eval/modelCompare.mjs`, 220 + 96
     calls), plus all 30 tool-loop cases on Haiku 4.5 / Haiku 5.5 low / Haiku 5.5 default (production request
     shape, thinking stripped like `lib/claude.js`). Haiku 5.5 is ~4× cheaper per call than Haiku 4.5 and

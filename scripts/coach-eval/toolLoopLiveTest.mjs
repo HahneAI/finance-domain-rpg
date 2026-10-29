@@ -126,7 +126,17 @@ const GOALSET = [
     text: "Add a $1,000 emergency fund goal for me." },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET];
+// 2026-10-29 — draft_log_entry (prefill-and-hand-off). Must draft, never claim it saved anything.
+const LOGSET = [
+  { id: "logmissed", expect: "draft_log_entry missed_unpaid, this week, 1 shift — says it's drafted, not saved",
+    text: "I missed my shift yesterday, can you log it for me?" },
+  { id: "logbonus", expect: "draft_log_entry bonus 250, weekOffset -1",
+    text: "I got a $250 bonus on last week's check." },
+  { id: "logpto", expect: "draft_log_entry pto 8 hours",
+    text: "I took 8 hours of PTO this week, put that in." },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -137,6 +147,7 @@ const PLANNED = only.length
     : only[0] === "simulation" ? SIMULATION
     : only[0] === "navigate" ? NAVIGATE
     : only[0] === "goalset" ? GOALSET
+    : only[0] === "logset" ? LOGSET
     : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }

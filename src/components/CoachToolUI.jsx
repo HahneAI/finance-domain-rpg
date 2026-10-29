@@ -23,6 +23,7 @@ export const TOOL_ACTIVITY_LABELS = {
   simulate_new_goal: "Working out what a new goal would cost",
   simulate_overtime_hours: "Working out what those hours are worth",
   simulate_without_logged_event: "Comparing against a version without it",
+  draft_log_entry: "Filling in that log entry",
 };
 
 /**
@@ -312,5 +313,39 @@ export function CoachSimulationStrip({ name, result }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The draft_log_entry result — a "Review in Log" button (2026-10-29, prefill-and-hand-off). Tapping it
+ * closes the chat and opens Log's own add form filled with the draft; nothing is written until the user
+ * saves there. Disabled (not hidden) when there's no handler or the account is read-only.
+ */
+export function CoachLogDraftChip({ result, onDraftLog, readOnly = false }) {
+  if (!result?.ok || !result.draft) return null;
+  const disabled = readOnly || typeof onDraftLog !== "function";
+  return (
+    <Pressable
+      disabled={disabled}
+      onClick={disabled ? undefined : () => onDraftLog(result.draft)}
+      aria-label={`${result.linkLabel}, ${result.date} — open the Log form`}
+      className="text-sm"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "8px",
+        marginTop: "8px", padding: "8px 14px", borderRadius: "12px",
+        background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)",
+        color: disabled ? "var(--color-text-disabled)" : "var(--color-teal)",
+        fontFamily: "var(--font-sans)", fontWeight: 600, letterSpacing: "0.3px",
+        cursor: disabled ? "default" : "pointer", maxWidth: "100%",
+      }}
+    >
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {result.linkLabel}
+      </span>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <path d="M6 3 L11 8 L6 13" />
+      </svg>
+    </Pressable>
   );
 }

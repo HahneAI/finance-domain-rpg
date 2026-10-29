@@ -3,7 +3,7 @@ import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
-import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip } from "./CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip, CoachLogDraftChip } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { chooseCoachModel } from "../lib/coachPolicy.js";
 import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
@@ -105,6 +105,8 @@ export function AskCoachPanel({
   // disabled rather than hiding it, so a missing handler is visible in
   // development instead of silently swallowing a confirm.
   onCreateGoal = null,
+  // Opens Log with a draft_log_entry result filled into its own add form. Absent = chip disabled.
+  onDraftLog = null,
   readOnly = false,
   isExiting = false,
   // Admin/tester/investor/AI-admin. Decides whether a turn that needs range (what-if, decision,
@@ -151,6 +153,7 @@ export function AskCoachPanel({
   // simulate_* results, same live-turn-only keying — rendered as CoachSimulationStrip so the tool's
   // own dates sit under Coach's words (2026-10-29).
   const [simStrips, setSimStrips] = useState({});
+  const [logDrafts, setLogDrafts] = useState({});
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -179,7 +182,7 @@ export function AskCoachPanel({
   // underneath the fixed composer with its confirm button unclickable.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, navChips, goalDrafts, simStrips, activeTool]);
+  }, [messages, navChips, goalDrafts, simStrips, logDrafts, activeTool]);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +268,7 @@ export function AskCoachPanel({
     setNavChips({});
     setGoalDrafts({});
     setSimStrips({});
+    setLogDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -287,6 +291,7 @@ export function AskCoachPanel({
     setNavChips({});
     setGoalDrafts({});
     setSimStrips({});
+    setLogDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -359,6 +364,9 @@ export function AskCoachPanel({
         }
         if (event.name === "propose_goal" && event.result?.ok) {
           setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
+        if (event.name === "draft_log_entry" && event.result?.ok) {
+          setLogDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
         if (event.name?.startsWith("simulate_") && !event.result?.error) {
           setSimStrips((prev) => ({ ...prev, [assistantIdx]: [...(prev[assistantIdx] ?? []), { name: event.name, result: event.result }] }));
@@ -596,6 +604,9 @@ export function AskCoachPanel({
                   {m.role === "assistant" && simStrips[i]?.map((s, k) => (
                     <CoachSimulationStrip key={k} name={s.name} result={s.result} />
                   ))}
+                  {m.role === "assistant" && logDrafts[i] && (
+                    <CoachLogDraftChip result={logDrafts[i]} onDraftLog={onDraftLog} readOnly={readOnly} />
+                  )}
                   {m.role === "assistant" && navChips[i] && (
                     <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
                   )}

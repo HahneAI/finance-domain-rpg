@@ -38,6 +38,7 @@ import {
   loanWeeklyAmount,
   fmtFullDate,
   isExpenseRemoved,
+  toLocalIso,
 } from "./finance.js";
 import {
   getFiscalWeekNumber,
@@ -243,6 +244,30 @@ export const COACH_TOOLS = [
           type: "integer",
           description: "Which occurrence, by its period number. Omit to use the most recent event of that type.",
         },
+      },
+      required: ["type"],
+    },
+  },
+  {
+    name: "draft_log_entry",
+    description:
+      "Prepare a log entry the user told you about — a missed shift, PTO, a partial shift, a bonus, tips, or other lost income — for them to review and save in the Log panel. Nothing is saved: the app shows a \"Review in Log\" button that opens Log with the form filled in, and the user saves it there. Use it instead of telling them to go log it themselves. Call at most once per message, and say in one line what you drafted.",
+    input_schema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: Object.keys(EVENT_TYPES),
+          description: "Which kind of entry.",
+        },
+        weekOffset: {
+          type: "integer",
+          description: "Which pay week it belongs to. 0 = this one, -1 = last one. Defaults to 0.",
+        },
+        shifts: { type: "integer", description: "Missed shifts, for missed_unpaid / missed_unapproved." },
+        hours: { type: "number", description: "Hours, for pto / pto_unapproved / partial (and missed hours when shifts aren't known)." },
+        amount: { type: "number", description: "Dollars, for bonus / tips_commission / other_loss." },
+        note: { type: "string", description: "Optional short note in the user's words." },
       },
       required: ["type"],
     },
@@ -946,7 +971,48 @@ function toolProposeGoal({ label, target, note }, data) {
   };
 }
 
+// Prefill-and-hand-off, decided 2026-09 (coach-tuning-handoff §6 item 1): the draft is shaped
+// exactly like LogPanel's add form (`nEv`), so LogPanel opens it in its own form and the user
+// saves through LogPanel's addLog — the one eager-saving write path. This tool writes nothing.
+const MONEY_TYPES = new Set(["bonus", "tips_commission", "other_loss"]);
+const HOURS_TYPES = new Set(["pto", "pto_unapproved", "partial"]);
+function toolDraftLogEntry({ type, weekOffset = 0, shifts, hours, amount, note }, data) {
+  const { allWeeks = [], currentWeek = null, config = null } = data;
+  if (!EVENT_TYPES[type]) return { error: `Unknown entry type "${type}". Use one of: ${Object.keys(EVENT_TYPES).join(", ")}.` };
+  if (!allWeeks.length || !currentWeek) return { error: "No pay weeks are built for this account yet." };
+  const offset = Number.isInteger(Number(weekOffset)) ? Number(weekOffset) : 0;
+  const week = allWeeks.find((w) => w.idx === currentWeek.idx + offset);
+  if (!week) return { error: `No pay week exists at offset ${offset}.` };
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+  if (MONEY_TYPES.has(type) && !num(amount)) return { error: `A ${EVENT_TYPES[type].label} entry needs a dollar amount — ask the user for it.` };
+  const shiftHours = Number(config?.shiftHours) || 0;
+  const missed = type === "missed_unpaid" || type === "missed_unapproved";
+  const draft = {
+    weekEnd: toLocalIso(week.weekEnd),
+    weekIdx: week.idx,
+    weekRotation: week.rotation ?? "6-Day",
+    type,
+    shiftsLost: missed ? Math.round(num(shifts)) : 0,
+    hoursLost: missed ? (num(hours) || Math.round(num(shifts)) * shiftHours) : (type === "partial" ? num(hours) : 0),
+    ptoHours: type === "pto" || type === "pto_unapproved" ? num(hours) : 0,
+    amount: MONEY_TYPES.has(type) ? num(amount) : 0,
+    note: typeof note === "string" ? note.slice(0, 140) : "",
+  };
+  const labels = periodLabels(week.idx, allWeeks, checksPerYearFor(config));
+  return {
+    ok: true,
+    draft,
+    typeLabel: EVENT_TYPES[type].label,
+    date: labels.date,
+    periodNumber: labels.period,
+    linkLabel: `Review in Log · ${EVENT_TYPES[type].label}`,
+    note_to_model: "Nothing is saved yet. The app shows a Review in Log button; the user checks the form and saves it there. Say in one line what you drafted"
+      + (HOURS_TYPES.has(type) && !num(hours) ? " and that they still need to add the hours." : "."),
+  };
+}
+
 const HANDLERS = {
+  draft_log_entry: toolDraftLogEntry,
   navigate_to: toolNavigateTo,
   propose_goal: toolProposeGoal,
   get_goal_detail: toolGetGoalDetail,

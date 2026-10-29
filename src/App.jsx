@@ -895,6 +895,15 @@ export default function App() {
     if (focusRef) focusCoachTarget(focusRef);
   }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // draft_log_entry hand-off (2026-10-29): Coach drafts, LogPanel opens it in its own add form, and
+  // the user saves through LogPanel's addLog (its existing eager save). Nothing is written here.
+  const [coachLogDraft, setCoachLogDraft] = useState(null);
+  const handleCoachDraftLog = useCallback((draft) => {
+    closeAskCoachWithAnimation();
+    setCoachLogDraft(draft);
+    navigateDirect("log");
+  }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   // Also exits any active admin demo view so the personal panel is shown.
@@ -2536,6 +2545,7 @@ export default function App() {
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
         cashOnHand={cashOnHand} onOpenCheckIn={() => setConfirmDismissed(false)}
+        coachDraft={coachLogDraft} onCoachDraftConsumed={() => setCoachLogDraft(null)}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
@@ -4731,6 +4741,7 @@ export default function App() {
           onClose={closeAskCoachWithAnimation}
           onNavigate={handleCoachNavigate}
           onCreateGoal={handleCoachCreateGoal}
+          onDraftLog={handleCoachDraftLog}
           readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
           privileged={canAccessAiFeatures({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin })}

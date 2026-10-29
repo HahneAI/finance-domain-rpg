@@ -5820,6 +5820,11 @@ renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
 > entire app — there is no top-level error boundary — while `vite build` and all 1859 unit tests
 > passed. **IF** a callback defined near the other Coach handlers needs a value computed after
 > those early returns, **THEN** it reads a ref assigned during render, never the const.
+> **`draft_log_entry` (2026-10-29) is the second write-shaped tool, same rule:** it returns a draft shaped
+> exactly like LogPanel's `nEv`; App holds it as `coachLogDraft`, LogPanel opens its own add form with it and the
+> user saves through `addLog` (existing eager save). **IF** LogPanel's add-form fields change, **THEN** update
+> `toolDraftLogEntry` in the same PR — a stale field silently drops from the prefill. **IF** a Coach tool ever
+> needs to write directly, **THEN** it goes through the owning panel's handler like these two, never its own write.
 > Check: `coachTools.test.js`'s propose_goal block (projection parity with simulate_new_goal, the
 > no-date branch, duplicate-without-leak, validation), `coachToolUI.test.jsx`'s `CoachGoalCard`
 > block (edits are what get created, re-projection on amount change, single-confirm, read-only),

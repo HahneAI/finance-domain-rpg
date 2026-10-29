@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/static-components */
 import { PaycheckCreditsLedger } from "./PaycheckCreditsLedger.jsx";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
@@ -44,6 +44,9 @@ export function LogPanel({
   logNetLost = 0, logNetGained = 0, adjustedTakeHome = 0,
   ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
   cashOnHand = null, onOpenCheckIn,
+  // A draft_log_entry result handed off from Ask Coach (2026-10-29). Opens the add form filled in;
+  // the user still saves through addLog below, so the eager save is unchanged.
+  coachDraft = null, onCoachDraftConsumed,
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -54,6 +57,13 @@ export function LogPanel({
   const [adding, setAdding] = useState(false);
   const [nEv, setNEv] = useState(blank);
   const [editId, setEditId] = useState(null);
+  useEffect(() => {
+    if (!coachDraft) return;
+    setNEv({ ...blank, ...coachDraft });
+    setEditId(null);
+    setAdding(true);
+    onCoachDraftConsumed?.();
+  }, [coachDraft]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);

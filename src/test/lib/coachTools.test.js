@@ -125,7 +125,7 @@ describe("COACH_TOOLS schemas", () => {
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
       "navigate_to", "propose_goal",
       "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
-      "simulate_without_logged_event",
+      "simulate_without_logged_event", "draft_log_entry",
     ]);
   });
 
@@ -689,5 +689,35 @@ describe("simulation payloads carry a computed, plain-language shift", () => {
     const pushed = r.existingGoals.filter((g) => g.periodsSooner < 0);
     expect(pushed.length).toBeGreaterThan(0);
     for (const g of pushed) expect(g.differenceInWords).toMatch(/later$/);
+  });
+});
+
+// 2026-10-29 (coach-tuning-handoff §6 item 1, prefill-and-hand-off): draft_log_entry writes nothing
+// and returns a draft shaped like LogPanel's add form.
+describe("executeCoachTool — draft_log_entry", () => {
+  const bag = async () => (await import("../../../scripts/coach-eval/fixtures/testAccount.js")).buildToolTestAccount();
+
+  it("drafts a missed shift on last week with hours from the shift length, without touching logs", async () => {
+    const data = await bag();
+    const before = JSON.stringify(data.logs);
+    const r = executeCoachTool("draft_log_entry", { type: "missed_unpaid", weekOffset: -1, shifts: 1 }, data);
+    expect(r.ok).toBe(true);
+    expect(r.draft).toMatchObject({ type: "missed_unpaid", weekIdx: data.currentWeek.idx - 1, shiftsLost: 1 });
+    expect(r.draft.hoursLost).toBe(Number(data.config.shiftHours));
+    expect(r.draft.weekEnd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(r.linkLabel).toBe("Review in Log · Missed Shift (Unpaid/Approved)");
+    expect(JSON.stringify(data.logs)).toBe(before);
+  });
+
+  it("refuses a money entry without an amount, and an unknown type", async () => {
+    const data = await bag();
+    expect(executeCoachTool("draft_log_entry", { type: "bonus" }, data).error).toMatch(/needs a dollar amount/);
+    expect(executeCoachTool("draft_log_entry", { type: "lottery" }, data).error).toMatch(/Unknown entry type/);
+  });
+
+  it("puts PTO hours in ptoHours and a bonus in amount", async () => {
+    const data = await bag();
+    expect(executeCoachTool("draft_log_entry", { type: "pto", hours: 8 }, data).draft).toMatchObject({ ptoHours: 8, hoursLost: 0, amount: 0 });
+    expect(executeCoachTool("draft_log_entry", { type: "bonus", amount: 250 }, data).draft).toMatchObject({ amount: 250, ptoHours: 0 });
   });
 });

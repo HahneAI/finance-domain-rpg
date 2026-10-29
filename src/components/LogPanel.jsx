@@ -57,12 +57,17 @@ export function LogPanel({
   const [adding, setAdding] = useState(false);
   const [nEv, setNEv] = useState(blank);
   const [editId, setEditId] = useState(null);
-  useEffect(() => {
-    if (!coachDraft) return;
+  // Apply a new Coach draft during render (React's "adjust state when a prop changes" pattern —
+  // no setState-in-effect cascade), then tell App it was used so a remount doesn't re-open it.
+  const [appliedCoachDraft, setAppliedCoachDraft] = useState(null);
+  if (coachDraft && coachDraft !== appliedCoachDraft) {
+    setAppliedCoachDraft(coachDraft);
     setNEv({ ...blank, ...coachDraft });
     setEditId(null);
     setAdding(true);
-    onCoachDraftConsumed?.();
+  }
+  useEffect(() => {
+    if (coachDraft) onCoachDraftConsumed?.();
   }, [coachDraft]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);

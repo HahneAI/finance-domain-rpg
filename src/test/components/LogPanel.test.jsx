@@ -611,3 +611,15 @@ describe('Tips/Commission entries in the general entry list', () => {
     expect(screen.queryByText('Missed Money')).toBeNull()
   })
 })
+
+// 2026-10-29: Coach's draft_log_entry hand-off opens the add form pre-filled and reports it consumed.
+describe('LogPanel — Coach log draft hand-off', () => {
+  it('opens the add form with the draft and calls onCoachDraftConsumed once', () => {
+    const onCoachDraftConsumed = vi.fn()
+    const draft = { weekEnd: '2026-03-09', weekIdx: 9, weekRotation: 'Standard', type: 'bonus', shiftsLost: 0, hoursLost: 0, ptoHours: 0, amount: 250, note: '' }
+    render(<LogPanel {...BASE_PROPS} logs={[]} coachDraft={draft} onCoachDraftConsumed={onCoachDraftConsumed} />)
+    expect(screen.getByText('SAVE')).toBeTruthy()
+    expect(screen.getByDisplayValue('250')).toBeTruthy()
+    expect(onCoachDraftConsumed).toHaveBeenCalledTimes(1)
+  })
+})

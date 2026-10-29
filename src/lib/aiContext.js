@@ -1,3 +1,5 @@
+import { getArchetype } from "../constants/goalArchetypes.js";
+import { computeGoalAmountCap, MAX_ACTIVE_GOALS } from "./goalLimits.js";
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate, isExpenseRemoved } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
@@ -280,6 +282,19 @@ export function buildCoachContext({
   if (config?.newJobSeasonMode) {
     lines.push(`New Job Season: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
   }
+
+  // TODO §31 Phase 4 — the identity the user chose, by archetype NAME only (goal
+  // names stay withheld, F114). Lets Coach frame advice in the user's own terms.
+  const archetype = config?.identity ? getArchetype(config.identity.archetypeId) : null;
+  if (archetype) {
+    lines.push(`Chosen identity: ${archetype.name} ("${archetype.hook}") — the user picked this; their starter goals came from it. Frame encouragement around becoming this person; never invent goals on its behalf.`);
+  }
+  // Goal limits — the SAME check every goal writer enforces (lib/goalLimits.js,
+  // F184), so Coach never proposes a goal the app will refuse.
+  const goalCap = computeGoalAmountCap({ weeklyIncome, expenses, todayIso: today, userPaySchedule: config?.userPaySchedule });
+  lines.push(`Goal limits: at most ${MAX_ACTIVE_GOALS} active goals (${activeGoals.length} active now)${
+    goalCap != null ? `; active goal targets may total at most ${fmt$(goalCap)} (five years of the Needs-only surplus) — ${fmt$(Math.max(0, goalCap - totalActiveGoalsTarget))} of room left` : ""
+  }. Claiming a goal frees room. Do not propose a goal that would exceed these.`);
 
   return lines.join("\n");
 }

@@ -299,3 +299,20 @@ describe("describeCoachRef", () => {
     expect(describeCoachRef(null)).toBeNull();
   });
 });
+
+describe('CoachGoalCard — goal limits (TODO §31, F184)', () => {
+  it('shows the refusal in red and does NOT claim the goal was added', () => {
+    const onCreate = vi.fn(() => ({ ok: false, reason: 'count', message: 'Goal limit reached — you must not spread yourself too thin in planning alone.' }))
+    render(<CoachGoalCard draft={{ ok: true, label: 'Boat', target: 500, projectedFinishDate: null }} onCreate={onCreate} />)
+    fireEvent.click(screen.getByText('Add goal'))
+    expect(onCreate).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Added to your goals/)).toBeNull()
+    expect(screen.getByTestId('goal-limit-note')).toHaveTextContent(/Goal limit reached/)
+    expect(screen.getByLabelText('Goal target amount').className).toContain('limit-halo')
+  })
+  it('a successful create still shows the confirmation', () => {
+    render(<CoachGoalCard draft={{ ok: true, label: 'Boat', target: 500 }} onCreate={() => ({ ok: true })} />)
+    fireEvent.click(screen.getByText('Add goal'))
+    expect(screen.getByText(/Added to your goals/)).toBeTruthy()
+  })
+})

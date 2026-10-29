@@ -10,6 +10,8 @@ import { logBetaEvent } from "../lib/db.js";
 import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS, ExactMathMark } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
+import { IdentitySuggestions } from "./IdentitySuggestions.jsx";
+import { pendingBillSuggestions, markSuggestion } from "../lib/goalArchetypes.js";
 import { BulkEditPage } from "./BulkEditPage.jsx";
 import { ExpenseDueDateField } from "./ExpenseDueDateField.jsx";
 import { buildBillsIcs, downloadBillsIcs } from "../lib/billsIcs.js";
@@ -78,7 +80,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, thisWeekActualSpend = null, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, thisWeekActualSpend = null, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false, onResolveSuggestion: onResolveSuggestionProp }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -90,6 +92,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const noop = useCallback(() => {}, []);
   const setExpenses = readOnly ? noop : setExpensesProp;
   const onSaveExpensesNow = readOnly ? noop : onSaveExpensesNowProp;
+  const onResolveSuggestion = readOnly ? noop : onResolveSuggestionProp;
   // Wraps setExpenses to also eager-save the computed value, so every
   // mutation below (add/edit/delete/reorder an expense or loan) doesn't sit
   // in the ambient debounce window. `updater` has the exact same signature
@@ -710,11 +713,12 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     _closeAddForm();
   };
 
-  const addExpFromMonthForward = () => {
-    if (!newExp.label) return;
+  // The one place a "from this month forward" expense row is shaped. The add form's
+  // From-Month-Forward button and the identity-suggestion Add button (TODO §31
+  // Phase 2) both build through it, so a suggested bill, once added, is
+  // indistinguishable from a hand-entered one (warden F182).
+  const buildMonthForwardExpense = ({ label, category, amount, cycle, note = "" }) => {
     const anchor = activeMonth ?? currentMonthKey; // fall back to current month in quarter view
-    const amount = parseFloat(newExp.amount) || 0;
-    const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const overrides = {};
     for (const key of monthKeysThroughFiscalYearEnd(anchor)) {
@@ -722,17 +726,41 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
     }
     const effectiveFrom = `${anchor}-01`;
     const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
-    applyExpenseUpdate(prev => [...prev, {
+    return {
       id: `exp_${crypto.randomUUID()}`,
-      category: newExp.category,
-      label: newExp.label,
-      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      category,
+      label,
+      note: [note, note, note, note],
       billingMeta: { amount, cycle, effectiveFrom },
       history: [{ effectiveFrom, weekly }],
       monthlyOverrides: overrides,
-    }]);
+    };
+  };
+
+  const addExpFromMonthForward = () => {
+    if (!newExp.label) return;
+    const built = buildMonthForwardExpense({
+      label: newExp.label,
+      category: newExp.category,
+      amount: parseFloat(newExp.amount) || 0,
+      cycle: newExp.cycle ?? "every30days",
+      note: newExp.note,
+    });
+    applyExpenseUpdate(prev => [...prev, built]);
     _closeAddForm();
   };
+
+  // Identity suggestions (TODO §31 Phase 2). Add = a real expense row + the
+  // suggestion marked accepted, handed to App as ONE payload for ONE eager write
+  // (expenses and config both change; two saves could merge onto a stale snapshot).
+  // Not me = config only. Pending suggestions never enter `expenses`.
+  const identitySuggestions = readOnly ? [] : pendingBillSuggestions({ config, expenses });
+  const acceptSuggestion = (s) => {
+    const nextExpenses = [...expenses, buildMonthForwardExpense({ label: s.label, category: s.category, amount: s.amount, cycle: s.cycle })];
+    setExpenses(nextExpenses);
+    onResolveSuggestion?.({ expenses: nextExpenses, config: markSuggestion(config, s.templateKey, "accepted") });
+  };
+  const dismissSuggestion = (s) => onResolveSuggestion?.({ config: markSuggestion(config, s.templateKey, "dismissed") });
 
   const addExpAllQuarters = () => {
     if (!newExp.label) return;
@@ -1368,6 +1396,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
     {/* OVERVIEW — expense list; loans rendered inside Needs */}
     {view === "overview" && <div>
+      <IdentitySuggestions identity={config?.identity} suggestions={identitySuggestions} onAdd={acceptSuggestion} onDismiss={dismissSuggestion} />
       {overviewCats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
         // Pin food to bottom of Needs (above loans); all other Needs expenses stay draggable

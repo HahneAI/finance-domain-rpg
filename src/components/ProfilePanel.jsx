@@ -9,6 +9,8 @@ import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js"
 import { resolveBetaChannel } from "../constants/betaChannels.js";
 import { BetaChannelFullModal } from "./BetaChannelFullModal.jsx";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH, VT } from "./ui.jsx";
+import { getArchetype } from "../constants/goalArchetypes.js";
+import { IdentityChangeDialog } from "./IdentityLocked.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -3195,7 +3197,7 @@ function BetaScoresAdminDetail({ onBack }) {
   );
 }
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, AI admin, or
   // the per-user tax_projections_enabled flag). The setup wizard's "Unlock
   // projections" choice intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -3205,6 +3207,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
+  const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
@@ -3319,6 +3322,14 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
       {/* App group */}
       <SH>App</SH>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
+        {/* Identity (TODO §31): clearing config.identity re-opens the archetype picker
+            on Home. Goals already added are untouched — the picker skips templates
+            the user already holds. identity is not a history-sensitive field. */}
+        <ListRow
+          label="Identity"
+          summary={config.identity ? `${getArchetype(config.identity.archetypeId)?.name ?? "Chosen"} · tap to change` : "Not chosen · pick one on Home"}
+          onPress={() => { if (config.identity) setShowIdentityDialog(true); }}
+        />
         <ListRow
           label="Account"
           summary={authedUser?.email ?? "—"}
@@ -3416,6 +3427,19 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         </svg>
         Sign Out (This Device)
       </Pressable>
+
+      {/* Identity change confirm (TODO §31). Continue = App opens the picker on Home
+          with the OLD identity still set; the user tidies their goals after picking.
+          Nothing is written here. */}
+      <IdentityChangeDialog
+        open={showIdentityDialog}
+        identity={config.identity}
+        onCancel={() => setShowIdentityDialog(false)}
+        onContinue={() => {
+          setShowIdentityDialog(false);
+          onChangeIdentity?.();
+        }}
+      />
 
       {/* Portaled to document.body so position:fixed resolves against the viewport,
           not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}

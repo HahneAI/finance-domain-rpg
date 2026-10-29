@@ -1,3 +1,4 @@
+import { GoalLimitNote } from "./GoalLimitNote.jsx";
 import { useState, useMemo } from "react";
 import { Pressable } from "./ui.jsx";
 
@@ -130,6 +131,8 @@ export function CoachGoalCard({ draft, onCreate, onEstimate, readOnly = false })
   const [label, setLabel] = useState(draft?.label ?? "");
   const [target, setTarget] = useState(String(draft?.target ?? ""));
   const [created, setCreated] = useState(false);
+  // Goal-limit refusal from App (TODO §31, F184): { message, n } — n replays the jiggle.
+  const [limitError, setLimitError] = useState(null);
 
   const amount = parseFloat(target);
   const valid = label.trim().length > 0 && Number.isFinite(amount) && amount > 0;
@@ -181,10 +184,12 @@ export function CoachGoalCard({ draft, onCreate, onEstimate, readOnly = false })
         <span className="text-md" style={{ color: "var(--color-text-secondary)" }}>$</span>
         <input
           value={target}
-          onChange={(e) => setTarget(e.target.value)}
+          key={limitError ? `lim-${limitError.n}` : "t"}
+          className={limitError ? "text-md limit-halo" : "text-md"}
+          aria-invalid={!!limitError || undefined}
+          onChange={(e) => { setTarget(e.target.value); setLimitError(null); }}
           inputMode="decimal"
           aria-label="Goal target amount"
-          className="text-md"
           style={{ ...cardInput, fontFamily: "var(--font-mono)" }}
         />
       </div>
@@ -203,6 +208,8 @@ export function CoachGoalCard({ draft, onCreate, onEstimate, readOnly = false })
           : "No finish date available for this account"}
       </div>
 
+      <GoalLimitNote error={limitError} />
+
       {draft.alreadyHaveOneNamedThis && (
         <div className="text-sm" style={{ color: "var(--color-warning)" }}>
           You already have a goal with this name.
@@ -214,7 +221,11 @@ export function CoachGoalCard({ draft, onCreate, onEstimate, readOnly = false })
           disabled={!valid || readOnly}
           onClick={() => {
             if (!valid || readOnly) return;
-            onCreate?.({ label: label.trim(), target: amount, note: draft.note ?? "" });
+            const res = onCreate?.({ label: label.trim(), target: amount, note: draft.note ?? "" });
+            if (res && res.ok === false) {
+              if (res.message) setLimitError((prev) => ({ message: res.message, n: (prev?.n ?? 0) + 1 }));
+              return;
+            }
             setCreated(true);
           }}
           className="text-sm"

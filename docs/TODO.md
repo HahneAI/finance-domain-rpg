@@ -1048,7 +1048,10 @@ Warden entries to read BEFORE building it — a change counts as done only after
 - Re-run `scripts/coach-eval` (`modelCompare.mjs` + `toolLoopLiveTest.mjs`) after any prompt or tool change.
 
 ### A. Coach woven into the existing UI (no new server route)
-- [ ] **A1 · "Ask Coach about this" on goal cards and expense rows** (first two surfaces). Opens Ask Coach with
+- [ ] **A1 · "Ask Coach about this" on goal cards and expense rows** (first two surfaces). **BUILT 2026-10-30 —
+  awaiting Anthony's review + a live check:** ASK COACH on both Home goal-card copies, "Ask Coach about this"
+  in Upkeep's expense sheet (double-tap a row; kept off the row itself, which carries drag handlers), one-shot
+  seed → fresh chat (`coachSeeds.js`, `AskCoachPanel` `seedPrompt`/`onSeedConsumed`, App `openCoachAbout`). Opens Ask Coach with
   that item preloaded as the first turn's focus (goal by rank, expense by label).
   Warden first: F174 (chip/focus refs, `data-coach-ref`), F177 (goal card body is duplicated mobile/desktop —
   edit as a pair), F114 (rank only), F178 (`PANEL_VIEW_KEYS` + `navigate_to` enum are one unit), the

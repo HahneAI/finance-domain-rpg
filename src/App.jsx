@@ -904,6 +904,15 @@ export default function App() {
     navigateDirect("log");
   }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "Ask Coach about this" (TODO §32 A1): a card hands Coach its opening question. The seed is
+  // one-shot — AskCoachPanel starts a fresh chat with it, then calls onSeedConsumed so reopening
+  // Coach later never re-sends it. Cards only receive this when the account can open Coach.
+  const [coachSeed, setCoachSeed] = useState(null);
+  const openCoachAbout = useCallback((text) => {
+    setCoachSeed({ id: `${Date.now()}`, text });
+    setAskCoachOpen(true);
+  }, []);
+
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   // Also exits any active admin demo view so the personal panel is shown.
@@ -2444,6 +2453,7 @@ export default function App() {
       ) : (
         <HomePanel
           navigate={navigate}
+          onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
           cashOnHand={cashOnHand}
           onOpenCashLedger={() => {
             navigate("log");
@@ -2516,6 +2526,7 @@ export default function App() {
       ) : (
         <BudgetPanel
           expenses={expenses} setExpenses={setExpenses}
+          onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           onResolveSuggestion={handleResolveSuggestion}
           weeklyIncome={weeklyIncome}
@@ -4742,6 +4753,8 @@ export default function App() {
           onNavigate={handleCoachNavigate}
           onCreateGoal={handleCoachCreateGoal}
           onDraftLog={handleCoachDraftLog}
+          seedPrompt={coachSeed}
+          onSeedConsumed={() => setCoachSeed(null)}
           readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
           privileged={canAccessAiFeatures({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin })}

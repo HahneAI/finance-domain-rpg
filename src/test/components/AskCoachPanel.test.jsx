@@ -101,6 +101,25 @@ describe("AskCoachPanel — sending a message", () => {
   });
 });
 
+describe("AskCoachPanel — seeded question from a card (TODO §32 A1)", () => {
+  it("sends the seed as the first user message of a fresh chat, once per seed id", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["Goal 2 is on track."]));
+    const onSeedConsumed = vi.fn();
+    const seed = { id: "s1", text: "How's my goal #2 tracking toward its Claim Date?" };
+    const { rerender } = render(<AskCoachPanel {...baseProps({ seedPrompt: seed, onSeedConsumed })} />);
+
+    await waitFor(() => expect(screen.getByText("Goal 2 is on track.")).toBeTruthy());
+    expect(mocks.chatWithCoach).toHaveBeenCalledTimes(1);
+    expect(mocks.chatWithCoach.mock.calls[0][0]).toEqual([{ role: "user", content: seed.text }]);
+    expect(onSeedConsumed).toHaveBeenCalledTimes(1);
+
+    // The same seed object again (App hasn't cleared it yet) must not resend.
+    rerender(<AskCoachPanel {...baseProps({ seedPrompt: seed, onSeedConsumed })} />);
+    rerender(<AskCoachPanel {...baseProps({ seedPrompt: null, onSeedConsumed })} />);
+    expect(mocks.chatWithCoach).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("AskCoachPanel — history", () => {
   const oldChat = {
     id: "chat-old",

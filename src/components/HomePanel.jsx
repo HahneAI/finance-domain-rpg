@@ -19,6 +19,7 @@ import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber, formatPayPeriodLabel, weekN
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, Pressable, useFoldTransition, useCountUp, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { goalCoachSeed } from "../lib/coachSeeds.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
@@ -105,6 +106,9 @@ export function HomePanel({
   betaCodeUsed = null,
   entitlement,
   readOnly = false,
+  // "Ask Coach about this" (TODO §32 A1). Passed by App only when the account can open Coach;
+  // absent = no button, so an account without Coach never sees a dead one.
+  onAskCoach,
 }) {
   // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow the mutation
   // setters with no-ops so every existing setGoals()/setConfig() call in this
@@ -1084,6 +1088,9 @@ export function HomePanel({
                             )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>✓ CLAIM IT</SmBtn>
+                            {onAskCoach && (
+                              <SmBtn onClick={() => onAskCoach(goalCoachSeed(i + 1))} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>ASK COACH</SmBtn>
+                            )}
                             {delGoalId === g.id ? (
                               <>
                                 <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>DEL</SmBtn>
@@ -1304,6 +1311,9 @@ export function HomePanel({
                             )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>✓ CLAIM IT</SmBtn>
+                            {onAskCoach && (
+                              <SmBtn onClick={() => onAskCoach(goalCoachSeed(i + 1))} c="var(--color-teal)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>ASK COACH</SmBtn>
+                            )}
                             {delGoalId === g.id ? (
                               <>
                                 <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: "1 1 auto", whiteSpace: "nowrap" }}>DEL</SmBtn>

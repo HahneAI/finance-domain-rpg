@@ -4,6 +4,7 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_
 import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, getNextNonZeroIso, phaseIdxForMonth, computeNetBreakdown, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
+import { expenseCoachSeed } from "../lib/coachSeeds.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
@@ -80,7 +81,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, thisWeekActualSpend = null, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false, onResolveSuggestion: onResolveSuggestionProp }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, avgWeeklySpend = 0, thisWeekActualSpend = null, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, freedomAllowancePerWeek = 0, isAdmin = false, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false, onResolveSuggestion: onResolveSuggestionProp, onAskCoach }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -2536,9 +2537,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
                   <Pressable onClick={() => setSheetDeleteConfirm(false)} className="text-xs" style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
                 </div>
               ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {/* "Ask Coach about this" (TODO §32 A1) — only when App passed onAskCoach, i.e. the
+                    account can open Coach. The question names the expense by its label. */}
+                {onAskCoach && sheetExpLive?.label && (
+                  <Pressable onClick={() => { const label = sheetExpLive.label; closeSheet(); onAskCoach(expenseCoachSeed(label)); }} className="text-xs" style={{ padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)", borderRadius: "14px", color: "var(--color-teal)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Ask Coach about this</Pressable>
+                )}
                 <div style={{ display: "flex", gap: "10px" }}>
                   <Pressable onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} className="text-xs" style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</Pressable>
                   {!isFoodSheet && <Pressable onClick={() => setSheetDeleteConfirm(true)} className="text-xs" style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</Pressable>}
+                </div>
                 </div>
               )}
             </>) : (

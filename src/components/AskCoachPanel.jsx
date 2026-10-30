@@ -107,6 +107,10 @@ export function AskCoachPanel({
   onCreateGoal = null,
   // Opens Log with a draft_log_entry result filled into its own add form. Absent = chip disabled.
   onDraftLog = null,
+  // "Ask Coach about this" (TODO §32 A1): { id, text } from a card's Ask Coach button. Starts a
+  // fresh chat with that question once per id, then onSeedConsumed lets App drop it.
+  seedPrompt = null,
+  onSeedConsumed = null,
   readOnly = false,
   isExiting = false,
   // Admin/tester/investor/AI-admin. Decides whether a turn that needs range (what-if, decision,
@@ -309,13 +313,15 @@ export function AskCoachPanel({
     onClose();
   }
 
-  const send = async () => {
-    const text = draft.trim();
+  // `textOverride`/`baseMessages` are for a seeded question (below): it starts a fresh chat, so it
+  // sends against an empty history instead of this render's `messages`.
+  const send = async (textOverride = null, baseMessages = messages) => {
+    const text = (textOverride ?? draft).trim();
     if (!text || sending) return;
     setDraft("");
     setErrored(false);
     const userMsg = { role: "user", content: text, timestamp: new Date().toISOString() };
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [...baseMessages, userMsg];
     setMessages([...nextMessages, { role: "assistant", content: "" }]);
     setSending(true);
     try {
@@ -393,6 +399,19 @@ export function AskCoachPanel({
       setActiveTool(null);
     }
   };
+
+  // A card's "Ask Coach about this" question (TODO §32 A1): handled once per seed id — a fresh chat
+  // (the previous one is closed out first, so its summary still runs), the question sent as the
+  // user's own first message, then the seed is handed back so a later reopen doesn't resend it.
+  const handledSeedRef = useRef(null);
+  useEffect(() => {
+    if (!seedPrompt || handledSeedRef.current === seedPrompt.id) return;
+    handledSeedRef.current = seedPrompt.id;
+    if (messagesRef.current.length) endCurrentSession();
+    resetToNewChat();
+    send(seedPrompt.text, []);
+    onSeedConsumed?.();
+  }, [seedPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-projects an edited target through the REAL goal timeline, locally — the
   // same executeCoachTool the chat loop uses, so the card's date can never
@@ -659,7 +678,7 @@ export function AskCoachPanel({
               }}
             />
             <Pressable
-              onClick={send}
+              onClick={() => send()}
               disabled={!draft.trim() || sending}
               className="text-xs" style={{
                 background: draft.trim() && !sending ? "var(--color-accent-primary)" : "var(--color-bg-raised)",

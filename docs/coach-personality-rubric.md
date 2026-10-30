@@ -469,7 +469,7 @@ Length targets describe the baseline-severity reply; Urgency governs how far sev
 **Model switch 2026-10-29 (after the shotgun run below):** "Haiku" in this table now means Claude Haiku 5.5
 and "Sonnet" means Claude Sonnet 5.5 at effort `low`; Haiku 4.5 and Sonnet 5 are retired. Targets are
 unchanged. Known gaps on the new pairing: natural Metaphor ~1–2 on Ask Coach/Amber/Green (TODO §32 A5 —
-re-lock or accept), Job Hunt on Sonnet 5.5 low ~122 words vs ~75 (Length 2 overshoot). Red, Directness and
+target stays 3; deferred to a later prompt-patterning pass, decided 2026-10-30), Job Hunt on Sonnet 5.5 low ~122 words vs ~75 (Length 2 overshoot). Red, Directness and
 Warmth hold. See Known Limitations, "Claude Haiku 5.5 baseline" and "Tuning pass".
 
 **Updates from the 2026-10-29 shotgun run (targets unchanged, levers built):**

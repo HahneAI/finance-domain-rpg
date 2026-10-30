@@ -1057,13 +1057,15 @@ Warden entries to read BEFORE building it — a change counts as done only after
   (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
 - [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
   starter prompts). Warden first: F113 (a new context line must match its UI tile), F178 (labels via `VIEW_LABELS`).
-- [ ] **A4 · One-line Coach notes per panel, cached weekly.** Decide AI-written vs computed copy first (open
-  question from 2026-10-29). If AI-written: one call per panel per fiscal week, cached like
-  `coachSignalState` (eager save, no schema change). Warden first: F24 (the Net Worth card's
-  fire-once-per-week throttle is the pattern to copy, `shouldFireForTier`), F113, F120 (nothing sensitive cached).
-- [ ] **A5 · Haiku 5.5 voice decision** — natural Metaphor lands ~1–2 vs the locked 3; two prompt nudges moved
-  nothing (2026-10-29). Decide: re-lock Ask Coach / Amber / Green Metaphor at 2, or accept a Sonnet-voiced
-  route for those. Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
+- [ ] **A4 · One-line Coach notes per panel — FIXED TEMPLATES (decided 2026-10-30).** No model call: each
+  note is a Coach-voiced template filled from the panel's own figures (zero cost, instant, deterministic).
+  Each template's numbers come from the same function the tile beside it uses — never a parallel formula.
+  Warden first: F113 (template figure = tile figure), F178 (panel names), F177 (Home dates only from
+  `resolveGoalFinishInfo()`), design system §22 (`.text-*` scale).
+- [ ] **A5 · Haiku 5.5 voice — DEFERRED (decided 2026-10-30).** The Metaphor target stays at 3 (no re-lock).
+  Natural output on Haiku 5.5 sits at ~1–2; two rule-wording nudges moved nothing. Revisit later with prompt
+  patterning (worked example replies that carry the voice) rather than more rules. Not a blocker for A1–A4.
+  Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
 
 ### B. Coach memory
 - [ ] **B1 · `coach_memory` table** — short user-confirmed facts (why each goal matters, decisions, things to

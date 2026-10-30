@@ -183,6 +183,13 @@ describe('HomePanel', () => {
       expect(onAskCoach.mock.calls[0][0]).not.toMatch(/Cancun|tires/)
     })
 
+    it('shows one Coach note built from the tiles\' own figures (TODO §32 A4)', () => {
+      render(<HomePanel {...goalProps} />)
+      const notes = screen.getAllByTestId('coach-note')
+      expect(notes).toHaveLength(1)
+      expect(notes[0].textContent).toMatch(/free this (week|check)|short of your average spend|Bills are taking/)
+    })
+
     it('names the claim action rather than a checkbox verb', () => {
       render(<HomePanel {...goalProps} />)
       expect(screen.getAllByText('✓ CLAIM IT').length).toBeGreaterThanOrEqual(1)

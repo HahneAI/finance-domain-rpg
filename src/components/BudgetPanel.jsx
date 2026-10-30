@@ -5,6 +5,9 @@ import { getEffectiveAmountForMonth, getExactEffectiveAmountForMonth, getNextNon
 import { latestPastEntry as latestPastEntryPure, applyMonthEdit, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, monthKeysThroughFiscalYearEnd, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { expenseCoachSeed } from "../lib/coachSeeds.js";
+import { spendRatioOf, upkeepHealthBand } from "../lib/upkeepHealth.js";
+import { upkeepCoachNote } from "../lib/coachNotes.js";
+import { CoachNote } from "./CoachNote.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { logBetaEvent } from "../lib/db.js";
@@ -1293,6 +1296,13 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
 
   return (<div>
     <PanelHero eyebrow="Expenses & Liabilities">Upkeep</PanelHero>
+    {/* Coach note (TODO §32 A4) — Upkeep Health's own ratio and band (lib/upkeepHealth.js, the
+        same pair Home's tile reads). */}
+    <CoachNote text={upkeepCoachNote({
+      spendRatio: spendRatioOf(avgWeeklySpend, weeklyIncome),
+      band: upkeepHealthBand(spendRatioOf(avgWeeklySpend, weeklyIncome)),
+      hasExpenses: expenses.length > 0,
+    })} />
     {/* ── Period selector — month row + quarter row + adv. edit in one glass box ── */}
     <MonthQuarterSelector
       activeMonth={activeMonth}

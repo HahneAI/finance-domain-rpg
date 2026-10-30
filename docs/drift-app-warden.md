@@ -5255,6 +5255,15 @@ epoch arg as HomePanel (F18)**, the exact parity a 2026-07-16 live-test bug viol
 expense cost → `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102, the `bcc8a6a`
 fix); period labels → `payPeriodUnit`/`weekNumToPaycheckNum`/`getPayPeriodBounds` (Spine A,
 schedule-aware — never hardcode "week"); `perCheckFactor` = `52/checksPerYear` scaling.
+> **Coach panel notes + Upkeep Health helper (2026-10-30, TODO §32 A3/A4).** `lib/upkeepHealth.js`
+> (`spendRatioOf`, `upkeepHealthBand`) is now the ONE spend-ratio formula — Home's Upkeep Health tile, this
+> builder and the Upkeep note all call it. `lib/coachNotes.js` templates take the exact value each tile
+> renders (Home: `leftThisWeek * perCheckFactor`, `nextWeekDisplay * perCheckFactor`; Log: App `logTotals`),
+> never a recomputation. **IF** a tile's displayed value or its formula changes, **THEN** change the value
+> passed to its note in the same commit (`coachNotes.test.js`, the panels' `coach-note` tests). **IF** a
+> note template is added, **THEN** it takes the tile's figure as an argument — no finance math inside
+> `coachNotes.js`. The "opened from the X panel" context line (A3) carries no figure and uses
+> `VIEW_LABELS` (F178).
 > **IF** a context line is added or changed, **THEN** it MUST call the authoritative Spine-A
 > function its UI twin calls — writing a local approximation is the D1 pattern §6 exists to
 > catch (the `billingMeta` estimate once disagreed by double digits; the flat-52 double-

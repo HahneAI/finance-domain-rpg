@@ -20,6 +20,9 @@ import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTim
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, Pressable, useFoldTransition, useCountUp, iS, lS, ScrollSnapRow } from "./ui.jsx";
 import { goalCoachSeed } from "../lib/coachSeeds.js";
+import { spendRatioOf } from "../lib/upkeepHealth.js";
+import { homeCoachNote } from "../lib/coachNotes.js";
+import { CoachNote } from "./CoachNote.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
@@ -157,7 +160,7 @@ export function HomePanel({
         return scoped.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       })()
     : null;
-  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  const spendRatio = spendRatioOf(avgWeeklySpend, weeklyIncome);
   // Net worth health: thin-cushion nudge when projected savings rate < 10%.
   // Suppressed in New Job Season, which has its own dedicated runway UI.
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
@@ -1716,6 +1719,15 @@ export function HomePanel({
       </div>
 
       <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
+      {/* Coach note (TODO §32 A4): fixed template over the exact values the tiles below show —
+          Left This Week|Check, Next Week Takehome|Next Paycheck|Next Check, Upkeep Health. */}
+      <CoachNote text={homeCoachNote({
+        leftThisCheck: leftThisWeek * perCheckFactor,
+        nextCheck: nextWeekNet != null ? nextWeekDisplay * perCheckFactor : null,
+        avgCheck: weeklyIncome * perCheckFactor,
+        unit: checksPerYear === 52 ? "week" : "check",
+        spendRatio,
+      })} />
       {(() => {
         // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
         // tiles collapse under "Your numbers" with an always-visible summary line.

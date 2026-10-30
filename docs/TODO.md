@@ -1059,8 +1059,13 @@ Warden entries to read BEFORE building it — a change counts as done only after
 - [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** Warden first: §9 Income map
   (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
 - [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
-  starter prompts). Warden first: F113 (a new context line must match its UI tile), F178 (labels via `VIEW_LABELS`).
-- [ ] **A4 · One-line Coach notes per panel — FIXED TEMPLATES (decided 2026-10-30).** No model call: each
+  starter prompts). **BUILT 2026-10-30 — awaiting review + live check:** App passes `originView` +
+  `originLabel` (`VIEW_LABELS`); empty chat shows that panel's intro + 3 tap-to-ask starters
+  (`lib/coachPanelStarters.js`, worded like the tool-loop eval cases); one context line names the panel. Warden first: F113 (a new context line must match its UI tile), F178 (labels via `VIEW_LABELS`).
+- [ ] **A4 · One-line Coach notes per panel — FIXED TEMPLATES (decided 2026-10-30).** **BUILT 2026-10-30 for
+  Home, Upkeep and Log — awaiting review:** `lib/coachNotes.js` + `CoachNote.jsx`; new `lib/upkeepHealth.js`
+  makes Upkeep Health one formula (Home tile, Coach context, Upkeep note). Income and Account have no note
+  yet — their headline figures (yearly gross/net, settings) don't make a useful one-liner; revisit. No model call: each
   note is a Coach-voiced template filled from the panel's own figures (zero cost, instant, deterministic).
   Each template's numbers come from the same function the tile beside it uses — never a parallel formula.
   Warden first: F113 (template figure = tile figure), F178 (panel names), F177 (Home dates only from

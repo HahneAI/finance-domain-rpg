@@ -120,6 +120,30 @@ describe("AskCoachPanel — seeded question from a card (TODO §32 A1)", () => {
   });
 });
 
+describe("AskCoachPanel — panel-aware (TODO §32 A3)", () => {
+  it("opens on the origin panel's intro and starters, and a starter tap asks it with a panel context line", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["Rent is most of it."]));
+    render(<AskCoachPanel {...baseProps({ originView: "budget", originLabel: "Upkeep" })} />);
+    expect(screen.getByText(/Looking at Upkeep/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Where is most of my money going?"));
+    await waitFor(() => expect(screen.getByText("Rent is most of it.")).toBeTruthy());
+    expect(mocks.chatWithCoach.mock.calls[0][0]).toEqual([{ role: "user", content: "Where is most of my money going?" }]);
+    expect(mocks.chatWithCoach.mock.calls[0][2]).toMatch(/opened Coach from the Upkeep panel/);
+    expect(screen.queryByTestId("coach-starters")).toBeNull();
+  });
+
+  it("keeps the generic intro, no starters and no panel line when opened from elsewhere", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["ok"]));
+    render(<AskCoachPanel {...baseProps()} />);
+    expect(screen.queryByTestId("coach-starters")).toBeNull();
+    expect(screen.getByText(/Ask me anything about how Authority Finance works/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "hi" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.chatWithCoach).toHaveBeenCalled());
+    expect(mocks.chatWithCoach.mock.calls[0][2]).not.toMatch(/opened Coach from/);
+  });
+});
+
 describe("AskCoachPanel — history", () => {
   const oldChat = {
     id: "chat-old",

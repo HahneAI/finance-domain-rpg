@@ -4755,6 +4755,8 @@ export default function App() {
           onDraftLog={handleCoachDraftLog}
           seedPrompt={coachSeed}
           onSeedConsumed={() => setCoachSeed(null)}
+          originView={currentView}
+          originLabel={VIEW_LABELS[currentView] ?? null}
           readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
           privileged={canAccessAiFeatures({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin })}

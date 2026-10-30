@@ -1,4 +1,5 @@
 import { getArchetype } from "../constants/goalArchetypes.js";
+import { spendRatioOf, upkeepHealthBand } from "./upkeepHealth.js";
 import { computeGoalAmountCap, MAX_ACTIVE_GOALS } from "./goalLimits.js";
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate, isExpenseRemoved } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
@@ -89,7 +90,7 @@ export function computeCoachHeadlineFigures({ config = null, weeklyIncome = 0, a
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
   // Matches HomePanel.jsx's "Upkeep Health" tile exactly: spendRatio =
   // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
-  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  const spendRatio = spendRatioOf(avgWeeklySpend, weeklyIncome);
   return { avgWeeklySurplus, activeWeeksThisYear, annualSavings, netWorthHealth, spendRatio };
 }
 
@@ -147,7 +148,7 @@ export function buildCoachContext({
 } = {}) {
   const { avgWeeklySurplus, annualSavings, netWorthHealth, spendRatio } =
     computeCoachHeadlineFigures({ config, weeklyIncome, avgWeeklySpend, fundedGoalSpend });
-  const budgetHealthLabel = spendRatio < 0.5 ? "well-managed" : spendRatio < 0.75 ? "healthy range" : "watch spend";
+  const budgetHealthLabel = upkeepHealthBand(spendRatio);
 
   const completedGoals = goals.filter((g) => g.completed);
   const activeGoals = goals.filter((g) => !g.completed);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable } from "./ui.jsx";
+import { panelStartersFor } from "../lib/coachPanelStarters.js";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
@@ -111,6 +112,11 @@ export function AskCoachPanel({
   // fresh chat with that question once per id, then onSeedConsumed lets App drop it.
   seedPrompt = null,
   onSeedConsumed = null,
+  // Panel-aware Coach (TODO §32 A3): the view Coach was opened from (App's key) and the name users
+  // see for it (VIEW_LABELS — "Upkeep", never "budget"). Drives the empty chat's intro + starters
+  // and one context line, so "this" in a question has a referent. No figures ride on it.
+  originView = null,
+  originLabel = null,
   readOnly = false,
   isExiting = false,
   // Admin/tester/investor/AI-admin. Decides whether a turn that needs range (what-if, decision,
@@ -137,6 +143,7 @@ export function AskCoachPanel({
   prevWeekNet = null,
   allWeeks = [],
 }) {
+  const originStarters = panelStartersFor(originView);
   const [view, setView] = useState("chat"); // "chat" | "history"
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -333,7 +340,7 @@ export function AskCoachPanel({
         // on demand instead of every call carrying it. CoachNetWorthCard has no
         // tools and deliberately leaves this false.
         detailAvailableViaTools: true,
-      });
+      }) + (originLabel ? `\nThe user opened Coach from the ${originLabel} panel; "this" or "here" in their question means that panel.` : "");
       const apiMessages = nextMessages.map(({ role, content }) => ({ role, content }));
       // Drill-down tools (lib/coachTools.js) run in the browser against this
       // exact prop bag — the same one buildCoachContext() reads above, so a
@@ -548,8 +555,22 @@ export function AskCoachPanel({
           <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
             {messages.length === 0 && (
               <EmptyStateArt>
-                Ask me anything about how Authority Finance works — your setup, a metric, a panel, or how to log something.
+                {originStarters?.intro ?? "Ask me anything about how Authority Finance works — your setup, a metric, a panel, or how to log something."}
               </EmptyStateArt>
+            )}
+            {messages.length === 0 && originStarters && (
+              <div data-testid="coach-starters" style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch" }}>
+                {originStarters.starters.map((q) => (
+                  <Pressable
+                    key={q}
+                    onClick={() => send(q)}
+                    className="text-sm"
+                    style={{ textAlign: "left", padding: "10px 14px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", color: "var(--color-text-primary)", cursor: "pointer" }}
+                  >
+                    {q}
+                  </Pressable>
+                ))}
+              </div>
             )}
             {messages.map((m, i) => (
               <div

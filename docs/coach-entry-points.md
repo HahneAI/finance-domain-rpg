@@ -42,7 +42,10 @@ same as a paying subscriber, no reduced version. Every section below now carries
 **What it is:** A full-screen chat, opened from a "Coach" tab in the bottom navigation — and, since
 2026-10-30 (TODO §32 A1), from an **ASK COACH** button on every Home goal card and an **Ask Coach about
 this** button in Upkeep's expense sheet, which open a fresh chat with that item's question already
-asked (goals by rank, expenses by label; `src/lib/coachSeeds.js`). A user
+asked (goals by rank, expenses by label; `src/lib/coachSeeds.js`). Opened from a panel, the empty chat
+shows that panel's intro and three starter questions, and Coach is told which panel it was opened from
+(`src/lib/coachPanelStarters.js`, A3). Separately, Home, Upkeep and Log carry a one-line **Coach note** —
+a fixed template over the panel's own tile figures, no model call (`src/lib/coachNotes.js`, A4). A user
 can ask plain questions about how the app works, how a number on their screen is calculated, or
 how to log something, and Coach answers using that person's real numbers — never a generic
 answer. Coach explicitly won't give tax, legal, or investment advice; it sticks to explaining

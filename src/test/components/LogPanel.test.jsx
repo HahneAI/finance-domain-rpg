@@ -101,6 +101,16 @@ const mkBonus = (weekEnd, amount) => ({
 // Visibility
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('Coach note (TODO §32 A4)', () => {
+  it('nudges an empty log and nets App logTotals once entries exist', () => {
+    const { unmount } = render(<LogPanel {...BASE_PROPS} logs={[]} />)
+    expect(screen.getByTestId('coach-note')).toHaveTextContent(/Nothing logged yet/)
+    unmount()
+    render(<LogPanel {...BASE_PROPS} logs={[{ id: 'a', type: 'bonus', amount: 250 }]} logNetLost={0} logNetGained={190.5} />)
+    expect(screen.getByTestId('coach-note')).toHaveTextContent('Your 1 logged entry adds $191 to take-home this year.')
+  })
+})
+
 describe('Attendance History — visibility', () => {
   it('does not render when logs array is empty', () => {
     renderPanel([])

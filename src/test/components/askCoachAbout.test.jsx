@@ -35,6 +35,14 @@ describe("coachSeeds", () => {
   });
 });
 
+describe("Upkeep Coach note (TODO §32 A4)", () => {
+  it("quotes Upkeep Health from the shared helper", () => {
+    mount();
+    const pct = Math.round((bag.avgWeeklySpend / bag.weeklyIncome) * 100);
+    expect(screen.getByTestId("coach-note")).toHaveTextContent(`Upkeep is taking ${pct}% of your take-home`);
+  });
+});
+
 describe("Upkeep expense sheet — Ask Coach about this", () => {
   it("offers the button only when App passes onAskCoach", () => {
     const { container } = mount();

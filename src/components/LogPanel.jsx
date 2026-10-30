@@ -1,5 +1,7 @@
 /* eslint-disable react-hooks/static-components */
 import { PaycheckCreditsLedger } from "./PaycheckCreditsLedger.jsx";
+import { logCoachNote } from "../lib/coachNotes.js";
+import { CoachNote } from "./CoachNote.jsx";
 import { useState, useEffect } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
@@ -611,6 +613,8 @@ export function LogPanel({
 
   return (<div>
     <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
+    {/* Coach note (TODO §32 A4) — App's logTotals (the Cash Left Behind tile's figure and its gain side). */}
+    <CoachNote text={logCoachNote({ entryCount: logs.length, netLost: logNetLost, netGained: logNetGained })} />
 
     {/* Subtitle — nudges the daily logging habit */}
     <div className="text-md" style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "-14px", marginBottom: "24px", lineHeight: 1.4 }}>

@@ -269,7 +269,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/stripe-create-checkout", {
+      const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -300,7 +300,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/stripe-portal", {
+      const res = await fetch("/api/stripe/portal", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -377,7 +377,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/delete-account", {
+      const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2335,7 +2335,7 @@ class AdminDetailErrorBoundary extends Component {
 // the write side of the "What's New" feature. UpdateAvailableBanner +
 // ChangelogModal (App.jsx) are the read side: a published entry here is what
 // makes the "What's New" tap target appear alongside the next update banner
-// a user sees. Writes go through api/admin-changelog.js (db.js's
+// a user sees. Writes go through api/_adminChangelog.js (db.js's
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
 function ChangelogAdminDetail({ onBack, embedded = false }) {
@@ -2624,7 +2624,7 @@ const BASE_CONTENT_COPY = {
 // (fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem for
 // beta, fetchAllBaseContentItems/saveBaseContentItem/deleteBaseContentItem
 // for base) passed in by each call site below. Writes always go through
-// api/admin-beta-hub.js's service-role client — never a direct client
+// api/_adminBetaHub.js's service-role client — never a direct client
 // write, per migration 037's/039's RLS posture.
 //
 // `crossPost` (optional: { label, saveItem }) — the paired audience's own
@@ -2991,7 +2991,7 @@ const RUBRIC_ADMIN_CATEGORIES = [
 ];
 
 // App Usage rubric category (0-50, 30-pt floor) reference board — every field
-// here already comes off api/admin-beta-report.js's per-user aggregate
+// here already comes off api/_adminBetaReport.js's per-user aggregate
 // (db.js's fetchBetaScoreboard), scoped to the tester's own 10-week window
 // (docs/TODO.md §30). Purely informational — the admin still hand-enters the
 // score itself below; this just replaces the old one-line text summary with
@@ -3015,7 +3015,7 @@ function BetaUsageBoard({ row }) {
 }
 
 // Feedback rubric category (0-25) reference — the tester's own submitted
-// text (api/admin-beta-report.js's ?format=json `feedback` array, most-
+// text (api/_adminBetaReport.js's ?format=json `feedback` array, most-
 // recent first, scoped to their own 10-week window same as the usage
 // board), inline instead of only a count — so "specificity" is judgable
 // right here instead of cross-referencing the separate ?format=feedback CSV.
@@ -3046,10 +3046,10 @@ function BetaFeedbackList({ feedback }) {
 // Admin scoresheet for the beta rubric (database/migrations/037's
 // beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
 // human" decision, given a live tester-visible home instead of only a
-// spreadsheet. Reads api/admin-beta-report.js's ?format=json (db.js's
+// spreadsheet. Reads api/_adminBetaReport.js's ?format=json (db.js's
 // fetchBetaScoreboard) for each tester's current usage/checklist stats as
 // reference alongside the score inputs; writes go through
-// api/admin-beta-hub.js (db.js's saveBetaScore).
+// api/_adminBetaHub.js (db.js's saveBetaScore).
 function BetaScoresAdminDetail({ onBack }) {
   // "use no memo" — same confirmed React Compiler miscompilation documented
   // in detail on ChangelogAdminDetail above: cancelEdit() immediately

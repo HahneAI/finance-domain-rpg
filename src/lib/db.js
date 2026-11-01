@@ -40,7 +40,7 @@ const DEFAULT_SUBSCRIPTION = {
   currentPeriodEnd: null,
   plan: null,
   // Migration 044 — set the instant a user asks to delete their account
-  // (api/delete-account.js), before the real archive-then-delete even runs.
+  // (api/_deleteAccount.js), before the real archive-then-delete even runs.
   // App.jsx gates on this to lock the account out of the dashboard for the
   // (should-be-brief) window before the account is fully purged.
   deletionRequestedAt: null,
@@ -1167,7 +1167,7 @@ export async function checkRevival() {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return null;
-    const res = await fetch("/api/revival-lookup", {
+    const res = await fetch("/api/account/revival-lookup", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1302,7 +1302,7 @@ async function changelogAuthHeaders() {
 }
 
 /**
- * Admin authoring list — every entry (drafts included), via api/admin-changelog.js's
+ * Admin authoring list — every entry (drafts included), via api/_adminChangelog.js's
  * service-role GET. Never call this for the ordinary "is there something new"
  * check; use fetchLatestPublishedChangelog for that (draft rows must never
  * reach a non-admin surface).
@@ -1311,7 +1311,7 @@ export async function fetchAllChangelogEntries() {
   const headers = await changelogAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in", entries: [] };
   try {
-    const res = await fetch("/api/admin-changelog", { method: "GET", headers });
+    const res = await fetch("/api/admin/changelog", { method: "GET", headers });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to load entries", entries: [] };
     return { ok: true, entries: payload.entries ?? [] };
@@ -1322,14 +1322,14 @@ export async function fetchAllChangelogEntries() {
 
 /**
  * Create (no id) or update (id present) a changelog entry. `published` toggles
- * draft<->published — api/admin-changelog.js owns the published_at timestamp
+ * draft<->published — api/_adminChangelog.js owns the published_at timestamp
  * logic (preserves the original publish time on a stays-published re-save).
  */
 export async function saveChangelogEntry({ id, versionLabel, title, body, published }) {
   const headers = await changelogAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch("/api/admin-changelog", {
+    const res = await fetch("/api/admin/changelog", {
       method: "POST",
       headers,
       body: JSON.stringify({ id, versionLabel, title, body, published }),
@@ -1346,7 +1346,7 @@ export async function deleteChangelogEntry(id) {
   const headers = await changelogAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch(`/api/admin-changelog?id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/admin/changelog?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers,
     });
@@ -1385,7 +1385,7 @@ export async function fetchPublishedChangelogEntries(limit = 5) {
 // read); writes are split the same way migration 037 splits them: a tester's
 // own checklist completions are a direct client insert/delete (RLS + the
 // eligibility trigger enforce it server-side), while content authoring and
-// score entry are admin-only and go through api/admin-beta-hub.js.
+// score entry are admin-only and go through api/_adminBetaHub.js.
 // ─────────────────────────────────────────────────────────────
 
 /** Published checklist items, in authoring order (oldest first — the order admin added them). */
@@ -1477,12 +1477,12 @@ async function betaHubAuthHeaders() {
   return { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
 }
 
-/** Admin authoring list for one content kind — drafts included, via api/admin-beta-hub.js's service-role GET. */
+/** Admin authoring list for one content kind — drafts included, via api/_adminBetaHub.js's service-role GET. */
 export async function fetchAllBetaContentItems(kind) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in", items: [] };
   try {
-    const res = await fetch(`/api/admin-beta-hub?entity=content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
+    const res = await fetch(`/api/admin/beta-hub?entity=content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to load items", items: [] };
     return { ok: true, items: payload.items ?? [] };
@@ -1496,7 +1496,7 @@ export async function saveBetaContentItem({ id, kind, title, body, published, em
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch("/api/admin-beta-hub", {
+    const res = await fetch("/api/admin/beta-hub", {
       method: "POST",
       headers,
       body: JSON.stringify({ entity: "content", id, kind, title, body, published, employerPreset }),
@@ -1513,7 +1513,7 @@ export async function deleteBetaContentItem(id) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch(`/api/admin-beta-hub?entity=content&id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/admin/beta-hub?entity=content&id=${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers,
     });
@@ -1527,7 +1527,7 @@ export async function deleteBetaContentItem(id) {
 
 /**
  * Every tracked beta tester with their current usage stats (reusing
- * api/admin-beta-report.js's existing aggregation — ?format=json is
+ * api/_adminBetaReport.js's existing aggregation — ?format=json is
  * additive, same data the CSV export already computes), their own feedback
  * text (most-recent first), and their current rubric score, if any — the
  * data set the admin scoresheet UI needs to show "here's what they've done"
@@ -1537,7 +1537,7 @@ export async function fetchBetaScoreboard() {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in", rows: [] };
   try {
-    const res = await fetch("/api/admin-beta-report?format=json", { method: "GET", headers });
+    const res = await fetch("/api/admin/beta-report?format=json", { method: "GET", headers });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to load scoreboard", rows: [] };
     return { ok: true, rows: payload.rows ?? [] };
@@ -1551,7 +1551,7 @@ export async function saveBetaScore({ userId, usageScore, feedbackScore, callsSc
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch("/api/admin-beta-hub", {
+    const res = await fetch("/api/admin/beta-hub", {
       method: "POST",
       headers,
       body: JSON.stringify({ entity: "score", userId, usageScore, feedbackScore, callsScore, longevityScore, adminNotes }),
@@ -1659,12 +1659,12 @@ export async function logBaseFeedback({ note }) {
   return { ok: true };
 }
 
-/** Admin authoring list for one base content kind — drafts included, via api/admin-beta-hub.js's service-role GET (entity: "base_content"). */
+/** Admin authoring list for one base content kind — drafts included, via api/_adminBetaHub.js's service-role GET (entity: "base_content"). */
 export async function fetchAllBaseContentItems(kind) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in", items: [] };
   try {
-    const res = await fetch(`/api/admin-beta-hub?entity=base_content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
+    const res = await fetch(`/api/admin/beta-hub?entity=base_content&kind=${encodeURIComponent(kind)}`, { method: "GET", headers });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Failed to load items", items: [] };
     return { ok: true, items: payload.items ?? [] };
@@ -1678,7 +1678,7 @@ export async function saveBaseContentItem({ id, kind, title, body, published, em
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch("/api/admin-beta-hub", {
+    const res = await fetch("/api/admin/beta-hub", {
       method: "POST",
       headers,
       body: JSON.stringify({ entity: "base_content", id, kind, title, body, published, employerPreset }),
@@ -1695,7 +1695,7 @@ export async function deleteBaseContentItem(id) {
   const headers = await betaHubAuthHeaders();
   if (!headers) return { ok: false, error: "Not signed in" };
   try {
-    const res = await fetch(`/api/admin-beta-hub?entity=base_content&id=${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/admin/beta-hub?entity=base_content&id=${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers,
     });

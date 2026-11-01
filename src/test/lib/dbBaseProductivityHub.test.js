@@ -3,7 +3,7 @@
 // dbBetaHomebase.test.js's structure — same fetcher shapes, minus any
 // isTrackedBetaTester/isTester gating (this surface is for every signed-in
 // user) and minus a scoring equivalent (deliberately not ported). Admin
-// writes go through api/admin-beta-hub.js's entity: "base_content" — see
+// writes go through api/_adminBetaHub.js's entity: "base_content" — see
 // src/test/api/adminBetaHub.test.js for that route's own coverage.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -139,7 +139,7 @@ describe('logBaseFeedback', () => {
   })
 })
 
-describe('admin fetch/save wrappers (api/admin-beta-hub.js entity: base_content)', () => {
+describe('admin fetch/save wrappers (api/_adminBetaHub.js entity: base_content)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -148,7 +148,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js entity: base_content)
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'c1' }] }) }))
     const result = await fetchAllBaseContentItems('checklist')
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub?entity=base_content&kind=checklist', expect.objectContaining({ method: 'GET' }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub?entity=base_content&kind=checklist', expect.objectContaining({ method: 'GET' }))
     expect(result).toEqual({ ok: true, items: [{ id: 'c1' }] })
   })
 
@@ -156,7 +156,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js entity: base_content)
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ item: { id: 'c1' } }) }))
     const result = await saveBaseContentItem({ id: null, kind: 'checklist', title: 'Add your first goal', body: '', published: true })
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ entity: 'base_content', id: null, kind: 'checklist', title: 'Add your first goal', body: '', published: true }),
     }))
@@ -175,7 +175,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js entity: base_content)
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
     const result = await deleteBaseContentItem('c1')
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub?entity=base_content&id=c1', expect.objectContaining({ method: 'DELETE' }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub?entity=base_content&id=c1', expect.objectContaining({ method: 'DELETE' }))
     expect(result).toEqual({ ok: true })
   })
 

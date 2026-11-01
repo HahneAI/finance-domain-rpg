@@ -1414,7 +1414,7 @@ export default function App() {
     setTimeout(() => setSyncStatus(null), 4000);
   }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
-  // docs/TODO.md — until now api/admin-beta-report.js was only reachable via a
+  // docs/TODO.md — until now api/_adminBetaReport.js was only reachable via a
   // manually-crafted authenticated HTTP request (curl/Postman); this is the
   // in-app trigger. Fetches with the current admin session's token rather than
   // a plain link, since the endpoint requires a Bearer token and window.open
@@ -1427,7 +1427,7 @@ export default function App() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
-      const url = format === "feedback" ? "/api/admin-beta-report?format=feedback" : "/api/admin-beta-report";
+      const url = format === "feedback" ? "/api/admin/beta-report?format=feedback" : "/api/admin/beta-report";
       const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));

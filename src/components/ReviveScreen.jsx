@@ -8,7 +8,7 @@
  * re-authenticates).
  *
  * Access is restored only by a successful charge: the plan buttons open a
- * Stripe Checkout via api/stripe-revive-checkout, and the webhook's revival
+ * Stripe Checkout via api/stripe/revive-checkout, and the webhook's revival
  * branch restores the archived data + consumes the tombstone. App.jsx clears
  * this screen when subscription_status flips to active (post-checkout poll).
  *
@@ -33,7 +33,7 @@ export function ReviveScreen({ revival, checkoutReturn }) {
       return;
     }
     try {
-      const res = await fetch("/api/stripe-revive-checkout", {
+      const res = await fetch("/api/stripe/revive-checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

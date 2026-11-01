@@ -34,7 +34,7 @@ describe('UpgradeModal — checkout', () => {
     fetch.mockResolvedValue({ ok: true, json: async () => ({ url: 'https://checkout.stripe.com/c/sess_1' }) })
     render(<UpgradeModal />)
     fireEvent.click(screen.getByText('Monthly'))
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe-create-checkout', expect.objectContaining({
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/stripe/checkout', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
       body: JSON.stringify({ plan: 'monthly' }),

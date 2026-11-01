@@ -479,7 +479,7 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
 - [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
-### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **applied** (production through 048 confirmed 2026-10-07); still unchecked until Anthony verifies the feature)*
+### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **applied** (confirmed 2026-10-07); still unchecked until Anthony verifies the feature)*
 
 *Decided 2026-10-04 in a side-by-side session with the Cyborg repo (its `docs/resource-track-source.md`
 §5a, TODO §55-0). Cyborg's Resource track shows figures that only this app computes. Rather than Cyborg
@@ -1004,7 +1004,7 @@ reaches all three, but watch beta feedback for "where did my numbers go."
 - [$] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.
 - [$] **31.13** Coach context line for archetype (§6/§24).
 
-**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **applied to production 2026-10-07**, so the new events now record) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
+**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **applied to production 2026-10-07** (first attempt was in the wrong Supabase project; the file now guards that with a clear error), so the new events record) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
 
 **Goal limits (added 2026-10-06, Anthony's spec) `[$]`:**
 - [$] **31.14** Max **6 active goals**; total active goal $ ≤ **(monthly take-home − monthly Needs incl. loans) × 60** (Lifestyle ignored). Monthly take-home = App `weeklyIncome` × 52/12; Needs = `computeNeedsSetAsidePerCheck().weeklyNeeds` × 52/12. No cap when income is 0 or surplus ≤ 0.
@@ -5859,9 +5859,9 @@ shown the channel is worth it.***
 **Sequence:** (1) PWA push reminders (`§8.C` weekly pre-game briefing) → (2) opt-in one-way SMS
 reminders with **no dollar figures** → (3) two-way Coach over SMS. Each step is a decision gate.
 
-- [ ] **Free a serverless slot first** — `api/` is **12/12** (Hobby cap). A Twilio inbound webhook
-  needs a route: merge the three `stripe-*.js` routes (same shape) or dispatch the webhook from an
-  existing route on a body/path field, as `api/seed.js` / `admin-beta-hub.js` already do.
+- [ ] **Free a serverless slot first** — *unblocked 2026-10-29: `api/` is now 7/12* (admin, Stripe
+  user-facing and account routes merged into three routers). A Twilio inbound webhook needs its own
+  signature check on the raw body, so give it its own slot like `stripe-webhook.js`.
 - [ ] **US A2P 10DLC registration** — brand → campaign → numbers. Campaigns fail review when the
   opt-in/opt-out method is inadequate; new campaigns require privacy-policy and terms URLs from
   2026-06-30 (Twilio changelog). **Review times and fees were not confirmed — verify with Twilio

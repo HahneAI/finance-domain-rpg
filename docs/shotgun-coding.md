@@ -55,7 +55,7 @@ of Anthony's projects; only the to-do file's location/tier names differ per repo
   eager-save props.
 - **Never** run/author a destructive migration against production, touch Stripe/live-money paths,
   delete user data, or handle secrets on a hunch — build the code, flag it for Anthony, stop there.
-- **Vercel 12-function cap** (currently 12/12): no new `api/` file — dispatch inside an existing one.
+- **Vercel 12-function cap** (currently 7/12 since 2026-10-29): add a route to an existing router (`api/admin|stripe|account/[route].js`) — never a new `api/` file in a shotgun run.
 - **Design tokens / text-size classes** as in CLAUDE.md; the `textUtilityClassAudit` test must stay green.
 - A task that can't be made to pass tests is **not** marked `$` — leave it `[ ]` and log why.
 

@@ -17,7 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 //     (039_add_base_productivity_hub.sql) — every user, not the tracked
 //     cohort. Both share handleContentGet/Save/Delete below, parametrized on
 //     table name — same title/body/published shape as changelog_entries,
-//     CRUD mirrors api/admin-changelog.js's GET/POST/DELETE-by-method
+//     CRUD mirrors api/_adminChangelog.js's GET/POST/DELETE-by-method
 //     pattern exactly. Both also carry an optional `employerPreset`
 //     (040_add_content_employer_targeting.sql) — null targets every
 //     eligible user (unchanged default), a value like "DHL" restricts

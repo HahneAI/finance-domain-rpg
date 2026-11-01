@@ -1,7 +1,7 @@
 // Beta Tester Homebase client functions (db.js, docs/TODO.md §12,
 // database/migrations/037_add_beta_homebase.sql). Reads are direct
 // RLS-scoped Supabase calls (mirrors beta_activity_events/changelog_entries);
-// admin writes go through api/admin-beta-hub.js — see
+// admin writes go through api/_adminBetaHub.js — see
 // src/test/api/adminBetaHub.test.js for that route's own coverage. This file
 // only exercises the db.js wrappers: request shape, gating, and error
 // fallbacks.
@@ -162,7 +162,7 @@ describe('fetchMyBetaScore', () => {
   })
 })
 
-describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
+describe('admin fetch/save wrappers (api/_adminBetaHub.js)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -171,7 +171,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'c1' }] }) }))
     const result = await fetchAllBetaContentItems('checklist')
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub?entity=content&kind=checklist', expect.objectContaining({ method: 'GET' }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub?entity=content&kind=checklist', expect.objectContaining({ method: 'GET' }))
     expect(result).toEqual({ ok: true, items: [{ id: 'c1' }] })
   })
 
@@ -179,7 +179,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ item: { id: 'c1' } }) }))
     const result = await saveBetaContentItem({ id: null, kind: 'checklist', title: 'Try goals', body: '', published: true })
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ entity: 'content', id: null, kind: 'checklist', title: 'Try goals', body: '', published: true }),
     }))
@@ -198,7 +198,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
     const result = await deleteBetaContentItem('c1')
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub?entity=content&id=c1', expect.objectContaining({ method: 'DELETE' }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub?entity=content&id=c1', expect.objectContaining({ method: 'DELETE' }))
     expect(result).toEqual({ ok: true })
   })
 
@@ -206,7 +206,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, rows: [{ user_id: 'u1' }] }) }))
     const result = await fetchBetaScoreboard()
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-report?format=json', expect.objectContaining({ method: 'GET' }))
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-report?format=json', expect.objectContaining({ method: 'GET' }))
     expect(result).toEqual({ ok: true, rows: [{ user_id: 'u1' }] })
   })
 
@@ -214,7 +214,7 @@ describe('admin fetch/save wrappers (api/admin-beta-hub.js)', () => {
     supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ score: { user_id: 'u1' } }) }))
     const result = await saveBetaScore({ userId: 'u1', usageScore: 40, feedbackScore: 20, callsScore: 10, longevityScore: 10, adminNotes: null })
-    expect(fetch).toHaveBeenCalledWith('/api/admin-beta-hub', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/admin/beta-hub', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ entity: 'score', userId: 'u1', usageScore: 40, feedbackScore: 20, callsScore: 10, longevityScore: 10, adminNotes: null }),
     }))

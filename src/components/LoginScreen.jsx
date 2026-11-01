@@ -8,7 +8,7 @@
  *   "revive"   — §17.I: the email matches an archived (non-payment-deleted)
  *                account. Supabase returns the same generic error for
  *                wrong-password and no-such-user, so every failed sign-in is
- *                checked against api/revival-lookup; a match routes here
+ *                checked against api/account/revival-lookup; a match routes here
  *                instead of the generic error. Email accounts set a NEW
  *                password (deliberately no restriction on reusing the old
  *                one); OAuth accounts just Continue with Google again. Either
@@ -687,12 +687,12 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 }
 
 // §17.I — unauthenticated tombstone check (deleted_accounts is service-role
-// only, so this goes through api/revival-lookup). Returns { revivable,
+// only, so this goes through api/account/revival-lookup). Returns { revivable,
 // oauthProvider } or null; any failure resolves null so the normal sign-in
 // error still shows.
 async function lookupRevivable(email) {
   try {
-    const res = await fetch("/api/revival-lookup", {
+    const res = await fetch("/api/account/revival-lookup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),

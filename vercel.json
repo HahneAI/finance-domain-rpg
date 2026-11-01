@@ -4,5 +4,39 @@
       "path": "/api/cron-subscription-lifecycle",
       "schedule": "0 15 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/admin-beta-hub",
+      "destination": "/api/admin/beta-hub"
+    },
+    {
+      "source": "/api/admin-beta-report",
+      "destination": "/api/admin/beta-report"
+    },
+    {
+      "source": "/api/admin-changelog",
+      "destination": "/api/admin/changelog"
+    },
+    {
+      "source": "/api/delete-account",
+      "destination": "/api/account/delete"
+    },
+    {
+      "source": "/api/revival-lookup",
+      "destination": "/api/account/revival-lookup"
+    },
+    {
+      "source": "/api/stripe-create-checkout",
+      "destination": "/api/stripe/checkout"
+    },
+    {
+      "source": "/api/stripe-portal",
+      "destination": "/api/stripe/portal"
+    },
+    {
+      "source": "/api/stripe-revive-checkout",
+      "destination": "/api/stripe/revive-checkout"
+    }
   ]
 }

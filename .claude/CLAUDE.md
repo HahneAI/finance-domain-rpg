@@ -18,13 +18,17 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No standalone backend server** — but no longer "pure frontend": `api/` holds 12 Vercel
-serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
-subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
-the "What's New" authoring surface, `admin-beta-hub.js` for the Beta Homebase's checklist/
-suggestion content + rubric scores (dispatched on `entity`: "content" | "score"), plus
-`api/seed.js` — a single route dispatched on `body.type` ("beta" | "investor" | "trial") that
-consolidates what used to be three separate seed-beta/seed-investor/seed-trial functions). All
+**No standalone backend server** — but no longer "pure frontend": `api/` holds **7 Vercel
+serverless functions** serving 14 routes. Three are routers, one file each, picking a handler by
+the dynamic path segment (`req.query.route`); the handlers live unchanged in `_`-prefixed modules:
+`api/admin/[route].js` (`beta-hub` — Beta Homebase/Money Moves content + rubric scores, dispatched
+on `entity`; `beta-report`; `changelog` — the "What's New" authoring surface),
+`api/stripe/[route].js` (`checkout`, `portal`, `revive-checkout`) and `api/account/[route].js`
+(`delete`, `revival-lookup`). The other four: `coach.js` (Coach streaming proxy),
+`stripe-webhook.js` (raw body, URL registered in Stripe — never merged), the daily
+`cron-subscription-lifecycle.js` + email engine, and `api/seed.js` (dispatched on `body.type`:
+"beta" | "investor" | "trial"). The pre-2026-10-29 URLs (`/api/stripe-portal`, …) still work via
+`vercel.json` rewrites, for cached PWA clients only — new code calls the router paths. All
 privileged writes (tier flags, subscription columns, changelog entries, beta content/scores) go
 through these service-role routes — the client never writes them (RLS migration 019).
 
@@ -34,11 +38,11 @@ outright ("No more than 12 Serverless Functions can be added to a Deployment on 
 This repo hit 13 once (adding `admin-changelog.js` tipped it over) and was brought back under the
 cap by merging seed-beta/seed-investor/seed-trial into the one `api/seed.js` above — same fix to
 reach for again if a future route addition trips this same failure, rather than assuming it's a
-rate limit or a real Vercel outage. **Currently sitting at 12/12 — zero headroom** (the Beta
-Homebase's `admin-beta-hub.js`, 2026-08-06, spent the last free slot by design — everything
-tester-facing in that feature reads/writes Supabase directly under RLS instead of adding routes).
-Consolidation candidates if another route is needed: the three `stripe-*.js` routes remain the
-next most mergeable group (same shape, different Stripe action).
+rate limit or a real Vercel outage. **Currently 7/12 — 5 free** (2026-10-29: admin ×3, Stripe
+user-facing ×3 and account ×2 merged into the three routers above, from 12/12). **A new route goes
+into an existing router as a new `_` module + one map entry, not a new file, unless it needs its own
+function config** (raw body like the webhook, a cron path, a long `maxDuration`). Spend the 5 free
+slots only on that kind of route. `src/test/api/apiRouters.test.js` pins the function list.
 
 ---
 
@@ -81,7 +85,7 @@ both pairs are cited from 4+ docs, so renumbering needs its own pass — until t
 qualify which one you mean. The check above reports these every run; that is expected, not a
 new failure.
 
-**Next free numbers (verify, do not trust):** TODO `§32` · migration `049` (applied through 048) · warden `F185`.
+**Next free numbers (verify, do not trust):** TODO `§32` · migration `049` (applied through 048) · warden `F186`.
 
 ---
 ## Commands

@@ -36,7 +36,7 @@ since: Claim Date, Ad-Lib wizard, DHL Warehouse, Beta Homebase, Money Moves, Ré
 | 22 | Master Timeline — Config History | `configHistory.js`, `db.js` | Write path live; read path mostly unbuilt |
 | 23 | Beta Tester Accounts | `entitlements.js` | Live |
 | 24 | AI Layer — Coach | `api/coach.js`, `coachPrompts.js`, `aiContext.js`, `AskCoachPanel.jsx` | Live, paid-tier gated |
-| 25 | Beta Homebase & Money Moves | `BetaHomebase.jsx`, `ProductivityHub.jsx`, `api/admin-beta-hub.js` | Live |
+| 25 | Beta Homebase & Money Moves | `BetaHomebase.jsx`, `ProductivityHub.jsx`, `/api/admin/beta-hub` (`api/_adminBetaHub.js`) | Live |
 | 26 | Résumé / Career Document Center | `ProfilePanel.jsx`, `resume_profile`, Storage `resumes` | v1+v2 live; v3+ ahead |
 | 27 | Serverless functions & Vercel cap | `api/` | 7/12 — 3 routers + 4 standalone (2026-10-29) |
 

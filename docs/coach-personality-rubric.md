@@ -372,6 +372,117 @@ around.
 
 ---
 
+## Axis 4 — Directness *(new — promoted from "Future Axes" 2026-10-07, `docs/TODO.md` §2.L)*
+
+**What it measures:** how plainly a problem or verdict is stated **at a fixed severity**. Not
+Axis 2 (Urgency Escalation — how the register moves *across* severity levels) and not Axis 3
+(length). Judge it from the text, not a feel: (1) does sentence one or two state the problem or
+verdict; (2) is there hedging language ("might", "could be worth"); (3) is the cause named
+outright. **Guardrail, not a dial:** directness is about the *situation*, never about shaming one
+expense or line — the persona's neutral-on-individual-expenses rule always binds.
+
+| Score | Name | Test |
+|---|---|---|
+| 1 | Cushioned | Reassurance or context first; the problem is implied or hedged |
+| 2 | Gentle | Names the problem, but after a softener, with hedged verbs |
+| **3** | **Plain (default)** | States the fact in sentence one or two; no hedging, no cushioning |
+| 4 | Blunt | Verdict first, cause named, no softener |
+| 5 | Hard truth | Verdict plus the thing the user is avoiding, in one line — the corner man who says what the student doesn't want to hear |
+
+**Anchor data from transcripts already on hand (scored by reading, no new calls, 2026-10-07):**
+- **~4:** Ask Coach near-limit — "The real issue isn't this week or next — it's the pattern."
+  (recorded Phase 4). Résumé Review — "'Team player, hard worker' is the weakest line on the page";
+  "there's no supervisory evidence anywhere on this page" (2026-10-06 draws).
+- **~3–4:** Job Hunt (post-fix) — "Riverbend first … a live conversation always outranks a quiet
+  one." Verdict-first, no hedge.
+- **~3:** Ask Coach tool-available, near-limit — "Your week … is tight — you're running a 98% spend
+  ratio" then a single question; Ask Coach healthy — "tracking ahead."
+- **~1–2 and 5: no clean samples yet.** Net Worth Red's "flying blind" is a *flourish standing in
+  for a plain statement* (a directness-2 pattern), noted but not scored. Elicit real 1s and 5s
+  per model with the calibration-override method before locking any target.
+
+## Axis 5 — Warmth / Formality *(new — promoted from "Future Axes" 2026-10-07, `docs/TODO.md` §2.L)*
+
+**What it measures:** how personal vs. professional the **register of a single message** is. The
+long-term product intent (recorded 2026-10-07, user): the user as a *student* of Coach, growing
+fond of him over time — Rocky/Mickey, Karate Kid/Miyagi. This axis is the dial for that, even if
+it never leaves 3 for a long while. **It measures voice only.** What actually makes those mentors
+feel warm — *remembering* the student and being specific about what they did — is earned rapport
+over time, a separate, unbuilt dimension; do not expect this axis to deliver it.
+
+| Score | Name | Test |
+|---|---|---|
+| 1 | Clinical | Report voice; no acknowledgement of the person |
+| 2 | Professional | Courteous, neutral |
+| **3** | **Steady corner-man (default)** | On the user's side; a brief nod to their effort or position |
+| 4 | Personal | Names the user's specific progress or effort; light encouragement |
+| 5 | Mentor-proud | Explicitly proud or emotional ("I've watched you grow") |
+
+**Grounding constraint — scores 4–5 are not samplable yet.** They require *real* shared history in
+the context block (goal completions, streaks, tenure, past check-ins). With none supplied, Coach
+will invent a shared past to sound close — the same fabrication failure as the Layer-B
+counterfactuals and the Résumé Review/Job Hunt date guesses (fixed 2026-10-06). Define 4–5 now;
+sample them only once a mode's context can supply true history. Scores 1–3 can be sampled today.
+
+**Anchor data (read, no new calls):** ~3 — Résumé Review: "Five years at one employer is a real
+strength worth keeping front and center", addressing the user by name; Ask Coach near-limit: closing
+question "what are you working toward?". ~2–3 — Job Hunt: task-focused, little acknowledgement of
+the person. **No clean 1, 2, 4 or 5 samples.**
+
+---
+
+## Locked Targets — Phase 5 batch decision *(shotgun run 2026-10-22, `[$]` until Anthony reviews)*
+
+**This table is the source of truth for every mode × axis target.** The Interaction Modes table below
+keeps the per-mode history and anchor quotes; where a number there differs, this table wins. Each cell
+is `target · confidence`. Confidence: **H** = 3+ matching live draws; **M** = several single draws
+agreeing; **L** = one draw or inferred. Haiku is near-deterministic on these prompts (repeat draws
+often word-for-word identical), so an H on a Haiku cell means "stable", not "independently sampled".
+Length targets describe the baseline-severity reply; Urgency governs how far severity may stretch it.
+
+| Mode (model) | Metaphor | Urgency | Length | Directness | Warmth |
+|---|---|---|---|---|---|
+| Ask Coach (Haiku; Sonnet on range turns) | 3 · H | 3 · H | **2** · M | 3 · H | 3 · H |
+| Net Worth — Amber (Haiku) | 3 · H | **4 · M** — one value for the whole card | 2 · H | 3 · H | 3 · H |
+| Net Worth — Red (Haiku) | **1** · H | ↑ | 2 · H | **4** · H | 3 · H |
+| Net Worth — Green (Haiku) | 3 · H | ↑ | **2–3** · H | 3 · H | **3** · H |
+| Job Hunt Chat (Sonnet) | **2** · H | 3 · H | 2 · H | **4** · H | 3 · M |
+| Résumé Review (Sonnet) | 3 · H | n/a | **3** · H | **4** · M | 3 · M |
+
+**Decisions made in the run (each was open going in):**
+- **Ask Coach Length 2**, not 3 — 2 is the persona's own "two to three sentences" rule. ⚠ Natural
+  Haiku runs ~4 sentences / ~96 words (3/3), so this cell is a known overshoot, deliberately NOT fixed
+  by editing `ASK_COACH_SYSTEM_PROMPT` (largest blast radius; per-message Haiku/Sonnet routing,
+  §2.L Phase 7, is the planned lever). Same draws close on a weak action ("Ask me about your goals")
+  instead of a panel — logged, not fixed.
+- **Green Warmth 3**, not 4 — Warmth 4 means naming the user's specific progress, and production's
+  Green context carries no earlier figure to name (see the Green grounding fix below). Revisit when
+  the card passes a real before/after.
+- **Red Warmth 3**, not 2 — a corner man stays on your side when it's serious; draws read steady
+  ("so we can see what stays and what moves"), not clinical.
+- **Job Hunt Directness 4**, revised up from the proposed 3 — 20+ natural draws open verdict-first
+  with the reason ("Riverbend first — you've got an interview scheduled"), which is the Axis 4 test
+  for 4, and is what a job search under runway pressure needs.
+- **Red Directness 4** made real by a prompt line (lead with the runway figure and its biggest
+  driver, no reassurance first); before it, Red opened on the runway but softened it.
+
+**Model switch 2026-10-29 (after the shotgun run below):** "Haiku" in this table now means Claude Haiku 5.5
+and "Sonnet" means Claude Sonnet 5.5 at effort `low`; Haiku 4.5 and Sonnet 5 are retired. Targets are
+unchanged. Known gaps on the new pairing: natural Metaphor ~1–2 on Ask Coach/Amber/Green (TODO §32 A5 —
+target stays 3; deferred to a later prompt-patterning pass, decided 2026-10-30), Job Hunt on Sonnet 5.5 low ~122 words vs ~75 (Length 2 overshoot). Red, Directness and
+Warmth hold. See Known Limitations, "Claude Haiku 5.5 baseline" and "Tuning pass".
+
+**Updates from the 2026-10-29 shotgun run (targets unchanged, levers built):**
+- **Ask Coach Length 2: the ⚠ is cleared.** Five worked examples now close `ASK_COACH_SYSTEM_PROMPT`. The
+  lock check gives 2 sentences ending on Home, and broad answers use 0 tools and 3–4 numbers (the cap is 3,
+  so this is still slightly over). Confidence stays M because the result comes from one deterministic Haiku draw per case.
+- **Ask Coach model.** Turns that need range (what-ifs, decisions, goal-setting, long messages) now go to
+  Sonnet for privileged accounts (`coachPolicy.js`). The same targets apply to both models; Sonnet holds
+  the full range, so it hits them more easily.
+- **Green Warmth.** Green now has a real "before" when the card saved a snapshot at the Amber/Red fire.
+  Live, Haiku names the exact turnaround ("savings rate from 9% to 90%") and reads warm 3–4 ("you've earned
+  it"). The lock stays **3** for Anthony's review; 4 is now grounded for the with-history case if wanted.
+
 ## Interaction Modes — Target Scores
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
@@ -398,11 +509,8 @@ around.
 
 ## Future Axes (not yet defined)
 
-- **Directness / bluntness** — how plainly bad news is stated vs. softened. Related to Axis 2
-  (Urgency Escalation) but not the same thing — Axis 2 is escalation *across* severity levels;
-  this would be the absolute register at a single severity level. The near-limit example under
-  Axis 2 above is already real anchor data for this axis too, whenever it gets defined.
-- **Warmth / formality** — how personal vs. professional the register is
+- ~~**Directness / bluntness**~~ — **promoted to Axis 4 above (2026-10-07).**
+- ~~**Warmth / formality**~~ — **promoted to Axis 5 above (2026-10-07).**
 - ~~**Urgency escalation** — how the voice shifts under Red-tier / runway-critical signals~~ —
   **promoted to Axis 2 above (2026-09-01).**
 - ~~**Sentence economy** — target message length by mode~~ — **promoted to Axis 3 above
@@ -410,7 +518,75 @@ around.
 
 ---
 
+## Combined-Axis Tuning — planned, post-launch (`docs/TODO.md` §2.L Phase 8, recorded 2026-10-08)
+
+Everything above scores one axis at a time. Once Phase 5's targets are locked, the open issues are
+closed and Coach is live, the next pass scores **three axes on the same reply** and tunes their
+1–5 settings as a set per mode. Reason, from this file's own data: the axes are not independent
+(Warmth overrides moved length, Directness overrides moved warmth, Directness 5 collided with
+Urgency on Net Worth Red). A target that holds alone can slip once its neighbours are also set.
+Nothing about method is decided yet — see the TODO entry for the open questions.
+
 ## Known Limitations (live-tested, not yet resolved)
+
+**Tuning pass + switch (2026-10-29, after the baseline below).** Prompt fixes: write tools (`propose_goal`,
+`draft_log_entry`) are called first and answered once; no "I've drafted" without the tool; a PANEL NAMES list
+in Ask Coach ("there is no Goals panel"); Job Hunt names only the Application Tracker / Cash Runway / Weekly
+Burn / Upkeep; status checks skip the week's date as a "number". Live after (Haiku 5.5, Sonnet 5.5 low on Job
+Hunt): duplicate answers 0/5 write cases (was 7/10), claimed-without-tool 0/5, every write tool called,
+`navigate_to` chip back on the goal question, Job Hunt real names 20/20 with Riverbend first 19/20, lock
+check down to ~3 numbers. **Not fixed:** Metaphor — two wording changes (persona "most messages carry one",
+Ask Coach "use exactly one") moved it 0/22 → 3/22 and were reverted; recorded as TODO §32 A5.
+Client fix shipped with the switch: `lib/claude.js` now keeps thinking blocks (with signatures) and sends them
+back on tool rounds, as the 5.5 models expect.
+
+**Claude Haiku 5.5 baseline (2026-10-29) — the same tests, both models, same prompts.**
+`scripts/coach-eval/modelCompare.mjs` re-ran all 25 promptfoo configs on each config's own model and on
+`claude-haiku-5-5` (default effort, ×2; then Haiku 5.5 at `low` ×2). `toolLoopLiveTest.mjs` ran all 30 tool
+cases three ways in production's request shape. The old transcripts weren't reused; prompts have changed
+since. Per call: Haiku 4.5 $0.0023, Haiku 5.5 $0.0006, Sonnet 5 $0.009. Latency: Haiku 4.5 ~1.8s, Haiku 5.5
+~4.4s (thinks ~350–1,500 tokens first; low effort ~3.3s), Sonnet 5 ~3–14s.
+
+| Mode (target M/L/D/W) | Haiku 4.5 (or Sonnet 5) natural | Haiku 5.5 natural |
+|---|---|---|
+| Ask Coach (3/2/3/3) | M 2–3 · L2 · D3 · W3; said "on track" at a 98% spend ratio | M 1–2 (literal) · L2 but ~6 numbers · D3–4 (calls 98% what it is) · W2–3 |
+| Net Worth Amber (3/2/3/3) | ~100 words, idioms | ~65 words, accurate, M 1–2 |
+| Net Worth Red (1/2/4/3) | ~80 words, "buys you a week" | **on target**: verdict first, ~48 words, no figures of speech |
+| Net Worth Green (3/2–3/3/3) | correct | correct, before/after exact, M 1–2 |
+| Job Hunt (2/2/4/3), vs Sonnet 5 | first pick 100%, invents "Applications panel" | **equal**: first pick 100%, own dates right, ~20% longer, invents "Job Hunt panel" |
+| Résumé (3/3/4/3), vs Sonnet 5 | ~290 words | **equal quality**, ~340 words; treats the harness's calibration override as an injected instruction and ignores it |
+
+**Range (extremes asked for by override):** Haiku 5.5 reaches Directness 1 and Warmth 1 on Ask Coach, which
+Haiku 4.5 never did, and Length 4 (129 words vs 68). Metaphor 5 reaches ~3–4 (~4–5 at `low`), still short of
+Opus. Warmth-4 probe: no invented shared history.
+**Tool loop (30 cases):** expected tool 27/30 for each setting. Every figure and date was identical to the tools'.
+Better than Haiku 4.5: broad answers use no tools; no "let me pull that up" narration. **New failures:**
+answers before AND after a write tool (7 of 10 write-tool runs) and one "I've drafted 8 hours of PTO" with no
+tool call (default effort). Fewer `navigate_to` chips. A missed shift is drafted as unpaid instead of asking first.
+**Effort:** default beats `low` on discipline (`low` Red ~85 words, softer; Amber ~90). Low effort only buys speed.
+**Production shape:** stripping thinking blocks from the tool round (as `lib/claude.js` does) caused no error.
+
+**2026-10-29 shotgun run: findings carried forward (live, scoped test key).**
+- **A conditional branch inside one prompt perturbed unrelated figure quoting on Haiku.** Folding Green's
+  "with history / without history" cases into one addendum made Haiku misquote "+$55 vs your average" as
+  "five dollars ahead" on all 3 no-history draws. This is new: the earlier Green draws quoted "55 dollars"
+  correctly. It was fixed by keeping two separate addenda, so the no-history prompt is byte-identical to
+  the verified one. The lesson fits the earlier ones (priming examples, idiom-counting): on Haiku, prefer
+  separate prompts over in-prompt branching.
+- **Goal-setting on Haiku still guesses timing.** In 2 of 3 two-turn draws, Haiku writes its lead-in before
+  calling `propose_goal`, including an ungrounded "you'd hit it by…" claim. The card itself is correct.
+  These turns now route to Sonnet, which grounded them in 13 calls. Accounts outside the Sonnet audience
+  still get the Haiku behaviour.
+- **Job Hunt (Sonnet), noted but not fixed:**
+  - It converts runway days to weeks itself. The maths has been correct, but the context already gives
+    "≈N weeks".
+  - It names panels that may not exist on screen: "Runway panel", "Expenses panel", "Applications panel".
+    These are unverified against New Job Season's real labels, so check them before launch.
+- **Sonnet (Job Hunt, and Ask Coach range turns):** after a tool call it sometimes repeats its closing sentence.
+- **Ask Coach (Haiku), noted but not fixed:**
+  - Mechanics ("how does X work") answers still run long with stacked idioms.
+  - One broad answer gave a goal date as "late August" instead of the paired date and week.
+  Both are candidates for one more worked example, not another rule.
 
 **Ask Coach broad-question number cap doesn't hold in live model output (2026-08-26, DW-19,
 `drift-app-warden.md` F160).** First-ever live test of Coach against a real model this session
@@ -802,6 +978,153 @@ in the closing line" + "only flag a date after Today". Live re-verify (Sonnet, `
   close on the same leadership item the body names, now as an action rather than a re-description.
   **Length unchanged:** 13 / 9 / 19 sentences, 318 / 257 / 351 words (before: 13–17, 272–346) —
   no trimming achieved; the Axis 3 proposal (target 3, range 3–5) stands.
+
+**Directness (Axis 4) extremes elicited, 2026-10-07 (Phase 5e; 8 calls, 0 errors, 1 draw each, one
+model per mode, only directness overridden — length/metaphor/grounding held).** Configs:
+`promptfooconfig.phase5e-directness-{askcoach,jobhunt,networth,resume}.yaml`.
+
+| Mode (model) | Directness 1 ("Cushioned") | Directness 5 ("Hard truth") | Read |
+|---|---|---|---|
+| Job Hunt tight (Sonnet) | **Reached cleanly** — "it might be … around Riverbend", "Whenever you get a moment, it could be worth glancing…"; leads with reassurance, never states a priority | **Reached cleanly** — "Riverbend first: your interview is live … a quiet application doesn't pay rent next week and an interview might" — verdict + the avoided thing (drafting Cascade check-ins instead of prepping) | Full 1→5 range |
+| Ask Coach near-limit (Haiku) | **NOT reached** — opens "You're running on fumes right now"; same plain-to-blunt register as natural | Modest — "You're spending nearly everything you make … that's the number that has to move"; reads ~4, no "thing they're avoiding" | Haiku range compressed to ~3–4 |
+| Net Worth Red (Haiku) | **NOT reached** — "one missed paycheck … away from a real problem" (also longer: 141 words, 5 sentences) | Reached — but via "you're flying blind in the most critical 22 days" and "stop drifting" | Floor unreachable; 5 collides with Red's calm/"never catastrophize" intent |
+| Résumé Review (Sonnet) | **NOT reached** — natural output already names gaps ("weakest line", "zero evidence"); override changed little | Reached — opens "Here's the hard truth: …zero evidence you've ever led anyone" | Natural ≈ 4; usable range 4–5 |
+
+**Findings.** (1) **Haiku's directness range is compressed** (same shape as its Axis 3 finding) —
+it cannot be talked into cushioning on Ask Coach or Net Worth; Sonnet has real range wherever the
+mode's own task doesn't force gap-naming. (2) **Résumé Review's directness floor is structural**,
+like its length floor: the addendum mandates naming gaps, so natural ≈ 4 and a "3 (Plain)" default
+is already exceeded — decide in the batch pass whether this mode's target is 4. (3) **Directness 5
+and Urgency interact on Net Worth Red**: the 5 draw re-uses the known "flying blind" flourish and
+adds "stop drifting", i.e. harsher than the Red addendum intends — directness 5 is not safe to
+assign to Red. (4) **Watch item (grounding), not yet a finding:** both Job Hunt override draws
+read "applied … 8 days ago" as interview timing ("interview … from 8 days ago", "you've got 8 days
+to show up ready"); the data has no interview date. The 6 natural re-verify draws (2026-10-06)
+never did this. If it recurs, label the days-ago figure as "since applying" in `buildJobHuntContext`.
+n=1 per cell — directional, not verified.
+
+**Warmth/Formality (Axis 5) scores 1–2 elicited, 2026-10-07 (Phase 5f; 9 calls, 0 errors, 1 draw
+each, one model per mode, only warmth overridden, calm scenarios so urgency doesn't confound).**
+Configs: `promptfooconfig.phase5f-warmth-{askcoach,jobhunt,networth,resume}.yaml`. Score 3 = the
+natural default, already sampled; scores 4–5 deliberately not sampled (see Axis 5 grounding
+constraint) except one probe.
+
+| Mode (model) | Warmth 1 ("Clinical") | Warmth 2 ("Professional") | Read |
+|---|---|---|---|
+| Job Hunt healthy (Sonnet) | **Reached** — "priority is preparation, not follow-up contact … Action: open the Riverbend … entry" (52 words, no second-person care) | **Reached** — imperative, impersonal ("Prioritize Riverbend Logistics …") | Full 1–3 range |
+| Résumé Review (Sonnet) | **NOT reached** — opens "Marcus, here's the straight read", "you weren't bouncing around" (warmer than the 2) | **Reached** — "Your experience entry for DHL … does not specify …", neutral throughout | 2–3 range; the "1" override came out *warmer* than the "2" |
+| Ask Coach default (Haiku) | ~2 — report-like but keeps "so the app can show you exactly how fast you can fund it" | ~3 — "you're tracking well … turns into real progress"; indistinguishable from natural | Haiku range compressed to ~2–3 |
+| Net Worth Green (Haiku) | **NOT reached** — "a clean turnaround … the momentum is real" | ~3–4 — "the corner work is paying off … That number is yours to own" | Floor unreachable on a celebratory tier |
+
+**Findings.** (1) **Only Job Hunt (Sonnet) yields a clean 1→2→3 ladder.** Haiku can't go clinical
+on Ask Coach or Net Worth — the same compressed-range shape as its Axis 3 and Axis 4 findings,
+now on three axes: Haiku's range is narrow on every axis tested. (2) **Warmth and directness are
+entangled in practice**: Résumé's "clinical" draw leaned on "the straight read" (a directness cue),
+and Job Hunt's clinical draw also shrank to 52 words (a length confound — warmth overrides cut
+length ~30% there). Axis 5 scores from a single draw need that caveat. (3) **Net Worth Green's
+tier addendum is itself celebratory**, so a score below 3 there conflicts with the tier's job —
+treat Green's target as ≥3, not a tunable 1–5. (4) **Grounding probe (Warmth 4, Ask Coach/Haiku,
+no real history in context): 1 draw, did NOT invent a shared past** — it reached only ~3 ("pick
+something real … watch the app show you exactly when you'll hit it") and stayed inside the data.
+That is weak evidence: Haiku couldn't *reach* 4, so it never needed to fabricate. The real test
+is a stronger model that will comply — one Sonnet probe (Job Hunt) is the cheapest next call.
+(5) Watch item from the Directness pass (Job Hunt "days ago" misread as interview timing): **0 of 2
+recurrences** here — both warmth draws stated "applied 8 days ago" / omitted it. n is still tiny.
+n=1 per cell — directional, not verified.
+
+**Warmth 4 grounding probe on Sonnet + deeper look at the Job Hunt "days ago" watch item, 2026-10-07
+(Phase 5f/5g; 4 calls, 0 errors).**
+- **Probe (Sonnet, Job Hunt healthy, Warmth 4, no real history in context): did NOT invent a shared
+  past.** It reached ~3.5 by praising something *in the data*: "You applied 8 days ago, which is solid
+  momentum". So even a model that complies with the override stayed grounded — but the data happened to
+  contain something to praise; not yet tested where it contains nothing. n=1.
+- **"Days ago" misread, base rate:** 2 misreads (both on the original Directness pair, tight runway:
+  "interview … from 8 days ago", "8 days to show up ready") vs 0 of 3 on a same-config rerun
+  (`promptfooconfig.phase5g-daysago-armA.yaml`, Directness-5 pressure, tight), 0/2 Warmth draws, 0/1
+  probe, 0/6 natural draws → roughly 2 of 5 under override pressure on tight runway, 0 of 9 otherwise.
+  Likely cause: the line reads `Interview scheduled, applied 2026-03-01, 8 days ago` — status and day
+  count adjacent, no interview date exists — **plus a fixture coincidence: tight runway is 9 days and
+  Riverbend is 8 days**, so the model can tie them together. A relabel ("N days since applying") is
+  cheap insurance but a before/after test would hit a floor effect (arm A is already 0/3), so it was
+  not run.
+- **More frequent finding from the same draws: runway → weeks conversion is wrong on tight runway.**
+  9 days came out as "maybe two more weeks of searching" and "two rounds of burn" (2 clear errors in
+  arm A; 9 days ≈ 1.3 weeks), plus the earlier "a little under two weeks" (loose). ~3 of the 6 tight
+  draws that convert it get it wrong or loose. `JOB_HUNT_ADDENDUM` asks the model to do this
+  arithmetic itself; same class as the days-ago and Today fixes — **compute it in
+  `buildJobHuntContext` (e.g. "~9 days (≈1.3 weeks of searching)")** rather than ask. Proposed, not built.
+
+**Job Hunt runway-weeks fix applied + re-verified; relabel tried and REVERTED, 2026-10-08 (Phase 5g;
+18 calls over two verify rounds, 0 errors).** `buildJobHuntContext` now emits
+`Cash Runway: ~9 days (≈1.3 weeks of searching)` (computed in the builder, `runwayWeeksText`), and
+`JOB_HUNT_ADDENDUM` says to use that weeks figure and the "N days ago" figure and never estimate
+elapsed time.
+- **Round 1 (also relabelled applied-days to "N days since applying" + a prompt clause saying it counts
+  from the application date, not an interview): FAILED on its own target.** The "8 days ago → interview
+  timing" misread went from 0/3 to **2/3** under directness-5 pressure ("it's 8 days out, not 17"), and
+  2/3 natural tight draws mixed up the two applications' dates ("your March 1 — sorry, February 20
+  application"). Runway also stopped being cited at all in natural draws (0/6). The weeks conversion
+  itself was fine whenever cited. **Lesson: a label tweak plus an explanatory clause made things
+  worse; the relabel and the clause were reverted** (back to "N days ago").
+- **Round 2 (weeks computed + light prompt clause, "N days ago" kept): holds.** Misread 0/9 draws;
+  weeks conversion correct in 5/5 draws that cite the runway ("1.3 weeks", "10 weeks"); first pick
+  Riverbend 9/9; no date mix-ups; one draw correctly derived "by March 18" (today + 9 days). Natural
+  draws cite the runway only 2 of 6 — optional by the addendum's wording, varies run to run, not
+  treated as a defect.
+- **Net Job Hunt status (this session's fixes together):** first-pick stable, elapsed days correct,
+  weeks correct. Remaining known: n is small everywhere (3–9 draws per cell); the 8-vs-9-day fixture
+  coincidence (tight runway 9, Riverbend 8) is still in `testAccount.js` and may be worth breaking
+  before any locking decision.
+
+**Net Worth Red flourish fix + Job Hunt fixture de-coincidence, 2026-10-08 (Phase 5h; 7 calls, 0 errors).**
+- **Red: FIXED (3/3).** `TIER_ADDENDA.red` now bans every figure of speech, not just corner-man
+  phrasing (names "flying blind", "running on fumes", "the clock is ticking" as examples), and
+  restates the two-to-three-sentence rule — the same restate-it-locally pattern that fixed Amber.
+  Natural Haiku draws (`promptfooconfig.phase5h-red-refix.yaml --repeat 3`): 0/3 flourishes, all
+  3 sentences / 81–95 words (Red was previously the longest tier, up to ~141 words). Residual
+  wording to watch: "survive the next three weeks" (one draw) — literal, but leans dramatic for
+  "never catastrophize". Separate fixture-fidelity note, not a prompt bug: the Red fixture shows a
+  $900 next paycheck during New Job Season, so draws speculate about "the new job settling".
+- **Job Hunt fixture:** Riverbend's applied date moved 2026-03-01 → **2026-03-04** (5 days ago) so
+  no figure sits next to the ~9-day tight runway. 4 draws (`phase5b --repeat 2`): Riverbend first
+  4/4, "17 days" correct, "≈1.3 weeks" correct in both tight draws, no days-as-interview misread.
+- **Still open — application-date mix-up:** 1 of 4 told the user to email Cascade "referencing your
+  March 4th application" (Riverbend's date; Cascade's is Feb 20). Seen before: 2/3 in the reverted
+  relabel round, 0/6 in the round after, now 1/4 — so it is a low-rate background error, not
+  caused by the relabel alone. Likely cause: the context lists applications newest-first and the
+  model grabs the first date. Not fixed yet; candidates: tell the addendum to cite an
+  application's own date only, or drop dates from the advice and keep "N days ago".
+
+**Job Hunt application-date mix-up — own-date rule added, 2026-10-08 (6 calls, 0 errors).**
+`JOB_HUNT_ADDENDUM` now says each application's applied date is on its own line and must never be
+borrowed from another application's line. Verify (`phase5b --repeat 3`): 0/6 mix-ups, first pick
+6/6 Riverbend, "17 days" correct throughout. **Weak evidence:** only 1 of 6 draws cited a calendar
+date at all (correctly, "February 20th" for Cascade) — most now say "17 days" instead — so this
+shows no recurrence, not a measured fix. Treat as closed-pending: reopen if a mix-up reappears.
+
+**Phase 5 lock check + alignment fixes, shotgun run 2026-10-22 (27 calls, 0 errors, all Haiku).**
+Natural draws on every Haiku cell against the proposed matrix (`promptfooconfig.phase5.yaml`,
+`promptfooconfig.phase5i-lock-askcoach.yaml`):
+- **Green grounding bug (production):** `CoachNetWorthCard` passes only current numbers, but the
+  addendum said "name the specific improvement" — Coach invented a delta ("a real shift from where you
+  were"). Fixed: Green names what is healthy now and never quotes a before figure. Verified: "You're
+  back on solid ground — your surplus is holding steady at 760 a week…", no before figure.
+- **Invented panel names:** Amber said "Expenses panel", Green "Goals panel" — neither exists (Red was
+  fine: it has its own action list). Fixed with a shared `NET_WORTH_PANEL_ACTION` (Home / Income /
+  Upkeep / Log, on-screen names, warden F178). Verified: Amber → "Upkeep", Green → "Home".
+- **Green stacked two corner-man touches** ("the corner work paid off" + "765 left to roll with").
+  Fixed with the Amber-style one-touch cap.
+- **Tried and reverted — counting every idiom toward the one-touch cap:** Amber went from two light
+  touches to four and from 92 to 131 words ("tailwind", "breathing room", "moves the needle"). Quoting
+  example idioms in the rule ("eating up") also got that exact idiom used. Third time this project has
+  seen a tighter or more explained rule backfire on Haiku (see the "since applying" relabel). Amber stays
+  on the plain corner-man cap: one corner-man phrase plus at most one everyday idiom reads as 3.
+- **Red Directness 4:** verdict-first line added; verified "You have 22 days of runway left and your
+  rent is carrying 57% of your weekly spend" (57% = 400/700, correct).
+- **Carried, not fixed:** Ask Coach length overshoot + weak closing action (see the locked table);
+  the Red fixture shows a $900 paycheck during New Job Season, so draws mention "when your paycheck
+  changes"; Red's three action names (Triage Expenses / Review Goals / Life Events) are spec names —
+  `CoachNetWorthCard` renders no buttons, so they are plain text the user has to map to a panel.
 
 ## Process For Filling This In
 

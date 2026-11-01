@@ -110,6 +110,7 @@ describe("eval fixture — tool-ready sibling account", () => {
       simulate_new_goal: { target: 3000, insertAtRank: 1 },
       simulate_overtime_hours: { hours: 8 },
       simulate_without_logged_event: { type: "missed_unpaid" },
+      draft_log_entry: { type: "missed_unpaid", weekOffset: -1, shifts: 1 },
     };
     // Guards against a tool being added without fixture data behind it.
     expect(Object.keys(calls).sort()).toEqual([...COACH_TOOL_NAMES].sort());

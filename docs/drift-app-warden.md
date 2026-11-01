@@ -1548,12 +1548,25 @@ derives from a shared `newJobSeasonDash` memo (one `computeNewJobSeasonRunway()`
 not two) — the Live State Inspector's three new New Job Season rows (`New Job Season Date`,
 `Unemployment Wkly`, `Unemployment Wks Left`) read `newJobSeasonDash.benefitsRemainingWeeks`
 from that same memo, isAdmin-gated diagnostic display only, no new call site.
+> **2026-10-29:** Job Hunt Coach's `simulate_runway_change` (`coachTools.js`) re-runs this same
+> `computeNewJobSeasonRunway()` + `resolvePrimaryRunwayDays()` pair with one expense changed — it is a consumer of
+> Spine A, not a new formula; it inherits every IF/THEN here.
 > **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
 > formula — everything routes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`
 > (Spine A), now including the admin Live State Inspector via the shared `newJobSeasonDash`
 > memo. **IF** the gate changes, **THEN** note it must stay `canAccessAskCoachGeneral` —
 > `isInvestor` now **is** folded in via `hasPrivilegedAccess` (2026-07-25), superseding
-> this entry's older "never fold in isInvestor" language; see F111. Check:
+> this entry's older "never fold in isInvestor" language; see F111. **IF** a tier addendum in
+> `coachPrompts.js` (`TIER_ADDENDA`) asks Coach to describe a *change* ("improvement", "turnaround",
+> "dropped from"), **THEN** the card must first pass the earlier figure into `buildCoachContext`. Done for
+> Green (2026-10-29, shotgun): each fire persists `coachSignalState.lastFiredSnapshot` =
+> `netWorthCheckInSnapshot()` (same `computeCoachHeadlineFigures()` the context block prints — never a
+> parallel formula); a Green after Amber/Red passes it as `earlierCheckIn` (→ "Earlier check-in" line) AND
+> calls `buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: true })`. **IF** you change either half,
+> **THEN** change both — the with-history addendum and the context line are one unit, and a Green with no
+> snapshot (older accounts) must keep the plain, no-before-figure addendum byte for byte (folding both
+> cases into one addendum made Haiku misquote "+$55" as "five dollars"; Known Limitations, rubric).
+> Amber/Green action names come from `NET_WORTH_PANEL_ACTION`; keep them equal to the on-screen nav (F178). Check:
 > `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
 **F142 · `estimateGoalNextYear(remainingAmount, cfg, expenses)`** — `finance.js:64–124`, consumed
@@ -1606,6 +1619,10 @@ on the card.
 > **THEN** the hero and the card beneath it can disagree about the same goal — the exact
 > two-surfaces-one-number shape of F18's own trigger. Check: grep `finishDate` in
 > HomePanel — every consumer traces back to `resolveGoalFinishInfo`.
+> **IF** a goal-card button is added or changed (e.g. **ASK COACH**, TODO §32 A1, 2026-10-30), **THEN**
+> change BOTH card copies (mobile and desktop branches) — `HomePanel.test.jsx` asserts ≥2 ASK COACH
+> buttons — and keep its question rank-only (`goalCoachSeed(i + 1)`, F114), the same `i + 1` as
+> `data-coach-ref="goal:<rank>"`.
 > **IF** a second caller of `computeClaimDates()` is added (App.jsx's Cyborg Resource snapshot,
 > TODO §22.F, is the first), **THEN** it must pass exactly the props HomePanel receives —
 > `timelineWeekNets` is `futureWeekNetsRaw`, `today` is `effectiveToday`, log totals from the
@@ -5172,8 +5189,8 @@ with no server gate is a D4 finding.
 
 | Gate | Definition | Tier inputs | Client call sites | Server / RLS gate |
 |---|---|---|---|---|
-| **`canAccessAiFeatures`** | `isAdmin \|\| isTester \|\| isInvestor` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor` | `NewJobSeasonHomePanel.jsx` (Job Hunt Assistant + Résumé Review entry points, F124) | Job Hunt/Résumé Review reuse `api/coach.js`'s wider `canAccessAskCoachGeneral` server-side, not this function directly — see F124's "known gap" note; no per-surface server re-check exists yet |
-| **`canAccessAskCoachGeneral`** | `isAdmin \|\| isTester \|\| isInvestor \|\| entitlement.isEntitled` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor`, subscription columns | `App.jsx` (Ask Coach panel + bottom-nav item), `HomePanel.jsx`/`NewJobSeasonHomePanel.jsx` (Net Worth card) | `api/coach.js:93` — re-checks on `userRow.is_admin`/`is_tester`/`is_investor` + server-derived `entitlement` before streaming (the real model gate for every surface that shares this route, Job Hunt/Résumé Review included) |
+| **`canAccessAiFeatures`** | `isAdmin \|\| isTester \|\| isInvestor` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor` | `NewJobSeasonHomePanel.jsx` (Job Hunt Assistant + Résumé Review entry points, F124) | **CLOSED 2026-10-29:** `api/coach.js` now applies this server-side per request `surface` via `src/lib/coachPolicy.js` (`COACH_SURFACES`: job_hunt/resume_review privileged-only; each surface's allowed models; Ask Coach Sonnet only for `ASK_COACH_SONNET_AUDIENCE`; tool list dropped past `MAX_SERVER_TOOL_ROUNDS`). **IF** a Coach surface is added, **THEN** add it to `COACH_SURFACES` and pass `surface` from its `chatWithCoach` call — an unknown surface is a 400. **IF** a surface's model changes, or a model that thinks by default (Sonnet 5+, Haiku 5.5) is added, **THEN** re-measure that surface's `maxTokens` — thinking counts toward it; the flat 1024 cut 1 of 2 production-shaped Résumé reviews off mid-sentence (fixed 2026-10-29: Résumé 4096, Job Hunt/Ask Coach 2048, Net Worth 1024; `coach.test.js` pins all four). **IF** `MODEL_IDS`/`MODEL_EFFORT` in `api/coach.js` change (Haiku 5.5 + Sonnet 5.5 effort `low` since 2026-10-29), **THEN** keep `lib/claude.js` passing `thinking`/`redacted_thinking` blocks back unchanged on tool rounds (`claudeToolLoop.test.js`), never send `temperature`/`top_p`/`top_k`, a prefill, a forced `tool_choice`, or `thinking: {type: "disabled"}` (all 400 on the 5.5 models), and re-run `scripts/coach-eval` (`modelCompare.mjs`, `toolLoopLiveTest.mjs`) before shipping. Older note, kept for history: Job Hunt/Résumé Review reuse `api/coach.js`'s wider `canAccessAskCoachGeneral` server-side, not this function directly — see F124's "known gap" note; no per-surface server re-check exists yet |
+| **`canAccessAskCoachGeneral`** | `isAdmin \|\| isTester \|\| isInvestor \|\| entitlement.isEntitled` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor`, subscription columns | `App.jsx` (Ask Coach panel + bottom-nav item; and the `onAskCoach` prop it passes to `HomePanel`/`BudgetPanel` — TODO §32 A1 — passed ONLY when this gate is true, so the cards' Ask Coach buttons never render for an account that can't open Coach), `HomePanel.jsx`/`NewJobSeasonHomePanel.jsx` (Net Worth card) | `api/coach.js:93` — re-checks on `userRow.is_admin`/`is_tester`/`is_investor` + server-derived `entitlement` before streaming (the real model gate for every surface that shares this route, Job Hunt/Résumé Review included) |
 | **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` — deliberately no `isInvestor` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
 | **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| isTester \|\| config.isInvestor` (F81, widened 2026-07-25 — was `isAdmin \|\| config.isInvestor` only, testers used to just ride the trial window) | `is_admin`, `is_tester`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
 | **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — SELECT now supplies `is_tester` (DW-7 fixed, F112/F86); field-coverage regression test enforces it stays that way |
@@ -5257,6 +5274,15 @@ epoch arg as HomePanel (F18)**, the exact parity a 2026-07-16 live-test bug viol
 expense cost → `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102, the `bcc8a6a`
 fix); period labels → `payPeriodUnit`/`weekNumToPaycheckNum`/`getPayPeriodBounds` (Spine A,
 schedule-aware — never hardcode "week"); `perCheckFactor` = `52/checksPerYear` scaling.
+> **Coach panel notes + Upkeep Health helper (2026-10-30, TODO §32 A3/A4).** `lib/upkeepHealth.js`
+> (`spendRatioOf`, `upkeepHealthBand`) is now the ONE spend-ratio formula — Home's Upkeep Health tile, this
+> builder and the Upkeep note all call it. `lib/coachNotes.js` templates take the exact value each tile
+> renders (Home: `leftThisWeek * perCheckFactor`, `nextWeekDisplay * perCheckFactor`; Log: App `logTotals`),
+> never a recomputation. **IF** a tile's displayed value or its formula changes, **THEN** change the value
+> passed to its note in the same commit (`coachNotes.test.js`, the panels' `coach-note` tests). **IF** a
+> note template is added, **THEN** it takes the tile's figure as an argument — no finance math inside
+> `coachNotes.js`. The "opened from the X panel" context line (A3) carries no figure and uses
+> `VIEW_LABELS` (F178).
 > **IF** a context line is added or changed, **THEN** it MUST call the authoritative Spine-A
 > function its UI twin calls — writing a local approximation is the D1 pattern §6 exists to
 > catch (the `billingMeta` estimate once disagreed by double digits; the flat-52 double-
@@ -5446,7 +5472,7 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > is a *date* or *elapsed time*, **THEN** compute it in the builder (`buildJobHuntContext` emits `Today:` +
 > `N days ago` per application; `ResumeReviewCard` prepends `Today:` — 2026-10-06, found because the model
 > guessed both) and mirror it in `scripts/coach-eval/prompts/resumeReview.js`; never leave the model to infer
-> it. **IF** persistence/retention/summary
+> it (runway days → weeks is computed there too: `runwayWeeksText`). Do NOT relabel "N days ago" to "since applying" — tried 2026-10-08, made the misread worse. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
 > entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
 > and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags
@@ -5677,7 +5703,9 @@ Caught in test, before any live call.
 > never `periodsToFund` (`wN`) — duration and completion move independently for every goal except
 > rank 1, where `sW = 0` makes them coincidentally equal, which is exactly why a rank-1-only test
 > would have passed. **IF** a new field is added to `summarizeGoal`, **THEN** state which of the
-> two it is. Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
+> two it is. **IF** Coach must describe the *size* of a shift, **THEN** it quotes `differenceInWords` /
+> `daysSooner` / `finishDateMoves`, computed in `diffGoals` from the pay schedule — never converts periods itself
+> (2026-10-29: Haiku turned 0.08 weeks into "five days sooner"). Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
 > and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
 > ranks, which is what fails under the `wN` comparison.
 
@@ -5833,6 +5861,11 @@ renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
 > entire app — there is no top-level error boundary — while `vite build` and all 1859 unit tests
 > passed. **IF** a callback defined near the other Coach handlers needs a value computed after
 > those early returns, **THEN** it reads a ref assigned during render, never the const.
+> **`draft_log_entry` (2026-10-29) is the second write-shaped tool, same rule:** it returns a draft shaped
+> exactly like LogPanel's `nEv`; App holds it as `coachLogDraft`, LogPanel opens its own add form with it and the
+> user saves through `addLog` (existing eager save). **IF** LogPanel's add-form fields change, **THEN** update
+> `toolDraftLogEntry` in the same PR — a stale field silently drops from the prefill. **IF** a Coach tool ever
+> needs to write directly, **THEN** it goes through the owning panel's handler like these two, never its own write.
 > Check: `coachTools.test.js`'s propose_goal block (projection parity with simulate_new_goal, the
 > no-date branch, duplicate-without-leak, validation), `coachToolUI.test.jsx`'s `CoachGoalCard`
 > block (edits are what get created, re-projection on amount change, single-confirm, read-only),

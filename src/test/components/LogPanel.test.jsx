@@ -101,6 +101,16 @@ const mkBonus = (weekEnd, amount) => ({
 // Visibility
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('Coach note (TODO §32 A4)', () => {
+  it('nudges an empty log and nets App logTotals once entries exist', () => {
+    const { unmount } = render(<LogPanel {...BASE_PROPS} logs={[]} />)
+    expect(screen.getByTestId('coach-note')).toHaveTextContent(/Nothing logged yet/)
+    unmount()
+    render(<LogPanel {...BASE_PROPS} logs={[{ id: 'a', type: 'bonus', amount: 250 }]} logNetLost={0} logNetGained={190.5} />)
+    expect(screen.getByTestId('coach-note')).toHaveTextContent('Your 1 logged entry adds $191 to take-home this year.')
+  })
+})
+
 describe('Attendance History — visibility', () => {
   it('does not render when logs array is empty', () => {
     renderPanel([])
@@ -609,5 +619,17 @@ describe('Tips/Commission entries in the general entry list', () => {
     render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
     expect(screen.getByText('Gained Money')).toBeTruthy()
     expect(screen.queryByText('Missed Money')).toBeNull()
+  })
+})
+
+// 2026-10-29: Coach's draft_log_entry hand-off opens the add form pre-filled and reports it consumed.
+describe('LogPanel — Coach log draft hand-off', () => {
+  it('opens the add form with the draft and calls onCoachDraftConsumed once', () => {
+    const onCoachDraftConsumed = vi.fn()
+    const draft = { weekEnd: '2026-03-09', weekIdx: 9, weekRotation: 'Standard', type: 'bonus', shiftsLost: 0, hoursLost: 0, ptoHours: 0, amount: 250, note: '' }
+    render(<LogPanel {...BASE_PROPS} logs={[]} coachDraft={draft} onCoachDraftConsumed={onCoachDraftConsumed} />)
+    expect(screen.getByText('SAVE')).toBeTruthy()
+    expect(screen.getByDisplayValue('250')).toBeTruthy()
+    expect(onCoachDraftConsumed).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,0 +1,27 @@
+description: >
+  Phase 5j (2026-10-29, shotgun) — Net Worth GREEN with a real "before". CoachNetWorthCard now
+  persists netWorthCheckInSnapshot() when a tier fires and passes it to Green as an
+  "Earlier check-in" context line; the Green addendum names the change using exactly those
+  figures when the line exists, and keeps the no-before-figure rule when it doesn't.
+  Checks: (1) with history — the comparison uses only the line's figures + current figures,
+  no invented percentage change; (2) without history — still no before-figure (regression).
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 1024
+
+prompts:
+  - id: file://prompts/netWorthTrigger.js
+    label: net-worth-trigger
+
+tests:
+  - description: "Green — with the Amber snapshot (9% / 91% / $75)"
+    vars:
+      tier: green
+      withHistory: true
+  - description: "Green — no snapshot (regression: no before-figure)"
+    vars:
+      tier: green

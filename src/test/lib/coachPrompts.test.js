@@ -28,9 +28,50 @@ describe("COACH_PERSONA_PROMPT", () => {
 });
 
 describe("ASK_COACH_SYSTEM_PROMPT", () => {
+  it("Haiku 5.5 tuning (2026-10-29): one write after a write tool, no claimed action, real panel names, three figures", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/call the tool first and write your message once, after its result/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Never say you've drafted, proposed, logged or saved anything unless you called that tool in this same turn/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/There is no Goals panel and no Expenses panel/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/The current week's date is not one of the numbers a status check needs/);
+  });
+
   it("includes the shared persona and the feature guide", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toContain(COACH_PERSONA_PROMPT);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/FEATURE REFERENCE/);
+  });
+
+  // 2026-10-29 (shotgun, §2.L): prose rules alone never stopped the fabricated counterfactual
+  // (3 live occurrences), the ~10-number broad answer (DW-19), the weak closing action, or a
+  // mid-sentence navigate_to call. Worked examples are the lever the rubric called for.
+  it("carries worked examples for status, expense, what-if and tool-timing turns, marked illustrative", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/WORKED EXAMPLES/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/illustrative only; never reuse them/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/must come from a simulate_ tool called in this same turn/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never stopping mid-sentence to call a tool/i);
+    // live 2026-10-29: the first draft's "from <date> to <date>" example made Coach invent a second
+    // date when the simulation showed none — the same-date case is now spelled out.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never write a second date that isn't in the result/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/before you write any of your answer/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Exactly three numbers, one takeaway/i);
+    // live 2026-10-29: "call every tool first" made a broad answer fan out to 8 tools.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/A status check or a broad question needs no lookup tools at all/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/quote the tool's differenceInWords exactly/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never reply with only a link/i);
+    // the examples sit before the feature guide, which stays last
+    expect(ASK_COACH_SYSTEM_PROMPT.indexOf("WORKED EXAMPLES")).toBeLessThan(ASK_COACH_SYSTEM_PROMPT.indexOf("FEATURE REFERENCE"));
+  });
+
+  // 2026-10-29 (shotgun, §2.L / handoff §6 item 3): goal-setting as an identity conversation —
+  // one question when the purpose is missing, never when it's already given.
+  it("asks one identity question before proposing an open-ended goal, but not when the user gave what and how much", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/GOAL-SETTING/);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/ask one short question about what reaching it would make possible/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never ask a question they've already answered/i);
+    // live 2026-10-29: Coach guessed "week 34" / "week 29" while the tool returned week 49 — twice,
+    // even when told to call first. The card already shows the real date, so the text states none.
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/your message must not state a finish date or say what it does to their other goals/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/Always make the proposal yourself with propose_goal/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/If the snapshot shows a chosen identity/i);
   });
 
   it("instructs leading with real personal data over restating the guide, across all panels", () => {
@@ -122,6 +163,53 @@ describe("buildNetWorthSystemPrompt", () => {
     expect(prompt).toMatch(/Life Events/);
   });
 
+  // 2026-10-08: Red complied with "drop the corner-man phrasing" by swapping in other color
+  // ("flying blind", "stop drifting") and ran the longest of the three tiers. The addendum now
+  // bans all figurative language and restates the length rule, the same restate-it-locally
+  // pattern that fixed Amber's stacked touches.
+  it("bans every figure of speech on the red tier (not just boxing) and restates the length rule", () => {
+    const prompt = buildNetWorthSystemPrompt("red");
+    expect(prompt).toMatch(/every other figure of speech with it/i);
+    expect(prompt).toMatch(/flying blind/i);
+    expect(prompt).toMatch(/usual two to three sentences/i);
+  });
+
+  // 2026-10-22 (shotgun, Phase 5 lock): Red directness locked at 4 — natural draws opened on the
+  // runway figure but softened it ("that's real, but…"). Verdict first, cause named, no softener.
+  it("leads the red tier with the runway figure and its biggest driver, no reassurance first", () => {
+    expect(buildNetWorthSystemPrompt("red")).toMatch(/lead with the runway figure and the single biggest thing driving it/i);
+  });
+
+  // 2026-10-22: production's Green context (CoachNetWorthCard → buildCoachContext) carries only the
+  // current numbers — no earlier figure — yet the old addendum asked Coach to "name the specific
+  // improvement", so it invented deltas ("a real shift from where you were").
+  // 2026-10-22: Green stacked two touches ("the corner work paid off" + "765 left to roll with") and
+  // both Amber and Green invented panel names ("Expenses panel", "Goals panel").
+  it.each(["amber", "green"])("caps tier %s at one corner-man touch and ends on a real, on-screen panel name", (tier) => {
+    const prompt = buildNetWorthSystemPrompt(tier);
+    expect(prompt).toMatch(/at most one light corner-man phrase/i);
+    expect(prompt).toMatch(/Home \(where goals and Claim Dates live\), Income, Upkeep \(expenses and loans\), or Log/);
+    expect(prompt).not.toMatch(/Budget panel|Expenses panel|Goals panel/i);
+  });
+
+  it("tells the green tier it has no 'before' figure and must not size the change", () => {
+    const prompt = buildNetWorthSystemPrompt("green");
+    expect(prompt).toMatch(/shows only where things stand now, not where they were/i);
+    expect(prompt).toMatch(/never quote a "before" figure or size the change/i);
+  });
+
+  it("gives Green a grounded comparison only when the card has a persisted 'before' (2026-10-29)", () => {
+    const withHistory = buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: true });
+    expect(withHistory).toMatch(/"Earlier check-in" line in the data below holds the real figures/);
+    expect(withHistory).toMatch(/never compute a percentage change, a difference or any figure that isn't written in the data/);
+    expect(withHistory).not.toMatch(/never quote a "before" figure/);
+    // Without history the prompt is the plain, live-verified Green addendum, byte for byte.
+    expect(buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: false })).toBe(buildNetWorthSystemPrompt("green"));
+    expect(buildNetWorthSystemPrompt("green")).not.toMatch(/Earlier check-in/);
+    // The flag only ever changes Green.
+    expect(buildNetWorthSystemPrompt("amber", { hasEarlierCheckIn: true })).toBe(buildNetWorthSystemPrompt("amber"));
+  });
+
   it("never catastrophizes per its own instruction on the red tier", () => {
     expect(buildNetWorthSystemPrompt("red")).toMatch(/never catastrophize/i);
   });
@@ -177,11 +265,23 @@ describe("RESUME_REVIEW_SYSTEM_PROMPT", () => {
 });
 
 describe("JOB_HUNT_SYSTEM_PROMPT", () => {
+  it("names only real places in the New Job Season view (2026-10-29)", () => {
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/Application Tracker in the Job Search section/);
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never an "Applications panel"/);
+  });
+
+  it("routes runway what-ifs to simulate_runway_change instead of estimating", () => {
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/call simulate_runway_change and quote its differenceInWords/i);
+  });
+
   // 2026-10-06 repeat-verify: the "follow up on first" pick flipped between
   // draws on identical data, and one draw invented elapsed time.
   it("commits to one pick (live conversation outranks a quiet application) and forbids estimating elapsed time", () => {
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/give one pick and commit to it/i);
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/scheduled interview or other live conversation outranks/i);
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never estimate elapsed time yourself/i);
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/use the weeks figure given with the Cash Runway line/i);
+    // 2026-10-08: ~1 in 4 draws cited Riverbend's applied date for Cascade (context lists newest first).
+    expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never one from another application's line/i);
   });
 });

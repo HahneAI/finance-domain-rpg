@@ -135,7 +135,7 @@ const REAL_ALL_WEEKS = buildYear(TOOL_ACCOUNT_CONFIG);
 // and invalidates Phase 4/5's word-for-word repeat comparisons. Tool-shaped
 // data belongs in buildToolTestAccount() at the bottom of this file.
 export function buildTestAccountArgs({
-  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null,
+  weeklyIncome = 845, avgWeeklySpend = 520, newJobSeasonMode = false, runwayDays = null, earlierCheckIn = null,
 } = {}) {
   const config = {
     firstActiveIdx: 0,
@@ -159,6 +159,7 @@ export function buildTestAccountArgs({
     currentWeek,
     today: "2026-03-09",
     runwayDays,
+    earlierCheckIn,
     logs: [],
     futureWeeks: [],
     timelineWeekNets: [],
@@ -388,8 +389,11 @@ export function buildToolTestContext(opts = {}) {
 // (Urgency Escalation) moves the way it did for Ask Coach in Phase 4, on a
 // mode whose own rubric anchor (coachPrompts.js's JOB_HUNT_ADDENDUM,
 // 2026-07-25) already calls for LESS metaphor than the default, not more.
+// Riverbend's applied date moved 2026-03-01 → 2026-03-04 (2026-10-08): at "8 days ago" it sat one day
+// off the tight variant's ~9-day runway, and Coach tied the two together ("8 days to show up ready").
+// 5 / 9 / 17 days keeps every figure in the context distinct. Findings before this date used 8 days.
 const JOB_HUNT_APPLICATIONS = [
-  { company: "Riverbend Logistics", role: "Warehouse Supervisor", status: "Interview scheduled", dateApplied: "2026-03-01" },
+  { company: "Riverbend Logistics", role: "Warehouse Supervisor", status: "Interview scheduled", dateApplied: "2026-03-04" },
   { company: "Cascade Freight", role: "Operations Lead", status: "Applied", dateApplied: "2026-02-20" },
 ];
 const JOB_HUNT_EXPENSES = [

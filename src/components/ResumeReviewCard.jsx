@@ -204,7 +204,7 @@ export function ResumeReviewCard({ config, showReview = true, embedded = false, 
       const contextBlock = `Today: ${fmtFullDate(todayIso)}\n\nRésumé text:\n${resumeText.trim()}\n\nTarget role: ${roleForPrompt}`;
       const messages = [{ role: "user", content: "Please review my resume against the target role." }];
       let accumulated = "";
-      for await (const chunk of chatWithCoach(messages, RESUME_REVIEW_SYSTEM_PROMPT, contextBlock, "sonnet")) {
+      for await (const chunk of chatWithCoach(messages, RESUME_REVIEW_SYSTEM_PROMPT, contextBlock, "sonnet", { surface: "resume_review" })) {
         accumulated += chunk;
         setReview(accumulated);
       }

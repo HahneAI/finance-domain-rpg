@@ -76,7 +76,7 @@ Axis 1** (standing instruction, Phase 4 finding).
   1 Concise (2–3 short sentences) · **2 Standard (anchor, = persona default)** · 3 Elaborated ·
   4 Expansive · 5 Exhaustive (itemized audit). All older Axis 3 findings used the OLD numbering — the
   rubric has a translation note (old 2→new 1, old 3→2, old 4→3, old 5→4, new 5 = itemized).
-- **Directness/bluntness** and **Warmth/formality** — still **undefined**, no anchor data.
+- **Axis 4 Directness** and **Axis 5 Warmth/Formality** — DEFINED 2026-10-07 (1–5, default 3; rubric has scales + anchors). Product intent: user as Coach's *student* (Rocky/Karate Kid). Warmth 4–5 can't be sampled until context supplies real shared history — otherwise Coach invents closeness.
 
 **There is a second layer this file also covers — see §6.** Everything above measures how Coach
 *sounds*. A separate axis measures whether Coach *reaches for the right tool*. Different runners,
@@ -94,7 +94,11 @@ end of all feature testing. Speculative paid "Coach Upgrade" tier (~$5–10/mo) 
 
 ## 2. Phase status (TODO §2.L)
 
-**Phase 5 — axis coverage across the 4 built modes → batch decision.** *In progress, near done.*
+**Phase 5 — axis coverage across the 4 built modes → batch decision.** ***Locked (shotgun 2026-10-22),
+awaiting Anthony's review.*** The live matrix is the "Locked Targets" section of
+`docs/coach-personality-rubric.md`; the "Still open" list below is historical — all five items closed
+(2026-10-06 → 10-22). What carries forward: Ask Coach's Length 2 overshoot + weak closing action,
+and Phase 8 (combined-axis tuning) after launch.
 Done: Metaphor + Urgency across all four modes; Net Worth tiers live-verified; Job Hunt/Résumé first
 pass; Résumé Review metaphor gap fixed (closing-line "corner" sentence now in
 `RESUME_REVIEW_ADDENDUM`); fixture fidelity fix (all fixtures share one real `buildYear()` calendar);
@@ -103,7 +107,7 @@ Axis 3 defined + rescaled + extremes sampled on all four modes; tool-available A
 restates one-touch cap + one-lever; live-verified 3/3 identical; regression test in
 `coachPrompts.test.js`).
 **Still open:**
-1. Directness/bluntness + Warmth/formality axes — define, then sample.
+1. Directness (Axis 4) + Warmth (Axis 5) — defined; now sample (Directness 1s/5s, Warmth 1–3).
 2. Repeat-verify **Job Hunt Chat** (3 calls so far, no repeat).
 3. Repeat-verify the **Ask Coach tool-available rerun** (2 samples, one Axis 2 shift unconfirmed).
 4. **Fresh Résumé Review score-1 run** under the rescaled target (old result is stale).
@@ -114,8 +118,16 @@ Statement Summary, Burnout Sentinel, Heirloom Letters, Council of Future Selves)
 features shipping**, not on the harness. Weekly-Briefing fixture is pre-built. Burnout Sentinel
 deliberately not faked (no streak/OT data source exists).
 
-**Phase 7 — model selection close-out:** Ask Coach/Haiku and special-handling/Opus locked; everything
-else undecided until Phase 5's batch decision lands.
+**Phase 7 — model selection close-out:** **Switched 2026-10-29 to Haiku 5.5 (base) + Sonnet 5.5 effort low
+(heavier turns, Job Hunt, Résumé); Haiku 4.5 / Sonnet 5 retired.** Special-handling/Opus lock unchanged. **Per-message
+routing built 2026-10-29 (shotgun, `[$]`):** `src/lib/coachPolicy.js` sends Ask Coach's range turns to
+Sonnet for privileged accounts, and `api/coach.js` enforces it with a per-surface gate and a 4-round tool
+cap. Open: when to flip `ASK_COACH_SONNET_AUDIENCE` to `"all"` (a cost decision, §2.G).
+
+**Phase 8 — combined-axis tuning (recorded 2026-10-08, the user's "Phase 2 testing"):** post-launch,
+only after every open item above closes. Score three axes on the same reply and tune their 1–5
+settings as a set per mode — Phase 5 showed the axes pull on each other. Method not decided.
+Shareable readout of everything measured so far: https://claude.ai/artifact/5voFyhrLG7aHem3AoiBrN8
 
 ---
 
@@ -192,12 +204,13 @@ Both read `AI_ADMIN_COACH_TEST_KEY` **directly** (`process.env`), and refuse to 
 so they need **no** `ANTHROPIC_API_KEY=` inline mapping. That mapping is a promptfoo-only
 workaround (§0); do not copy it onto these.
 
-**Shipped: 10 tools** in `src/lib/coachTools.js`, executed **client-side** — `api/` sits at the
+**Shipped: 12 tools** (10 + `draft_log_entry` and `simulate_runway_change`, 2026-10-29) in `src/lib/coachTools.js`, executed **client-side** — `api/` sits at the
 12/12 Vercel Hobby function cap with zero headroom, so a tool route was never an option.
 
 `get_goal_detail` · `get_expense_detail` · `get_week_breakdown` · `list_log_entries` ·
 `navigate_to` · `propose_goal` · `simulate_expense_change` · `simulate_new_goal` ·
-`simulate_overtime_hours` · `simulate_without_logged_event`
+`simulate_overtime_hours` · `simulate_without_logged_event` · `draft_log_entry` ·
+`simulate_runway_change` (Job Hunt only)
 
 Selection measured correct 4/4, then 5/5 as the count grew. UI in `CoachToolUI.jsx` (activity
 line, `CoachNavChip`, `CoachGoalCard`). `propose_goal` is the only write-shaped one and it still
@@ -211,15 +224,18 @@ DW-19 in §3 — both are "the model won't obey an instruction it has every mean
 few-shot worked example is the untried lever for both. Full writeup: `drift-app-warden.md` §21
 F168–F176, `docs/coach-entry-points.md` §1.
 
-**Unbuilt, with decisions already made (don't re-litigate):**
-1. `draft_log_entry` — user chose **prefill-and-hand-off to the Log panel**, not a direct write.
-2. Simulation result strip — a UI treatment for simulation output. Proposed, not selected.
-3. Goal-setting / identity prompt addendum — teaching Coach to draw out who someone wants to be
-   before proposing a goal. User deferred it explicitly ("tool + chip only — prompt work
-   separate"); the tool now exists to land on.
-4. `JOB_HUNT_TOOLS` still exposes **only** `get_expense_detail`; widening needs props threaded
-   through `NewJobSeasonHomePanel`.
-5. Noted, unactioned: `api/coach.js` has no per-surface gate; no per-user cap on tool rounds.
+**The list below was all built in the 2026-10-29 shotgun run (`[$]`, awaiting Anthony's review;
+journal: `docs/shotgun-coding.md`).** The fabricated-counterfactual finding above is addressed by
+worked examples plus a computed `differenceInWords`. Re-check it live after any Ask Coach prompt edit.
+1. `draft_log_entry`: **prefill-and-hand-off to the Log panel** (`CoachLogDraftChip` → `LogPanel`
+   add form). Never a direct write.
+2. Simulation result strip: `CoachSimulationStrip` (tool-driven, F174).
+3. Goal-setting / identity addendum: the GOAL-SETTING block in `ASK_COACH_SYSTEM_PROMPT`. Haiku's
+   timing residual is routed to Sonnet.
+4. `JOB_HUNT_TOOLS` = `get_expense_detail` + `simulate_runway_change`. Chosen over threading goal props
+   through `NewJobSeasonHomePanel`, because a runway what-if is Job Hunt's real question.
+5. `api/coach.js` per-surface gate and 4-round tool cap: `resolveCoachRequest()` /
+   `countTrailingToolRounds()` in `src/lib/coachPolicy.js`.
 
 ---
 

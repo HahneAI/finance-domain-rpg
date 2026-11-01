@@ -168,6 +168,28 @@ describe('HomePanel', () => {
       expect(screen.getAllByText('Target').length).toBeGreaterThanOrEqual(1)
     })
 
+    // TODO §32 A1 — "Ask Coach about this". Both card copies (mobile/desktop, F177) carry it, and the
+    // question names the goal by rank only (F114), never by its label.
+    it('shows ASK COACH only when App passes onAskCoach, and sends a rank-only question', () => {
+      const { unmount } = render(<HomePanel {...goalProps} />)
+      expect(screen.queryByText('ASK COACH')).toBeNull()
+      unmount()
+      const onAskCoach = vi.fn()
+      render(<HomePanel {...goalProps} onAskCoach={onAskCoach} />)
+      const buttons = screen.getAllByText('ASK COACH')
+      expect(buttons.length).toBeGreaterThanOrEqual(2)
+      fireEvent.click(buttons[1])
+      expect(onAskCoach).toHaveBeenCalledWith("How's my goal #2 tracking toward its Claim Date?")
+      expect(onAskCoach.mock.calls[0][0]).not.toMatch(/Cancun|tires/)
+    })
+
+    it('shows one Coach note built from the tiles\' own figures (TODO §32 A4)', () => {
+      render(<HomePanel {...goalProps} />)
+      const notes = screen.getAllByTestId('coach-note')
+      expect(notes).toHaveLength(1)
+      expect(notes[0].textContent).toMatch(/free this (week|check)|short of your average spend|Bills are taking/)
+    })
+
     it('names the claim action rather than a checkbox verb', () => {
       render(<HomePanel {...goalProps} />)
       expect(screen.getAllByText('✓ CLAIM IT').length).toBeGreaterThanOrEqual(1)

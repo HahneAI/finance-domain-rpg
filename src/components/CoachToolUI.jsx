@@ -23,6 +23,8 @@ export const TOOL_ACTIVITY_LABELS = {
   simulate_new_goal: "Working out what a new goal would cost",
   simulate_overtime_hours: "Working out what those hours are worth",
   simulate_without_logged_event: "Comparing against a version without it",
+  draft_log_entry: "Filling in that log entry",
+  simulate_runway_change: "Working out what that does to your runway",
 };
 
 /**
@@ -240,5 +242,111 @@ export function CoachGoalCard({ draft, onCreate, onEstimate, readOnly = false })
         >Add goal</Pressable>
       </div>
     </div>
+  );
+}
+
+// Short, read-only form of a tool's "the week of April 27th, 2026" for the strip below.
+function shortWeek(finishDate) {
+  if (!finishDate) return "not this year";
+  return String(finishDate).replace(/^the week of /, "").replace(/, \d{4}$/, "");
+}
+
+const money = (n) => `$${Math.round(Math.abs(Number(n) || 0)).toLocaleString()}`;
+
+// The strip's one-line heading, built only from the simulation's own result fields.
+function simulationHeading(name, result) {
+  if (name === "simulate_expense_change") return `If ${result.expenseLabel} were ${money(result.simulatedWeeklyCost)}/wk`;
+  if (name === "simulate_new_goal") return `If you added a ${money(result.newGoal?.targetAmount)} goal`;
+  if (name === "simulate_overtime_hours") return `With that overtime · +${money(result.addedTakeHome)} take-home`;
+  if (name === "simulate_without_logged_event") return `Without that ${result.event?.type ?? "entry"}`;
+  return "If that changed";
+}
+
+/**
+ * The simulate_* result, shown as numbers under Coach's message — §2.L / coach-tuning-handoff §6
+ * item 2 (built 2026-10-29). Live testing found Coach's prose occasionally mis-sizing a shift; this
+ * strip renders the tool's own dates and its computed differenceInWords, so the real figures are on
+ * screen whatever the wording. Goals by rank only (F114 privacy). Read-only: no actions here.
+ */
+export function CoachSimulationStrip({ name, result }) {
+  const rows = result?.goals ?? result?.existingGoals;
+  if (!name?.startsWith("simulate_") || !Array.isArray(rows) || result?.error) return null;
+  const tone = (g) => (g.differenceInWords === "no change" || !g.periodsSooner
+    ? "var(--color-text-secondary)"
+    : g.periodsSooner > 0 ? "var(--color-teal)" : "var(--color-warning)");
+  return (
+    <div
+      role="group"
+      aria-label="Simulation result"
+      style={{
+        marginTop: "8px", padding: "10px 12px", borderRadius: "12px",
+        background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)",
+        display: "flex", flexDirection: "column", gap: "8px", maxWidth: "100%",
+      }}
+    >
+      <div className="text-2xs" style={{
+        color: "var(--color-text-secondary)", letterSpacing: "1.5px",
+        textTransform: "uppercase", fontFamily: "var(--font-sans)", fontWeight: 600,
+      }}>
+        {simulationHeading(name, result)}
+      </div>
+      {result.newGoal && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span className="text-sm" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)", fontWeight: 600 }}>
+            New goal · lands as goal {result.newGoal.insertedAtRank}
+          </span>
+          <span className="text-sm" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>
+            {shortWeek(result.newGoal.finishDate)}
+          </span>
+        </div>
+      )}
+      {rows.map((g) => (
+        <div key={g.rank} style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+          <span className="text-sm" style={{ fontFamily: "var(--font-sans)", fontWeight: 600 }}>
+            <span style={{ color: "var(--color-text-primary)" }}>Goal {g.rank}</span>
+            <span style={{ color: tone(g) }}> · {g.differenceInWords ?? "not this year"}</span>
+          </span>
+          <span className="text-sm" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
+            {g.finishDateMoves
+              ? `${shortWeek(g.current?.finishDate)} → ${shortWeek(g.simulated?.finishDate)}`
+              : `${shortWeek(g.current?.finishDate)} · date unchanged`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The draft_log_entry result — a "Review in Log" button (2026-10-29, prefill-and-hand-off). Tapping it
+ * closes the chat and opens Log's own add form filled with the draft; nothing is written until the user
+ * saves there. Disabled (not hidden) when there's no handler or the account is read-only.
+ */
+export function CoachLogDraftChip({ result, onDraftLog, readOnly = false }) {
+  if (!result?.ok || !result.draft) return null;
+  const disabled = readOnly || typeof onDraftLog !== "function";
+  return (
+    <Pressable
+      disabled={disabled}
+      onClick={disabled ? undefined : () => onDraftLog(result.draft)}
+      aria-label={`${result.linkLabel}, ${result.date} — open the Log form`}
+      className="text-sm"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "8px",
+        marginTop: "8px", padding: "8px 14px", borderRadius: "12px",
+        background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)",
+        color: disabled ? "var(--color-text-disabled)" : "var(--color-teal)",
+        fontFamily: "var(--font-sans)", fontWeight: 600, letterSpacing: "0.3px",
+        cursor: disabled ? "default" : "pointer", maxWidth: "100%",
+      }}
+    >
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {result.linkLabel}
+      </span>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <path d="M6 3 L11 8 L6 13" />
+      </svg>
+    </Pressable>
   );
 }

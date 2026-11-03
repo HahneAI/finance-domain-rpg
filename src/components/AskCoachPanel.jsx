@@ -415,6 +415,11 @@ export function AskCoachPanel({
         if (toolRoundOpen) {
           toolRoundOpen = false;
           setActiveTool(null);
+          // Text written after a tool round is the answer; anything Coach wrote before the tool call
+          // is dropped, so the bubble never shows the same answer twice (Haiku 5.5 often writes the
+          // full reply alongside a propose_* call, then again after the result — 2026-11-03). If
+          // nothing follows the tool, the earlier text simply stays.
+          accumulated = "";
         }
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);

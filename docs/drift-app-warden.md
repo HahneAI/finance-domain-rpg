@@ -5982,6 +5982,12 @@ avoid, how to be spoken to, facts about them), own-row RLS like `coach_chats`.
 > and writes `archived_coach_memory` only when rows were read (safe before 049 is applied);
 > `restoreRevivedAccount` re-inserts them under the new user id, best-effort (never fails a revival).
 > **IF** the archive/restore shape changes, **THEN** change both files and the §16.2 restore-blob row.
+> **One answer per turn (2026-11-03).** Haiku 5.5 often writes its full reply alongside a propose_* /
+> draft_log_entry call and again after the result; `AskCoachPanel` now keeps only text written after the
+> last tool round (pre-tool text survives only if nothing follows), and `toolLoopLiveTest.mjs` prints the
+> same. **IF** the streaming loop changes, **THEN** keep that reset — `AskCoachPanel.test.jsx` "one answer
+> per turn". Live (Haiku 5.5, 2026-11-03): duplicates 0/5 write cases; memory proposed for a tone
+> instruction 3/3 and a goal reason 2/3, never for a plain status question (0/3).
 > Check: `coachMemory.test.js`, `coachTools.test.js` (propose_memory), `AskCoachPanel.test.jsx` /
 > `JobHuntChatPanel.test.jsx` (memory blocks), `ProfilePanel.test.jsx` (page), `accountArchiveCoachMemory.test.js`,
 > `stripeWebhook.test.js` (restore).

@@ -199,6 +199,23 @@ describe("AskCoachPanel — Coach memory (TODO §32 B)", () => {
   });
 });
 
+describe("AskCoachPanel — one answer per turn around tools (2026-11-03)", () => {
+  it("shows only the text written after a tool round, and keeps pre-tool text when nothing follows", async () => {
+    mocks.chatWithCoach.mockImplementation(async function* (msgs, sys, ctx, model, opts) {
+      yield "That's a strong reason.";
+      opts.onToolEvent({ phase: "start", name: "propose_memory" });
+      opts.onToolEvent({ phase: "result", name: "propose_memory", result: { ok: true, proposal: { kind: "goal_why", body: "x" }, kindLabel: "Why a goal matters" } });
+      yield "That's a strong reason. Tap Save if you want me to keep it.";
+    });
+    render(<AskCoachPanel {...baseProps()} />);
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "It matters because of my kids" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.saveCoachChat).toHaveBeenCalled());
+    const saved = mocks.saveCoachChat.mock.calls.at(-1)[0];
+    expect(saved.messages[1].content).toBe("That's a strong reason. Tap Save if you want me to keep it.");
+  });
+});
+
 describe("AskCoachPanel — history", () => {
   const oldChat = {
     id: "chat-old",

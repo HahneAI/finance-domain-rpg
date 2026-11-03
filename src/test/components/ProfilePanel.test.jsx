@@ -20,6 +20,9 @@ const { mocks } = vi.hoisted(() => ({
     uploadResumeFile: vi.fn(),
     getResumeFileUrl: vi.fn(),
     deleteResumeFile: vi.fn(),
+    loadCoachMemory: vi.fn(),
+    saveCoachMemory: vi.fn(),
+    deleteCoachMemory: vi.fn(),
   },
 }))
 vi.mock('../../lib/db.js', async (importOriginal) => {
@@ -31,6 +34,9 @@ vi.mock('../../lib/db.js', async (importOriginal) => {
     uploadResumeFile: mocks.uploadResumeFile,
     getResumeFileUrl: mocks.getResumeFileUrl,
     deleteResumeFile: mocks.deleteResumeFile,
+    loadCoachMemory: mocks.loadCoachMemory,
+    saveCoachMemory: mocks.saveCoachMemory,
+    deleteCoachMemory: mocks.deleteCoachMemory,
   }
 })
 
@@ -309,6 +315,58 @@ describe('ProfilePanel — App Preferences Résumé row', () => {
 
     fireEvent.click(screen.getByText('Done'))
     expect(screen.queryByText('Choose File')).toBeNull()
+  })
+})
+
+describe('ProfilePanel — What Coach knows about me (TODO §32 B2)', () => {
+  const MEM = [{ id: 'm1', kind: 'goal_why', body: 'So my kids see me finish something', source: 'user' }]
+  const mount = (over = {}) => render(<ProfilePanel authedUser={{ email: 'a@b.c' }} config={DEFAULT_CONFIG} setConfig={() => {}} saveConfigNow={() => {}} allWeeks={[]} taxDerived={null} {...over} />)
+  beforeEach(() => {
+    mocks.loadCoachMemory.mockResolvedValue(MEM)
+    mocks.deleteCoachMemory.mockResolvedValue(true)
+  })
+
+  it('only offers the row to accounts that can open Coach', () => {
+    const { unmount } = mount()
+    expect(screen.queryByText('What Coach knows about me')).toBeNull()
+    unmount()
+    mount({ coachAvailable: true })
+    expect(screen.getByText('What Coach knows about me')).toBeTruthy()
+  })
+
+  it('lists memories, forgets one, and refuses a Social Security number before saving', async () => {
+    mount({ coachAvailable: true })
+    fireEvent.click(screen.getByText('What Coach knows about me'))
+    await waitFor(() => expect(screen.getByText('So my kids see me finish something')).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Forget: So my kids see me finish something'))
+    await waitFor(() => expect(screen.queryByText('So my kids see me finish something')).toBeNull())
+    expect(mocks.deleteCoachMemory).toHaveBeenCalledWith('m1')
+
+    fireEvent.change(screen.getByLabelText('In your words'), { target: { value: 'My SSN is 123-45-6789' } })
+    fireEvent.click(screen.getByText('Save'))
+    expect(screen.getByText(/Coach doesn't store those/)).toBeTruthy()
+    expect(mocks.saveCoachMemory).not.toHaveBeenCalled()
+  })
+
+  it('saves a typed memory as source "user" and shows it', async () => {
+    mocks.loadCoachMemory.mockResolvedValue([])
+    mocks.saveCoachMemory.mockResolvedValue({ id: 'm2', kind: 'avoid', body: 'No payday loans', source: 'user' })
+    mount({ coachAvailable: true })
+    fireEvent.click(screen.getByText('What Coach knows about me'))
+    fireEvent.change(screen.getByLabelText('What kind of thing is it'), { target: { value: 'avoid' } })
+    fireEvent.change(screen.getByLabelText('In your words'), { target: { value: 'No payday loans' } })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(screen.getByText('No payday loans')).toBeTruthy())
+    expect(mocks.saveCoachMemory).toHaveBeenCalledWith({ kind: 'avoid', body: 'No payday loans', source: 'user' })
+  })
+
+  it('switching memory off is an eager config save', () => {
+    const setConfig = vi.fn(); const saveConfigNow = vi.fn()
+    mount({ coachAvailable: true, setConfig, saveConfigNow })
+    fireEvent.click(screen.getByText('What Coach knows about me'))
+    fireEvent.click(screen.getByText('Turn off'))
+    expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ coachMemoryOff: true }))
+    expect(setConfig).toHaveBeenCalledWith(saveConfigNow.mock.calls[0][0])
   })
 })
 

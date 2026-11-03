@@ -74,8 +74,9 @@ function mkRes() {
 }
 
 /** Wire the admin client; returns spies for the event claim, user_data writes, and the tombstone. */
-function setupAdmin({ claimError = null, tombstone = null } = {}) {
+function setupAdmin({ claimError = null, tombstone = null, memoryInsertError = null } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: claimError });
+  const memoryInsert = vi.fn().mockResolvedValue({ error: memoryInsertError });
   const updateEq = vi.fn().mockResolvedValue({ error: null });
   const update = vi.fn().mockReturnValue({ eq: updateEq });
   const upsert = vi.fn().mockResolvedValue({ error: null });
@@ -84,6 +85,7 @@ function setupAdmin({ claimError = null, tombstone = null } = {}) {
   const maybeSingle = vi.fn().mockResolvedValue({ data: tombstone, error: null });
   mocks.adminClient.from.mockImplementation((table) => {
     if (table === "stripe_webhook_events") return { insert };
+    if (table === "coach_memory") return { insert: memoryInsert };
     if (table === "deleted_accounts") {
       return {
         select: vi.fn().mockReturnValue({
@@ -94,7 +96,7 @@ function setupAdmin({ claimError = null, tombstone = null } = {}) {
     }
     return { update, upsert, eq: updateEq };
   });
-  return { insert, update, updateEq, upsert, tombstoneUpdate, tombstoneUpdateEq };
+  return { insert, update, updateEq, upsert, tombstoneUpdate, tombstoneUpdateEq, memoryInsert };
 }
 
 beforeEach(() => {
@@ -272,6 +274,30 @@ describe("stripe-webhook — upsert mapping per event type", () => {
     expect(tombstoneUpdateEq).toHaveBeenCalledWith("email", "gone@example.com");
     // Plain update path must NOT also run
     expect(update).not.toHaveBeenCalled();
+  });
+
+  // Migration 049 (TODO §32 B): Coach memory archived at a non-payment deletion comes back on
+  // revival, under the NEW user id; a failed memory insert never fails the revival.
+  it.each([[null, 200], [{ message: "boom" }, 200]])("restores archived Coach memory on revival (insert error: %s)", async (memoryInsertError, status) => {
+    const { upsert, memoryInsert } = setupAdmin({
+      memoryInsertError,
+      tombstone: {
+        email: "gone@example.com", archived_config: {}, revived_at: null,
+        archived_coach_memory: [{ kind: "goal_why", body: "So my kids see me finish something", source: "user", created_at: "2026-10-01T00:00:00Z" }],
+      },
+    });
+    mocks.stripeSubscriptions.retrieve.mockResolvedValue({ id: "sub_rev", status: "active", current_period_end: 1785000000, items: { data: [{ price: { id: "price_month_test" } }] } });
+    const payload = mkEvent("checkout.session.completed", {
+      mode: "subscription", customer: "cus_old", subscription: "sub_rev", client_reference_id: "user-new",
+      metadata: { revival: "true", revival_email: "gone@example.com" },
+    });
+    const res = mkRes();
+    await handler(mkReq(payload, sign(payload)), res);
+    expect(res.statusCode).toBe(status);
+    expect(upsert).toHaveBeenCalled();
+    expect(memoryInsert).toHaveBeenCalledWith([
+      { user_id: "user-new", kind: "goal_why", body: "So my kids see me finish something", source: "user", created_at: "2026-10-01T00:00:00Z" },
+    ]);
   });
 
   it("a revival event whose tombstone is already consumed falls through to the plain status update", async () => {

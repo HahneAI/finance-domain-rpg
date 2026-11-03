@@ -1079,18 +1079,20 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
 
 ### B. Coach memory
-- [ ] **B1 · `coach_memory` table** — short user-confirmed facts (why each goal matters, decisions, things to
+- [ ] **B1 · `coach_memory` table** **BUILT 2026-11-03 — migration 049 WRITTEN, NOT APPLIED** (decisions,
+  Anthony 2026-11-03: archived with the account on a non-payment deletion and restored on revival, dropped for
+  good on a user-requested deletion; F120 check run → RLS-only with regulated identifiers refused; warden F186).  — short user-confirmed facts (why each goal matters, decisions, things to
   avoid, the user's own instructions). Migration **049** (verify the next number with the CLAUDE.md
   collision check), `user_id references user_data(user_id) on delete cascade` like `coach_chats` (023), RLS own-row
   only (migration 019 pattern). Warden first: F120 (encryption trigger — memory is free text about money and life;
   run the sensitive-data check before shipping), §16.2 "`deleted_accounts` restore blob shape" row (decide whether
   memory is archived on deletion or dropped — and say so in the privacy copy), F146 (retention pattern to mirror).
-- [ ] **B2 · "What Coach knows about me" page** (Account panel) — view, edit, delete each memory; global
+- [ ] **B2 · "What Coach knows about me" page** **BUILT 2026-11-03:**  (Account panel) — view, edit, delete each memory; global
   memory-off switch. Warden first: §12 Account map, eager-save rule, `readOnly` shadow.
-- [ ] **B3 · Memory into context** — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
+- [ ] **B3 · Memory into context** **BUILT 2026-11-03 (Ask Coach + Job Hunt):**  — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
   Warden first: F113/F114 (no goal names; memory text must not smuggle them back in), prompt-cache prefix order
   (memory goes after the frozen system prompt).
-- [ ] **B4 · Coach proposes a memory, user confirms** — a write-shaped tool on the `propose_goal` pattern
+- [ ] **B4 · Coach proposes a memory, user confirms** **BUILT 2026-11-03 (`propose_memory` + `CoachMemoryCard`):**  — a write-shaped tool on the `propose_goal` pattern
   (card + Confirm, never a silent write). Warden first: F176 (write-shaped tool contract), F174.
 
 ### C. Routines (scheduled Coach)

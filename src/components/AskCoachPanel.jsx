@@ -4,10 +4,11 @@ import { panelStartersFor } from "../lib/coachPanelStarters.js";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
-import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip, CoachLogDraftChip } from "./CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip, CoachLogDraftChip, CoachMemoryCard } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
 import { chooseCoachModel } from "../lib/coachPolicy.js";
-import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
+import { loadCoachChats, saveCoachChat, deleteCoachChat, loadCoachMemory, saveCoachMemory } from "../lib/db.js";
+import { memoryContextBlock } from "../lib/coachMemory.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
 import coachLineartMono from "../assets/coach-avatar-lineart-mono.png";
 import { CoachMonocleIcon } from "./CoachMonocleIcon.jsx";
@@ -165,6 +166,23 @@ export function AskCoachPanel({
   // own dates sit under Coach's words (2026-10-29).
   const [simStrips, setSimStrips] = useState({});
   const [logDrafts, setLogDrafts] = useState({});
+  // Coach memory (TODO §32 B, migration 049). Loaded once per open; off when the user switched it off
+  // on the memory page (config.coachMemoryOff) — then nothing is loaded, sent or proposed.
+  const memoryOff = config?.coachMemoryOff === true;
+  const [memories, setMemories] = useState([]);
+  const [memoryDrafts, setMemoryDrafts] = useState({});
+  useEffect(() => {
+    if (memoryOff) return;
+    let cancelled = false;
+    loadCoachMemory().then((rows) => { if (!cancelled) setMemories(rows); });
+    return () => { cancelled = true; };
+  }, [memoryOff]);
+  const handleSaveMemory = async (proposal) => {
+    if (readOnly) return false;
+    const row = await saveCoachMemory({ ...proposal, source: "coach" });
+    if (row) setMemories((prev) => [row, ...prev]);
+    return Boolean(row);
+  };
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -193,7 +211,7 @@ export function AskCoachPanel({
   // underneath the fixed composer with its confirm button unclickable.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, navChips, goalDrafts, simStrips, logDrafts, activeTool]);
+  }, [messages, navChips, goalDrafts, simStrips, logDrafts, memoryDrafts, activeTool]);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,6 +298,7 @@ export function AskCoachPanel({
     setGoalDrafts({});
     setSimStrips({});
     setLogDrafts({});
+    setMemoryDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -303,6 +322,7 @@ export function AskCoachPanel({
     setGoalDrafts({});
     setSimStrips({});
     setLogDrafts({});
+    setMemoryDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -340,7 +360,8 @@ export function AskCoachPanel({
         // on demand instead of every call carrying it. CoachNetWorthCard has no
         // tools and deliberately leaves this false.
         detailAvailableViaTools: true,
-      }) + (originLabel ? `\nThe user opened Coach from the ${originLabel} panel; "this" or "here" in their question means that panel.` : "");
+      }) + (originLabel ? `\nThe user opened Coach from the ${originLabel} panel; "this" or "here" in their question means that panel.` : "")
+        + memoryContextBlock(memories, { memoryOff });
       const apiMessages = nextMessages.map(({ role, content }) => ({ role, content }));
       // Drill-down tools (lib/coachTools.js) run in the browser against this
       // exact prop bag — the same one buildCoachContext() reads above, so a
@@ -351,6 +372,7 @@ export function AskCoachPanel({
       const toolData = {
         config, goals, expenses, logs, currentWeek, today, allWeeks, futureWeeks,
         timelineWeekNets, logNetLost, logNetGained, futureEventDeductions,
+        memories, memoryOff,
       };
       let accumulated = "";
       // The assistant bubble this turn is writing into — chips attach to it.
@@ -378,6 +400,9 @@ export function AskCoachPanel({
         if (event.name === "propose_goal" && event.result?.ok) {
           setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
+        if (event.name === "propose_memory" && event.result?.ok) {
+          setMemoryDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
         if (event.name === "draft_log_entry" && event.result?.ok) {
           setLogDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
@@ -386,7 +411,7 @@ export function AskCoachPanel({
         }
       };
       const turnModel = chooseCoachModel(apiMessages[apiMessages.length - 1]?.content, { privileged });
-      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, turnModel, { tools: ASK_COACH_TOOLS, toolData, onToolEvent, surface: "ask_coach" })) {
+      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, turnModel, { tools: memoryOff ? ASK_COACH_TOOLS.filter((t) => t.name !== "propose_memory") : ASK_COACH_TOOLS, toolData, onToolEvent, surface: "ask_coach" })) {
         if (toolRoundOpen) {
           toolRoundOpen = false;
           setActiveTool(null);
@@ -644,6 +669,9 @@ export function AskCoachPanel({
                   {m.role === "assistant" && simStrips[i]?.map((s, k) => (
                     <CoachSimulationStrip key={k} name={s.name} result={s.result} />
                   ))}
+                  {m.role === "assistant" && memoryDrafts[i] && (
+                    <CoachMemoryCard result={memoryDrafts[i]} onSave={handleSaveMemory} readOnly={readOnly} />
+                  )}
                   {m.role === "assistant" && logDrafts[i] && (
                     <CoachLogDraftChip result={logDrafts[i]} onDraftLog={onDraftLog} readOnly={readOnly} />
                   )}

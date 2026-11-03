@@ -705,6 +705,53 @@ export async function saveCoachChat(chat) {
  * defense-in-depth on top of RLS's own-row policy — same double-check pattern
  * already used for the investor_users delete below.
  */
+/**
+ * Coach memory (migration 049, TODO §32 B). Newest first. Returns [] on no session or a
+ * missing-table error (migration not yet run), same tolerance as loadCoachChats.
+ */
+export async function loadCoachMemory() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("coach_memory")
+    .select("id, kind, body, source, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    console.warn("Failed to load coach memory:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => ({ id: row.id, kind: row.kind, body: row.body, source: row.source, createdAt: row.created_at }));
+}
+
+/** Inserts one confirmed memory. Returns the saved row, or null (with the error logged) on failure. */
+export async function saveCoachMemory({ kind, body, source = "user" }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from("coach_memory")
+    .insert({ user_id: userId, kind, body: String(body).trim(), source })
+    .select("id, kind, body, source, created_at")
+    .single();
+  if (error) {
+    console.error("Failed to save coach memory:", error.message);
+    return null;
+  }
+  return { id: data.id, kind: data.kind, body: data.body, source: data.source, createdAt: data.created_at };
+}
+
+export async function deleteCoachMemory(id) {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+  const { error } = await supabase.from("coach_memory").delete().eq("id", id).eq("user_id", userId);
+  if (error) {
+    console.error("Failed to delete coach memory:", error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function deleteCoachChat(id) {
   const userId = await getCurrentUserId();
   if (!userId) return;

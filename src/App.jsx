@@ -2581,6 +2581,7 @@ export default function App() {
       />)}
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
+        coachAvailable={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement })}
         config={config}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}

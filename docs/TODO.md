@@ -1056,7 +1056,10 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Warden first: F174 (chip/focus refs, `data-coach-ref`), F177 (goal card body is duplicated mobile/desktop —
   edit as a pair), F114 (rank only), F178 (`PANEL_VIEW_KEYS` + `navigate_to` enum are one unit), the
   `canAccessAskCoachGeneral` gate row (entry points must hide for non-entitled accounts).
-- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** Warden first: §9 Income map
+- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** **BUILT 2026-11-03 — awaiting review:**
+  an ASK pill in each active row of Income's weekly table (not the Full Detail modal — Coach would open over it;
+  stops the tap reaching the admin week inspector) and an ASK button beside EDIT on each Log entry. Questions name
+  the row's own week-end date (`paycheckCoachSeed`, `logEntryCoachSeed`). Warden first: §9 Income map
   (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
 - [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
   starter prompts). **BUILT 2026-10-30 — awaiting review + live check:** App passes `originView` +

@@ -2497,6 +2497,7 @@ export default function App() {
         />
       ))}
       {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
+        onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -2551,6 +2552,7 @@ export default function App() {
         />
       ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
+        onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isDiagnosticAdmin}
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}

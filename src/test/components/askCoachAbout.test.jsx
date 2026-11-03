@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { BudgetPanel } from "../../components/BudgetPanel.jsx";
-import { goalCoachSeed, expenseCoachSeed } from "../../lib/coachSeeds.js";
+import { goalCoachSeed, expenseCoachSeed, paycheckCoachSeed, logEntryCoachSeed } from "../../lib/coachSeeds.js";
 import { buildToolTestAccount } from "../../../scripts/coach-eval/fixtures/testAccount.js";
 import { getFiscalWeekInfo } from "../../lib/fiscalWeek.js";
 
@@ -32,6 +32,13 @@ describe("coachSeeds", () => {
   it("names a goal by rank and an expense by its label", () => {
     expect(goalCoachSeed(1)).toBe("How's my goal #1 tracking toward its Claim Date?");
     expect(expenseCoachSeed("Groceries")).toBe("What's going on with my Groceries expense?");
+  });
+
+  it("A2: names a paycheck week and a log entry by the date the row shows", () => {
+    expect(paycheckCoachSeed(new Date(2026, 2, 16), "last week")).toBe("Why is my paycheck what it is for the week ending Mar 16 (last week)?");
+    expect(paycheckCoachSeed("2026-03-16")).toBe("Why is my paycheck what it is for the week ending Mar 16?");
+    expect(logEntryCoachSeed("PTO Used", "2026-02-09")).toBe("What did my PTO Used entry for the week ending Feb 9 do to my numbers and goals?");
+    expect(logEntryCoachSeed("Bonus / Extra Pay", "")).toBe("What did my Bonus / Extra Pay entry do to my numbers and goals?");
   });
 });
 

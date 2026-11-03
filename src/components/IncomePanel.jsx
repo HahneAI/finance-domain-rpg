@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { paycheckCoachSeed } from "../lib/coachSeeds.js";
 import { MONTH_FULL, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
@@ -8,7 +9,7 @@ import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
+export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null, onAskCoach }) {
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -484,6 +485,21 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
                   <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                  {/* "Ask Coach about this" (TODO §32 A2) — only when App passed onAskCoach. Stops the
+                      tap from reaching the row's admin week inspector. */}
+                  {onAskCoach && w.active && (
+                    <Pressable
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const offset = !isBiweekly && currentWeek ? w.idx - currentWeek.idx : null;
+                        const relative = offset === 0 ? "this week" : offset === -1 ? "last week" : offset === 1 ? "next week" : null;
+                        onAskCoach(paycheckCoachSeed(w.weekEnd, relative));
+                      }}
+                      className="text-2xs"
+                      aria-label={`Ask Coach about the paycheck for the week ending ${w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                      style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "10px", background: "transparent", border: "1px solid var(--color-border-accent)", color: "var(--color-teal)", letterSpacing: "1px", cursor: "pointer" }}
+                    >ASK</Pressable>
+                  )}
                 </td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{displayGross}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>

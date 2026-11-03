@@ -17,7 +17,7 @@
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
 | 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
-| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 13 | 0 |
+| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 17 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -1110,10 +1110,49 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Ask Coach why (`lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, warden F187). — fires when a goal's Claim Date slips past a threshold. Warden first: F177
   (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
 
-### D. Command center hub (after A–C work)
-- [ ] **D1 · Scope the hub** — one Coach-first home that surfaces memory, routines' output and panel notes.
-  Warden first: §8 Home map (F183 identity-first Home layout gate), F178 naming screen (grep the new name against
-  existing vocabulary first), design system §22.
+### D. Command center hub — DRAFT PLAN (2026-11-03, awaiting Anthony's approval; nothing built)
+
+**Shape (recommended): Home *becomes* the command center** — no sixth tab (the mobile bottom nav already holds
+Home · Income · Upkeep · Log · Account + Coach), no new server function, no migration. Home already carries most
+of the pieces A–C built (Claim Date hero, Coach note, slip alert, briefing, Net Worth card, collapsed "Your
+numbers"); today they sit as a loose stack. D turns that stack into one Coach-first page, top to bottom:
+
+1. **Today with Coach** — the week's briefing (C2) plus an **inline ask bar** ("Ask Coach anything…") that opens
+   the chat with the question already sent (same one-shot seed as A1). The AI is the first thing on the page,
+   not a tab you go find.
+2. **Needs you** — ONE ranked queue replacing the scattered cards: Net Worth Red/Amber (F24) → bills due today
+   (§20.C) → Claim Date slips (C3) → unconfirmed week check-in → identity bill suggestions (F182) → a Green
+   recovery note last. Each card: one line + one action. Ranking is a pure function (`lib/commandCenter.js`)
+   so the order is tested, not eyeballed. Empty queue = one calm line, not a blank gap.
+3. **Claim Dates** — the existing hero + goal cards, unchanged (F177: dates only from `resolveGoalFinishInfo()`).
+4. **Coach remembers** — a slim strip showing 2–3 saved memories in the user's words + "See all" (F186), so the
+   user can see Coach actually knows them. Hidden when memory is off or empty.
+5. **Around the app** — the A4 panel notes for Upkeep and Log condensed into tappable one-liners that open their
+   panel (Income/Account join when they get notes).
+6. **Your numbers** — the existing tiles, collapsed by default (F183's identity-first layout, extended to
+   everyone).
+
+**Build order** (each step shippable on its own):
+- [ ] **D1 · `lib/commandCenter.js` + "Needs you" queue** — pure ranking over existing signals; move the Net Worth
+  card, slip alert and due-today card into the queue. Warden first: F24, F187, §20.C due-today, F182, F183.
+- [ ] **D2 · "Today with Coach" + inline ask bar** — briefing on top, ask bar reuses `openCoachAbout`.
+  Warden first: F187, the `canAccessAskCoachGeneral` gate row (no ask bar for accounts without Coach — they get
+  the queue and Claim Dates only).
+- [ ] **D3 · "Coach remembers" + "Around the app" strips** — Warden first: F186 (memory off / empty), F113
+  (note figures = tile figures), F178 (labels via `VIEW_LABELS`).
+- [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — Warden first: F183 (today's
+  identity-first gate), design system §22, Liquid Glass `purpose` whitelist (`active-systems.md` §15) if glass is
+  used, `textUtilityClassAudit`. A real browser render is required (React Compiler blind spot).
+- [ ] **D5 (later) · Push delivery** — briefing + slip alerts as PWA push (§8.C); needs its own design pass.
+
+**Open questions for Anthony (answer before D1):**
+1. Evolve Home into the command center (recommended) — or a separate new first tab?
+2. Name: keep the tab label **Home** (recommended — no rename churn) and title the top section "Today with
+   Coach", or rename? Screened free 2026-11-03: **HQ**, **Huddle**, **Game Plan** (taken: "Hub" — Money Moves /
+   Homebase; "Corner" — Coach's own phrasing).
+3. Ask bar: send the question straight into the chat (recommended), or show suggested questions first?
+4. Accounts without Coach (expired / no entitlement): show the non-AI parts only (recommended), or add an
+   upgrade card in Coach's slot?
 
 ---
 

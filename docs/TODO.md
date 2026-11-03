@@ -1096,14 +1096,18 @@ Warden entries to read BEFORE building it — a change counts as done only after
   (card + Confirm, never a silent write). Warden first: F176 (write-shaped tool contract), F174.
 
 ### C. Routines (scheduled Coach)
-- [ ] **C1 · Merge `claude/api-consolidation` first** (12/12 → 7/12 functions) and verify on a preview
+- [ ] **C1 · Merge `claude/api-consolidation` first** — **DONE upstream (PR #765, 2026-10-30); preview check still Anthony's.** (12/12 → 7/12 functions) and verify on a preview
   deployment: one route per router + one old URL. Warden first: F185 (on that branch — router rules; never move
   `stripe-webhook.js` or the cron path).
-- [ ] **C2 · Weekly Pre-Game Briefing** (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
+- [ ] **C2 · Weekly Pre-Game Briefing** — **BUILT 2026-11-03, awaiting review:** client-side on Home (no cron/slot
+  needed), once per fiscal week, Haiku 5.5 `weekly_briefing` surface, cached in `config.coachBriefing`, memory-aware;
+  live 6/6 three sentences, figures as written (warden F187). Push delivery still needs §8.C. (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
   into the existing daily cron over a new slot. Warden first: F86 (cron shell: SELECT must cover every field the
   job reads — DW-7 class), lifecycle exemption row, F87 (email disclosure rule if it emails), the per-surface
   `maxTokens` IF/THEN in the `canAccessAiFeatures` gate row (a new surface needs a cap sized for thinking).
-- [ ] **C3 · Goal-date drift alert** — fires when a goal's Claim Date slips past a threshold. Warden first: F177
+- [ ] **C3 · Goal-date drift alert** — **BUILT 2026-11-03, awaiting review:** fixed-template alert on Home when a
+  Claim Date slips 14+ days past the last acknowledged date (target/rank changes re-baseline quietly); Got it +
+  Ask Coach why (`lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, warden F187). — fires when a goal's Claim Date slips past a threshold. Warden first: F177
   (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
 
 ### D. Command center hub (after A–C work)

@@ -638,7 +638,7 @@ describe("coach — per-surface gate, model policy and tool-round cap", () => {
     for (const surface of ["resume_review", "job_hunt", "ask_coach", "net_worth"]) {
       await handler(mkReq({ body: { messages: [{ role: "user", content: "x" }], surface, model: "sonnet" } }), mkRes());
     }
-    expect(fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).max_tokens)).toEqual([4096, 2048, 2048, 1024]);
+    expect(fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).max_tokens)).toEqual([4096, 2048, 2048, 2048]);
   });
 
   it("rejects an unknown surface with 400", async () => {

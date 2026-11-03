@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt, RESUME_REVIEW_SYSTEM_PROMPT, JOB_HUNT_SYSTEM_PROMPT } from "../../lib/coachPrompts.js";
+import { COACH_PERSONA_PROMPT, WEEKLY_BRIEFING_SYSTEM_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt, RESUME_REVIEW_SYSTEM_PROMPT, JOB_HUNT_SYSTEM_PROMPT } from "../../lib/coachPrompts.js";
 
 describe("COACH_PERSONA_PROMPT", () => {
   it("explicitly instructs against combative language, per docs/coach-personality-rubric.md", () => {
@@ -290,5 +290,14 @@ describe("JOB_HUNT_SYSTEM_PROMPT", () => {
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/use the weeks figure given with the Cash Runway line/i);
     // 2026-10-08: ~1 in 4 draws cited Riverbend's applied date for Cascade (context lists newest first).
     expect(JOB_HUNT_SYSTEM_PROMPT).toMatch(/never one from another application's line/i);
+  });
+});
+
+describe("WEEKLY_BRIEFING_SYSTEM_PROMPT (TODO §32 C2)", () => {
+  it("is the persona plus a three-sentence, figures-as-written briefing that ends on a real panel", () => {
+    expect(WEEKLY_BRIEFING_SYSTEM_PROMPT).toContain(COACH_PERSONA_PROMPT);
+    expect(WEEKLY_BRIEFING_SYSTEM_PROMPT).toMatch(/Write exactly three sentences, no greeting and no sign-off/);
+    expect(WEEKLY_BRIEFING_SYSTEM_PROMPT).toMatch(/never add, subtract or estimate a new figure/);
+    expect(WEEKLY_BRIEFING_SYSTEM_PROMPT).toMatch(/\(Home, Income, Upkeep or Log\)/);
   });
 });

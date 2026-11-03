@@ -49,7 +49,9 @@ a fixed template over the panel's own tile figures, no model call (`src/lib/coac
 Paycheck weeks (Income) and log entries (Log) carry ASK buttons too (A2). **Coach memory (2026-11-03, TODO §32 B,
 migration 049):** things the user saved — in their words — are added to Ask Coach's and Job Hunt's context;
 Ask Coach can offer to remember something new with a Save card (`propose_memory`), and Account → "What Coach
-knows about me" lists, adds, forgets and switches memory off. A user
+knows about me" lists, adds, forgets and switches memory off. **Routines (2026-11-03, TODO §32 C):** Home shows a
+Weekly Pre-Game Briefing once per fiscal week (Coach writes first; Haiku 5.5, `weekly_briefing` surface) and a
+Claim Date slip alert (fixed template, no model call) with an "Ask Coach why" button. A user
 can ask plain questions about how the app works, how a number on their screen is calculated, or
 how to log something, and Coach answers using that person's real numbers — never a generic
 answer. Coach explicitly won't give tax, legal, or investment advice; it sticks to explaining

@@ -35,3 +35,9 @@ export function logEntryCoachSeed(typeLabel, weekEnd) {
   const label = weekEndLabel(weekEnd);
   return `What did my ${typeLabel} entry${label ? ` for the week ending ${label}` : ""} do to my numbers and goals?`;
 }
+
+// C3 (2026-11-03). The Claim Date slip alert's "Ask Coach why" — rank only (F114), the two dates the
+// alert itself shows.
+export function claimSlipCoachSeed(rank, fromLabel, toLabel) {
+  return `Why did my goal #${rank}'s Claim Date move from ${fromLabel} to ${toLabel}?`;
+}

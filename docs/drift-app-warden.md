@@ -5992,6 +5992,23 @@ avoid, how to be spoken to, facts about them), own-row RLS like `coach_chats`.
 > `JobHuntChatPanel.test.jsx` (memory blocks), `ProfilePanel.test.jsx` (page), `accountArchiveCoachMemory.test.js`,
 > `stripeWebhook.test.js` (restore).
 
+**F187 · Coach routines — Weekly Pre-Game Briefing + Claim Date slip alert** — `CoachBriefingCard.jsx`, `coachPrompts.js` (`WEEKLY_BRIEFING_SYSTEM_PROMPT`), `coachPolicy.js` (`weekly_briefing` surface), `lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, `HomePanel.jsx`, `coachSeeds.js` (`claimSlipCoachSeed`) — **[G]+[L]**
+2026-11-03 (TODO §32 C2/C3). Both run client-side on Home — no cron, no new function (7/12 unchanged).
+> **Briefing (G).** Haiku 5.5, `surface: "weekly_briefing"` (Haiku-only, 2048 tokens), fires once per fiscal
+> week on first Home open, cached in `config.coachBriefing { weekIdx, message, dismissedWeekIdx }` and
+> eager-saved on fire/dismiss — the F24/DW-9 pattern. Gate = `canAccessAskCoachGeneral` at the Home call site,
+> exactly the Net Worth card's. Context = `buildCoachContext` + memory (F186). **IF** the trigger, cache shape
+> or gate changes, **THEN** mirror CoachNetWorthCard and re-run `promptfooconfig.phase6-weekly-briefing.yaml`
+> (via `modelCompare.mjs --only phase6 --candidate-only`). Push delivery is NOT built (needs §8.C PWA push).
+> **Slip alert (L→G).** Dates come only from `resolveGoalFinishInfo()` (F177) through `tl` order (rank = i+1).
+> Baselines `config.claimDateWatch { [goalId]: { date, target, rank } }`: seeded quietly (debounced
+> `setConfig`, a derived sync — never eager) for new goals AND whenever target or rank changed (the user's
+> own move, not a slip); alert at a slip >= `CLAIM_SLIP_THRESHOLD_DAYS` (14); earlier dates never alert;
+> "Got it" moves the slipped baselines and eager-saves. **IF** `computeClaimDates`/`resolveGoalFinishInfo`
+> output changes shape, **THEN** `claimDateWatch.test.js` + the Home tests are the check.
+> **Net Worth cap (2026-11-03):** `net_worth` maxTokens 1024 → 2048 — Haiku 5.5 thinks up to ~980 tokens
+> before writing, so 1024 risked a cut-off card.
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +
 `resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeNewJobSeasonRunway` — the

@@ -23,6 +23,9 @@ import { goalCoachSeed } from "../lib/coachSeeds.js";
 import { spendRatioOf } from "../lib/upkeepHealth.js";
 import { homeCoachNote } from "../lib/coachNotes.js";
 import { CoachNote } from "./CoachNote.jsx";
+import { ClaimDateSlipAlert } from "./ClaimDateSlipAlert.jsx";
+import { CoachBriefingCard } from "./CoachBriefingCard.jsx";
+import { detectClaimDateSlips } from "../lib/claimDateWatch.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
@@ -358,6 +361,25 @@ export function HomePanel({
     goals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained,
     futureEventDeductions, config, currentWeek, today,
   });
+
+  // Claim Date slip alert (TODO §32 C3) — resolveGoalFinishInfo's dates against the last acknowledged
+  // ones. New or user-changed goals get a baseline quietly: a derived-state sync, so it rides the
+  // debounced save (setConfig only), never an eager save. "Got it" below is the eager-saved gesture.
+  const claimWatch = config?.claimDateWatch ?? {};
+  const { slips: claimSlips, newBaselines: claimNewBaselines } = detectClaimDateSlips({ goals: tl, resolveGoalFinishInfo, watch: claimWatch });
+  const claimNewBaselinesKey = JSON.stringify(claimNewBaselines);
+  useEffect(() => {
+    if (claimNewBaselinesKey === "{}") return;
+    setConfig?.({ ...config, claimDateWatch: { ...(config?.claimDateWatch ?? {}), ...JSON.parse(claimNewBaselinesKey) } });
+  }, [claimNewBaselinesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleAcknowledgeClaimSlips = () => {
+    const next = {
+      ...config,
+      claimDateWatch: { ...claimWatch, ...Object.fromEntries(claimSlips.map((sl) => [sl.goalId, { date: sl.toIso, target: sl.target, rank: sl.rank }])) },
+    };
+    setConfig?.(next);
+    saveConfigNow?.(next);
+  };
 
   // Archetype picker preview (TODO §31): the same computeClaimDates() the goal
   // cards use, with the candidate goals appended AFTER the user's real ones —
@@ -1728,6 +1750,22 @@ export function HomePanel({
         unit: checksPerYear === 52 ? "week" : "check",
         spendRatio,
       })} />
+      <ClaimDateSlipAlert slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />
+      {/* Weekly Pre-Game Briefing (TODO §32 C2) — same gate as the Net Worth card; fires once per fiscal week. */}
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
+        <CoachBriefingCard
+          config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          expenses={expenses}
+          goals={goals}
+          weeklyIncome={weeklyIncome}
+          avgWeeklySpend={avgWeeklySpend}
+          fundedGoalSpend={fundedGoalSpend}
+          currentWeek={currentWeek}
+          today={todayIso}
+        />
+      )}
       {(() => {
         // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
         // tiles collapse under "Your numbers" with an always-visible summary line.

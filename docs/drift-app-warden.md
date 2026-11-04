@@ -1535,7 +1535,10 @@ forward slot for a Coach-generated insight.
 2026-07-24: admin/tester/investor **or** a real trial/paid entitlement, per
 `hasPrivilegedAccess({isAdmin, isTester, isInvestor})` as of 2026-07-25 — see F111);
 `CoachNetWorthCard.jsx` computes `runwayDays` via `computeNewJobSeasonRunway()` +
-`resolvePrimaryRunwayDays()` directly (`newJobSeasonRunway.js`) — **not** a local estimate;
+`resolvePrimaryRunwayDays()` (`newJobSeasonRunway.js`) — **not** a local estimate — now wrapped once in
+`coachTriggers.js` `netWorthRunwayDays()` (2026-11-04, TODO §32 D1) so Home's "Needs you" ranking
+(`lib/commandCenter.js` `rankNeedsYou`) resolves the SAME tier the card does. **IF** the card's tier inputs
+change, **THEN** change Home's ranking call with them (`HomePanel.test.jsx` "Needs you" is the check);
 `coachTriggers.js`: `resolveNetWorthSignalTier`, `shouldFireForTier` (one message per
 tier per fiscal week) — **[G + L, both converged]**
 Proactive Coach message, now reachable from both `HomePanel` (Amber/Green/Red) and

@@ -25,6 +25,8 @@ import { homeCoachNote } from "../lib/coachNotes.js";
 import { CoachNote } from "./CoachNote.jsx";
 import { ClaimDateSlipAlert } from "./ClaimDateSlipAlert.jsx";
 import { CoachBriefingCard } from "./CoachBriefingCard.jsx";
+import { rankNeedsYou } from "../lib/commandCenter.js";
+import { netWorthRunwayDays, resolveNetWorthSignalTier } from "../lib/coachTriggers.js";
 import { detectClaimDateSlips } from "../lib/claimDateWatch.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1740,7 +1742,54 @@ export function HomePanel({
         </div>
       </div>
 
-      <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
+      {/* "Needs you" (TODO §32 D1) — one ranked queue for the cards that ask something of the user.
+          rankNeedsYou() fixes the order only; each card still hides itself (dismissed, nothing due),
+          and when they all do the list is empty and the calm line shows (CSS :empty, index.css). */}
+      {(() => {
+        const coachOn = canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement });
+        // Same tier the Net Worth card itself resolves (F24) — via the shared runway helper, never a copy.
+        const netWorthTier = coachOn
+          ? resolveNetWorthSignalTier({
+            netWorthHealth,
+            runwayDays: netWorthRunwayDays({ config, expenses, today: todayIso }),
+            previousTier: config?.coachSignalState?.lastFiredTier ?? null,
+          })
+          : null;
+        const netWorthCard = (
+          <CoachNetWorthCard
+            key="netWorth"
+            config={config}
+            setConfig={setConfig}
+            saveConfigNow={saveConfigNow}
+            expenses={expenses}
+            goals={goals}
+            weeklyIncome={weeklyIncome}
+            avgWeeklySpend={avgWeeklySpend}
+            fundedGoalSpend={fundedGoalSpend}
+            netWorthHealth={netWorthHealth}
+            currentWeek={currentWeek}
+            today={todayIso}
+          />
+        );
+        const render = {
+          netWorthAlert: netWorthCard,
+          netWorthRecovery: netWorthCard,
+          dueToday: <DueTodayCard key="dueToday" bills={billsDueToday} todayIso={todayIso} />,
+          claimSlips: <ClaimDateSlipAlert key="claimSlips" slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />,
+        };
+        const order = rankNeedsYou({ netWorthTier, dueTodayCount: billsDueToday?.length ?? 0, claimSlipCount: claimSlips.length });
+        return (
+          <section className="needs-you" aria-label="Needs you" data-coach-ref="home-needs-you" style={{ marginBottom: "20px" }}>
+            <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: 700, marginBottom: "10px" }}>
+              Needs you
+            </div>
+            <div className="needs-you-list" data-testid="needs-you-list">{order.map((k) => render[k])}</div>
+            <div className="needs-you-empty text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Nothing needs you right now.
+            </div>
+          </section>
+        );
+      })()}
       {/* Coach note (TODO §32 A4): fixed template over the exact values the tiles below show —
           Left This Week|Check, Next Week Takehome|Next Paycheck|Next Check, Upkeep Health. */}
       <CoachNote text={homeCoachNote({
@@ -1750,7 +1799,6 @@ export function HomePanel({
         unit: checksPerYear === 52 ? "week" : "check",
         spendRatio,
       })} />
-      <ClaimDateSlipAlert slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />
       {/* Weekly Pre-Game Briefing (TODO §32 C2) — same gate as the Net Worth card; fires once per fiscal week. */}
       {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
         <CoachBriefingCard
@@ -1847,30 +1895,6 @@ export function HomePanel({
 
       {showBreakthroughTips && (
         <NetWorthHealthTips seed={weekNumber ?? 0} />
-      )}
-
-      {/* §2.C — left the admin/tester-only standing constraint; now also
-          open to a real trial/paid entitlement (docs/coach-entry-points.md
-          §2). Locked decision 2026-07-25: admin/tester/investor all bypass
-          the AI-feature paid wall unconditionally (entitlements.js's
-          hasPrivilegedAccess) — this does NOT reopen the separate, still-true
-          rule that beta testers and investors are otherwise two distinct
-          account tiers with zero overlap (docs/active-systems.md "Beta
-          Tester Accounts"). */}
-      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
-        <CoachNetWorthCard
-          config={config}
-          setConfig={setConfig}
-          saveConfigNow={saveConfigNow}
-          expenses={expenses}
-          goals={goals}
-          weeklyIncome={weeklyIncome}
-          avgWeeklySpend={avgWeeklySpend}
-          fundedGoalSpend={fundedGoalSpend}
-          netWorthHealth={netWorthHealth}
-          currentWeek={currentWeek}
-          today={todayIso}
-        />
       )}
 
       {/* Year-End Outlook: legacy position. With an identity it lives inside

@@ -1110,7 +1110,11 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Ask Coach why (`lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, warden F187). — fires when a goal's Claim Date slips past a threshold. Warden first: F177
   (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
 
-### D. Command center hub — DRAFT PLAN (2026-11-03, awaiting Anthony's approval; nothing built)
+### D. Command center hub — APPROVED 2026-11-04
+
+**Decisions (Anthony, 2026-11-04):** Home becomes the command center (no new tab) · tab label stays **Home** ·
+the ask bar sends the question straight into the chat · accounts without Coach see the non-AI parts only (no
+upgrade card in Coach's slot).
 
 **Shape (recommended): Home *becomes* the command center** — no sixth tab (the mobile bottom nav already holds
 Home · Income · Upkeep · Log · Account + Coach), no new server function, no migration. Home already carries most
@@ -1133,8 +1137,12 @@ numbers"); today they sit as a loose stack. D turns that stack into one Coach-fi
    everyone).
 
 **Build order** (each step shippable on its own):
-- [ ] **D1 · `lib/commandCenter.js` + "Needs you" queue** — pure ranking over existing signals; move the Net Worth
-  card, slip alert and due-today card into the queue. Warden first: F24, F187, §20.C due-today, F182, F183.
+- [ ] **D1 · `lib/commandCenter.js` + "Needs you" queue** — **BUILT 2026-11-04, awaiting review.** `rankNeedsYou()`
+  orders Net Worth Red/Amber → bills due today → Claim Date slips → Net Worth Green; the Net Worth card moved
+  up from the bottom of Home into the queue; empty queue shows "Nothing needs you right now." The tier comes
+  from the shared `netWorthRunwayDays()` + `resolveNetWorthSignalTier()` (F24) — same as the card.
+  **Not yet in the queue:** unconfirmed week check-in and identity bill suggestions (F182) — neither is on Home
+  today; they join when they get a Home card. Warden consulted: F24, F187, §20.C, F182, F183.
 - [ ] **D2 · "Today with Coach" + inline ask bar** — briefing on top, ask bar reuses `openCoachAbout`.
   Warden first: F187, the `canAccessAskCoachGeneral` gate row (no ask bar for accounts without Coach — they get
   the queue and Claim Dates only).

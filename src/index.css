@@ -664,3 +664,8 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .limit-halo { animation: none; }
 }
+
+/* Home "Needs you" queue (TODO §32 D1): each card hides itself when dismissed, so the
+   calm empty line shows only when the list rendered nothing at all. */
+.needs-you-empty { display: none; }
+.needs-you-list:empty + .needs-you-empty { display: block; }

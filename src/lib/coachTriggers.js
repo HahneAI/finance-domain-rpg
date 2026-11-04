@@ -19,6 +19,16 @@
 // newJobSeasonRunway.js) the New Job Season panels use. Removed 2026-07-21: callers now
 // pass runwayDays computed via computeNewJobSeasonRunway()/resolvePrimaryRunwayDays()
 // directly, so every Coach surface quotes the same number as the New Job Season UI.
+import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
+
+/**
+ * The Red tier's runway — the same computeNewJobSeasonRunway() the New Job Season panels use (F24).
+ * One helper so CoachNetWorthCard and Home's "Needs you" ranking (TODO §32 D1) read the same number.
+ */
+export function netWorthRunwayDays({ config, expenses = [], today, includeBenefits = true }) {
+  const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
+  return resolvePrimaryRunwayDays(dash, config, includeBenefits);
+}
 
 /**
  * Resolves which signal tier (if any) should be showing right now.

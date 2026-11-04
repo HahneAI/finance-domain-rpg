@@ -57,6 +57,55 @@ describe('HomePanel', () => {
     expect(screen.getByLabelText('Bills due today')).toBeTruthy()
   })
 
+  // TODO §32 D1 — one ranked "Needs you" queue.
+  describe('"Needs you" queue', () => {
+    it('renders an empty list (the calm line shows via CSS) when nothing needs the user', () => {
+      render(<HomePanel {...baseProps} />)
+      expect(screen.getByRole('region', { name: 'Needs you' })).toBeTruthy()
+      expect(screen.getByTestId('needs-you-list').children).toHaveLength(0)
+      expect(screen.getByText('Nothing needs you right now.')).toBeTruthy()
+    })
+
+    it('puts the Net Worth check-in ahead of bills due today, both inside the queue', async () => {
+      mocks.chatWithCoach.mockImplementation(async function* () { yield 'amber check-in' })
+      render(
+        <HomePanel
+          {...baseProps}
+          config={{ newJobSeasonMode: false }}
+          expenses={[]}
+          currentWeek={{ idx: 10 }}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+          billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]}
+        />
+      )
+      await waitFor(() => expect(screen.getByText('amber check-in')).toBeTruthy())
+      const list = screen.getByTestId('needs-you-list')
+      expect(list.children).toHaveLength(2)
+      expect(list.children[0]).toHaveTextContent('amber check-in')
+      expect(list.children[1]).toHaveAttribute('aria-label', 'Bills due today')
+    })
+
+    it('leaves the Net Worth card out of the queue for an account without Coach', () => {
+      mocks.chatWithCoach.mockClear()
+      render(
+        <HomePanel
+          {...baseProps}
+          config={{ newJobSeasonMode: false }}
+          entitlement={{ isEntitled: false, state: 'none' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+          billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]}
+        />
+      )
+      const list = screen.getByTestId('needs-you-list')
+      expect(list.children).toHaveLength(1)
+      expect(list.children[0]).toHaveAttribute('aria-label', 'Bills due today')
+      expect(mocks.chatWithCoach).not.toHaveBeenCalled()
+    })
+  })
+
   it('does not show a sign-out action on Home', () => {
     render(<HomePanel {...baseProps} />)
     expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull()

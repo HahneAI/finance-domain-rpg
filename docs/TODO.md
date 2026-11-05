@@ -1148,8 +1148,13 @@ numbers"); today they sit as a loose stack. D turns that stack into one Coach-fi
   question to `openCoachAbout` — the same one-shot seed as A1 — so it opens the chat already sent. "Needs you"
   moved up right under it, so the page now reads Today with Coach → Needs you → Claim Dates. Accounts without
   Coach get no Coach section at all. Warden consulted: F187, F111 gate row, F177 (Claim Dates untouched).
-- [ ] **D3 · "Coach remembers" + "Around the app" strips** — Warden first: F186 (memory off / empty), F113
-  (note figures = tile figures), F178 (labels via `VIEW_LABELS`).
+- [ ] **D3 · "Coach remembers" + "Around the app" strips** — **BUILT 2026-11-04, awaiting review.**
+  `CommandCenterStrips.jsx`. *Coach remembers*: the 3 newest memories in the user's words + "See all (n)", which
+  opens Account straight on "What Coach knows" (one-shot `initialSection`); Coach accounts only, hidden when
+  memory is off or empty (so it stays hidden until migration 049 is applied). *Around the app*: the Upkeep and Log
+  notes (A4) as tappable one-liners that open those panels, built from the same inputs each panel passes; labels
+  from `VIEW_LABELS`. Fixed templates, so every account sees them. Sits between Claim Dates and "Your numbers".
+  Warden consulted: F186, F113, F178.
 - [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — Warden first: F183 (today's
   identity-first gate), design system §22, Liquid Glass `purpose` whitelist (`active-systems.md` §15) if glass is
   used, `textUtilityClassAudit`. A real browser render is required (React Compiler blind spot).

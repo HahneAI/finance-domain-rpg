@@ -3292,7 +3292,7 @@ function BetaScoresAdminDetail({ onBack }) {
   );
 }
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity, coachAvailable = false }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity, coachAvailable = false, initialSection = null, onInitialSectionConsumed }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, AI admin, or
   // the per-user tax_projections_enabled flag). The setup wizard's "Unlock
   // projections" choice intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -3300,7 +3300,12 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   // docs/TODO.md §17/§20 — the real 10-week cohort only (isAdmin does NOT count,
   // same distinction isTrackedBetaTester enforces everywhere else).
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
-  const [activeSection, setActiveSection] = useState(null);
+  const [activeSection, setActiveSection] = useState(initialSection);
+  // One-shot entry section (Home's "Coach remembers" → See all, TODO §32 D3): read once at mount, then
+  // hand it back so the next Account visit starts on the normal page.
+  useEffect(() => {
+    if (initialSection) onInitialSectionConsumed?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });

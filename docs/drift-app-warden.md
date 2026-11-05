@@ -1666,6 +1666,9 @@ bottom for the goal the user was chasing when the job ended. **No date is render
 with no income there is no surplus, so no Claim Date the math can support — inventing one would
 break the same never-render-an-unsupported-date rule the rest of the surface keeps. No setter is
 threaded, so F20's readOnly shadow needs no new entry.
+> **Home "Around the app" (2026-11-04, TODO §32 D3):** prints panel names from App's `VIEW_LABELS`, threaded to
+> HomePanel as `viewLabels` (fallbacks "Upkeep"/"Log"), and navigates by route key. A rename touches
+> `VIEW_LABELS` only; never hardcode a new label there.
 
 **The Budget panel is named "Upkeep" in all user-visible text**; every route key, filename and
 `data-coach-ref` stays `budget`. Sites moved: `NAV_ITEMS`, `BOTTOM_NAV`, `DemoAccountTree`'s tab
@@ -5994,6 +5997,11 @@ avoid, how to be spoken to, facts about them), own-row RLS like `coach_chats`.
 > Check: `coachMemory.test.js`, `coachTools.test.js` (propose_memory), `AskCoachPanel.test.jsx` /
 > `JobHuntChatPanel.test.jsx` (memory blocks), `ProfilePanel.test.jsx` (page), `accountArchiveCoachMemory.test.js`,
 > `stripeWebhook.test.js` (restore).
+> **Home strip (2026-11-04, TODO §32 D3):** `CommandCenterStrips.jsx` `CoachRemembersStrip` shows the 3 newest rows
+> from `loadCoachMemory()` — mounted only when App passes `onOpenCoachMemory` (the `canAccessAskCoachGeneral`
+> gate), skipped entirely when `config.coachMemoryOff`. "See all" → Account's `coachmemory` section via
+> ProfilePanel's one-shot `initialSection`. **IF** the memory gate, the off switch or the section key changes,
+> **THEN** `commandCenterStrips.test.jsx` + the ProfilePanel "entry section" test are the check.
 
 **F187 · Coach routines — Weekly Pre-Game Briefing + Claim Date slip alert** — `CoachBriefingCard.jsx`, `coachPrompts.js` (`WEEKLY_BRIEFING_SYSTEM_PROMPT`), `coachPolicy.js` (`weekly_briefing` surface), `lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, `HomePanel.jsx`, `coachSeeds.js` (`claimSlipCoachSeed`) — **[G]+[L]**
 2026-11-03 (TODO §32 C2/C3). Both run client-side on Home — no cron, no new function (7/12 unchanged).

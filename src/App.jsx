@@ -913,6 +913,15 @@ export default function App() {
     setAskCoachOpen(true);
   }, []);
 
+  // Home's "Coach remembers" → "See all" (TODO §32 D3): open Account straight on "What Coach knows".
+  // One-shot — ProfilePanel reads it as its first section, then clears it, so a later Account visit
+  // lands on the normal Account page.
+  const [profileEntrySection, setProfileEntrySection] = useState(null);
+  const openCoachMemory = () => {
+    setProfileEntrySection("coachmemory");
+    navigate("profile");
+  };
+
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   // Also exits any active admin demo view so the personal panel is shown.
@@ -2480,6 +2489,9 @@ export default function App() {
           config={config}
           logNetLost={logTotals.netLost}
           logNetGained={logTotals.netGained}
+          logCount={logs.length}
+          viewLabels={VIEW_LABELS}
+          onOpenCoachMemory={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachMemory : undefined}
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
           currentWeek={currentWeek}
@@ -2583,6 +2595,8 @@ export default function App() {
         authedUser={authedUser}
         coachAvailable={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement })}
         config={config}
+        initialSection={profileEntrySection}
+        onInitialSectionConsumed={() => setProfileEntrySection(null)}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}
         onChangeIdentity={handleChangeIdentity}

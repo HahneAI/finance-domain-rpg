@@ -95,6 +95,19 @@ describe('HomePanel', () => {
     })
   })
 
+  // TODO §32 D3 — "Around the app": each panel's own note, labelled by name, opening its route.
+  it('shows the Upkeep and Log notes from the same inputs those panels use, and opens the panel', () => {
+    const navigate = vi.fn()
+    render(<HomePanel {...baseProps} navigate={navigate} remainingSpend={{ avgWeeklySpend: 400 }} expenses={[{ id: 'e1' }]}
+      logCount={2} logNetLost={300} logNetGained={0} viewLabels={{ budget: 'Upkeep', log: 'Log' }} />)
+    const strip = screen.getByRole('region', { name: 'Around the app' })
+    expect(strip).toHaveTextContent('Upkeep is taking 40% of your take-home')
+    expect(strip).toHaveTextContent('Your 2 logged entries cost $300 in take-home this year.')
+    fireEvent.click(screen.getByRole('button', { name: /^Open Upkeep:/ }))
+    expect(navigate).toHaveBeenCalledWith('budget')
+    expect(screen.queryByRole('region', { name: 'Coach remembers' })).toBeNull() // no Coach → no memory strip
+  })
+
   // TODO §32 D1 — one ranked "Needs you" queue.
   describe('"Needs you" queue', () => {
     it('renders an empty list (the calm line shows via CSS) when nothing needs the user', () => {

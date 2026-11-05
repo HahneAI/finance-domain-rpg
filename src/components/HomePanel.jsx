@@ -26,6 +26,9 @@ import { CoachNote } from "./CoachNote.jsx";
 import { ClaimDateSlipAlert } from "./ClaimDateSlipAlert.jsx";
 import { CoachBriefingCard } from "./CoachBriefingCard.jsx";
 import { CoachAskBar } from "./CoachAskBar.jsx";
+import { CoachRemembersStrip, AroundTheAppStrip } from "./CommandCenterStrips.jsx";
+import { upkeepCoachNote, logCoachNote } from "../lib/coachNotes.js";
+import { upkeepHealthBand } from "../lib/upkeepHealth.js";
 import { rankNeedsYou } from "../lib/commandCenter.js";
 import { netWorthRunwayDays, resolveNetWorthSignalTier } from "../lib/coachTriggers.js";
 import { detectClaimDateSlips } from "../lib/claimDateWatch.js";
@@ -101,6 +104,9 @@ export function HomePanel({
   config = null,
   logNetLost = 0,
   logNetGained = 0,
+  logCount = 0,
+  onOpenCoachMemory,
+  viewLabels = {},
   futureEventDeductions = {},
   futureWeekNets = [],
   prevWeekNet,
@@ -1826,6 +1832,27 @@ export function HomePanel({
         unit: checksPerYear === 52 ? "week" : "check",
         spendRatio,
       })} />
+      {/* "Coach remembers" + "Around the app" (TODO §32 D3). Memory strip: Coach accounts only
+          (onOpenCoachMemory is passed only then), hidden when memory is off or empty (F186).
+          Around the app: each panel's own note, from the same inputs that panel passes (F113) —
+          Upkeep = spendRatioOf(avgWeeklySpend, weeklyIncome) + its band + expenses; Log = App's
+          logTotals + the entry count. Fixed templates, no model call — shown to every account. */}
+      {onOpenCoachMemory && <CoachRemembersStrip memoryOff={config?.coachMemoryOff === true} onSeeAll={onOpenCoachMemory} />}
+      <AroundTheAppStrip
+        onOpen={navigate}
+        items={[
+          {
+            view: "budget",
+            label: viewLabels.budget ?? "Upkeep",
+            text: upkeepCoachNote({ spendRatio, band: upkeepHealthBand(spendRatio), hasExpenses: expenses.length > 0 }),
+          },
+          {
+            view: "log",
+            label: viewLabels.log ?? "Log",
+            text: logCoachNote({ entryCount: logCount, netLost: logNetLost, netGained: logNetGained }),
+          },
+        ]}
+      />
       {(() => {
         // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
         // tiles collapse under "Your numbers" with an always-visible summary line.

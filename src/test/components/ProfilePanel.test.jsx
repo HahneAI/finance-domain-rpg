@@ -334,6 +334,13 @@ describe('ProfilePanel — What Coach knows about me (TODO §32 B2)', () => {
     expect(screen.getByText('What Coach knows about me')).toBeTruthy()
   })
 
+  it('opens straight on the memory page when Home hands it as the entry section, then clears it (TODO §32 D3)', async () => {
+    const onInitialSectionConsumed = vi.fn()
+    mount({ coachAvailable: true, initialSection: 'coachmemory', onInitialSectionConsumed })
+    await waitFor(() => expect(screen.getByText('So my kids see me finish something')).toBeTruthy())
+    expect(onInitialSectionConsumed).toHaveBeenCalledTimes(1)
+  })
+
   it('lists memories, forgets one, and refuses a Social Security number before saving', async () => {
     mount({ coachAvailable: true })
     fireEvent.click(screen.getByText('What Coach knows about me'))

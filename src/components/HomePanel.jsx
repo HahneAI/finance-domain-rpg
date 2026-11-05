@@ -25,6 +25,7 @@ import { homeCoachNote } from "../lib/coachNotes.js";
 import { CoachNote } from "./CoachNote.jsx";
 import { ClaimDateSlipAlert } from "./ClaimDateSlipAlert.jsx";
 import { CoachBriefingCard } from "./CoachBriefingCard.jsx";
+import { CoachAskBar } from "./CoachAskBar.jsx";
 import { rankNeedsYou } from "../lib/commandCenter.js";
 import { netWorthRunwayDays, resolveNetWorthSignalTier } from "../lib/coachTriggers.js";
 import { detectClaimDateSlips } from "../lib/claimDateWatch.js";
@@ -694,6 +695,80 @@ export function HomePanel({
           } : {})}
         />
       )}
+      {/* "Today with Coach" (TODO §32 D2) — the command center's first section: this week's briefing
+          (C2, F187 — same canAccessAskCoachGeneral gate as before) and the ask bar, which sends the
+          question straight into the chat (onAskCoach is only passed when the account can open Coach).
+          An account without Coach gets neither, and no section — Anthony's 2026-11-04 call. */}
+      {(canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) || onAskCoach) && (
+        <section aria-label="Today with Coach" data-coach-ref="home-today" style={{ marginBottom: "20px" }}>
+          <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: 700, marginBottom: "10px" }}>
+            Today with Coach
+          </div>
+          {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
+            <CoachBriefingCard
+              config={config}
+              setConfig={setConfig}
+              saveConfigNow={saveConfigNow}
+              expenses={expenses}
+              goals={goals}
+              weeklyIncome={weeklyIncome}
+              avgWeeklySpend={avgWeeklySpend}
+              fundedGoalSpend={fundedGoalSpend}
+              currentWeek={currentWeek}
+              today={todayIso}
+            />
+          )}
+          {onAskCoach && <CoachAskBar onAsk={onAskCoach} />}
+        </section>
+      )}
+      {/* "Needs you" (TODO §32 D1) — one ranked queue for the cards that ask something of the user.
+          rankNeedsYou() fixes the order only; each card still hides itself (dismissed, nothing due),
+          and when they all do the list is empty and the calm line shows (CSS :empty, index.css). */}
+      {(() => {
+        const coachOn = canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement });
+        // Same tier the Net Worth card itself resolves (F24) — via the shared runway helper, never a copy.
+        const netWorthTier = coachOn
+          ? resolveNetWorthSignalTier({
+            netWorthHealth,
+            runwayDays: netWorthRunwayDays({ config, expenses, today: todayIso }),
+            previousTier: config?.coachSignalState?.lastFiredTier ?? null,
+          })
+          : null;
+        const netWorthCard = (
+          <CoachNetWorthCard
+            key="netWorth"
+            config={config}
+            setConfig={setConfig}
+            saveConfigNow={saveConfigNow}
+            expenses={expenses}
+            goals={goals}
+            weeklyIncome={weeklyIncome}
+            avgWeeklySpend={avgWeeklySpend}
+            fundedGoalSpend={fundedGoalSpend}
+            netWorthHealth={netWorthHealth}
+            currentWeek={currentWeek}
+            today={todayIso}
+          />
+        );
+        const render = {
+          netWorthAlert: netWorthCard,
+          netWorthRecovery: netWorthCard,
+          dueToday: <DueTodayCard key="dueToday" bills={billsDueToday} todayIso={todayIso} />,
+          claimSlips: <ClaimDateSlipAlert key="claimSlips" slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />,
+        };
+        const order = rankNeedsYou({ netWorthTier, dueTodayCount: billsDueToday?.length ?? 0, claimSlipCount: claimSlips.length });
+        return (
+          <section className="needs-you" aria-label="Needs you" data-coach-ref="home-needs-you" style={{ marginBottom: "20px" }}>
+            <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: 700, marginBottom: "10px" }}>
+              Needs you
+            </div>
+            <div className="needs-you-list" data-testid="needs-you-list">{order.map((k) => render[k])}</div>
+            <div className="needs-you-empty text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Nothing needs you right now.
+            </div>
+          </section>
+        );
+      })()}
       {goals.length === 0 && !showArchetypePicker && (
         <div
           className="text-sm" style={{
@@ -1742,54 +1817,6 @@ export function HomePanel({
         </div>
       </div>
 
-      {/* "Needs you" (TODO §32 D1) — one ranked queue for the cards that ask something of the user.
-          rankNeedsYou() fixes the order only; each card still hides itself (dismissed, nothing due),
-          and when they all do the list is empty and the calm line shows (CSS :empty, index.css). */}
-      {(() => {
-        const coachOn = canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement });
-        // Same tier the Net Worth card itself resolves (F24) — via the shared runway helper, never a copy.
-        const netWorthTier = coachOn
-          ? resolveNetWorthSignalTier({
-            netWorthHealth,
-            runwayDays: netWorthRunwayDays({ config, expenses, today: todayIso }),
-            previousTier: config?.coachSignalState?.lastFiredTier ?? null,
-          })
-          : null;
-        const netWorthCard = (
-          <CoachNetWorthCard
-            key="netWorth"
-            config={config}
-            setConfig={setConfig}
-            saveConfigNow={saveConfigNow}
-            expenses={expenses}
-            goals={goals}
-            weeklyIncome={weeklyIncome}
-            avgWeeklySpend={avgWeeklySpend}
-            fundedGoalSpend={fundedGoalSpend}
-            netWorthHealth={netWorthHealth}
-            currentWeek={currentWeek}
-            today={todayIso}
-          />
-        );
-        const render = {
-          netWorthAlert: netWorthCard,
-          netWorthRecovery: netWorthCard,
-          dueToday: <DueTodayCard key="dueToday" bills={billsDueToday} todayIso={todayIso} />,
-          claimSlips: <ClaimDateSlipAlert key="claimSlips" slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />,
-        };
-        const order = rankNeedsYou({ netWorthTier, dueTodayCount: billsDueToday?.length ?? 0, claimSlipCount: claimSlips.length });
-        return (
-          <section className="needs-you" aria-label="Needs you" data-coach-ref="home-needs-you" style={{ marginBottom: "20px" }}>
-            <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: 700, marginBottom: "10px" }}>
-              Needs you
-            </div>
-            <div className="needs-you-list" data-testid="needs-you-list">{order.map((k) => render[k])}</div>
-            <div className="needs-you-empty text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              Nothing needs you right now.
-            </div>
-          </section>
-        );
-      })()}
       {/* Coach note (TODO §32 A4): fixed template over the exact values the tiles below show —
           Left This Week|Check, Next Week Takehome|Next Paycheck|Next Check, Upkeep Health. */}
       <CoachNote text={homeCoachNote({
@@ -1799,21 +1826,6 @@ export function HomePanel({
         unit: checksPerYear === 52 ? "week" : "check",
         spendRatio,
       })} />
-      {/* Weekly Pre-Game Briefing (TODO §32 C2) — same gate as the Net Worth card; fires once per fiscal week. */}
-      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
-        <CoachBriefingCard
-          config={config}
-          setConfig={setConfig}
-          saveConfigNow={saveConfigNow}
-          expenses={expenses}
-          goals={goals}
-          weeklyIncome={weeklyIncome}
-          avgWeeklySpend={avgWeeklySpend}
-          fundedGoalSpend={fundedGoalSpend}
-          currentWeek={currentWeek}
-          today={todayIso}
-        />
-      )}
       {(() => {
         // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
         // tiles collapse under "Your numbers" with an always-visible summary line.

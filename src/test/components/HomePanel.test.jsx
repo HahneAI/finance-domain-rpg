@@ -57,6 +57,44 @@ describe('HomePanel', () => {
     expect(screen.getByLabelText('Bills due today')).toBeTruthy()
   })
 
+  // TODO §32 D2 — "Today with Coach": briefing + ask bar at the top of Home.
+  describe('"Today with Coach"', () => {
+    it('sends the typed question straight to Coach and clears the bar', () => {
+      const onAskCoach = vi.fn()
+      render(<HomePanel {...baseProps} onAskCoach={onAskCoach} />)
+      const input = screen.getByLabelText('Ask Coach anything')
+      const ask = screen.getByRole('button', { name: 'Ask' })
+      expect(ask).toBeDisabled()
+      fireEvent.change(input, { target: { value: '  Can I afford a trip in June?  ' } })
+      fireEvent.click(ask)
+      expect(onAskCoach).toHaveBeenCalledWith('Can I afford a trip in June?')
+      expect(input).toHaveValue('')
+    })
+
+    it('does not send a blank question', () => {
+      const onAskCoach = vi.fn()
+      render(<HomePanel {...baseProps} onAskCoach={onAskCoach} />)
+      fireEvent.change(screen.getByLabelText('Ask Coach anything'), { target: { value: '   ' } })
+      fireEvent.submit(screen.getByRole('search', { name: 'Ask Coach' }))
+      expect(onAskCoach).not.toHaveBeenCalled()
+    })
+
+    it('shows no Coach section at all for an account without Coach', () => {
+      render(<HomePanel {...baseProps} entitlement={{ isEntitled: false, state: 'none' }} />)
+      expect(screen.queryByRole('region', { name: 'Today with Coach' })).toBeNull()
+      expect(screen.queryByLabelText('Ask Coach anything')).toBeNull()
+    })
+
+    it('sits above "Needs you", which sits above the Claim Dates', () => {
+      render(<HomePanel {...baseProps} onAskCoach={vi.fn()} />)
+      const today = screen.getByRole('region', { name: 'Today with Coach' })
+      const needs = screen.getByRole('region', { name: 'Needs you' })
+      const goals = screen.getAllByText('Goals')[0]
+      expect(today.compareDocumentPosition(needs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(needs.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+  })
+
   // TODO §32 D1 — one ranked "Needs you" queue.
   describe('"Needs you" queue', () => {
     it('renders an empty list (the calm line shows via CSS) when nothing needs the user', () => {

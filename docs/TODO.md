@@ -1143,9 +1143,11 @@ numbers"); today they sit as a loose stack. D turns that stack into one Coach-fi
   from the shared `netWorthRunwayDays()` + `resolveNetWorthSignalTier()` (F24) — same as the card.
   **Not yet in the queue:** unconfirmed week check-in and identity bill suggestions (F182) — neither is on Home
   today; they join when they get a Home card. Warden consulted: F24, F187, §20.C, F182, F183.
-- [ ] **D2 · "Today with Coach" + inline ask bar** — briefing on top, ask bar reuses `openCoachAbout`.
-  Warden first: F187, the `canAccessAskCoachGeneral` gate row (no ask bar for accounts without Coach — they get
-  the queue and Claim Dates only).
+- [ ] **D2 · "Today with Coach" + inline ask bar** — **BUILT 2026-11-04, awaiting review.** New top section
+  on Home: this week's briefing (C2, gate unchanged) + `CoachAskBar` ("Ask Coach anything…"), which hands the
+  question to `openCoachAbout` — the same one-shot seed as A1 — so it opens the chat already sent. "Needs you"
+  moved up right under it, so the page now reads Today with Coach → Needs you → Claim Dates. Accounts without
+  Coach get no Coach section at all. Warden consulted: F187, F111 gate row, F177 (Claim Dates untouched).
 - [ ] **D3 · "Coach remembers" + "Around the app" strips** — Warden first: F186 (memory off / empty), F113
   (note figures = tile figures), F178 (labels via `VIEW_LABELS`).
 - [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — Warden first: F183 (today's

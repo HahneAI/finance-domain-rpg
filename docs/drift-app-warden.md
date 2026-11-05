@@ -6003,6 +6003,10 @@ avoid, how to be spoken to, facts about them), own-row RLS like `coach_chats`.
 > exactly the Net Worth card's. Context = `buildCoachContext` + memory (F186). **IF** the trigger, cache shape
 > or gate changes, **THEN** mirror CoachNetWorthCard and re-run `promptfooconfig.phase6-weekly-briefing.yaml`
 > (via `modelCompare.mjs --only phase6 --candidate-only`). Push delivery is NOT built (needs §8.C PWA push).
+> **Placement (2026-11-04, TODO §32 D2):** the briefing now renders inside Home's top "Today with Coach"
+> section with `CoachAskBar`; the slip alert renders inside the "Needs you" queue (D1, `rankNeedsYou`). Gates
+> unchanged — the section shows only when `canAccessAskCoachGeneral` or `onAskCoach` is truthy. **IF** either
+> gate changes, **THEN** `HomePanel.test.jsx` "Today with Coach" / "Needs you" are the check.
 > **Slip alert (L→G).** Dates come only from `resolveGoalFinishInfo()` (F177) through `tl` order (rank = i+1).
 > Baselines `config.claimDateWatch { [goalId]: { date, target, rank } }`: seeded quietly (debounced
 > `setConfig`, a derived sync — never eager) for new goals AND whenever target or rank changed (the user's

@@ -17,7 +17,7 @@
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
 | 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
-| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 13 | 0 |
+| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 17 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -1056,7 +1056,10 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Warden first: F174 (chip/focus refs, `data-coach-ref`), F177 (goal card body is duplicated mobile/desktop —
   edit as a pair), F114 (rank only), F178 (`PANEL_VIEW_KEYS` + `navigate_to` enum are one unit), the
   `canAccessAskCoachGeneral` gate row (entry points must hide for non-entitled accounts).
-- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** Warden first: §9 Income map
+- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** **BUILT 2026-11-03 — awaiting review:**
+  an ASK pill in each active row of Income's weekly table (not the Full Detail modal — Coach would open over it;
+  stops the tap reaching the admin week inspector) and an ASK button beside EDIT on each Log entry. Questions name
+  the row's own week-end date (`paycheckCoachSeed`, `logEntryCoachSeed`). Warden first: §9 Income map
   (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
 - [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
   starter prompts). **BUILT 2026-10-30 — awaiting review + live check:** App passes `originView` +
@@ -1076,35 +1079,100 @@ Warden entries to read BEFORE building it — a change counts as done only after
   Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
 
 ### B. Coach memory
-- [ ] **B1 · `coach_memory` table** — short user-confirmed facts (why each goal matters, decisions, things to
+- [ ] **B1 · `coach_memory` table** **BUILT 2026-11-03 — migration 049 WRITTEN, NOT APPLIED** (decisions,
+  Anthony 2026-11-03: archived with the account on a non-payment deletion and restored on revival, dropped for
+  good on a user-requested deletion; F120 check run → RLS-only with regulated identifiers refused; warden F186).  — short user-confirmed facts (why each goal matters, decisions, things to
   avoid, the user's own instructions). Migration **049** (verify the next number with the CLAUDE.md
   collision check), `user_id references user_data(user_id) on delete cascade` like `coach_chats` (023), RLS own-row
   only (migration 019 pattern). Warden first: F120 (encryption trigger — memory is free text about money and life;
   run the sensitive-data check before shipping), §16.2 "`deleted_accounts` restore blob shape" row (decide whether
   memory is archived on deletion or dropped — and say so in the privacy copy), F146 (retention pattern to mirror).
-- [ ] **B2 · "What Coach knows about me" page** (Account panel) — view, edit, delete each memory; global
+- [ ] **B2 · "What Coach knows about me" page** **BUILT 2026-11-03:**  (Account panel) — view, edit, delete each memory; global
   memory-off switch. Warden first: §12 Account map, eager-save rule, `readOnly` shadow.
-- [ ] **B3 · Memory into context** — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
+- [ ] **B3 · Memory into context** **BUILT 2026-11-03 (Ask Coach + Job Hunt):**  — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
   Warden first: F113/F114 (no goal names; memory text must not smuggle them back in), prompt-cache prefix order
   (memory goes after the frozen system prompt).
-- [ ] **B4 · Coach proposes a memory, user confirms** — a write-shaped tool on the `propose_goal` pattern
+- [ ] **B4 · Coach proposes a memory, user confirms** **BUILT 2026-11-03 (`propose_memory` + `CoachMemoryCard`):**  — a write-shaped tool on the `propose_goal` pattern
   (card + Confirm, never a silent write). Warden first: F176 (write-shaped tool contract), F174.
 
 ### C. Routines (scheduled Coach)
-- [ ] **C1 · Merge `claude/api-consolidation` first** (12/12 → 7/12 functions) and verify on a preview
+- [ ] **C1 · Merge `claude/api-consolidation` first** — **DONE upstream (PR #765, 2026-10-30); preview check still Anthony's.** (12/12 → 7/12 functions) and verify on a preview
   deployment: one route per router + one old URL. Warden first: F185 (on that branch — router rules; never move
   `stripe-webhook.js` or the cron path).
-- [ ] **C2 · Weekly Pre-Game Briefing** (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
+- [ ] **C2 · Weekly Pre-Game Briefing** — **BUILT 2026-11-03, awaiting review:** client-side on Home (no cron/slot
+  needed), once per fiscal week, Haiku 5.5 `weekly_briefing` surface, cached in `config.coachBriefing`, memory-aware;
+  live 6/6 three sentences, figures as written (warden F187). Push delivery still needs §8.C. (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
   into the existing daily cron over a new slot. Warden first: F86 (cron shell: SELECT must cover every field the
   job reads — DW-7 class), lifecycle exemption row, F87 (email disclosure rule if it emails), the per-surface
   `maxTokens` IF/THEN in the `canAccessAiFeatures` gate row (a new surface needs a cap sized for thinking).
-- [ ] **C3 · Goal-date drift alert** — fires when a goal's Claim Date slips past a threshold. Warden first: F177
+- [ ] **C3 · Goal-date drift alert** — **BUILT 2026-11-03, awaiting review:** fixed-template alert on Home when a
+  Claim Date slips 14+ days past the last acknowledged date (target/rank changes re-baseline quietly); Got it +
+  Ask Coach why (`lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, warden F187). — fires when a goal's Claim Date slips past a threshold. Warden first: F177
   (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
 
-### D. Command center hub (after A–C work)
-- [ ] **D1 · Scope the hub** — one Coach-first home that surfaces memory, routines' output and panel notes.
-  Warden first: §8 Home map (F183 identity-first Home layout gate), F178 naming screen (grep the new name against
-  existing vocabulary first), design system §22.
+### D. Command center hub — APPROVED 2026-11-04
+
+**Decisions (Anthony, 2026-11-04):** Home becomes the command center (no new tab) · tab label stays **Home** ·
+the ask bar sends the question straight into the chat · accounts without Coach see the non-AI parts only (no
+upgrade card in Coach's slot).
+
+**Shape (recommended): Home *becomes* the command center** — no sixth tab (the mobile bottom nav already holds
+Home · Income · Upkeep · Log · Account + Coach), no new server function, no migration. Home already carries most
+of the pieces A–C built (Claim Date hero, Coach note, slip alert, briefing, Net Worth card, collapsed "Your
+numbers"); today they sit as a loose stack. D turns that stack into one Coach-first page, top to bottom:
+
+1. **Today with Coach** — the week's briefing (C2) plus an **inline ask bar** ("Ask Coach anything…") that opens
+   the chat with the question already sent (same one-shot seed as A1). The AI is the first thing on the page,
+   not a tab you go find.
+2. **Needs you** — ONE ranked queue replacing the scattered cards: Net Worth Red/Amber (F24) → bills due today
+   (§20.C) → Claim Date slips (C3) → unconfirmed week check-in → identity bill suggestions (F182) → a Green
+   recovery note last. Each card: one line + one action. Ranking is a pure function (`lib/commandCenter.js`)
+   so the order is tested, not eyeballed. Empty queue = one calm line, not a blank gap.
+3. **Claim Dates** — the existing hero + goal cards, unchanged (F177: dates only from `resolveGoalFinishInfo()`).
+4. **Coach remembers** — a slim strip showing 2–3 saved memories in the user's words + "See all" (F186), so the
+   user can see Coach actually knows them. Hidden when memory is off or empty.
+5. **Around the app** — the A4 panel notes for Upkeep and Log condensed into tappable one-liners that open their
+   panel (Income/Account join when they get notes).
+6. **Your numbers** — the existing tiles, collapsed by default (F183's identity-first layout, extended to
+   everyone).
+
+**Build order** (each step shippable on its own):
+- [ ] **D1 · `lib/commandCenter.js` + "Needs you" queue** — **BUILT 2026-11-04, awaiting review.** `rankNeedsYou()`
+  orders Net Worth Red/Amber → bills due today → Claim Date slips → Net Worth Green; the Net Worth card moved
+  up from the bottom of Home into the queue; empty queue shows "Nothing needs you right now." The tier comes
+  from the shared `netWorthRunwayDays()` + `resolveNetWorthSignalTier()` (F24) — same as the card.
+  **Not yet in the queue:** unconfirmed week check-in and identity bill suggestions (F182) — neither is on Home
+  today; they join when they get a Home card. Warden consulted: F24, F187, §20.C, F182, F183.
+- [ ] **D2 · "Today with Coach" + inline ask bar** — **BUILT 2026-11-04, awaiting review.** New top section
+  on Home: this week's briefing (C2, gate unchanged) + `CoachAskBar` ("Ask Coach anything…"), which hands the
+  question to `openCoachAbout` — the same one-shot seed as A1 — so it opens the chat already sent. "Needs you"
+  moved up right under it, so the page now reads Today with Coach → Needs you → Claim Dates. Accounts without
+  Coach get no Coach section at all. Warden consulted: F187, F111 gate row, F177 (Claim Dates untouched).
+- [ ] **D3 · "Coach remembers" + "Around the app" strips** — **BUILT 2026-11-04, awaiting review.**
+  `CommandCenterStrips.jsx`. *Coach remembers*: the 3 newest memories in the user's words + "See all (n)", which
+  opens Account straight on "What Coach knows" (one-shot `initialSection`); Coach accounts only, hidden when
+  memory is off or empty (so it stays hidden until migration 049 is applied). *Around the app*: the Upkeep and Log
+  notes (A4) as tappable one-liners that open those panels, built from the same inputs each panel passes; labels
+  from `VIEW_LABELS`. Fixed templates, so every account sees them. Sits between Claim Dates and "Your numbers".
+  Warden consulted: F186, F113, F178.
+- [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — **BUILT 2026-11-05, awaiting review.**
+  "Your numbers" (tiles + Year-End Outlook) is now collapsed for every account, not only identity holders. Real
+  check: production `vite build` (React Compiler on) + Chromium at 390×844 against the mocked Supabase
+  (`scripts/live-test/lib.mjs`), a paid account and an expired one. Results: section order Today with Coach → Needs you →
+  Claim Dates → Coach remembers → Around the app → Your numbers, no horizontal scroll, tiles open on expand, ask bar
+  opens Coach with the question, See all lands on What Coach knows, expired account shows no Coach sections, zero
+  page errors. The Coach API was stubbed offline, so the Net Worth card and briefing were not seen live (they fail
+  quiet by design) — check those on preview. Warden consulted: F183 (updated), §22 design tokens, F177.
+- [ ] **D5 (later) · Push delivery** — briefing + slip alerts as PWA push (§8.C); needs its own design pass.
+
+**Open questions for Anthony (answer before D1):**
+1. Evolve Home into the command center (recommended) — or a separate new first tab?
+2. Name: keep the tab label **Home** (recommended — no rename churn) and title the top section "Today with
+   Coach", or rename? Screened free 2026-11-03: **HQ**, **Huddle**, **Game Plan** (taken: "Hub" — Money Moves /
+   Homebase; "Corner" — Coach's own phrasing).
+3. Ask bar: send the question straight into the chat (recommended), or show suggested questions first?
+4. Accounts without Coach (expired / no entitlement): show the non-AI parts only (recommended), or add an
+   upgrade card in Coach's slot?
 
 ---
 

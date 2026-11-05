@@ -32,6 +32,7 @@ const baseProps = {
 describe('HomePanel', () => {
   it('labels the tile as Next Week Takehome and shows a currency value', () => {
     render(<HomePanel {...baseProps} futureWeekNets={[1234]} />)
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     const tiles = screen.getAllByText('Next Week Takehome')
     expect(tiles.length).toBeGreaterThanOrEqual(1)
     const tile = tiles[0].closest('button')
@@ -46,6 +47,7 @@ describe('HomePanel', () => {
     expect(screen.queryByText(/With this week's bills/)).toBeNull()
     unmount()
     render(<HomePanel {...props} thisWeekActualSpend={1250} />)
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     expect(screen.getByText(/With this week's bills: -?\$300|With this week's bills: \(?\$300/)).toBeTruthy()
   })
 
@@ -55,6 +57,106 @@ describe('HomePanel', () => {
     unmount()
     render(<HomePanel {...baseProps} billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]} />)
     expect(screen.getByLabelText('Bills due today')).toBeTruthy()
+  })
+
+  // TODO §32 D2 — "Today with Coach": briefing + ask bar at the top of Home.
+  describe('"Today with Coach"', () => {
+    it('sends the typed question straight to Coach and clears the bar', () => {
+      const onAskCoach = vi.fn()
+      render(<HomePanel {...baseProps} onAskCoach={onAskCoach} />)
+      const input = screen.getByLabelText('Ask Coach anything')
+      const ask = screen.getByRole('button', { name: 'Ask' })
+      expect(ask).toBeDisabled()
+      fireEvent.change(input, { target: { value: '  Can I afford a trip in June?  ' } })
+      fireEvent.click(ask)
+      expect(onAskCoach).toHaveBeenCalledWith('Can I afford a trip in June?')
+      expect(input).toHaveValue('')
+    })
+
+    it('does not send a blank question', () => {
+      const onAskCoach = vi.fn()
+      render(<HomePanel {...baseProps} onAskCoach={onAskCoach} />)
+      fireEvent.change(screen.getByLabelText('Ask Coach anything'), { target: { value: '   ' } })
+      fireEvent.submit(screen.getByRole('search', { name: 'Ask Coach' }))
+      expect(onAskCoach).not.toHaveBeenCalled()
+    })
+
+    it('shows no Coach section at all for an account without Coach', () => {
+      render(<HomePanel {...baseProps} entitlement={{ isEntitled: false, state: 'none' }} />)
+      expect(screen.queryByRole('region', { name: 'Today with Coach' })).toBeNull()
+      expect(screen.queryByLabelText('Ask Coach anything')).toBeNull()
+    })
+
+    it('sits above "Needs you", which sits above the Claim Dates', () => {
+      render(<HomePanel {...baseProps} onAskCoach={vi.fn()} />)
+      const today = screen.getByRole('region', { name: 'Today with Coach' })
+      const needs = screen.getByRole('region', { name: 'Needs you' })
+      const goals = screen.getAllByText('Goals')[0]
+      expect(today.compareDocumentPosition(needs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(needs.compareDocumentPosition(goals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+  })
+
+  // TODO §32 D3 — "Around the app": each panel's own note, labelled by name, opening its route.
+  it('shows the Upkeep and Log notes from the same inputs those panels use, and opens the panel', () => {
+    const navigate = vi.fn()
+    render(<HomePanel {...baseProps} navigate={navigate} remainingSpend={{ avgWeeklySpend: 400 }} expenses={[{ id: 'e1' }]}
+      logCount={2} logNetLost={300} logNetGained={0} viewLabels={{ budget: 'Upkeep', log: 'Log' }} />)
+    const strip = screen.getByRole('region', { name: 'Around the app' })
+    expect(strip).toHaveTextContent('Upkeep is taking 40% of your take-home')
+    expect(strip).toHaveTextContent('Your 2 logged entries cost $300 in take-home this year.')
+    fireEvent.click(screen.getByRole('button', { name: /^Open Upkeep:/ }))
+    expect(navigate).toHaveBeenCalledWith('budget')
+    expect(screen.queryByRole('region', { name: 'Coach remembers' })).toBeNull() // no Coach → no memory strip
+  })
+
+  // TODO §32 D1 — one ranked "Needs you" queue.
+  describe('"Needs you" queue', () => {
+    it('renders an empty list (the calm line shows via CSS) when nothing needs the user', () => {
+      render(<HomePanel {...baseProps} />)
+      expect(screen.getByRole('region', { name: 'Needs you' })).toBeTruthy()
+      expect(screen.getByTestId('needs-you-list').children).toHaveLength(0)
+      expect(screen.getByText('Nothing needs you right now.')).toBeTruthy()
+    })
+
+    it('puts the Net Worth check-in ahead of bills due today, both inside the queue', async () => {
+      mocks.chatWithCoach.mockImplementation(async function* () { yield 'amber check-in' })
+      render(
+        <HomePanel
+          {...baseProps}
+          config={{ newJobSeasonMode: false }}
+          expenses={[]}
+          currentWeek={{ idx: 10 }}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+          billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]}
+        />
+      )
+      await waitFor(() => expect(screen.getByText('amber check-in')).toBeTruthy())
+      const list = screen.getByTestId('needs-you-list')
+      expect(list.children).toHaveLength(2)
+      expect(list.children[0]).toHaveTextContent('amber check-in')
+      expect(list.children[1]).toHaveAttribute('aria-label', 'Bills due today')
+    })
+
+    it('leaves the Net Worth card out of the queue for an account without Coach', () => {
+      mocks.chatWithCoach.mockClear()
+      render(
+        <HomePanel
+          {...baseProps}
+          config={{ newJobSeasonMode: false }}
+          entitlement={{ isEntitled: false, state: 'none' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+          billsDueToday={[{ id: 'rent', label: 'Rent', amount: 1000 }]}
+        />
+      )
+      const list = screen.getByTestId('needs-you-list')
+      expect(list.children).toHaveLength(1)
+      expect(list.children[0]).toHaveAttribute('aria-label', 'Bills due today')
+      expect(mocks.chatWithCoach).not.toHaveBeenCalled()
+    })
   })
 
   it('does not show a sign-out action on Home', () => {
@@ -403,14 +505,17 @@ describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
     expect(left.style.color).toBe('var(--color-red)')
   })
 
-  it('no identity → legacy layout: no hero, no collapse, tiles visible', () => {
+  // TODO §32 D4 (2026-11-04): "Your numbers" now collapses for every account, not only identity holders.
+  it('no identity → no hero, but the tiles still collapse under "Your numbers" (§32 D4)', () => {
     render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
     expect(screen.queryByTestId('identity-hero')).toBeNull()
-    expect(screen.queryByTestId('your-numbers')).toBeNull()
+    expect(screen.getByTestId('your-numbers')).toBeTruthy()
+    expect(screen.queryByText('Next Week Takehome')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThan(0)
   })
 
-  it('Year-End Outlook lives inside "Your numbers" with an identity (hidden until expanded), at the bottom without one', () => {
+  it('Year-End Outlook lives inside "Your numbers" with or without an identity, hidden until expanded (§32 D4)', () => {
     const { unmount } = render(<HomePanel {...props} />)
     expect(screen.queryByText('Year-End Outlook')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
@@ -418,7 +523,9 @@ describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
     expect(screen.getByText('Surplus after all goals')).toBeTruthy()
     unmount()
     render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
-    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+    expect(screen.queryByText('Year-End Outlook')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getAllByText('Year-End Outlook')).toHaveLength(1)
   })
 
   it('tidy mode still takes the hero slot', () => {

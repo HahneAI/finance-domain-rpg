@@ -23,6 +23,15 @@ import { goalCoachSeed } from "../lib/coachSeeds.js";
 import { spendRatioOf } from "../lib/upkeepHealth.js";
 import { homeCoachNote } from "../lib/coachNotes.js";
 import { CoachNote } from "./CoachNote.jsx";
+import { ClaimDateSlipAlert } from "./ClaimDateSlipAlert.jsx";
+import { CoachBriefingCard } from "./CoachBriefingCard.jsx";
+import { CoachAskBar } from "./CoachAskBar.jsx";
+import { CoachRemembersStrip, AroundTheAppStrip } from "./CommandCenterStrips.jsx";
+import { upkeepCoachNote, logCoachNote } from "../lib/coachNotes.js";
+import { upkeepHealthBand } from "../lib/upkeepHealth.js";
+import { rankNeedsYou } from "../lib/commandCenter.js";
+import { netWorthRunwayDays, resolveNetWorthSignalTier } from "../lib/coachTriggers.js";
+import { detectClaimDateSlips } from "../lib/claimDateWatch.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Exported so App.jsx's handleCoachCreateGoal (Coach's propose_goal card)
@@ -95,6 +104,9 @@ export function HomePanel({
   config = null,
   logNetLost = 0,
   logNetGained = 0,
+  logCount = 0,
+  onOpenCoachMemory,
+  viewLabels = {},
   futureEventDeductions = {},
   futureWeekNets = [],
   prevWeekNet,
@@ -358,6 +370,25 @@ export function HomePanel({
     goals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained,
     futureEventDeductions, config, currentWeek, today,
   });
+
+  // Claim Date slip alert (TODO §32 C3) — resolveGoalFinishInfo's dates against the last acknowledged
+  // ones. New or user-changed goals get a baseline quietly: a derived-state sync, so it rides the
+  // debounced save (setConfig only), never an eager save. "Got it" below is the eager-saved gesture.
+  const claimWatch = config?.claimDateWatch ?? {};
+  const { slips: claimSlips, newBaselines: claimNewBaselines } = detectClaimDateSlips({ goals: tl, resolveGoalFinishInfo, watch: claimWatch });
+  const claimNewBaselinesKey = JSON.stringify(claimNewBaselines);
+  useEffect(() => {
+    if (claimNewBaselinesKey === "{}") return;
+    setConfig?.({ ...config, claimDateWatch: { ...(config?.claimDateWatch ?? {}), ...JSON.parse(claimNewBaselinesKey) } });
+  }, [claimNewBaselinesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleAcknowledgeClaimSlips = () => {
+    const next = {
+      ...config,
+      claimDateWatch: { ...claimWatch, ...Object.fromEntries(claimSlips.map((sl) => [sl.goalId, { date: sl.toIso, target: sl.target, rank: sl.rank }])) },
+    };
+    setConfig?.(next);
+    saveConfigNow?.(next);
+  };
 
   // Archetype picker preview (TODO §31): the same computeClaimDates() the goal
   // cards use, with the candidate goals appended AFTER the user's real ones —
@@ -670,6 +701,80 @@ export function HomePanel({
           } : {})}
         />
       )}
+      {/* "Today with Coach" (TODO §32 D2) — the command center's first section: this week's briefing
+          (C2, F187 — same canAccessAskCoachGeneral gate as before) and the ask bar, which sends the
+          question straight into the chat (onAskCoach is only passed when the account can open Coach).
+          An account without Coach gets neither, and no section — Anthony's 2026-11-04 call. */}
+      {(canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) || onAskCoach) && (
+        <section aria-label="Today with Coach" data-coach-ref="home-today" style={{ marginBottom: "20px" }}>
+          <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: 700, marginBottom: "10px" }}>
+            Today with Coach
+          </div>
+          {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
+            <CoachBriefingCard
+              config={config}
+              setConfig={setConfig}
+              saveConfigNow={saveConfigNow}
+              expenses={expenses}
+              goals={goals}
+              weeklyIncome={weeklyIncome}
+              avgWeeklySpend={avgWeeklySpend}
+              fundedGoalSpend={fundedGoalSpend}
+              currentWeek={currentWeek}
+              today={todayIso}
+            />
+          )}
+          {onAskCoach && <CoachAskBar onAsk={onAskCoach} />}
+        </section>
+      )}
+      {/* "Needs you" (TODO §32 D1) — one ranked queue for the cards that ask something of the user.
+          rankNeedsYou() fixes the order only; each card still hides itself (dismissed, nothing due),
+          and when they all do the list is empty and the calm line shows (CSS :empty, index.css). */}
+      {(() => {
+        const coachOn = canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement });
+        // Same tier the Net Worth card itself resolves (F24) — via the shared runway helper, never a copy.
+        const netWorthTier = coachOn
+          ? resolveNetWorthSignalTier({
+            netWorthHealth,
+            runwayDays: netWorthRunwayDays({ config, expenses, today: todayIso }),
+            previousTier: config?.coachSignalState?.lastFiredTier ?? null,
+          })
+          : null;
+        const netWorthCard = (
+          <CoachNetWorthCard
+            key="netWorth"
+            config={config}
+            setConfig={setConfig}
+            saveConfigNow={saveConfigNow}
+            expenses={expenses}
+            goals={goals}
+            weeklyIncome={weeklyIncome}
+            avgWeeklySpend={avgWeeklySpend}
+            fundedGoalSpend={fundedGoalSpend}
+            netWorthHealth={netWorthHealth}
+            currentWeek={currentWeek}
+            today={todayIso}
+          />
+        );
+        const render = {
+          netWorthAlert: netWorthCard,
+          netWorthRecovery: netWorthCard,
+          dueToday: <DueTodayCard key="dueToday" bills={billsDueToday} todayIso={todayIso} />,
+          claimSlips: <ClaimDateSlipAlert key="claimSlips" slips={claimSlips} onAcknowledge={handleAcknowledgeClaimSlips} onAskCoach={onAskCoach} />,
+        };
+        const order = rankNeedsYou({ netWorthTier, dueTodayCount: billsDueToday?.length ?? 0, claimSlipCount: claimSlips.length });
+        return (
+          <section className="needs-you" aria-label="Needs you" data-coach-ref="home-needs-you" style={{ marginBottom: "20px" }}>
+            <div className="text-2xs" style={{ letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: 700, marginBottom: "10px" }}>
+              Needs you
+            </div>
+            <div className="needs-you-list" data-testid="needs-you-list">{order.map((k) => render[k])}</div>
+            <div className="needs-you-empty text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Nothing needs you right now.
+            </div>
+          </section>
+        );
+      })()}
       {goals.length === 0 && !showArchetypePicker && (
         <div
           className="text-sm" style={{
@@ -1718,7 +1823,6 @@ export function HomePanel({
         </div>
       </div>
 
-      <DueTodayCard bills={billsDueToday} todayIso={todayIso} />
       {/* Coach note (TODO §32 A4): fixed template over the exact values the tiles below show —
           Left This Week|Check, Next Week Takehome|Next Paycheck|Next Check, Upkeep Health. */}
       <CoachNote text={homeCoachNote({
@@ -1728,11 +1832,31 @@ export function HomePanel({
         unit: checksPerYear === 52 ? "week" : "check",
         spendRatio,
       })} />
+      {/* "Coach remembers" + "Around the app" (TODO §32 D3). Memory strip: Coach accounts only
+          (onOpenCoachMemory is passed only then), hidden when memory is off or empty (F186).
+          Around the app: each panel's own note, from the same inputs that panel passes (F113) —
+          Upkeep = spendRatioOf(avgWeeklySpend, weeklyIncome) + its band + expenses; Log = App's
+          logTotals + the entry count. Fixed templates, no model call — shown to every account. */}
+      {onOpenCoachMemory && <CoachRemembersStrip memoryOff={config?.coachMemoryOff === true} onSeeAll={onOpenCoachMemory} />}
+      <AroundTheAppStrip
+        onOpen={navigate}
+        items={[
+          {
+            view: "budget",
+            label: viewLabels.budget ?? "Upkeep",
+            text: upkeepCoachNote({ spendRatio, band: upkeepHealthBand(spendRatio), hasExpenses: expenses.length > 0 }),
+          },
+          {
+            view: "log",
+            label: viewLabels.log ?? "Log",
+            text: logCoachNote({ entryCount: logCount, netLost: logNetLost, netGained: logNetGained }),
+          },
+        ]}
+      />
       {(() => {
-        // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
-        // tiles collapse under "Your numbers" with an always-visible summary line.
-        // Without one, today's layout is untouched. The tiles themselves are one
-        // block either way — never duplicated.
+        // "Your numbers" (TODO §31 Phase 3, widened to every account in §32 D4): the money
+        // tiles collapse under an always-visible summary line. The tiles are one block —
+        // never duplicated.
         const numbersBlock = (<>
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
@@ -1793,7 +1917,8 @@ export function HomePanel({
         ))}
       </div>
         </>);
-        if (!config?.identity) return numbersBlock;
+        // Command center (TODO §32 D4, 2026-11-04): collapsed for EVERY account now, not only
+        // identity holders — the Coach sections above lead the page. Same single numbersBlock.
         return (
           <YourNumbers
             leftLabel={leftThisCheckLabel}
@@ -1811,33 +1936,6 @@ export function HomePanel({
         <NetWorthHealthTips seed={weekNumber ?? 0} />
       )}
 
-      {/* §2.C — left the admin/tester-only standing constraint; now also
-          open to a real trial/paid entitlement (docs/coach-entry-points.md
-          §2). Locked decision 2026-07-25: admin/tester/investor all bypass
-          the AI-feature paid wall unconditionally (entitlements.js's
-          hasPrivilegedAccess) — this does NOT reopen the separate, still-true
-          rule that beta testers and investors are otherwise two distinct
-          account tiers with zero overlap (docs/active-systems.md "Beta
-          Tester Accounts"). */}
-      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, isAiAdmin, entitlement }) && (
-        <CoachNetWorthCard
-          config={config}
-          setConfig={setConfig}
-          saveConfigNow={saveConfigNow}
-          expenses={expenses}
-          goals={goals}
-          weeklyIncome={weeklyIncome}
-          avgWeeklySpend={avgWeeklySpend}
-          fundedGoalSpend={fundedGoalSpend}
-          netWorthHealth={netWorthHealth}
-          currentWeek={currentWeek}
-          today={todayIso}
-        />
-      )}
-
-      {/* Year-End Outlook: legacy position. With an identity it lives inside
-          "Your numbers" instead (TODO §31) — same element, never duplicated. */}
-      {!config?.identity && yearEndOutlook}
     </div>
   );
 }

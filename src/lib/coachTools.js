@@ -23,6 +23,7 @@
 // figure its own way is a parallel formula, which is the app's single most
 // expensive documented failure mode (docs/drift-app-warden.md §12).
 
+import { validateMemory, MEMORY_KINDS } from "./coachMemory.js";
 import {
   computeGoalTimeline,
   computeNetBreakdown,
@@ -270,6 +271,24 @@ export const COACH_TOOLS = [
         note: { type: "string", description: "Optional short note in the user's words." },
       },
       required: ["type"],
+    },
+  },
+  {
+    // TODO §32 B4 (2026-11-03) — Coach's memory is user-confirmed: this only proposes one.
+    name: "propose_memory",
+    description:
+      "Offer to remember something lasting the user just told you, so later conversations can use it: why a goal matters to them, a decision they made, something they want to avoid, how they want you to talk to them, or a fact about them. The app shows it as a card they can save or dismiss; nothing is stored unless they save it, so never say it's saved. Write it in their words, one short sentence. Never a figure the app already tracks (pay, balances, bills, dates) and never an account, card or Social Security number. At most once per message, and only for something that will still matter next month.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          enum: ["goal_why", "decision", "avoid", "instruction", "fact"],
+          description: "goal_why = why a goal matters; decision = a choice they made; avoid = something they don't want; instruction = how they want you to talk to them; fact = something about them.",
+        },
+        body: { type: "string", description: "One short sentence in the user's own words, under 280 characters." },
+      },
+      required: ["kind", "body"],
     },
   },
 ];
@@ -1069,7 +1088,25 @@ function toolSimulateRunwayChange({ label, newWeeklyCost }, data) {
   };
 }
 
+// TODO §32 B4 — propose a memory. Validates with the same rules the memory page uses (length,
+// regulated identifiers) and refuses when the user turned memory off. Writes nothing.
+function toolProposeMemory({ kind, body }, data) {
+  if (data?.memoryOff) return { error: "The user has turned Coach memory off. Don't offer to remember things." };
+  const problem = validateMemory({ kind, body });
+  if (problem) return { error: problem };
+  const text = String(body).trim();
+  const duplicate = (data?.memories ?? []).some((m) => String(m.body ?? "").trim().toLowerCase() === text.toLowerCase());
+  if (duplicate) return { error: "The user already has that saved. Don't propose it again." };
+  return {
+    ok: true,
+    proposal: { kind, body: text },
+    kindLabel: MEMORY_KINDS[kind],
+    note_to_model: "Shown as a card with a Save button. Nothing is stored until they tap it, so say they can save it — never that it's saved.",
+  };
+}
+
 const HANDLERS = {
+  propose_memory: toolProposeMemory,
   simulate_runway_change: toolSimulateRunwayChange,
   draft_log_entry: toolDraftLogEntry,
   navigate_to: toolNavigateTo,

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/static-components */
 import { PaycheckCreditsLedger } from "./PaycheckCreditsLedger.jsx";
 import { logCoachNote } from "../lib/coachNotes.js";
+import { logEntryCoachSeed } from "../lib/coachSeeds.js";
 import { CoachNote } from "./CoachNote.jsx";
 import { useState, useEffect } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
@@ -46,6 +47,8 @@ export function LogPanel({
   logNetLost = 0, logNetGained = 0, adjustedTakeHome = 0,
   ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
   cashOnHand = null, onOpenCheckIn,
+  // "Ask Coach about this" (TODO §32 A2): App passes it only when the account can open Coach.
+  onAskCoach,
   // A draft_log_entry result handed off from Ask Coach (2026-10-29). Opens the add form filled in;
   // the user still saves through addLog below, so the eager save is unchanged.
   coachDraft = null, onCoachDraftConsumed,
@@ -839,6 +842,10 @@ export function LogPanel({
                   className="text-sm" style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", lineHeight: 1 }}
                   title="Impact breakdown"
                 >{expandedImpact.has(entry.id) ? "▲" : "▼"}</Pressable>
+                {/* "Ask Coach about this" (TODO §32 A2) — only when App passed onAskCoach. */}
+                {onAskCoach && (
+                  <Pressable onClick={() => onAskCoach(logEntryCoachSeed(ev.label, entry.weekEnd))} className="text-xs" aria-label={`Ask Coach about this ${ev.label} entry`} style={{ background: "transparent", border: "1px solid var(--color-border-accent)", color: "var(--color-teal)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>ASK</Pressable>
+                )}
                 <Pressable onClick={() => startEdit(entry)} className="text-xs" style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>EDIT</Pressable>
                 {cdel === entry.id
                   ? <>

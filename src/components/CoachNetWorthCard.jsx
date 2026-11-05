@@ -3,8 +3,7 @@ import { Pressable } from "./ui.jsx";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext, netWorthCheckInSnapshot } from "../lib/aiContext.js";
 import { buildNetWorthSystemPrompt } from "../lib/coachPrompts.js";
-import { resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
-import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "../lib/newJobSeasonRunway.js";
+import { netWorthRunwayDays, resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
 
 const TIER_COLOR = {
   amber: "var(--color-warning)",
@@ -81,10 +80,10 @@ export function CoachNetWorthCard({
   // the default stays true only for the plain HomePanel call site, which has
   // no toggle of its own and where computeNewJobSeasonRunway() returns null
   // anyway (config.newJobSeasonMode is false there).
-  const runwayDays = useMemo(() => {
-    const dash = computeNewJobSeasonRunway({ config, expenses, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
-    return resolvePrimaryRunwayDays(dash, config, includeBenefits);
-  }, [config, expenses, today, includeBenefits]);
+  const runwayDays = useMemo(
+    () => netWorthRunwayDays({ config, expenses, today, includeBenefits }),
+    [config, expenses, today, includeBenefits],
+  );
   const weekIdx = currentWeek?.idx ?? null;
   const tier = resolveNetWorthSignalTier({ netWorthHealth, runwayDays, previousTier: signalState.lastFiredTier });
 

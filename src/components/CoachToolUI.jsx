@@ -24,6 +24,7 @@ export const TOOL_ACTIVITY_LABELS = {
   simulate_overtime_hours: "Working out what those hours are worth",
   simulate_without_logged_event: "Comparing against a version without it",
   draft_log_entry: "Filling in that log entry",
+  propose_memory: "Writing that down for you to save",
   simulate_runway_change: "Working out what that does to your runway",
 };
 
@@ -348,5 +349,47 @@ export function CoachLogDraftChip({ result, onDraftLog, readOnly = false }) {
         <path d="M6 3 L11 8 L6 13" />
       </svg>
     </Pressable>
+  );
+}
+
+// TODO §32 B4 — a propose_memory result: "Remember this?" with Save / Not now. Nothing is stored
+// until Save; onSave persists it (AskCoachPanel → db.saveCoachMemory) and resolves true/false.
+export function CoachMemoryCard({ result, onSave, readOnly = false }) {
+  const [status, setStatus] = useState("idle"); // idle | saving | saved | dismissed | error
+  if (!result?.ok || !result.proposal || status === "dismissed") return null;
+  const disabled = readOnly || typeof onSave !== "function";
+  const handleSave = async () => {
+    setStatus("saving");
+    const ok = await onSave(result.proposal);
+    setStatus(ok ? "saved" : "error");
+  };
+  return (
+    <div
+      data-testid="coach-memory-card"
+      style={{ marginTop: "8px", padding: "12px 14px", borderRadius: "12px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)", maxWidth: "100%" }}
+    >
+      <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "4px" }}>
+        {status === "saved" ? "Coach will remember" : "Remember this?"} · {result.kindLabel}
+      </div>
+      <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: 1.45 }}>{result.proposal.body}</div>
+      {status === "error" && (
+        <div className="text-xs" style={{ color: "var(--color-red)", marginTop: "6px" }}>Couldn't save that. Try again from Account → What Coach knows about me.</div>
+      )}
+      {status !== "saved" && (
+        <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+          <Pressable
+            disabled={disabled || status === "saving"}
+            onClick={disabled ? undefined : handleSave}
+            className="text-xs"
+            style={{ padding: "8px 16px", borderRadius: "12px", border: "none", background: disabled ? "var(--color-bg-surface)" : "var(--color-teal)", color: disabled ? "var(--color-text-disabled)" : "var(--color-bg-base)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", cursor: disabled ? "default" : "pointer" }}
+          >{status === "saving" ? "Saving…" : "Save"}</Pressable>
+          <Pressable
+            onClick={() => setStatus("dismissed")}
+            className="text-xs"
+            style={{ padding: "7px 14px", borderRadius: "12px", background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          >Not now</Pressable>
+        </div>
+      )}
+    </div>
   );
 }

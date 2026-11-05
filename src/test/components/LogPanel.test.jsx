@@ -102,6 +102,16 @@ const mkBonus = (weekEnd, amount) => ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Coach note (TODO §32 A4)', () => {
+  it('A2: shows ASK on an entry only with onAskCoach and asks about that entry by type and week', () => {
+    const { unmount } = render(<LogPanel {...BASE_PROPS} logs={[mkBonus('2026-03-16', 500)]} />)
+    expect(screen.queryByText('ASK')).toBeNull()
+    unmount()
+    const onAskCoach = vi.fn()
+    render(<LogPanel {...BASE_PROPS} logs={[mkBonus('2026-03-16', 500)]} onAskCoach={onAskCoach} />)
+    fireEvent.click(screen.getByText('ASK'))
+    expect(onAskCoach).toHaveBeenCalledWith('What did my Bonus / Extra Pay entry for the week ending Mar 16 do to my numbers and goals?')
+  })
+
   it('nudges an empty log and nets App logTotals once entries exist', () => {
     const { unmount } = render(<LogPanel {...BASE_PROPS} logs={[]} />)
     expect(screen.getByTestId('coach-note')).toHaveTextContent(/Nothing logged yet/)

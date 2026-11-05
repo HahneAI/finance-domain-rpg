@@ -73,12 +73,13 @@ describe("resolveCoachRequest — server-side surface gate", () => {
     expect(resolveCoachRequest({ surface: "resume_review", model: "sonnet", privileged: true }).maxTokens).toBe(4096);
     expect(resolveCoachRequest({ surface: "job_hunt", model: "sonnet", privileged: true }).maxTokens).toBe(2048);
     expect(resolveCoachRequest({ surface: "ask_coach", model: "sonnet", privileged: true }).maxTokens).toBe(2048);
-    expect(resolveCoachRequest({ surface: "net_worth", model: "haiku", privileged: false }).maxTokens).toBe(1024);
+    expect(resolveCoachRequest({ surface: "net_worth", model: "haiku", privileged: false }).maxTokens).toBe(2048);
+    expect(resolveCoachRequest({ surface: "weekly_briefing", model: "sonnet", privileged: true })).toEqual({ ok: true, model: "haiku", maxTokens: 2048 });
     expect(resolveCoachRequest({ model: "haiku", privileged: false }).maxTokens).toBe(2048);
   });
 
-  it("lists exactly the four live Coach surfaces", () => {
-    expect(Object.keys(COACH_SURFACES).sort()).toEqual(["ask_coach", "job_hunt", "net_worth", "resume_review"]);
+  it("lists exactly the five live Coach surfaces", () => {
+    expect(Object.keys(COACH_SURFACES).sort()).toEqual(["ask_coach", "job_hunt", "net_worth", "resume_review", "weekly_briefing"]);
   });
 });
 

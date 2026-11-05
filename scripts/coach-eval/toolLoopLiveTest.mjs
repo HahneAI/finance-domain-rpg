@@ -154,7 +154,18 @@ const JOBHUNT = [
     text: "Which of these two applications should I follow up on first, and how?" },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET, ...JOBHUNT];
+// TODO §32 B4 (2026-11-03) — propose_memory: offered for lasting things, in the user's words; never for
+// a plain status question; never claimed as saved.
+const MEMORY = [
+  { id: "memtone", expect: "propose_memory kind instruction, says they can save it (not that it's saved)",
+    text: "Just so you know, I want you to be blunt with me. No sugarcoating, ever." },
+  { id: "memwhy", expect: "propose_memory kind goal_why in their words, may also answer",
+    text: "My first goal matters because I want my kids to see me finish something for once." },
+  { id: "memnone", expect: "NO propose_memory — a status check, nothing lasting shared",
+    text: "How's my week looking?" },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET, ...JOBHUNT, ...MEMORY];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -269,7 +280,10 @@ async function runConversation(prompt) {
     rounds = round + 1;
     const offerTools = round < MAX_TOOL_ROUNDS;
     const reply = await callAnthropic(convo, offerTools, setup);
-    text += reply.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    // Mirrors AskCoachPanel (2026-11-03): text written after a tool round replaces what came before
+    // it, so this prints the answer a user actually sees.
+    const roundText = reply.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    if (roundText) text = round > 0 ? roundText : text + roundText;
     const uses = reply.content.filter((b) => b.type === "tool_use");
     if (!offerTools || reply.stop_reason !== "tool_use" || !uses.length) break;
 

@@ -21,7 +21,11 @@ export const ASK_COACH_SONNET_AUDIENCE = "privileged";
 // a reply; unused headroom costs nothing.
 export const COACH_SURFACES = {
   ask_coach: { privilegedOnly: false, models: ["haiku", "sonnet"], maxTokens: 2048 },
-  net_worth: { privilegedOnly: false, models: ["haiku"], maxTokens: 1024 },
+  // 2048 since the Haiku 5.5 switch: it thinks before writing (up to ~980 tokens in the 2026-10-29
+  // baseline), and 1024 left too little room for the card text after that.
+  net_worth: { privilegedOnly: false, models: ["haiku"], maxTokens: 2048 },
+  // Weekly Pre-Game Briefing (TODO §32 C2) — same audience and model as the Net Worth card.
+  weekly_briefing: { privilegedOnly: false, models: ["haiku"], maxTokens: 2048 },
   job_hunt: { privilegedOnly: true, models: ["sonnet"], maxTokens: 2048 },
   resume_review: { privilegedOnly: true, models: ["sonnet"], maxTokens: 4096 },
 };

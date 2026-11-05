@@ -125,7 +125,7 @@ describe("COACH_TOOLS schemas", () => {
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
       "navigate_to", "propose_goal",
       "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
-      "simulate_without_logged_event", "draft_log_entry",
+      "simulate_without_logged_event", "draft_log_entry", "propose_memory",
     ]);
   });
 
@@ -747,5 +747,21 @@ describe("executeCoachTool — simulate_runway_change", () => {
     expect(executeCoachTool("simulate_runway_change", { label: "Netflix", newWeeklyCost: 0 }, data).error).toMatch(/No tracked expense/);
     expect(executeCoachTool("simulate_runway_change", { label: "Rent", newWeeklyCost: 0 },
       { ...data, config: { ...data.config, newJobSeasonMode: false } }).error).toMatch(/only exists in New Job Season/);
+  });
+});
+
+// TODO §32 B4 — propose_memory writes nothing and refuses what the memory page refuses.
+describe("executeCoachTool — propose_memory", () => {
+  it("returns a proposal with the kind's label, in the user's words", () => {
+    const r = executeCoachTool("propose_memory", { kind: "avoid", body: "  No payday loans, ever  " }, {});
+    expect(r).toMatchObject({ ok: true, proposal: { kind: "avoid", body: "No payday loans, ever" }, kindLabel: "Something to avoid" });
+  });
+
+  it("refuses regulated identifiers, duplicates, unknown kinds and memory-off accounts", () => {
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "My SSN is 123-45-6789" }, {}).error).toMatch(/Social Security/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "Routing 021000021 at my bank" }, {}).error).toMatch(/account, card/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "x" }, { memories: [{ body: "X" }] }).error).toMatch(/already has that saved/);
+    expect(executeCoachTool("propose_memory", { kind: "secret", body: "x" }, {}).error).toMatch(/Pick what kind/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "x" }, { memoryOff: true }).error).toMatch(/turned Coach memory off/);
   });
 });

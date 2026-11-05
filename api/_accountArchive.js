@@ -1,6 +1,6 @@
 // Shared archive-then-delete primitive (§17.I / migration 017's deleted_accounts
 // tombstone). Originally lived only inside cron-subscription-lifecycle.js for the
-// day-21+7 non-payment path; factored out (migration 044) so api/delete-account.js
+// day-21+7 non-payment path; factored out (migration 044) so api/_deleteAccount.js
 // can reuse the exact same tombstone-then-purge sequence for user-initiated
 // deletion instead of the old plain hard-delete-with-no-archive it used to run —
 // one function, never allowed to diverge between the two callers (CLAUDE.md's
@@ -65,6 +65,21 @@ export async function archiveAndDeleteAccount(adminClient, userId, now, deletion
     await cancelStripeSubscription(fullRow.stripe_subscription_id, STRIPE_CLIENTS);
   }
 
+  // Coach memory (migration 049, TODO §32 B). Archived ONLY for a non-payment deletion so a paid
+  // revival brings it back; a user-requested deletion keeps none (Anthony, 2026-11-03). Read errors
+  // — e.g. the table not existing yet because 049 hasn't been applied — never block a deletion, and
+  // the archive column is only written when rows were actually read, so this code is safe to ship
+  // before the migration.
+  let archivedCoachMemory = null;
+  if (deletionReason !== "user_requested") {
+    const { data: memoryRows, error: memoryError } = await adminClient
+      .from("coach_memory")
+      .select("kind, body, source, created_at")
+      .eq("user_id", userId);
+    if (memoryError) console.warn(`archive: coach_memory read skipped (${memoryError.message})`);
+    else if (memoryRows?.length) archivedCoachMemory = memoryRows;
+  }
+
   // Supabase reports "email" as the provider for password accounts; the
   // tombstone only records real OAuth providers (so the revival screen knows
   // to show "Continue with Google" instead of a password field).
@@ -83,6 +98,7 @@ export async function archiveAndDeleteAccount(adminClient, userId, now, deletion
       archived_show_extra: fullRow.show_extra ?? null,
       archived_week_confirmations: fullRow.week_confirmations ?? null,
       archived_pto_goal: fullRow.pto_goal ?? null,
+      ...(archivedCoachMemory ? { archived_coach_memory: archivedCoachMemory } : {}),
       stripe_customer_id: fullRow.stripe_customer_id ?? null,
       plan: fullRow.plan ?? null,
       deletion_reason: deletionReason,

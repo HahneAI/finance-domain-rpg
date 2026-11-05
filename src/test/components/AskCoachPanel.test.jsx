@@ -15,6 +15,8 @@ const { mocks } = vi.hoisted(() => ({
     loadCoachChats: vi.fn(),
     saveCoachChat: vi.fn(),
     deleteCoachChat: vi.fn(),
+    loadCoachMemory: vi.fn(),
+    saveCoachMemory: vi.fn(),
   },
 }));
 vi.mock("../../lib/claude.js", () => ({ chatWithCoach: mocks.chatWithCoach }));
@@ -22,6 +24,8 @@ vi.mock("../../lib/db.js", () => ({
   loadCoachChats: mocks.loadCoachChats,
   saveCoachChat: mocks.saveCoachChat,
   deleteCoachChat: mocks.deleteCoachChat,
+  loadCoachMemory: mocks.loadCoachMemory,
+  saveCoachMemory: mocks.saveCoachMemory,
 }));
 vi.mock("../../lib/aiContext.js", () => ({ buildCoachContext: () => "CONTEXT" }));
 
@@ -44,6 +48,8 @@ beforeEach(() => {
   mocks.loadCoachChats.mockResolvedValue([]);
   mocks.saveCoachChat.mockResolvedValue("new-chat-id");
   mocks.deleteCoachChat.mockResolvedValue(undefined);
+  mocks.loadCoachMemory.mockResolvedValue([]);
+  mocks.saveCoachMemory.mockResolvedValue(null);
 });
 
 describe("AskCoachPanel — sending a message", () => {
@@ -98,6 +104,115 @@ describe("AskCoachPanel — sending a message", () => {
     fireEvent.click(screen.getByText("Send"));
     await waitFor(() => expect(mocks.saveCoachChat).toHaveBeenCalledTimes(2));
     expect(mocks.saveCoachChat.mock.calls[1][0].id).toBe("new-chat-id");
+  });
+});
+
+describe("AskCoachPanel — seeded question from a card (TODO §32 A1)", () => {
+  it("sends the seed as the first user message of a fresh chat, once per seed id", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["Goal 2 is on track."]));
+    const onSeedConsumed = vi.fn();
+    const seed = { id: "s1", text: "How's my goal #2 tracking toward its Claim Date?" };
+    const { rerender } = render(<AskCoachPanel {...baseProps({ seedPrompt: seed, onSeedConsumed })} />);
+
+    await waitFor(() => expect(screen.getByText("Goal 2 is on track.")).toBeTruthy());
+    expect(mocks.chatWithCoach).toHaveBeenCalledTimes(1);
+    expect(mocks.chatWithCoach.mock.calls[0][0]).toEqual([{ role: "user", content: seed.text }]);
+    expect(onSeedConsumed).toHaveBeenCalledTimes(1);
+
+    // The same seed object again (App hasn't cleared it yet) must not resend.
+    rerender(<AskCoachPanel {...baseProps({ seedPrompt: seed, onSeedConsumed })} />);
+    rerender(<AskCoachPanel {...baseProps({ seedPrompt: null, onSeedConsumed })} />);
+    expect(mocks.chatWithCoach).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AskCoachPanel — panel-aware (TODO §32 A3)", () => {
+  it("opens on the origin panel's intro and starters, and a starter tap asks it with a panel context line", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["Rent is most of it."]));
+    render(<AskCoachPanel {...baseProps({ originView: "budget", originLabel: "Upkeep" })} />);
+    expect(screen.getByText(/Looking at Upkeep/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Where is most of my money going?"));
+    await waitFor(() => expect(screen.getByText("Rent is most of it.")).toBeTruthy());
+    expect(mocks.chatWithCoach.mock.calls[0][0]).toEqual([{ role: "user", content: "Where is most of my money going?" }]);
+    expect(mocks.chatWithCoach.mock.calls[0][2]).toMatch(/opened Coach from the Upkeep panel/);
+    expect(screen.queryByTestId("coach-starters")).toBeNull();
+  });
+
+  it("keeps the generic intro, no starters and no panel line when opened from elsewhere", async () => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["ok"]));
+    render(<AskCoachPanel {...baseProps()} />);
+    expect(screen.queryByTestId("coach-starters")).toBeNull();
+    expect(screen.getByText(/Ask me anything about how Authority Finance works/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "hi" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.chatWithCoach).toHaveBeenCalled());
+    expect(mocks.chatWithCoach.mock.calls[0][2]).not.toMatch(/opened Coach from/);
+  });
+});
+
+describe("AskCoachPanel — Coach memory (TODO §32 B)", () => {
+  const MEM = [{ id: "m1", kind: "goal_why", body: "So my kids see me finish something", source: "user" }];
+  async function ask(props) {
+    render(<AskCoachPanel {...baseProps(props)} />);
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "How am I doing?" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.chatWithCoach).toHaveBeenCalled());
+    return mocks.chatWithCoach.mock.calls[0];
+  }
+
+  it("sends saved memories in the context and offers propose_memory", async () => {
+    mocks.loadCoachMemory.mockResolvedValue(MEM);
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["ok"]));
+    render(<AskCoachPanel {...baseProps()} />);
+    await waitFor(() => expect(mocks.loadCoachMemory).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "How am I doing?" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.chatWithCoach).toHaveBeenCalled());
+    const [, , contextBlock, , options] = mocks.chatWithCoach.mock.calls[0];
+    expect(contextBlock).toMatch(/Why a goal matters: So my kids see me finish something/);
+    expect(options.tools.map((t) => t.name)).toContain("propose_memory");
+  });
+
+  it("with memory switched off: loads nothing, sends nothing, and drops the tool", async () => {
+    mocks.loadCoachMemory.mockResolvedValue(MEM);
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["ok"]));
+    const [, , contextBlock, , options] = await ask({ config: { coachMemoryOff: true } });
+    expect(mocks.loadCoachMemory).not.toHaveBeenCalled();
+    expect(contextBlock).not.toMatch(/asked you to remember/);
+    expect(options.tools.map((t) => t.name)).not.toContain("propose_memory");
+  });
+
+  it("renders a propose_memory result as a card that saves only on tap, as source 'coach'", async () => {
+    mocks.saveCoachMemory.mockResolvedValue({ id: "m2", kind: "avoid", body: "No payday loans", source: "coach" });
+    mocks.chatWithCoach.mockImplementation(async function* (msgs, sys, ctx, model, opts) {
+      opts.onToolEvent({ phase: "start", name: "propose_memory" });
+      opts.onToolEvent({ phase: "result", name: "propose_memory", result: { ok: true, proposal: { kind: "avoid", body: "No payday loans" }, kindLabel: "Something to avoid" } });
+      yield "Want me to remember that?";
+    });
+    await ask();
+    await waitFor(() => expect(screen.getByTestId("coach-memory-card")).toBeTruthy());
+    expect(mocks.saveCoachMemory).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(screen.getByText(/Coach will remember/)).toBeTruthy());
+    expect(mocks.saveCoachMemory).toHaveBeenCalledWith({ kind: "avoid", body: "No payday loans", source: "coach" });
+  });
+});
+
+describe("AskCoachPanel — one answer per turn around tools (2026-11-03)", () => {
+  it("shows only the text written after a tool round, and keeps pre-tool text when nothing follows", async () => {
+    mocks.chatWithCoach.mockImplementation(async function* (msgs, sys, ctx, model, opts) {
+      yield "That's a strong reason.";
+      opts.onToolEvent({ phase: "start", name: "propose_memory" });
+      opts.onToolEvent({ phase: "result", name: "propose_memory", result: { ok: true, proposal: { kind: "goal_why", body: "x" }, kindLabel: "Why a goal matters" } });
+      yield "That's a strong reason. Tap Save if you want me to keep it.";
+    });
+    render(<AskCoachPanel {...baseProps()} />);
+    fireEvent.change(screen.getByPlaceholderText("Ask Coach…"), { target: { value: "It matters because of my kids" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.saveCoachChat).toHaveBeenCalled());
+    const saved = mocks.saveCoachChat.mock.calls.at(-1)[0];
+    expect(saved.messages[1].content).toBe("That's a strong reason. Tap Save if you want me to keep it.");
   });
 });
 

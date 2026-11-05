@@ -125,7 +125,7 @@ describe("COACH_TOOLS schemas", () => {
       "get_goal_detail", "get_expense_detail", "get_week_breakdown", "list_log_entries",
       "navigate_to", "propose_goal",
       "simulate_expense_change", "simulate_new_goal", "simulate_overtime_hours",
-      "simulate_without_logged_event",
+      "simulate_without_logged_event", "draft_log_entry", "propose_memory",
     ]);
   });
 
@@ -143,7 +143,7 @@ describe("COACH_TOOLS schemas", () => {
   // would keep invalidating the cache behind it.
   it("exposes stable module-level per-surface sets", () => {
     expect(ASK_COACH_TOOLS).toBe(COACH_TOOLS);
-    expect(JOB_HUNT_TOOLS.map((t) => t.name)).toEqual(["get_expense_detail"]);
+    expect(JOB_HUNT_TOOLS.map((t) => t.name)).toEqual(["get_expense_detail", "simulate_runway_change"]);
   });
 });
 
@@ -667,5 +667,101 @@ describe("executeCoachTool — failure handling", () => {
     for (const name of COACH_TOOL_NAMES) {
       expect(() => executeCoachTool(name, {}, {})).not.toThrow();
     }
+  });
+});
+
+// 2026-10-29: Haiku converted periodsSooner 0.08 weeks into "five days sooner". The size is now
+// computed in the tool (days from the pay schedule + words), so the model only has to quote it.
+describe("simulation payloads carry a computed, plain-language shift", () => {
+  it("states a sub-day shift as 'less than a day' and flags an unchanged finish date", async () => {
+    const { buildToolTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const r = executeCoachTool("simulate_without_logged_event", { type: "missed_unpaid" }, buildToolTestAccount());
+    const g1 = r.goals[0];
+    expect(g1.periodsSooner).toBeCloseTo(0.08, 2);
+    expect(g1.daysSooner).toBeCloseTo(0.6, 1);
+    expect(g1.differenceInWords).toBe("less than a day sooner");
+    expect(g1.finishDateMoves).toBe(false);
+  });
+
+  it("reports a later finish in days or weeks with direction 'later'", async () => {
+    const { buildToolTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const r = executeCoachTool("simulate_new_goal", { target: 3000, insertAtRank: 1 }, buildToolTestAccount());
+    const pushed = r.existingGoals.filter((g) => g.periodsSooner < 0);
+    expect(pushed.length).toBeGreaterThan(0);
+    for (const g of pushed) expect(g.differenceInWords).toMatch(/later$/);
+  });
+});
+
+// 2026-10-29 (coach-tuning-handoff §6 item 1, prefill-and-hand-off): draft_log_entry writes nothing
+// and returns a draft shaped like LogPanel's add form.
+describe("executeCoachTool — draft_log_entry", () => {
+  const bag = async () => (await import("../../../scripts/coach-eval/fixtures/testAccount.js")).buildToolTestAccount();
+
+  it("drafts a missed shift on last week with hours from the shift length, without touching logs", async () => {
+    const data = await bag();
+    const before = JSON.stringify(data.logs);
+    const r = executeCoachTool("draft_log_entry", { type: "missed_unpaid", weekOffset: -1, shifts: 1 }, data);
+    expect(r.ok).toBe(true);
+    expect(r.draft).toMatchObject({ type: "missed_unpaid", weekIdx: data.currentWeek.idx - 1, shiftsLost: 1 });
+    expect(r.draft.hoursLost).toBe(Number(data.config.shiftHours));
+    expect(r.draft.weekEnd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(r.linkLabel).toBe("Review in Log · Missed Shift (Unpaid/Approved)");
+    expect(JSON.stringify(data.logs)).toBe(before);
+  });
+
+  it("refuses a money entry without an amount, and an unknown type", async () => {
+    const data = await bag();
+    expect(executeCoachTool("draft_log_entry", { type: "bonus" }, data).error).toMatch(/needs a dollar amount/);
+    expect(executeCoachTool("draft_log_entry", { type: "lottery" }, data).error).toMatch(/Unknown entry type/);
+  });
+
+  it("puts PTO hours in ptoHours and a bonus in amount", async () => {
+    const data = await bag();
+    expect(executeCoachTool("draft_log_entry", { type: "pto", hours: 8 }, data).draft).toMatchObject({ ptoHours: 8, hoursLost: 0, amount: 0 });
+    expect(executeCoachTool("draft_log_entry", { type: "bonus", amount: 250 }, data).draft).toMatchObject({ amount: 250, ptoHours: 0 });
+  });
+});
+
+// 2026-10-29 (coach-tuning-handoff §6 item 4): Job Hunt's runway what-if, measured through the same
+// computeNewJobSeasonRunway/resolvePrimaryRunwayDays the panels use.
+describe("executeCoachTool — simulate_runway_change", () => {
+  const jh = async (variant) => {
+    const { buildJobHuntTestAccount } = await import("../../../scripts/coach-eval/fixtures/testAccount.js");
+    const a = buildJobHuntTestAccount({ variant });
+    return { config: a.config, expenses: a.expenses, today: a.effectiveToday, includeBenefits: true };
+  };
+
+  it("cutting a $75/wk bill on a $500 cushion moves runway 9 -> 11 days", async () => {
+    const r = executeCoachTool("simulate_runway_change", { label: "Utilities", newWeeklyCost: 0 }, await jh("tight"));
+    expect(r).toMatchObject({ currentWeeklyBurn: 400, simulatedWeeklyBurn: 325, currentRunwayDays: 9, simulatedRunwayDays: 11 });
+    expect(r.differenceInWords).toBe("about 2 days more runway");
+  });
+
+  it("states a longer gain in weeks", async () => {
+    const r = executeCoachTool("simulate_runway_change", { label: "utilities", newWeeklyCost: 0 }, await jh("healthy"));
+    expect(r.differenceInWords).toBe("about 2 weeks more runway");
+  });
+
+  it("refuses outside New Job Season and for an unknown bill", async () => {
+    const data = await jh("tight");
+    expect(executeCoachTool("simulate_runway_change", { label: "Netflix", newWeeklyCost: 0 }, data).error).toMatch(/No tracked expense/);
+    expect(executeCoachTool("simulate_runway_change", { label: "Rent", newWeeklyCost: 0 },
+      { ...data, config: { ...data.config, newJobSeasonMode: false } }).error).toMatch(/only exists in New Job Season/);
+  });
+});
+
+// TODO §32 B4 — propose_memory writes nothing and refuses what the memory page refuses.
+describe("executeCoachTool — propose_memory", () => {
+  it("returns a proposal with the kind's label, in the user's words", () => {
+    const r = executeCoachTool("propose_memory", { kind: "avoid", body: "  No payday loans, ever  " }, {});
+    expect(r).toMatchObject({ ok: true, proposal: { kind: "avoid", body: "No payday loans, ever" }, kindLabel: "Something to avoid" });
+  });
+
+  it("refuses regulated identifiers, duplicates, unknown kinds and memory-off accounts", () => {
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "My SSN is 123-45-6789" }, {}).error).toMatch(/Social Security/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "Routing 021000021 at my bank" }, {}).error).toMatch(/account, card/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "x" }, { memories: [{ body: "X" }] }).error).toMatch(/already has that saved/);
+    expect(executeCoachTool("propose_memory", { kind: "secret", body: "x" }, {}).error).toMatch(/Pick what kind/);
+    expect(executeCoachTool("propose_memory", { kind: "fact", body: "x" }, { memoryOff: true }).error).toMatch(/turned Coach memory off/);
   });
 });

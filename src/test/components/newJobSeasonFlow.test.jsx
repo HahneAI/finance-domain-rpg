@@ -34,6 +34,7 @@ vi.mock('../../lib/db.js', () => ({
   loadResumeProfile: vi.fn().mockResolvedValue(null),
   saveResumeProfile: vi.fn().mockResolvedValue(true),
   saveCoachChat: vi.fn().mockResolvedValue('chat-id'),
+  loadCoachMemory: vi.fn().mockResolvedValue([]),
 }))
 
 const JOB_LOSS_CONFIG = {

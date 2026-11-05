@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCoachContext, buildJobHuntContext } from "../../lib/aiContext.js";
+import { buildCoachContext, buildJobHuntContext, netWorthCheckInSnapshot } from "../../lib/aiContext.js";
 import { fmtFullDate } from "../../lib/finance.js";
 
 // Builds a synthetic full fiscal year of week objects shaped the way
@@ -498,7 +498,7 @@ describe("buildJobHuntContext", () => {
       expenses: [essentialExpense],
       effectiveToday: "2026-07-07",
     });
-    expect(block).toMatch(/Cash Runway: ~\d+ days · weekly essential burn \$300 across 1 tracked expense/);
+    expect(block).toMatch(/Cash Runway: ~\d+ days \(≈[\d.]+ weeks? of searching\) · weekly essential burn \$300 across 1 tracked expense/);
   });
 
   it("omits the lifestyle line when there's no active lifestyle spend", () => {
@@ -620,6 +620,19 @@ describe("buildJobHuntContext", () => {
     expect(block).toContain("(applied, applied 2026-07-09)");
   });
 
+  it("converts runway days to weeks in the builder (9 days → ≈1.3 weeks; 70 → ≈10 weeks), never left to the model", () => {
+    const runway = (cash) => buildJobHuntContext({
+      config: { ...baseConfig, newJobSeasonCashOnHand: cash },
+      expenses: [essentialExpense],
+      effectiveToday: "2026-07-07",
+    }).match(/Cash Runway: ~(\d+) days \((≈[\d.]+ weeks? of searching)\)/);
+    const m = runway(1800);
+    expect(m).not.toBeNull();
+    const days = Number(m[1]);
+    const expected = Math.round((days / 7) * 10) / 10;
+    expect(m[2]).toBe(`≈${Number.isInteger(expected) ? expected : expected.toFixed(1)} ${expected === 1 ? "week" : "weeks"} of searching`);
+  });
+
   it("shows only the 5 most recent applications and flags the total when there are more", () => {
     const apps = Array.from({ length: 7 }, (_, i) => ({
       id: `a${i}`, company: `Company ${i}`, role: "Associate", status: "applied",
@@ -703,5 +716,21 @@ describe("buildCoachContext — identity + goal limits (TODO §31 Phase 4)", () 
     const block = buildCoachContext({ ...base, weeklyIncome: 0, config: {} });
     expect(block).toContain("at most 6 active goals");
     expect(block).not.toContain("Needs-only surplus");
+  });
+});
+
+describe("buildCoachContext — Green's earlier check-in (§2.L, 2026-10-29)", () => {
+  const base = { config: {}, weeklyIncome: 900, avgWeeklySpend: 300, goals: [], expenses: [], currentWeek: { idx: 27 }, today: "2026-07-07", allWeeks: buildAllWeeks(52) };
+  it("prints the persisted snapshot as a dated 'Earlier check-in' line", () => {
+    const block = buildCoachContext({ ...base, earlierCheckIn: { tier: "amber", weekIdx: 20, savingsRatePct: 9, spendRatioPct: 91, weeklySurplus: 75 } });
+    expect(block).toMatch(/Earlier check-in \(amber, .+\): savings rate 9%, spend ratio 91%, weekly surplus \$75/);
+  });
+  it("omits the line when there is no snapshot", () => {
+    expect(buildCoachContext(base)).not.toContain("Earlier check-in");
+  });
+  it("snapshots the same figures the context block itself prints", () => {
+    const snap = netWorthCheckInSnapshot(base);
+    expect(snap).toMatchObject({ spendRatioPct: 33, weeklySurplus: 600 });
+    expect(buildCoachContext(base)).toContain(`${snap.spendRatioPct}%`);
   });
 });

@@ -151,9 +151,20 @@ doesn't repeat their reasoning.
   `REAL_ALL_WEEKS` above); a "fabricated counterfactual" pattern found three
   times (Coach inventing a plausible-sounding hypothetical impact instead of
   calling the simulation tool that would answer it for real) — tool
-  *availability* doesn't prevent this, only tool *use* does, still open.
-  Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
-  F168-F174.
+  *availability* doesn't prevent this, only tool *use* does. Addressed
+  2026-10-29 with worked examples in `ASK_COACH_SYSTEM_PROMPT` plus a computed
+  `differenceInWords` in every simulation result (what-ifs then quoted tool
+  numbers only). Full writeup: `docs/coach-entry-points.md` §1, `drift-app-warden.md` §21
+  F168-F176. Groups (id filter): `adversarial` · `simulation` · `navigate` ·
+  `goalset` · `logset` · `jobhunt`. `jobhunt` runs Job Hunt's own prompt, context and
+  tools on Sonnet. `COACH_EVAL_MODEL=sonnet` overrides the model for the
+  other groups; `history` on a case replays a two-turn conversation.
+- `modelCompare.mjs` (2026-10-29) — replays every `promptfooconfig*.yaml` on its own
+  model(s) AND a candidate model, side by side, by importing each config's prompt
+  builder and tests and calling the API directly (exact request control: `effort`,
+  max_tokens, usage incl. thinking tokens, stop_reason, cost). Built for the Haiku 5.5
+  baseline because the 5.x models think by default and promptfoo's effort handling
+  was unclear. Reads `AI_ADMIN_COACH_TEST_KEY` directly; no retries; `--max-calls` cap.
 - `personalityToolLoopLiveTest.mjs` (2026-09-03) — this harness's own tool-loop-capable
   sibling, same reason as `toolLoopLiveTest.mjs` above (promptfoo can't drive a tool round). A
   DIRECTIONAL rerun of the Phase 1-4 Ask Coach baseline under `AskCoachPanel.jsx`'s real
@@ -392,8 +403,16 @@ retry-on-a-hunch.** Concretely for this file:
     (floor 3–4; natural baseline 13–17 sentences, proposed target 3); Ask Coach tool-available — no metaphor, Axis 2 shift
     confirmed (directional, 1 draw each). Details:
     `docs/coach-personality-rubric.md` Known Limitations.
-  - [ ] Remaining before Phase 5 can conclude: Directness/bluntness and
-    Warmth/formality (still undefined) — then the batch decision: lock one
+  - [$] Phase 5 batch decision LOCKED (shotgun 2026-10-22, awaiting
+    Anthony's review): mode × axis matrix in `docs/coach-personality-rubric.md`
+    "Locked Targets". Lock check 27 calls (`promptfooconfig.phase5.yaml`,
+    `promptfooconfig.phase5i-lock-askcoach.yaml`); fixed Green's invented
+    "before" figure, invented panel names (Amber/Green), Green stacked
+    touches, Red Directness 4. Rerun those two configs after any prompt edit.
+  - [x] (superseded by the lock above) Remaining before Phase 5 could conclude: Directness (Axis 4) and
+    Warmth/Formality (Axis 5) are DEFINED (2026-10-07); Directness 1s/5s
+    SAMPLED 2026-10-07 (`promptfooconfig.phase5e-directness-*.yaml`, 8 calls —
+    see rubric); Warmth 1–2 SAMPLED 2026-10-07 (`promptfooconfig.phase5f-warmth-*.yaml`, 9 calls); Sonnet warmth-4 probe DONE (no fabrication, n=1); Job Hunt weeks-of-runway grounding fix BUILT + verified 2026-10-08 (relabel tried, reverted — see rubric); Net Worth Red flourish FIXED + Job Hunt fixture date de-coincided 2026-10-08 (`promptfooconfig.phase5h-red-refix.yaml`); Job Hunt application-date own-date rule added 2026-10-08 (0/6, weak evidence) (4–5 need real shared-history context) — then the batch decision: lock one
     target number per mode/axis pair across all four modes. (Job Hunt
     first-pick/wrong-gap and Résumé Review date grounding FIXED + re-verified
     2026-10-06 — see the rubric's Known Limitations.)
@@ -421,3 +440,28 @@ retry-on-a-hunch.** Concretely for this file:
   Phase-3-verified. Everything else in the table (Job Hunt Assistant,
   Résumé Review, Statement Summary, Net Worth Trigger's tiers, the rest)
   is still undecided.
+  - [$] Per-message routing BUILT 2026-10-29 (shotgun): Ask Coach turns that need
+    range go to Sonnet for privileged accounts (`src/lib/coachPolicy.js`),
+    enforced server-side together with a per-surface gate and a 4-round tool cap.
+- [$] Net Worth Green with a real "before" (2026-10-29, shotgun):
+  `promptfooconfig.phase5j-green-history.yaml` (6 calls, $0.018). With the
+  Amber snapshot, the before/after figures are exact; without it, Green still
+  gives no before figure. Rerun it after any edit to the Green addenda or
+  the "Earlier check-in" line.
+- [ ] Model switch 2026-10-29: Haiku 5.5 base + Sonnet 5.5 (effort low). The runners
+  default to that pairing (toolLoopLiveTest: Haiku 5.5, Job Hunt on Sonnet 5.5 low).
+  The older promptfoo configs keep their original providers as dated records;
+  re-run any of them on the new pairing with `modelCompare.mjs --candidate-only`.
+- Record: Claude Haiku 5.5 baseline taken 2026-10-29. Results:
+  rubric Known Limitations, "Claude Haiku 5.5 baseline". Re-run:
+  `node modelCompare.mjs --repeat 2` (all configs, original model +
+  `claude-haiku-5-5`; `--effort low`, `--candidate`, `--only`,
+  `--candidate-only` available; results/ is gitignored) and
+  `COACH_EVAL_MODEL=claude-haiku-5-5 COACH_EVAL_JOBHUNT_MODEL=claude-haiku-5-5
+  COACH_EVAL_STRIP_THINKING=1 COACH_EVAL_MAX_CALLS=120 node toolLoopLiveTest.mjs
+  <all 30 ids>` (the runner's no-argument default is only the first 5 cases).
+- [ ] Phase 8 — Combined-axis tuning (recorded 2026-10-08; the user's
+  "Phase 2 testing"). Post-launch, after every Phase 5 open item closes:
+  score three axes on the same reply and tune their 1–5 settings jointly
+  per mode, because Phase 5 showed the axes pull on each other. Method not
+  decided — see `docs/TODO.md` §2.L Phase 8.

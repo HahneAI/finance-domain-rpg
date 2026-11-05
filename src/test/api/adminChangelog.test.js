@@ -1,4 +1,4 @@
-// api/admin-changelog.js — admin authoring surface for changelog_entries
+// api/_adminChangelog.js — admin authoring surface for changelog_entries
 // (database/migrations/032). Same auth pattern as revival-lookup.js/
 // admin-beta-report.js: verify session via the anon-key client, re-check
 // is_admin server-side, then use the service-role client for the real work.
@@ -21,7 +21,7 @@ globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
 globalThis.process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
 
-const { default: handler } = await import("../../../api/admin-changelog.js");
+const { default: handler } = await import("../../../api/_adminChangelog.js");
 
 function mkRes() {
   return {

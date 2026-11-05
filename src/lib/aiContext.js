@@ -1,4 +1,5 @@
 import { getArchetype } from "../constants/goalArchetypes.js";
+import { spendRatioOf, upkeepHealthBand } from "./upkeepHealth.js";
 import { computeGoalAmountCap, MAX_ACTIVE_GOALS } from "./goalLimits.js";
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate, isExpenseRemoved } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
@@ -72,6 +73,37 @@ function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx, 
  * when config.newJobSeasonMode is set) so the block prompt-caches across a
  * session even as the underlying numbers change.
  */
+/**
+ * The headline figures Coach quotes (surplus, annual savings, savings rate, spend ratio) — extracted
+ * 2026-10-29 so CoachNetWorthCard can snapshot the SAME numbers when a tier fires (Green's
+ * "earlier check-in" line) instead of re-deriving them. buildCoachContext calls this too.
+ */
+export function computeCoachHeadlineFigures({ config = null, weeklyIncome = 0, avgWeeklySpend = 0, fundedGoalSpend = 0 } = {}) {
+  const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
+  // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
+  // so the Coach's stated annual savings/net-worth figures can't drift from
+  // the Home tile they're described as matching — a flat 52 here double-
+  // diluted weeklyIncome's own already-per-active-week average for any
+  // account that didn't start at fiscal week 0 (TODO §1, 2026-07-19).
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
+  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
+  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
+  // Matches HomePanel.jsx's "Upkeep Health" tile exactly: spendRatio =
+  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
+  const spendRatio = spendRatioOf(avgWeeklySpend, weeklyIncome);
+  return { avgWeeklySurplus, activeWeeksThisYear, annualSavings, netWorthHealth, spendRatio };
+}
+
+/** The compact snapshot CoachNetWorthCard persists when a tier fires — all from computeCoachHeadlineFigures. */
+export function netWorthCheckInSnapshot(args) {
+  const f = computeCoachHeadlineFigures(args);
+  return {
+    savingsRatePct: f.netWorthHealth.rate != null ? Math.round(f.netWorthHealth.rate * 100) : null,
+    spendRatioPct: Math.round(f.spendRatio * 100),
+    weeklySurplus: Math.round(f.avgWeeklySurplus),
+  };
+}
+
 export function buildCoachContext({
   config = null,
   weeklyIncome = 0,
@@ -110,21 +142,13 @@ export function buildCoachContext({
   // names outright would have forced a wrong-label tool call just to discover
   // what exists.
   detailAvailableViaTools = false,
+  // CoachNetWorthCard's persisted snapshot from the tier that fired before this one (Green only):
+  // { tier, weekIdx, savingsRatePct, spendRatioPct, weeklySurplus }. Lets Green name a real change.
+  earlierCheckIn = null,
 } = {}) {
-  const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
-  // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
-  // so the Coach's stated annual savings/net-worth figures can't drift from
-  // the Home tile they're described as matching — a flat 52 here double-
-  // diluted weeklyIncome's own already-per-active-week average for any
-  // account that didn't start at fiscal week 0 (TODO §1, 2026-07-19).
-  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
-  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
-  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
-
-  // Matches HomePanel.jsx's "Upkeep Health" tile exactly: spendRatio =
-  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
-  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
-  const budgetHealthLabel = spendRatio < 0.5 ? "well-managed" : spendRatio < 0.75 ? "healthy range" : "watch spend";
+  const { avgWeeklySurplus, annualSavings, netWorthHealth, spendRatio } =
+    computeCoachHeadlineFigures({ config, weeklyIncome, avgWeeklySpend, fundedGoalSpend });
+  const budgetHealthLabel = upkeepHealthBand(spendRatio);
 
   const completedGoals = goals.filter((g) => g.completed);
   const activeGoals = goals.filter((g) => !g.completed);
@@ -296,6 +320,19 @@ export function buildCoachContext({
     goalCap != null ? `; active goal targets may total at most ${fmt$(goalCap)} (five years of the Needs-only surplus) — ${fmt$(Math.max(0, goalCap - totalActiveGoalsTarget))} of room left` : ""
   }. Claiming a goal frees room. Do not propose a goal that would exceed these.`);
 
+  // Green's real "before" (2026-10-29): the snapshot CoachNetWorthCard saved when the previous tier
+  // fired, computed by computeCoachHeadlineFigures at that time — so a turnaround can be named
+  // with figures that actually existed, not inferred.
+  if (earlierCheckIn && earlierCheckIn.tier) {
+    const when = Number.isInteger(earlierCheckIn.weekIdx) ? formatPeriodWithDate(earlierCheckIn.weekIdx, allWeeks, checksPerYear) : "an earlier period";
+    const parts = [
+      earlierCheckIn.savingsRatePct != null ? `savings rate ${earlierCheckIn.savingsRatePct}%` : null,
+      earlierCheckIn.spendRatioPct != null ? `spend ratio ${earlierCheckIn.spendRatioPct}%` : null,
+      earlierCheckIn.weeklySurplus != null ? `weekly surplus ${fmt$(earlierCheckIn.weeklySurplus)}` : null,
+    ].filter(Boolean);
+    if (parts.length) lines.push(`Earlier check-in (${earlierCheckIn.tier}, ${when}): ${parts.join(", ")}`);
+  }
+
   return lines.join("\n");
 }
 
@@ -315,6 +352,14 @@ export function buildCoachContext({
  * name would break the feature, not just protect privacy the way it does
  * for goals.
  */
+// Runway days → weeks, computed here for the same reason as wholeDaysBetween:
+// the 2026-10-07 probes had Coach turn a 9-day runway into "two more weeks" in
+// ~3 of 6 tight-runway draws when JOB_HUNT_ADDENDUM left the arithmetic to it.
+function runwayWeeksText(days) {
+  const weeks = Math.round((days / 7) * 10) / 10;
+  return `≈${Number.isInteger(weeks) ? weeks : weeks.toFixed(1)} ${weeks === 1 ? "week" : "weeks"} of searching`;
+}
+
 // Whole days from `fromIso` to `toIso` (both YYYY-MM-DD). Computed here, not
 // left to the model — the 2026-10-06 Job Hunt repeat-verify had Coach call a
 // 17-day silence "over three weeks" when only the applied date was given.
@@ -332,7 +377,7 @@ export function buildJobHuntContext({ config = null, expenses = [], effectiveTod
   if (!dash) return "";
 
   const runwayDays = resolvePrimaryRunwayDays(dash, config, includeBenefits);
-  lines.push(`Cash Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
+  lines.push(`Cash Runway: ${runwayDays != null ? `~${Math.round(runwayDays)} days (${runwayWeeksText(runwayDays)})` : "no essential burn — effectively open-ended"} · weekly essential burn ${fmt$(dash.weeklyBurn)} across ${dash.essentialCount} tracked ${dash.essentialCount === 1 ? "expense" : "expenses"}`);
   if (dash.lifestyleWeeklySpend > 0) {
     lines.push(`Lifestyle spend still tracked (not counted in runway above): ${fmt$(dash.lifestyleWeeklySpend)}/wk`);
   }

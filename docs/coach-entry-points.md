@@ -39,7 +39,19 @@ same as a paying subscriber, no reduced version. Every section below now carries
 
 ## 1. Ask Coach — the general chat
 
-**What it is:** A full-screen chat, opened from a "Coach" tab in the bottom navigation. A user
+**What it is:** A full-screen chat, opened from a "Coach" tab in the bottom navigation — and, since
+2026-10-30 (TODO §32 A1), from an **ASK COACH** button on every Home goal card and an **Ask Coach about
+this** button in Upkeep's expense sheet, which open a fresh chat with that item's question already
+asked (goals by rank, expenses by label; `src/lib/coachSeeds.js`). Opened from a panel, the empty chat
+shows that panel's intro and three starter questions, and Coach is told which panel it was opened from
+(`src/lib/coachPanelStarters.js`, A3). Separately, Home, Upkeep and Log carry a one-line **Coach note** —
+a fixed template over the panel's own tile figures, no model call (`src/lib/coachNotes.js`, A4).
+Paycheck weeks (Income) and log entries (Log) carry ASK buttons too (A2). **Coach memory (2026-11-03, TODO §32 B,
+migration 049):** things the user saved — in their words — are added to Ask Coach's and Job Hunt's context;
+Ask Coach can offer to remember something new with a Save card (`propose_memory`), and Account → "What Coach
+knows about me" lists, adds, forgets and switches memory off. **Routines (2026-11-03, TODO §32 C):** Home shows a
+Weekly Pre-Game Briefing once per fiscal week (Coach writes first; Haiku 5.5, `weekly_briefing` surface) and a
+Claim Date slip alert (fixed template, no model call) with an "Ask Coach why" button. A user
 can ask plain questions about how the app works, how a number on their screen is calculated, or
 how to log something, and Coach answers using that person's real numbers — never a generic
 answer. Coach explicitly won't give tax, legal, or investment advice; it sticks to explaining
@@ -77,8 +89,10 @@ item 5.
 *Reference: `docs/TODO.md` §2.H (Chat & Search History Persistence), subsections H3–H4;
 `docs/drift-app-warden.md` §21 F146.*
 
-**Technical reference:** API route `POST /api/coach` · Model: **Haiku** (`claude-haiku-4-5`,
-hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
+**Technical reference:** API route `POST /api/coach` · Model: **Haiku 5.5** (`claude-haiku-5-5`,
+default effort); turns that need range (what-ifs, decisions, goal-setting) go to **Sonnet 5.5**
+(`claude-sonnet-5-5`, effort `low`) for privileged accounts via `src/lib/coachPolicy.js` (switch made
+2026-10-29; Haiku 4.5 / Sonnet 5 retired) · System
 prompt: `ASK_COACH_SYSTEM_PROMPT` in `src/lib/coachPrompts.js` (shared Coach voice + Ask-Coach
 answering rules + the app feature guide from `src/lib/coachFeatureGuide.js`, all frozen
 together into one prompt). Gate: `canAccessAskCoachGeneral({isAdmin, isTester, isInvestor,
@@ -268,7 +282,7 @@ per mode, not a one-shot rewrite — see the can-of-worms discussion in this ses
 still blank).*
 
 **Technical reference:** API route `POST /api/coach` (same route as the chat above) · Model:
-**Haiku** (`claude-haiku-4-5`) · System prompt: `buildNetWorthSystemPrompt(tier)` in
+**Haiku 5.5** (`claude-haiku-5-5`; was `claude-haiku-4-5` until 2026-10-29) · System prompt: `buildNetWorthSystemPrompt(tier)` in
 `src/lib/coachPrompts.js` — picks one of three short tier-specific prompts (gentle / critical /
 recovery), each built on the same shared Coach voice as the chat above. Gate: same as the chat
 above — `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})`, checked at both mount
@@ -355,8 +369,8 @@ instead — revisit only if usage shows people want the shortcuts specifically.
 stress of an active search under runway pressure).*
 
 **Technical reference:** Same shared route as sections 1–2, `POST /api/coach` · Model:
-**Sonnet** (`claude-sonnet-5`, per §18.G's cost split — Haiku for chat/FAQ/triggers, Sonnet for
-job-hunt drafts) · System prompt: `JOB_HUNT_SYSTEM_PROMPT` in `coachPrompts.js` · Context:
+**Sonnet 5.5** (`claude-sonnet-5-5`, effort `low`; was `claude-sonnet-5` until 2026-10-29 — Haiku for
+chat/FAQ/triggers, Sonnet for job-hunt and résumé work) · System prompt: `JOB_HUNT_SYSTEM_PROMPT` in `coachPrompts.js` · Context:
 `buildJobHuntContext()` in `aiContext.js`, grounded in `computeNewJobSeasonRunway`/
 `resolvePrimaryRunwayDays`/`sumJobHuntIncome` — never a parallel estimate (§21 F113's rule) —
 plus `config.targetIncomeAnnual`/`jobApplications`/`returnToWorkDate`. Gate:

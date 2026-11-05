@@ -12,6 +12,9 @@ const { mocks } = vi.hoisted(() => ({
 }));
 vi.mock("../../lib/claude.js", () => ({ chatWithCoach: mocks.chatWithCoach }));
 vi.mock("../../lib/aiContext.js", () => ({ buildJobHuntContext: mocks.buildJobHuntContext }));
+vi.mock("../../lib/db.js", () => ({
+  loadCoachMemory: vi.fn().mockResolvedValue([{ id: "m1", kind: "decision", body: "Only warehouse lead roles, no driving" }]),
+}));
 
 function chunkGenerator(chunks) {
   return async function* () {
@@ -44,8 +47,20 @@ describe("JobHuntChatPanel", () => {
     const [messages, systemPrompt, contextBlock, model] = mocks.chatWithCoach.mock.calls[0];
     expect(messages).toEqual([{ role: "user", content: "Should I take this offer?" }]);
     expect(systemPrompt).toMatch(/Job Hunt Assistant mode/);
-    expect(contextBlock).toBe("JOB_HUNT_CONTEXT");
+    expect(contextBlock).toMatch(/^JOB_HUNT_CONTEXT/);
     expect(model).toBe("sonnet");
+  });
+
+  // TODO §32 B3 — Job Hunt reads saved Coach memory (read-only), unless memory is switched off.
+  it.each([[false, true], [true, false]])("memory off=%s → memory line in context=%s", async (off, expected) => {
+    mocks.chatWithCoach.mockImplementation(chunkGenerator(["ok"]));
+    render(<JobHuntChatPanel {...baseProps({ config: { newJobSeasonMode: true, coachMemoryOff: off } })} />);
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.change(screen.getByPlaceholderText("Ask about the search…"), { target: { value: "Which first?" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => expect(mocks.chatWithCoach).toHaveBeenCalled());
+    const contextBlock = mocks.chatWithCoach.mock.calls[0][2];
+    expect(/A decision I made: Only warehouse lead roles, no driving/.test(contextBlock)).toBe(expected);
   });
 
   it("shows an error and preserves the user's message when the call fails", async () => {

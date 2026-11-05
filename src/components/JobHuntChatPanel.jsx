@@ -4,6 +4,8 @@ import { chatWithCoach } from "../lib/claude.js";
 import { buildJobHuntContext } from "../lib/aiContext.js";
 import { JOB_HUNT_TOOLS } from "../lib/coachTools.js";
 import { JOB_HUNT_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
+import { loadCoachMemory } from "../lib/db.js";
+import { memoryContextBlock } from "../lib/coachMemory.js";
 
 /**
  * §18.E — Job Hunt Assistant. A focused, single-session chat scoped to
@@ -34,6 +36,14 @@ export function JobHuntChatPanel({
   const [errored, setErrored] = useState(false);
   const listEndRef = useRef(null);
 
+  const [memories, setMemories] = useState([]);
+  useEffect(() => {
+    if (config?.coachMemoryOff === true) return;
+    let cancelled = false;
+    loadCoachMemory().then((rows) => { if (!cancelled) setMemories(rows); });
+    return () => { cancelled = true; };
+  }, [config?.coachMemoryOff]);
+
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
@@ -58,12 +68,15 @@ export function JobHuntChatPanel({
     setMessages([...nextMessages, { role: "assistant", content: "" }]);
     setSending(true);
     try {
-      const contextBlock = buildJobHuntContext({ config, expenses, effectiveToday, includeBenefits });
+      // Coach memory (TODO §32 B3) — read-only here: Job Hunt can use what the user saved, but only
+      // Ask Coach proposes new memories. Off when the user switched memory off.
+      const contextBlock = buildJobHuntContext({ config, expenses, effectiveToday, includeBenefits })
+        + memoryContextBlock(memories, { memoryOff: config?.coachMemoryOff === true });
       let accumulated = "";
-      // This mode offers only get_expense_detail — see JOB_HUNT_TOOLS in
-      // lib/coachTools.js for why the other three are withheld here.
-      const toolData = { config, expenses, today: effectiveToday };
-      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet", { tools: JOB_HUNT_TOOLS, toolData })) {
+      // get_expense_detail + simulate_runway_change — see JOB_HUNT_TOOLS in lib/coachTools.js.
+      // includeBenefits lets the runway simulation match this panel's own runway headline.
+      const toolData = { config, expenses, today: effectiveToday, includeBenefits };
+      for await (const chunk of chatWithCoach(nextMessages, JOB_HUNT_SYSTEM_PROMPT, contextBlock, "sonnet", { tools: JOB_HUNT_TOOLS, toolData, surface: "job_hunt" })) {
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
       }

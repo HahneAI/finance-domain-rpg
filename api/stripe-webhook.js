@@ -79,6 +79,16 @@ async function restoreRevivedAccount(adminClient, { session, subscription, userI
   );
   if (restoreError) throw new Error(`revival restore failed: ${restoreError.message}`);
 
+  // Coach memory archived at a non-payment deletion (migration 049). Best-effort: a failure here is
+  // logged, never thrown — the account and its billing are already restored above.
+  const memoryRows = Array.isArray(tombstone.archived_coach_memory) ? tombstone.archived_coach_memory : [];
+  if (memoryRows.length) {
+    const { error: memoryError } = await adminClient.from("coach_memory").insert(
+      memoryRows.map((m) => ({ user_id: userId, kind: m.kind, body: m.body, source: m.source ?? "user", created_at: m.created_at }))
+    );
+    if (memoryError) console.error(`revival: coach_memory restore failed: ${memoryError.message}`);
+  }
+
   const { error: consumeError } = await adminClient
     .from("deleted_accounts")
     .update({

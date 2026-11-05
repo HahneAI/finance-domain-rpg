@@ -53,7 +53,7 @@ import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { focusCoachTarget } from "./lib/coachFocus.js";
-import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
+import { isTrackedBetaTester, canAccessAskCoachGeneral, canAccessAiFeatures } from "./lib/entitlements.js";
 import { computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome, isNjsBillActive } from "./lib/newJobSeasonRunway.js";
 
 // Website/flyer-QR-code signup funnel — a link shaped like
@@ -895,6 +895,33 @@ export default function App() {
     if (focusRef) focusCoachTarget(focusRef);
   }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // draft_log_entry hand-off (2026-10-29): Coach drafts, LogPanel opens it in its own add form, and
+  // the user saves through LogPanel's addLog (its existing eager save). Nothing is written here.
+  const [coachLogDraft, setCoachLogDraft] = useState(null);
+  const handleCoachDraftLog = useCallback((draft) => {
+    closeAskCoachWithAnimation();
+    setCoachLogDraft(draft);
+    navigateDirect("log");
+  }, [closeAskCoachWithAnimation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Ask Coach about this" (TODO §32 A1): a card hands Coach its opening question. The seed is
+  // one-shot — AskCoachPanel starts a fresh chat with it, then calls onSeedConsumed so reopening
+  // Coach later never re-sends it. Cards only receive this when the account can open Coach.
+  const [coachSeed, setCoachSeed] = useState(null);
+  const openCoachAbout = useCallback((text) => {
+    setCoachSeed({ id: `${Date.now()}`, text });
+    setAskCoachOpen(true);
+  }, []);
+
+  // Home's "Coach remembers" → "See all" (TODO §32 D3): open Account straight on "What Coach knows".
+  // One-shot — ProfilePanel reads it as its first section, then clears it, so a later Account visit
+  // lands on the normal Account page.
+  const [profileEntrySection, setProfileEntrySection] = useState(null);
+  const openCoachMemory = () => {
+    setProfileEntrySection("coachmemory");
+    navigate("profile");
+  };
+
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   // Also exits any active admin demo view so the personal panel is shown.
@@ -1414,7 +1441,7 @@ export default function App() {
     setTimeout(() => setSyncStatus(null), 4000);
   }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
-  // docs/TODO.md — until now api/admin-beta-report.js was only reachable via a
+  // docs/TODO.md — until now api/_adminBetaReport.js was only reachable via a
   // manually-crafted authenticated HTTP request (curl/Postman); this is the
   // in-app trigger. Fetches with the current admin session's token rather than
   // a plain link, since the endpoint requires a Bearer token and window.open
@@ -1427,7 +1454,7 @@ export default function App() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error("Not signed in");
-      const url = format === "feedback" ? "/api/admin-beta-report?format=feedback" : "/api/admin-beta-report";
+      const url = format === "feedback" ? "/api/admin/beta-report?format=feedback" : "/api/admin/beta-report";
       const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -2435,6 +2462,7 @@ export default function App() {
       ) : (
         <HomePanel
           navigate={navigate}
+          onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
           cashOnHand={cashOnHand}
           onOpenCashLedger={() => {
             navigate("log");
@@ -2461,6 +2489,9 @@ export default function App() {
           config={config}
           logNetLost={logTotals.netLost}
           logNetGained={logTotals.netGained}
+          logCount={logs.length}
+          viewLabels={VIEW_LABELS}
+          onOpenCoachMemory={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachMemory : undefined}
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
           currentWeek={currentWeek}
@@ -2478,6 +2509,7 @@ export default function App() {
         />
       ))}
       {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
+        onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -2507,6 +2539,7 @@ export default function App() {
       ) : (
         <BudgetPanel
           expenses={expenses} setExpenses={setExpenses}
+          onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           onResolveSuggestion={handleResolveSuggestion}
           weeklyIncome={weeklyIncome}
@@ -2531,11 +2564,13 @@ export default function App() {
         />
       ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
+        onAskCoach={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement }) ? openCoachAbout : undefined}
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isDiagnosticAdmin}
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
         cashOnHand={cashOnHand} onOpenCheckIn={() => setConfirmDismissed(false)}
+        coachDraft={coachLogDraft} onCoachDraftConsumed={() => setCoachLogDraft(null)}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
@@ -2558,7 +2593,10 @@ export default function App() {
       />)}
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
+        coachAvailable={canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin, entitlement })}
         config={config}
+        initialSection={profileEntrySection}
+        onInitialSectionConsumed={() => setProfileEntrySection(null)}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}
         onChangeIdentity={handleChangeIdentity}
@@ -4731,8 +4769,14 @@ export default function App() {
           onClose={closeAskCoachWithAnimation}
           onNavigate={handleCoachNavigate}
           onCreateGoal={handleCoachCreateGoal}
+          onDraftLog={handleCoachDraftLog}
+          seedPrompt={coachSeed}
+          onSeedConsumed={() => setCoachSeed(null)}
+          originView={currentView}
+          originLabel={VIEW_LABELS[currentView] ?? null}
           readOnly={isExpiredReadOnly}
           isExiting={askCoachExiting}
+          privileged={canAccessAiFeatures({ isAdmin, isTester, isInvestor: config.isInvestor, isAiAdmin })}
           config={config}
           expenses={expenses}
           goals={goals}

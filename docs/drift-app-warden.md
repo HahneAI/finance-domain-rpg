@@ -173,7 +173,7 @@ nothing is orphaned).
 | T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§9 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §2 · §9 | B, C |
-| T8 | **Login System** | G | `LoginScreen.jsx`, `ReviveScreen.jsx`, `TrialExplainerScreen.jsx`, `api/revival-lookup.js` | §17 (auth entry) · §8 (revival detection at sign-in) | B, C |
+| T8 | **Login System** | G | `LoginScreen.jsx`, `ReviveScreen.jsx`, `TrialExplainerScreen.jsx`, `api/_revivalLookup.js` (`/api/account/revival-lookup`) | §17 (auth entry) · §8 (revival detection at sign-in) | B, C |
 | T9 | **Paywall System** | G | `App.jsx` (entitlement resolution + `readOnly` fencing), `UpgradeCard/Modal/Panel.jsx`, `TrialBanner.jsx`, `api/stripe-*.js`, `api/cron-subscription-lifecycle.js` + `_lifecycle*.js`, `_email.js` | §8 · §4 | B, C |
 | T10 | **UI-UX** | G | `ui.jsx`, `LiquidGlass.jsx`, `index.css` (`@theme`), `useSwipeStack.js`, `PwaInstallModal.jsx`, animation rules | §1 · §16 (primitives) · §3 | E |
 
@@ -1535,7 +1535,10 @@ forward slot for a Coach-generated insight.
 2026-07-24: admin/tester/investor **or** a real trial/paid entitlement, per
 `hasPrivilegedAccess({isAdmin, isTester, isInvestor})` as of 2026-07-25 — see F111);
 `CoachNetWorthCard.jsx` computes `runwayDays` via `computeNewJobSeasonRunway()` +
-`resolvePrimaryRunwayDays()` directly (`newJobSeasonRunway.js`) — **not** a local estimate;
+`resolvePrimaryRunwayDays()` (`newJobSeasonRunway.js`) — **not** a local estimate — now wrapped once in
+`coachTriggers.js` `netWorthRunwayDays()` (2026-11-04, TODO §32 D1) so Home's "Needs you" ranking
+(`lib/commandCenter.js` `rankNeedsYou`) resolves the SAME tier the card does. **IF** the card's tier inputs
+change, **THEN** change Home's ranking call with them (`HomePanel.test.jsx` "Needs you" is the check);
 `coachTriggers.js`: `resolveNetWorthSignalTier`, `shouldFireForTier` (one message per
 tier per fiscal week) — **[G + L, both converged]**
 Proactive Coach message, now reachable from both `HomePanel` (Amber/Green/Red) and
@@ -1548,12 +1551,25 @@ derives from a shared `newJobSeasonDash` memo (one `computeNewJobSeasonRunway()`
 not two) — the Live State Inspector's three new New Job Season rows (`New Job Season Date`,
 `Unemployment Wkly`, `Unemployment Wks Left`) read `newJobSeasonDash.benefitsRemainingWeeks`
 from that same memo, isAdmin-gated diagnostic display only, no new call site.
+> **2026-10-29:** Job Hunt Coach's `simulate_runway_change` (`coachTools.js`) re-runs this same
+> `computeNewJobSeasonRunway()` + `resolvePrimaryRunwayDays()` pair with one expense changed — it is a consumer of
+> Spine A, not a new formula; it inherits every IF/THEN here.
 > **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
 > formula — everything routes through `computeNewJobSeasonRunway()`/`resolvePrimaryRunwayDays()`
 > (Spine A), now including the admin Live State Inspector via the shared `newJobSeasonDash`
 > memo. **IF** the gate changes, **THEN** note it must stay `canAccessAskCoachGeneral` —
 > `isInvestor` now **is** folded in via `hasPrivilegedAccess` (2026-07-25), superseding
-> this entry's older "never fold in isInvestor" language; see F111. Check:
+> this entry's older "never fold in isInvestor" language; see F111. **IF** a tier addendum in
+> `coachPrompts.js` (`TIER_ADDENDA`) asks Coach to describe a *change* ("improvement", "turnaround",
+> "dropped from"), **THEN** the card must first pass the earlier figure into `buildCoachContext`. Done for
+> Green (2026-10-29, shotgun): each fire persists `coachSignalState.lastFiredSnapshot` =
+> `netWorthCheckInSnapshot()` (same `computeCoachHeadlineFigures()` the context block prints — never a
+> parallel formula); a Green after Amber/Red passes it as `earlierCheckIn` (→ "Earlier check-in" line) AND
+> calls `buildNetWorthSystemPrompt("green", { hasEarlierCheckIn: true })`. **IF** you change either half,
+> **THEN** change both — the with-history addendum and the context line are one unit, and a Green with no
+> snapshot (older accounts) must keep the plain, no-before-figure addendum byte for byte (folding both
+> cases into one addendum made Haiku misquote "+$55" as "five dollars"; Known Limitations, rubric).
+> Amber/Green action names come from `NET_WORTH_PANEL_ACTION`; keep them equal to the on-screen nav (F178). Check:
 > `newJobSeasonFlow.test.jsx`'s "Coach presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
 **F142 · `estimateGoalNextYear(remainingAmount, cfg, expenses)`** — `finance.js:64–124`, consumed
@@ -1606,6 +1622,10 @@ on the card.
 > **THEN** the hero and the card beneath it can disagree about the same goal — the exact
 > two-surfaces-one-number shape of F18's own trigger. Check: grep `finishDate` in
 > HomePanel — every consumer traces back to `resolveGoalFinishInfo`.
+> **IF** a goal-card button is added or changed (e.g. **ASK COACH**, TODO §32 A1, 2026-10-30), **THEN**
+> change BOTH card copies (mobile and desktop branches) — `HomePanel.test.jsx` asserts ≥2 ASK COACH
+> buttons — and keep its question rank-only (`goalCoachSeed(i + 1)`, F114), the same `i + 1` as
+> `data-coach-ref="goal:<rank>"`.
 > **IF** a second caller of `computeClaimDates()` is added (App.jsx's Cyborg Resource snapshot,
 > TODO §22.F, is the first), **THEN** it must pass exactly the props HomePanel receives —
 > `timelineWeekNets` is `futureWeekNetsRaw`, `today` is `effectiveToday`, log totals from the
@@ -1646,6 +1666,9 @@ bottom for the goal the user was chasing when the job ended. **No date is render
 with no income there is no surplus, so no Claim Date the math can support — inventing one would
 break the same never-render-an-unsupported-date rule the rest of the surface keeps. No setter is
 threaded, so F20's readOnly shadow needs no new entry.
+> **Home "Around the app" (2026-11-04, TODO §32 D3):** prints panel names from App's `VIEW_LABELS`, threaded to
+> HomePanel as `viewLabels` (fallbacks "Upkeep"/"Log"), and navigates by route key. A rename touches
+> `VIEW_LABELS` only; never hardcode a new label there.
 
 **The Budget panel is named "Upkeep" in all user-visible text**; every route key, filename and
 `data-coach-ref` stays `budget`. Sites moved: `NAV_ITEMS`, `BOTTOM_NAV`, `DemoAccountTree`'s tab
@@ -2998,13 +3021,13 @@ everyone locked, since `taxExemptOptIn` without the unlock is ignored by the mat
 **F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
 password `:171` (hidden for Google-only accounts — no email identity, `6e123e8`,
 `:113–117`), link Google `:198`, global sign-out `:186–193`, **delete account**
-`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token
+`:317–345` (type-DELETE confirmation → `POST /api/account/delete` with bearer token
 → goodbye state → sign-out) — **[G]**
 **Migration 044 (2026-08-30) redefined this path — the prior "true, unrecoverable,
 no-archive" invariant below is gone.** A raw `auth.admin.deleteUser` failure used to
 surface as a scary "Failed to delete auth account" error to the user (screenshot-driven
 fix) *after* `user_data` had already been wiped — a request to leave must never come
-back as an infra error. `api/delete-account.js` now (1) stamps `deletion_requested_at`
+back as an infra error. `api/_deleteAccount.js` (`/api/account/delete`) now (1) stamps `deletion_requested_at`
 on the row first — a single-column UPDATE that should never fail, and locking on it is
 enough to honor the request from the user's perspective — then (2) attempts the exact
 same `archiveAndDeleteAccount()` (`api/_accountArchive.js`, factored out of the cron in
@@ -3030,7 +3053,7 @@ distinguishing the two in the tombstone row.
 > fallback to `DEFAULT_SUBSCRIPTION`) and `src/App.jsx`'s goodbye gate
 > (`subscription?.deletionRequestedAt`) still runs before the paywall/dashboard checks.
 > The confirmation text contract (`confirmationText` body field) must still match
-> `api/delete-account`'s server-side check. **IF** identity-gating changes, **THEN**
+> `/api/account/delete`'s server-side check. **IF** identity-gating changes, **THEN**
 > re-walk the Google-only × email-only × linked matrix — the password form must never
 > show where re-auth can't succeed.
 
@@ -3077,8 +3100,8 @@ session goes through checkout again, it opens a genuinely new Stripe customer/su
 > unretryable orphan is exactly this incident again.
 
 **F53 · Subscription card + checkout/portal** — `:206–315`: `handleCheckout:210`
-(→ `/api/stripe-create-checkout`), `handleManageSubscription:241` (→
-`/api/stripe-portal`), status resolution `:269–315` — **[G]**
+(→ `/api/stripe/checkout`), `handleManageSubscription:241` (→
+`/api/stripe/portal`), status resolution `:269–315` — **[G]**
 §17.F surface. Status resolution order is deliberate: raw Stripe `past_due`/`canceled`
 take display precedence over the resolved entitlement, and `getEntitlement` is called
 with **real wall-clock `new Date()`** — never `effectiveToday`/Lock Date (same rule as
@@ -3100,7 +3123,7 @@ the paywall gate; the comment at `:269–277` records it).
 | `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
 | Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
 | Freedom Allowance cap/default | F51 + wizard Wrap Up (§7 F5) + `freedomAllowancePerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
-| `api/delete-account` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
+| `/api/account/delete` / `api/_accountArchive.js` / `cron-subscription-lifecycle.js`'s archive semantics (migration 044) | F52's lock-then-best-effort-archive shape; both callers must share one `archiveAndDeleteAccount()`; `sweepPendingDeletions()`'s no-trial-filter retry query; `src/App.jsx`'s `deletionRequestedAt` goodbye gate; revival flow (T8/T9) now finds BOTH cron- and user-deleted accounts revivable (`deletion_reason` distinguishes them) | `deleteAccount.test.js` + `cronLifecycleDelete.test.js` + revival lookup on a user-deleted email now returns the tombstone (deliberate, not a gap) | D4 |
 | Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
 | `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
 | New admin CRUD sub-view added to `ProfilePanel.jsx` (any `useState`-heavy detail view with a `cancelEdit`/`handleSave` pair closing over a shared `draft` object) | The React Compiler draft-closure crash class (§12.4 case law) + `AdminDetailErrorBoundary` coverage | Add `"use no memo";` as the component's first statement; wrap its `activeSection` render call site in `<AdminDetailErrorBoundary title=... onBack=...>`; verify with a real `vite build` + browser render, **not** `npm run test:run` alone — Vitest cannot see this bug class (`vitest.config.js` omits the compiler plugin) | D1/D5 |
@@ -3534,7 +3557,7 @@ machine instead of a hardcoded bypass.
 | `user_data` column set (any migration) | F67 mapping, F68 both writers + drift badge + `latestPersistedStateRef`, BOOKMARK freshness, CLAUDE.md migration-number note | The F69 new-column checklist; regenerate/append bookmark | D2/D5 |
 | `DEFAULT_CONFIG` shape (`constants/config.js`) | F67's merge (new fields flow to existing rows), snapshot tests, wizard `formData` spread (§7 F2) | `config.test.js.snap` update is *expected* — an unchanged snapshot after adding a field means the merge missed it | D1 |
 | Load-time migration steps (F67) | Idempotency + ordering; `db.test.js` migration cases; the §5 read slice (`extractBaseRateHistory` runs in the same load) | Load a legacy-shaped fixture twice; identical output both times | D2 |
-| `checkRevival`/`revival-lookup` contract | F65 ordering, T8's ReviveScreen inputs, T5 F52's hard-delete invariant (user-deleted emails must NOT be revivable) | Three-signup walk (F71) + user-deleted email returns `revivable: false` | D4 |
+| `checkRevival`/`account/revival-lookup` contract | F65 ordering, T8's ReviveScreen inputs, T5 F52's hard-delete invariant (user-deleted emails must NOT be revivable) | Three-signup walk (F71) + user-deleted email returns `revivable: false` | D4 |
 | Trial seeding (`/api/seed-trial`, migration 021 trigger) | F71 → `getEntitlement` inputs (T9), tester 6-month window semantics (§9), lifecycle cron's skip list | New signup shows 14-day countdown; `is_tester` flip seeds 6-month window once | D1/D4 |
 | Investor code/demo storage | F70 isolation contract + investor exemptions (config-history, cron) | Demo edit writes demo rows only; investor account generates no `account_history` rows | D4 |
 
@@ -3583,7 +3606,7 @@ machine instead of a hardcoded bypass.
 moment SIGNED_IN fires, T7's boot chain (§14 F65) owns the flow.
 
 **Scope:** `LoginScreen.jsx` (570 lines, 6 modes), `ReviveScreen.jsx`,
-`TrialExplainerScreen.jsx`, `api/revival-lookup.js`, and App.jsx's pre-session render
+`TrialExplainerScreen.jsx`, `api/_revivalLookup.js` (`/api/account/revival-lookup`), and App.jsx's pre-session render
 ladder (`:1429–1478`).
 
 ### 15.1 Block 1 — Critical inventory (function by function)
@@ -3665,10 +3688,10 @@ checkbox gates entry into setup, `3fd8896`).
 > fresh trial signups (never life-event re-entries — `wizardEntry === false` is that
 > discriminator, §7 F8's source/tagging depends on the same value).
 
-**F79 · Revival lookup + ReviveScreen contract** — `api/revival-lookup.js` (dual-mode:
+**F79 · Revival lookup + ReviveScreen contract** — `api/_revivalLookup.js` (`/api/account/revival-lookup`) (dual-mode:
 unauthenticated email probe for F73, session-verified probe for T7's `checkRevival`;
 only `revived_at IS NULL` tombstones count); `ReviveScreen.jsx:24–51`
-(`stripe-revive-checkout`, restore only via webhook after a real charge) — **[G]**
+(`/api/stripe/revive-checkout`, restore only via webhook after a real charge) — **[G]**
 **Documented accepted risk:** the unauthenticated path is deliberately an existence
 oracle ("this email had an account deleted for non-payment") — the file's own comment
 owns that trade-off; it returns flags + provider, never archived data.
@@ -3792,8 +3815,9 @@ variant (`:603–609`) clears ReviveScreen only when the restored subscription r
 > without it a revived user lands in setup over their restored data.
 
 **F84 · Stripe server routes** — `_stripeClient.js#resolveAppOrigin:118` (redirects
-derive from the requesting deployment — `1a12dd6`); `stripe-create-checkout` /
-`stripe-portal` / `stripe-revive-checkout` (bearer-token pattern);
+derive from the requesting deployment — `1a12dd6`); `/api/stripe/checkout` /
+`/api/stripe/portal` / `/api/stripe/revive-checkout` (`_stripeCreateCheckout.js` /
+`_stripePortal.js` / `_stripeReviveCheckout.js` behind the F185 router; bearer-token pattern);
 `stripe-webhook.js`: signature verification + **idempotency via
 `stripe_webhook_events`** (migration 018, `:122`), event cases (`:134–181`), and
 `restoreRevivedAccount:42–86` (matches tombstone `revived_at IS NULL`, upserts the
@@ -3840,6 +3864,23 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 > nudge from a resend.dev address lands in spam or looks like phishing. Check:
 > `EMAIL_FROM` set to the verified domain in prod env.
 
+**F185 · API routers — three functions serve eight routes** — `api/admin/[route].js`,
+`api/stripe/[route].js`, `api/account/[route].js`, `vercel.json` `rewrites`,
+`src/test/api/apiRouters.test.js` — 2026-10-29 — **[G]**
+> Vercel Hobby counts one function per non-`_` file under `api/` (cap 12). Each router picks a handler
+> from its map by the dynamic path segment (`req.query.route`) and passes the request through untouched;
+> the handlers live unchanged in `_`-prefixed modules. 12/12 → **7/12**.
+> **IF** a route is added, **THEN** add a `_` module + one map entry in the matching router (not a new
+> file), add it to `apiRouters.test.js`'s dispatch list, and call it at `/api/<group>/<route>`. Take a
+> new slot only for a route needing its own function config (raw body, cron path, long `maxDuration`).
+> **IF** a router's map key or a handler module is renamed, **THEN** update the client callers
+> (`db.js`, `ProfilePanel.jsx`, `App.jsx`, `LoginScreen.jsx`, `UpgradeCard.jsx`, `ReviveScreen.jsx`)
+> and the matching `vercel.json` rewrite in the same commit — the rewrites keep pre-2026-10-29 URLs
+> alive for cached PWA clients, and a stale one 404s silently.
+> **NEVER** move or rewrite `stripe-webhook.js` (`bodyParser: false`; URL registered in Stripe) or
+> `cron-subscription-lifecycle.js` (path registered in `vercel.json` `crons`). Check:
+> `apiRouters.test.js` (dispatch, 404, function list, rewrites) + each handler's own test file.
+
 ### 16.2 Block 2 — Drift trigger map (cross-boundary)
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
@@ -3849,8 +3890,9 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 | Trial/grace timestamps or seeding (`seed-trial`, migration 021 trigger) | F80 phase math, F85 nudge days, T8 explainer, tester 6-month semantics | Fresh signup + tester flip walked through day-7/12/14/21/28 with a clock mock | D1 |
 | Tier bypass semantics (§9) | F81's deliberate tester **non**-bypass vs F86's cron exemption — two halves of one promise; breaking either strands testers (paywall) or deletes them (cron) | Expired tester account: sees paywall, never dunned/deleted | D4 |
 | Webhook event set / Stripe API version | F84 cases + idempotency table + revival restore path | Replay-twice test; Stripe CLI fixture run | D2 |
-| `deleted_accounts` restore blob shape | F84's `restoreRevivedAccount` upsert vs `archiveAndDeleteAccount`'s archive write (F86) — writer and reader of one shape in two files | Archive → revive round-trip restores every field (config/expenses/goals/logs/weekConfirmations/ptoGoal) | D1 |
+| `deleted_accounts` restore blob shape | F84's `restoreRevivedAccount` upsert vs `archiveAndDeleteAccount`'s archive write (F86) — writer and reader of one shape in two files | Archive → revive round-trip restores every field (config/expenses/goals/logs/weekConfirmations/ptoGoal; plus Coach memory via `archived_coach_memory` on a non-payment deletion only — F186) | D1 |
 | Redirect/origin handling | `resolveAppOrigin` candidates; checkout/portal/revive all three routes | Checkout from a preview deployment returns to that deployment | D4 |
+| A route added to / renamed in an `api/<group>/[route].js` map (F185) | Client callers, the `vercel.json` rewrite for its old URL, the function count | `apiRouters.test.js`; on a preview deployment, hit both the new path and the old URL | D4 |
 
 ### 16.3 Block 3 — Gate matrix
 
@@ -4572,6 +4614,10 @@ sensitivity threshold where RLS-only protection is inadequate. Full writeup and 
 > current the same way the migration-number note is, per F109 below). Check: before any field in
 > that class is added, confirm an explicit encryption decision was documented — "column exists,
 > RLS covers it" is not sufficient for this class of data.
+> **Trigger check run 2026-11-03 — `coach_memory` (migration 049, F186):** free text ≤280 chars, below the
+> regulated class, so RLS-only — with regulated identifiers refused before insert by `validateMemory`
+> (SSN-shaped, 9+ digit runs, grouped card numbers) and forbidden in Coach's prompt. Decision recorded in the
+> migration's own header.
 
 **F109 · Migration-folder rules** — `database/migrations/` — **[G]**
 Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
@@ -4841,7 +4887,7 @@ entry).
 > automated test spans both today.
 
 **F123 · Beta Homebase — three tables, three different write postures, don't blur them** —
-`database/migrations/037_add_beta_homebase.sql`, `api/admin-beta-hub.js`, `db.js`,
+`database/migrations/037_add_beta_homebase.sql`, `api/_adminBetaHub.js`, `db.js`,
 `App.jsx`/`ProfilePanel.jsx`/`BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for the
 rubric scores as a source of truth for the tester's own displayed total**
 Introduced with the Beta Tester Homebase (docs/TODO.md §12) — the icon next to the
@@ -4849,7 +4895,7 @@ notification bell, gated `isTrackedBetaTester` (F122's predicate reused as-is, n
 re-derived). Three new tables, three DIFFERENT write postures — conflating any two of them
 is the drift this entry exists to prevent:
 - **`beta_content_items`** (checklist items + suggestion prompts) — admin-write-only via
-  `api/admin-beta-hub.js`'s service-role client (`entity: "content"`). Tester read is a direct
+  `api/_adminBetaHub.js`'s service-role client (`entity: "content"`). Tester read is a direct
   RLS-scoped client select (`published_at IS NOT NULL AND is_tracked_beta_tester(auth.uid())`)
   — no API round trip, same posture `changelog_entries` (F-adjacent, migration 032) already
   established for this exact "read is safe direct, write is admin-only" split.
@@ -4858,7 +4904,7 @@ is the drift this entry exists to prevent:
   SECURITY DEFINER `BEFORE INSERT` trigger re-checking `is_tracked_beta_tester(NEW.user_id)`,
   mirroring migration 031's `check_beta_activity_event_eligibility` pattern exactly — same
   reasoning: RLS alone proves "this row is mine," not "I'm actually a tracked beta tester").
-- **`beta_scores`** — admin-write-only via `api/admin-beta-hub.js` (`entity: "score"`).
+- **`beta_scores`** — admin-write-only via `api/_adminBetaHub.js` (`entity: "score"`).
   **Deliberately NOT auto-computed** — docs/TODO.md §12.L's "scoring stays manual, reviewed by
   a human" decision (Call Attendance in particular has zero in-app data source). `admin_notes`
   on this table must NEVER be selected by a tester-facing query — it's admin's own reasoning,
@@ -4959,7 +5005,7 @@ is the drift this entry exists to prevent:
 
 **F125 · Money Moves (base-user Productivity Hub) — deliberately ISOLATED from the Beta
 Homebase, not a variant of it** — `database/migrations/039_add_base_productivity_hub.sql`,
-`api/admin-beta-hub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
+`api/_adminBetaHub.js`, `db.js`, `App.jsx`/`ProfilePanel.jsx`/`ProductivityHub.jsx`,
 `BetaHomebase.jsx` — **[G] for the icon/content gate, [L] for nothing — there is no
 score/ledger half here, unlike F123**
 Added 2026-08-08 as the base-user counterpart to the Beta Tester Homebase (F123) — same
@@ -4979,9 +5025,9 @@ next time either surface changes:
   own `user_id = auth.uid()` check is the whole gate. `base_feedback_events` is its own table
   rather than a second event_type on `beta_activity_events` (030's pattern) for the same
   reason F123's `beta_scores.admin_notes` rule protects tester-only data: that table
-  specifically feeds `api/admin-beta-report.js`'s scoring aggregation, and mixing non-cohort
+  specifically feeds `api/_adminBetaReport.js`'s scoring aggregation, and mixing non-cohort
   rows in would corrupt its "~40 known testers" scope.
-- **Admin route IS shared — `api/admin-beta-hub.js` grew an `entity: "base_content"` branch**
+- **Admin route IS shared — `api/_adminBetaHub.js` grew an `entity: "base_content"` branch**
   instead of a new file, the opposite call from the tables above. `CONTENT_TABLES` maps
   `content` → `beta_content_items` and `base_content` → `base_content_items`; every handler
   (`handleContentGet`/`Save`/`Delete`) is parametrized on `table` and shared by both. This
@@ -5006,7 +5052,7 @@ next time either surface changes:
   boolean in opposite directions** (`isTrackedTester &&` for the beta icon, `!isTrackedTester
   &&` for the Money Moves icon) — a user is never shown both, and never shown neither.
 > **IF** `base_content_items`'s shape diverges from `beta_content_items`'s (a field added to
-> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/admin-beta-hub.js`
+> one but not the other), **THEN** `CONTENT_TABLES`' shared handlers in `api/_adminBetaHub.js`
 > break silently for whichever entity lacks the field — either add it to both tables or split
 > the handlers, don't patch around a mismatch inline. **IF** a new field is added to
 > `base_content_items`/a new base-only content kind is introduced, **THEN** decide whether
@@ -5023,7 +5069,7 @@ next time either surface changes:
 > flags for its own badge.
 
 **F126 · Content employer-preset targeting — RLS-enforced, not a client-side filter** —
-`database/migrations/040_add_content_employer_targeting.sql`, `api/admin-beta-hub.js`,
+`database/migrations/040_add_content_employer_targeting.sql`, `api/_adminBetaHub.js`,
 `db.js`, `ProfilePanel.jsx` (`ContentAdminDetail`'s DHL checkbox, `UserCommunicationAdminDetail`)
 — **[G] — routes admin content to the right employer's users, drift = wrong/no content shown
 to the wrong/right employer**
@@ -5139,7 +5185,7 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 | `isTrackedBetaTester`'s eligibility condition, again (F123) | Migration 037's `is_tracked_beta_tester(uid)` SQL function AND `check_beta_checklist_completion_eligibility` trigger — third consumer of the same rule | Change JS + SQL function together; non-eligible insert attempt still fails after either-side edit | D4 |
 | A new `beta_content_items`/`beta_scores` field (F123) | Decide tester-visible vs admin-only BEFORE adding it to any tester-facing `fetch...` in `db.js` — `beta_scores.admin_notes` is the existing admin-only precedent | Grep `db.js`'s tester-facing selects for the new column; confirm it's absent unless deliberately exposed | D1 |
-| `beta_content_items` shape changes (column added/renamed, F125) | `api/admin-beta-hub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
+| `beta_content_items` shape changes (column added/renamed, F125) | `api/_adminBetaHub.js`'s shared `handleContentGet`/`Save`/`Delete` also serve `base_content_items` via the same `table` param — a beta-only field change breaks the base path silently unless `base_content_items` gets it too or the handlers split | Exercise both `entity: "content"` and `entity: "base_content"` in `adminBetaHub.test.js` after the change | D1 |
 | `isTrackedBetaTester`'s eligibility condition, again (F125) | `App.jsx`'s Beta Homebase icon (`isTrackedTester &&`) and Money Moves icon (`!isTrackedTester &&`) are two ends of the same boolean — a user must never see both or neither | Toggle a test account's tracked-tester status; confirm exactly one icon renders | D4 |
 | `config.employerPreset`'s storage key/location (F126) | `get_user_employer_preset(uid)`'s `config->>'employerPreset'` extraction — silently returns null (reads as "no targeting") rather than erroring | Publish a DHL-only item; confirm it's still invisible to a non-DHL test account and visible to a DHL one | D1 |
 | `ContentAdminDetail`/`ChangelogAdminDetail`'s list-view BackBar (F127) | Both are now embedded-only (mounted exclusively via `UserCommunicationAdminDetail`) — `embedded` must stay `true` at every call site or a stray back button reappears | Grep `ProfilePanel.jsx` for `<ContentAdminDetail`/`<ChangelogAdminDetail` call sites; confirm all pass `embedded` | D1 |
@@ -5153,8 +5199,8 @@ with no server gate is a D4 finding.
 
 | Gate | Definition | Tier inputs | Client call sites | Server / RLS gate |
 |---|---|---|---|---|
-| **`canAccessAiFeatures`** | `isAdmin \|\| isTester \|\| isInvestor` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor` | `NewJobSeasonHomePanel.jsx` (Job Hunt Assistant + Résumé Review entry points, F124) | Job Hunt/Résumé Review reuse `api/coach.js`'s wider `canAccessAskCoachGeneral` server-side, not this function directly — see F124's "known gap" note; no per-surface server re-check exists yet |
-| **`canAccessAskCoachGeneral`** | `isAdmin \|\| isTester \|\| isInvestor \|\| entitlement.isEntitled` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor`, subscription columns | `App.jsx` (Ask Coach panel + bottom-nav item), `HomePanel.jsx`/`NewJobSeasonHomePanel.jsx` (Net Worth card) | `api/coach.js:93` — re-checks on `userRow.is_admin`/`is_tester`/`is_investor` + server-derived `entitlement` before streaming (the real model gate for every surface that shares this route, Job Hunt/Résumé Review included) |
+| **`canAccessAiFeatures`** | `isAdmin \|\| isTester \|\| isInvestor` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor` | `NewJobSeasonHomePanel.jsx` (Job Hunt Assistant + Résumé Review entry points, F124) | **CLOSED 2026-10-29:** `api/coach.js` now applies this server-side per request `surface` via `src/lib/coachPolicy.js` (`COACH_SURFACES`: job_hunt/resume_review privileged-only; each surface's allowed models; Ask Coach Sonnet only for `ASK_COACH_SONNET_AUDIENCE`; tool list dropped past `MAX_SERVER_TOOL_ROUNDS`). **IF** a Coach surface is added, **THEN** add it to `COACH_SURFACES` and pass `surface` from its `chatWithCoach` call — an unknown surface is a 400. **IF** a surface's model changes, or a model that thinks by default (Sonnet 5+, Haiku 5.5) is added, **THEN** re-measure that surface's `maxTokens` — thinking counts toward it; the flat 1024 cut 1 of 2 production-shaped Résumé reviews off mid-sentence (fixed 2026-10-29: Résumé 4096, Job Hunt/Ask Coach 2048, Net Worth 1024; `coach.test.js` pins all four). **IF** `MODEL_IDS`/`MODEL_EFFORT` in `api/coach.js` change (Haiku 5.5 + Sonnet 5.5 effort `low` since 2026-10-29), **THEN** keep `lib/claude.js` passing `thinking`/`redacted_thinking` blocks back unchanged on tool rounds (`claudeToolLoop.test.js`), never send `temperature`/`top_p`/`top_k`, a prefill, a forced `tool_choice`, or `thinking: {type: "disabled"}` (all 400 on the 5.5 models), and re-run `scripts/coach-eval` (`modelCompare.mjs`, `toolLoopLiveTest.mjs`) before shipping. Older note, kept for history: Job Hunt/Résumé Review reuse `api/coach.js`'s wider `canAccessAskCoachGeneral` server-side, not this function directly — see F124's "known gap" note; no per-surface server re-check exists yet |
+| **`canAccessAskCoachGeneral`** | `isAdmin \|\| isTester \|\| isInvestor \|\| entitlement.isEntitled` (`hasPrivilegedAccess`, 2026-07-25) | `is_admin`, `is_tester`, `is_investor`, subscription columns | `App.jsx` (Ask Coach panel + bottom-nav item; and the `onAskCoach` prop it passes to `HomePanel`/`BudgetPanel`/`IncomePanel`/`LogPanel` — TODO §32 A1/A2 — passed ONLY when this gate is true, so the cards' Ask Coach buttons never render for an account that can't open Coach), `HomePanel.jsx`/`NewJobSeasonHomePanel.jsx` (Net Worth card) | `api/coach.js:93` — re-checks on `userRow.is_admin`/`is_tester`/`is_investor` + server-derived `entitlement` before streaming (the real model gate for every surface that shares this route, Job Hunt/Résumé Review included) |
 | **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` — deliberately no `isInvestor` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
 | **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| isTester \|\| config.isInvestor` (F81, widened 2026-07-25 — was `isAdmin \|\| config.isInvestor` only, testers used to just ride the trial window) | `is_admin`, `is_tester`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
 | **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — SELECT now supplies `is_tester` (DW-7 fixed, F112/F86); field-coverage regression test enforces it stays that way |
@@ -5238,6 +5284,15 @@ epoch arg as HomePanel (F18)**, the exact parity a 2026-07-16 live-test bug viol
 expense cost → `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102, the `bcc8a6a`
 fix); period labels → `payPeriodUnit`/`weekNumToPaycheckNum`/`getPayPeriodBounds` (Spine A,
 schedule-aware — never hardcode "week"); `perCheckFactor` = `52/checksPerYear` scaling.
+> **Coach panel notes + Upkeep Health helper (2026-10-30, TODO §32 A3/A4).** `lib/upkeepHealth.js`
+> (`spendRatioOf`, `upkeepHealthBand`) is now the ONE spend-ratio formula — Home's Upkeep Health tile, this
+> builder and the Upkeep note all call it. `lib/coachNotes.js` templates take the exact value each tile
+> renders (Home: `leftThisWeek * perCheckFactor`, `nextWeekDisplay * perCheckFactor`; Log: App `logTotals`),
+> never a recomputation. **IF** a tile's displayed value or its formula changes, **THEN** change the value
+> passed to its note in the same commit (`coachNotes.test.js`, the panels' `coach-note` tests). **IF** a
+> note template is added, **THEN** it takes the tile's figure as an argument — no finance math inside
+> `coachNotes.js`. The "opened from the X panel" context line (A3) carries no figure and uses
+> `VIEW_LABELS` (F178).
 > **IF** a context line is added or changed, **THEN** it MUST call the authoritative Spine-A
 > function its UI twin calls — writing a local approximation is the D1 pattern §6 exists to
 > catch (the `billingMeta` estimate once disagreed by double digits; the flat-52 double-
@@ -5427,7 +5482,7 @@ resume.pdf" / "Saved — pasted text" / "Not saved") stays live without re-fetch
 > is a *date* or *elapsed time*, **THEN** compute it in the builder (`buildJobHuntContext` emits `Today:` +
 > `N days ago` per application; `ResumeReviewCard` prepends `Today:` — 2026-10-06, found because the model
 > guessed both) and mirror it in `scripts/coach-eval/prompts/resumeReview.js`; never leave the model to infer
-> it. **IF** persistence/retention/summary
+> it (runway days → weeks is computed there too: `runwayWeeksText`). Do NOT relabel "N days ago" to "since applying" — tried 2026-10-08, made the misread worse. **IF** persistence/retention/summary
 > generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
 > entry (or an extension of F146) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
 > and `ask_coach`-only history filter generalize automatically — F146's own IF/THEN already flags
@@ -5658,7 +5713,9 @@ Caught in test, before any live call.
 > never `periodsToFund` (`wN`) — duration and completion move independently for every goal except
 > rank 1, where `sW = 0` makes them coincidentally equal, which is exactly why a rank-1-only test
 > would have passed. **IF** a new field is added to `summarizeGoal`, **THEN** state which of the
-> two it is. Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
+> two it is. **IF** Coach must describe the *size* of a shift, **THEN** it quotes `differenceInWords` /
+> `daysSooner` / `finishDateMoves`, computed in `diffGoals` from the pay schedule — never converts periods itself
+> (2026-10-29: Haiku turned 0.08 weeks into "five days sooner"). Check: `coachTools.test.js`'s "a goal inserted first pushes the existing ones back"
 > and "removing a gain pushes goals back" — both assert `every(periodsSooner < 0)` across BOTH
 > ranks, which is what fails under the `wN` comparison.
 
@@ -5814,6 +5871,11 @@ renders `CoachGoalCard`, and only the user's Confirm calls into `App.jsx`'s
 > entire app — there is no top-level error boundary — while `vite build` and all 1859 unit tests
 > passed. **IF** a callback defined near the other Coach handlers needs a value computed after
 > those early returns, **THEN** it reads a ref assigned during render, never the const.
+> **`draft_log_entry` (2026-10-29) is the second write-shaped tool, same rule:** it returns a draft shaped
+> exactly like LogPanel's `nEv`; App holds it as `coachLogDraft`, LogPanel opens its own add form with it and the
+> user saves through `addLog` (existing eager save). **IF** LogPanel's add-form fields change, **THEN** update
+> `toolDraftLogEntry` in the same PR — a stale field silently drops from the prefill. **IF** a Coach tool ever
+> needs to write directly, **THEN** it goes through the owning panel's handler like these two, never its own write.
 > Check: `coachTools.test.js`'s propose_goal block (projection parity with simulate_new_goal, the
 > no-date branch, duplicate-without-leak, validation), `coachToolUI.test.jsx`'s `CoachGoalCard`
 > block (edits are what get created, re-projection on amount change, single-confirm, read-only),
@@ -5892,6 +5954,7 @@ deleted and `BudgetPanel` already hides.
 
 **F183 · Identity-first Home — hero + collapsed "Your numbers"** — `HomePanel.jsx` (layout gate, `savingsRate`), `IdentityLocked.jsx` (`IdentityHero`, `YourNumbers`) — **[G]+[L]**
 2026-10-06 (TODO §31 Phase 3). Locked: everyone with an identity, numbers collapsed by default, counter over ALL goals, no streaks.
+> **Widened 2026-11-05 (TODO §32 D4):** the collapse now applies to EVERY account — the no-identity "legacy layout, tiles open" branch and the bottom Year-End Outlook slot are gone. The identity gate below now decides only the hero. Check: `HomePanel.test.jsx` "no identity → … still collapse" + the Year-End Outlook case.
 > **Gate [G]:** `config.identity` set → `IdentityHero` replaces the plain banner (tidy mode still takes the slot) and BOTH tile groups (goal-stats grid incl. Left This Week + "Financial Health" title/tiles) render inside `YourNumbers`, collapsed every load (React state, not persisted). No identity → today's layout, tiles open. NJS Home and DemoAccountTree are untouched. The tile JSX exists once (`numbersBlock`) and is either wrapped or returned bare — **IF** someone duplicates it per branch, **THEN** it will drift.
 > **Views, not math [L]:** hero counter = `completedGoals.length` / `goals.length` (the Goals x/y tile's own figures); hero Next = `nextClaim` (the Next Claim Date hero's own goal) formatted by `formatGoalFinishDate`; summary $ = `leftThisWeek * perCheckFactor` (the Left This Week tile value); summary % = the single `savingsRate` const that `pulseNetWorth` now also reads. **IF** any of these tiles changes its formula, **THEN** the summary/hero change with it automatically — never re-derive them in the hero or summary.
 > **A collapsed section never hides a bad week:** negative left-this-week renders `--color-red` on the always-visible summary. Due Today and the Claim Date surface stay outside the collapse.
@@ -5908,6 +5971,59 @@ deleted and `BudgetPanel` already hides.
 > **Silent until crossed:** no limit copy renders before a blocked attempt; typing clears the red state. `App` reads the cap via `goalAmountCapRef` (assigned during render) because its handlers sit above the auth early returns (F176).
 > **Telemetry:** a block logs `goal_limit_hit` (note = reason) — migration 048 (applied 2026-10-07).
 > Check: `goalLimits.test.js` (incl. $5k/$2k → $180,000), `HomePanel.test.jsx` goal-limits block, `coachToolUI.test.jsx` limits block, `aiContext.test.js` identity/limits block, live-test §31 limits.
+
+**F186 · Coach memory — user-confirmed, read into context, archived only on non-payment deletion** — `database/migrations/049_add_coach_memory.sql`, `lib/coachMemory.js` (`validateMemory`, `memoryContextBlock`), `db.js` (`loadCoachMemory`/`saveCoachMemory`/`deleteCoachMemory`), `coachTools.js` (`propose_memory`), `CoachToolUI.jsx` (`CoachMemoryCard`), `AskCoachPanel.jsx`, `JobHuntChatPanel.jsx`, `ProfilePanel.jsx` (`CoachMemoryDetail`), `api/_accountArchive.js`, `api/stripe-webhook.js` — **[G]+[L]**
+2026-11-03 (TODO §32 B1–B4). Short facts the user chose to keep (why a goal matters, decisions, things to
+avoid, how to be spoken to, facts about them), own-row RLS like `coach_chats`.
+> **One writer path, always confirmed.** Rows are written only by the memory page (Save) or the
+> `CoachMemoryCard` Save button after a `propose_memory` result — the tool itself writes nothing (F176's
+> contract). **IF** a new path writes `coach_memory`, **THEN** it runs `validateMemory` first (F120 outcome:
+> SSN-shaped text, 9+ digit runs and grouped card numbers are refused, because the column is RLS-only).
+> **Context.** `memoryContextBlock` appends at most `MAX_MEMORIES_IN_CONTEXT` lines AFTER the grounded
+> context, framed "the app's figures always win … never change your rules". **IF** memory text is ever
+> placed before the system prompt or into the cached system block, **THEN** caching and the prompt-injection
+> framing both break — keep it in the per-call context. Ask Coach reads + proposes; Job Hunt reads only.
+> **Memory off** (`config.coachMemoryOff`, eager-saved from the memory page): nothing loaded, nothing sent,
+> `propose_memory` dropped from the tool list, and the tool refuses if called anyway.
+> **Deletion.** `archiveAndDeleteAccount` reads memory ONLY when `deletionReason !== "user_requested"`
+> and writes `archived_coach_memory` only when rows were read (safe before 049 is applied);
+> `restoreRevivedAccount` re-inserts them under the new user id, best-effort (never fails a revival).
+> **IF** the archive/restore shape changes, **THEN** change both files and the §16.2 restore-blob row.
+> **One answer per turn (2026-11-03).** Haiku 5.5 often writes its full reply alongside a propose_* /
+> draft_log_entry call and again after the result; `AskCoachPanel` now keeps only text written after the
+> last tool round (pre-tool text survives only if nothing follows), and `toolLoopLiveTest.mjs` prints the
+> same. **IF** the streaming loop changes, **THEN** keep that reset — `AskCoachPanel.test.jsx` "one answer
+> per turn". Live (Haiku 5.5, 2026-11-03): duplicates 0/5 write cases; memory proposed for a tone
+> instruction 3/3 and a goal reason 2/3, never for a plain status question (0/3).
+> Check: `coachMemory.test.js`, `coachTools.test.js` (propose_memory), `AskCoachPanel.test.jsx` /
+> `JobHuntChatPanel.test.jsx` (memory blocks), `ProfilePanel.test.jsx` (page), `accountArchiveCoachMemory.test.js`,
+> `stripeWebhook.test.js` (restore).
+> **Home strip (2026-11-04, TODO §32 D3):** `CommandCenterStrips.jsx` `CoachRemembersStrip` shows the 3 newest rows
+> from `loadCoachMemory()` — mounted only when App passes `onOpenCoachMemory` (the `canAccessAskCoachGeneral`
+> gate), skipped entirely when `config.coachMemoryOff`. "See all" → Account's `coachmemory` section via
+> ProfilePanel's one-shot `initialSection`. **IF** the memory gate, the off switch or the section key changes,
+> **THEN** `commandCenterStrips.test.jsx` + the ProfilePanel "entry section" test are the check.
+
+**F187 · Coach routines — Weekly Pre-Game Briefing + Claim Date slip alert** — `CoachBriefingCard.jsx`, `coachPrompts.js` (`WEEKLY_BRIEFING_SYSTEM_PROMPT`), `coachPolicy.js` (`weekly_briefing` surface), `lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, `HomePanel.jsx`, `coachSeeds.js` (`claimSlipCoachSeed`) — **[G]+[L]**
+2026-11-03 (TODO §32 C2/C3). Both run client-side on Home — no cron, no new function (7/12 unchanged).
+> **Briefing (G).** Haiku 5.5, `surface: "weekly_briefing"` (Haiku-only, 2048 tokens), fires once per fiscal
+> week on first Home open, cached in `config.coachBriefing { weekIdx, message, dismissedWeekIdx }` and
+> eager-saved on fire/dismiss — the F24/DW-9 pattern. Gate = `canAccessAskCoachGeneral` at the Home call site,
+> exactly the Net Worth card's. Context = `buildCoachContext` + memory (F186). **IF** the trigger, cache shape
+> or gate changes, **THEN** mirror CoachNetWorthCard and re-run `promptfooconfig.phase6-weekly-briefing.yaml`
+> (via `modelCompare.mjs --only phase6 --candidate-only`). Push delivery is NOT built (needs §8.C PWA push).
+> **Placement (2026-11-04, TODO §32 D2):** the briefing now renders inside Home's top "Today with Coach"
+> section with `CoachAskBar`; the slip alert renders inside the "Needs you" queue (D1, `rankNeedsYou`). Gates
+> unchanged — the section shows only when `canAccessAskCoachGeneral` or `onAskCoach` is truthy. **IF** either
+> gate changes, **THEN** `HomePanel.test.jsx` "Today with Coach" / "Needs you" are the check.
+> **Slip alert (L→G).** Dates come only from `resolveGoalFinishInfo()` (F177) through `tl` order (rank = i+1).
+> Baselines `config.claimDateWatch { [goalId]: { date, target, rank } }`: seeded quietly (debounced
+> `setConfig`, a derived sync — never eager) for new goals AND whenever target or rank changed (the user's
+> own move, not a slip); alert at a slip >= `CLAIM_SLIP_THRESHOLD_DAYS` (14); earlier dates never alert;
+> "Got it" moves the slipped baselines and eager-saves. **IF** `computeClaimDates`/`resolveGoalFinishInfo`
+> output changes shape, **THEN** `claimDateWatch.test.js` + the Home tests are the check.
+> **Net Worth cap (2026-11-03):** `net_worth` maxTokens 1024 → 2048 — Haiku 5.5 thinks up to ~980 tokens
+> before writing, so 1024 risked a cut-off card.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain, converged on `computeNewJobSeasonRunway` +

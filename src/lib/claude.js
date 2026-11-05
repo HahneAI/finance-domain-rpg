@@ -75,12 +75,22 @@ async function* streamTurn(res, collected) {
           partialJson[event.index] = "";
         } else if (cb?.type === "text") {
           blocks[event.index] = { type: "text", text: "" };
+        } else if (cb?.type === "thinking") {
+          // The 5.5 models think by default. A tool round must send the assistant turn back
+          // with its thinking blocks unchanged (signature included), so they are kept here.
+          blocks[event.index] = { type: "thinking", thinking: cb.thinking ?? "", signature: cb.signature ?? "" };
+        } else if (cb?.type === "redacted_thinking") {
+          blocks[event.index] = { ...cb };
         }
       } else if (event.type === "content_block_delta") {
         if (event.delta?.type === "text_delta") {
           const text = event.delta.text;
           if (blocks[event.index]) blocks[event.index].text += text;
           yield text;
+        } else if (event.delta?.type === "thinking_delta") {
+          if (blocks[event.index]) blocks[event.index].thinking += event.delta.thinking ?? "";
+        } else if (event.delta?.type === "signature_delta") {
+          if (blocks[event.index]) blocks[event.index].signature = (blocks[event.index].signature ?? "") + (event.delta.signature ?? "");
         } else if (event.delta?.type === "input_json_delta") {
           partialJson[event.index] = (partialJson[event.index] ?? "") + (event.delta.partial_json ?? "");
         }
@@ -130,7 +140,9 @@ export async function* chatWithCoach(messages, systemPrompt, contextBlock, model
   // prose. Fired as { phase: "start" } before a tool runs and { phase: "result" }
   // after, with the tool's own return value. Never awaited and always wrapped —
   // a throwing listener must not take down the chat turn.
-  const { tools = null, toolData = {}, maxToolRounds = MAX_TOOL_ROUNDS, onToolEvent = null } = options;
+  // `surface` names the Coach feature making the call ("ask_coach" | "net_worth" | "job_hunt" |
+  // "resume_review"); api/coach.js gates and picks the allowed model per surface (lib/coachPolicy.js).
+  const { tools = null, toolData = {}, maxToolRounds = MAX_TOOL_ROUNDS, onToolEvent = null, surface = undefined } = options;
   const emit = (event) => {
     if (!onToolEvent) return;
     try { onToolEvent(event); } catch { /* a UI listener's failure is not the chat's problem */ }
@@ -147,6 +159,7 @@ export async function* chatWithCoach(messages, systemPrompt, contextBlock, model
       systemPrompt,
       contextBlock,
       model,
+      ...(surface ? { surface } : {}),
       ...(offerTools ? { tools } : {}),
     });
 

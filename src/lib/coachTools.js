@@ -23,6 +23,7 @@
 // figure its own way is a parallel formula, which is the app's single most
 // expensive documented failure mode (docs/drift-app-warden.md §12).
 
+import { validateMemory, MEMORY_KINDS } from "./coachMemory.js";
 import {
   computeGoalTimeline,
   computeNetBreakdown,
@@ -38,6 +39,7 @@ import {
   loanWeeklyAmount,
   fmtFullDate,
   isExpenseRemoved,
+  toLocalIso,
 } from "./finance.js";
 import {
   getFiscalWeekNumber,
@@ -47,7 +49,7 @@ import {
   weekNumToPaycheckNum,
 } from "./fiscalWeek.js";
 import { getNextDueDate, getExpenseDisplayAmount, getExpenseDisplaySuffix, normalizeCycle } from "./expense.js";
-import { isNjsBillActive } from "./newJobSeasonRunway.js";
+import { isNjsBillActive, computeNewJobSeasonRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./newJobSeasonRunway.js";
 
 // Every tool that looks up a bill by name resolves its candidate set through
 // this, never through a bare status check. isNjsBillActive alone is not enough:
@@ -165,7 +167,7 @@ export const COACH_TOOLS = [
   {
     name: "propose_goal",
     description:
-      "Offer the user a new goal to add, with a name you write and a target amount. The app renders it as an editable card under your message — they can reword the name, adjust the amount, and confirm; nothing is saved unless they do. Use this when a conversation lands on something they want to become or achieve, rather than telling them to go add it themselves. Name it the way THEY described it, in their words. Call at most once per message.",
+      "Offer the user a new goal to add, with a name you write and a target amount. The app renders it as an editable card under your message — they can reword the name, adjust the amount, and confirm; nothing is saved unless they do. Use this when a conversation lands on something they want to become or achieve, rather than telling them to go add it themselves. Name it the way THEY described it, in their words. Call at most once per message. The card shows the projected finish date and its priority rank — do not state a date or an effect on other goals in your message; the card is the source of those.",
     input_schema: {
       type: "object",
       properties: {
@@ -247,6 +249,48 @@ export const COACH_TOOLS = [
       required: ["type"],
     },
   },
+  {
+    name: "draft_log_entry",
+    description:
+      "Prepare a log entry the user told you about — a missed shift, PTO, a partial shift, a bonus, tips, or other lost income — for them to review and save in the Log panel. Nothing is saved: the app shows a \"Review in Log\" button that opens Log with the form filled in, and the user saves it there. Use it instead of telling them to go log it themselves. Call at most once per message, and say in one line what you drafted.",
+    input_schema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: Object.keys(EVENT_TYPES),
+          description: "Which kind of entry.",
+        },
+        weekOffset: {
+          type: "integer",
+          description: "Which pay week it belongs to. 0 = this one, -1 = last one. Defaults to 0.",
+        },
+        shifts: { type: "integer", description: "Missed shifts, for missed_unpaid / missed_unapproved." },
+        hours: { type: "number", description: "Hours, for pto / pto_unapproved / partial (and missed hours when shifts aren't known)." },
+        amount: { type: "number", description: "Dollars, for bonus / tips_commission / other_loss." },
+        note: { type: "string", description: "Optional short note in the user's words." },
+      },
+      required: ["type"],
+    },
+  },
+  {
+    // TODO §32 B4 (2026-11-03) — Coach's memory is user-confirmed: this only proposes one.
+    name: "propose_memory",
+    description:
+      "Offer to remember something lasting the user just told you, so later conversations can use it: why a goal matters to them, a decision they made, something they want to avoid, how they want you to talk to them, or a fact about them. The app shows it as a card they can save or dismiss; nothing is stored unless they save it, so never say it's saved. Write it in their words, one short sentence. Never a figure the app already tracks (pay, balances, bills, dates) and never an account, card or Social Security number. At most once per message, and only for something that will still matter next month.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          enum: ["goal_why", "decision", "avoid", "instruction", "fact"],
+          description: "goal_why = why a goal matters; decision = a choice they made; avoid = something they don't want; instruction = how they want you to talk to them; fact = something about them.",
+        },
+        body: { type: "string", description: "One short sentence in the user's own words, under 280 characters." },
+      },
+      required: ["kind", "body"],
+    },
+  },
 ];
 
 export const COACH_TOOL_NAMES = COACH_TOOLS.map((t) => t.name);
@@ -271,7 +315,26 @@ export const ASK_COACH_TOOLS = COACH_TOOLS;
 // household numbers (see JOB_HUNT_ADDENDUM in coachPrompts.js). Widening this
 // set means threading the missing props through NewJobSeasonHomePanel first;
 // do that deliberately, not by adding a name to this array.
-export const JOB_HUNT_TOOLS = COACH_TOOLS.filter((t) => t.name === "get_expense_detail");
+// Job Hunt's own what-if (2026-10-29, coach-tuning-handoff §6 item 4): the question that mode
+// actually gets is "what can I cut to stretch my runway?", which the goal simulations can't answer.
+// Kept out of COACH_TOOLS (Ask Coach) — it only makes sense in New Job Season.
+export const RUNWAY_TOOLS = [
+  {
+    name: "simulate_runway_change",
+    description:
+      "Recalculate the user's New Job Season cash runway as if one tracked expense cost a different amount per week (0 = cut it entirely). Answers \"how much longer could I hold out if I cut this?\" Returns current and simulated runway in days plus a ready-made differenceInWords — quote that, never convert days to weeks yourself.",
+    input_schema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "The expense's label, e.g. \"Utilities\". Matched case-insensitively." },
+        newWeeklyCost: { type: "number", description: "The new cost per week in dollars. 0 means cutting it entirely." },
+      },
+      required: ["label", "newWeeklyCost"],
+    },
+  },
+];
+
+export const JOB_HUNT_TOOLS = [...COACH_TOOLS.filter((t) => t.name === "get_expense_detail"), ...RUNWAY_TOOLS];
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 
@@ -360,6 +423,23 @@ function summarizeGoal(g, data) {
   };
 }
 
+// Plain-language size of a simulated shift, computed here so Coach never converts fractional
+// periods itself — live 2026-10-29 Haiku turned 0.08 weeks (about half a day) into "five days
+// sooner". Days per period come from the pay schedule (365 / checks per year).
+function describeShift(periodsSooner, checksPerYear) {
+  if (periodsSooner == null) return { daysSooner: null, differenceInWords: null };
+  const days = periodsSooner * (365 / checksPerYear);
+  const abs = Math.abs(days);
+  const direction = days > 0 ? "sooner" : "later";
+  let words;
+  if (abs < 0.05) words = "no change";
+  else if (abs < 1) words = `less than a day ${direction}`;
+  else if (abs < 1.5) words = `about a day ${direction}`;
+  else if (abs < 10.5) words = `about ${Math.round(abs)} days ${direction}`;
+  else words = `about ${Math.round(abs / 7)} weeks ${direction}`;
+  return { daysSooner: Math.round(days * 10) / 10, differenceInWords: words };
+}
+
 // Pairs each goal's real timeline against its simulated one. `periodsSooner` is
 // positive when the change helps and negative when it hurts, so the model never
 // has to infer direction from two dates.
@@ -373,13 +453,17 @@ function diffGoals(baseTimeline, simTimeline, data) {
     const sooner = current.periodsUntilFinish != null && simulated?.periodsUntilFinish != null
       ? round2(current.periodsUntilFinish - simulated.periodsUntilFinish)
       : null;
+    const checksPerYear = checksPerYearFor(data.config);
     return {
       rank: i + 1,
       targetAmount: round2(g.target),
       current,
       simulated,
       periodsSooner: sooner,
-      payPeriodUnit: payPeriodUnit(checksPerYearFor(data.config), "lower"),
+      ...describeShift(sooner, checksPerYear),
+      // false when both runs land in the same period — the answer is "the date doesn't move".
+      finishDateMoves: simulated ? current.finishPeriodNumber !== simulated.finishPeriodNumber : null,
+      payPeriodUnit: payPeriodUnit(checksPerYear, "lower"),
     };
   });
 }
@@ -925,7 +1009,106 @@ function toolProposeGoal({ label, target, note }, data) {
   };
 }
 
+// Prefill-and-hand-off, decided 2026-09 (coach-tuning-handoff §6 item 1): the draft is shaped
+// exactly like LogPanel's add form (`nEv`), so LogPanel opens it in its own form and the user
+// saves through LogPanel's addLog — the one eager-saving write path. This tool writes nothing.
+const MONEY_TYPES = new Set(["bonus", "tips_commission", "other_loss"]);
+const HOURS_TYPES = new Set(["pto", "pto_unapproved", "partial"]);
+function toolDraftLogEntry({ type, weekOffset = 0, shifts, hours, amount, note }, data) {
+  const { allWeeks = [], currentWeek = null, config = null } = data;
+  if (!EVENT_TYPES[type]) return { error: `Unknown entry type "${type}". Use one of: ${Object.keys(EVENT_TYPES).join(", ")}.` };
+  if (!allWeeks.length || !currentWeek) return { error: "No pay weeks are built for this account yet." };
+  const offset = Number.isInteger(Number(weekOffset)) ? Number(weekOffset) : 0;
+  const week = allWeeks.find((w) => w.idx === currentWeek.idx + offset);
+  if (!week) return { error: `No pay week exists at offset ${offset}.` };
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+  if (MONEY_TYPES.has(type) && !num(amount)) return { error: `A ${EVENT_TYPES[type].label} entry needs a dollar amount — ask the user for it.` };
+  const shiftHours = Number(config?.shiftHours) || 0;
+  const missed = type === "missed_unpaid" || type === "missed_unapproved";
+  const draft = {
+    weekEnd: toLocalIso(week.weekEnd),
+    weekIdx: week.idx,
+    weekRotation: week.rotation ?? "6-Day",
+    type,
+    shiftsLost: missed ? Math.round(num(shifts)) : 0,
+    hoursLost: missed ? (num(hours) || Math.round(num(shifts)) * shiftHours) : (type === "partial" ? num(hours) : 0),
+    ptoHours: type === "pto" || type === "pto_unapproved" ? num(hours) : 0,
+    amount: MONEY_TYPES.has(type) ? num(amount) : 0,
+    note: typeof note === "string" ? note.slice(0, 140) : "",
+  };
+  const labels = periodLabels(week.idx, allWeeks, checksPerYearFor(config));
+  return {
+    ok: true,
+    draft,
+    typeLabel: EVENT_TYPES[type].label,
+    date: labels.date,
+    periodNumber: labels.period,
+    linkLabel: `Review in Log · ${EVENT_TYPES[type].label}`,
+    note_to_model: "Nothing is saved yet. The app shows a Review in Log button; the user checks the form and saves it there. Say in one line what you drafted"
+      + (HOURS_TYPES.has(type) && !num(hours) ? " and that they still need to add the hours." : "."),
+  };
+}
+
+// Same single-change pattern as toolSimulateExpenseChange, but measured through the runway functions
+// the New Job Season panels and buildJobHuntContext use (warden F22/F44) — never a parallel formula.
+function toolSimulateRunwayChange({ label, newWeeklyCost }, data) {
+  const { config = null, expenses = [], today = null, includeBenefits = true } = data;
+  if (!config?.newJobSeasonMode) return { error: "Runway only exists in New Job Season." };
+  const needle = String(label ?? "").trim().toLowerCase();
+  const active = visibleExpenses(data);
+  const target = active.find((e) => (e.label ?? "").trim().toLowerCase() === needle)
+    ?? active.find((e) => (e.label ?? "").trim().toLowerCase().includes(needle));
+  if (!target) return { error: `No tracked expense matching "${label}".`, availableLabels: active.map((e) => e.label ?? "Unnamed") };
+  const next = Number(newWeeklyCost);
+  if (!Number.isFinite(next) || next < 0) return { error: "newWeeklyCost must be a number of dollars, 0 or more." };
+  const runway = (exps) => {
+    const dash = computeNewJobSeasonRunway({ config, expenses: exps, effectiveToday: today, extraCash: sumJobHuntIncome(config) });
+    return dash ? { days: resolvePrimaryRunwayDays(dash, config, includeBenefits), weeklyBurn: dash.weeklyBurn } : null;
+  };
+  const simExpenses = expenses.map((e) => (e === target
+    ? { ...e, monthlyOverrides: undefined, history: [{ effectiveFrom: "1970-01-01", weekly: [next, next, next, next] }] }
+    : e));
+  const cur = runway(expenses);
+  const sim = runway(simExpenses);
+  if (!cur || !sim) return { error: "No runway could be computed for this account." };
+  const gained = cur.days != null && sim.days != null ? sim.days - cur.days : null;
+  const abs = Math.abs(gained ?? 0);
+  const words = gained == null ? "runway becomes open-ended"
+    : abs < 0.5 ? "no real change"
+    : abs < 10.5 ? `about ${Math.round(abs)} ${Math.round(abs) === 1 ? "day" : "days"} ${gained > 0 ? "more" : "less"} runway`
+    : `about ${Math.round(abs / 7)} ${Math.round(abs / 7) === 1 ? "week" : "weeks"} ${gained > 0 ? "more" : "less"} runway`;
+  return {
+    simulated: `${target.label ?? "Unnamed"} at ${next === 0 ? "$0/wk (cut)" : `$${next}/wk`}`,
+    expenseLabel: target.label ?? "Unnamed",
+    currentWeeklyBurn: round2(cur.weeklyBurn),
+    simulatedWeeklyBurn: round2(sim.weeklyBurn),
+    currentRunwayDays: cur.days != null ? Math.round(cur.days) : null,
+    simulatedRunwayDays: sim.days != null ? Math.round(sim.days) : null,
+    differenceInWords: words,
+  };
+}
+
+// TODO §32 B4 — propose a memory. Validates with the same rules the memory page uses (length,
+// regulated identifiers) and refuses when the user turned memory off. Writes nothing.
+function toolProposeMemory({ kind, body }, data) {
+  if (data?.memoryOff) return { error: "The user has turned Coach memory off. Don't offer to remember things." };
+  const problem = validateMemory({ kind, body });
+  if (problem) return { error: problem };
+  const text = String(body).trim();
+  const duplicate = (data?.memories ?? []).some((m) => String(m.body ?? "").trim().toLowerCase() === text.toLowerCase());
+  if (duplicate) return { error: "The user already has that saved. Don't propose it again." };
+  return {
+    ok: true,
+    proposal: { kind, body: text },
+    kindLabel: MEMORY_KINDS[kind],
+    note_to_model: "Shown as a card with a Save button. Nothing is stored until they tap it, so say they can save it — never that it's saved.",
+  };
+}
+
 const HANDLERS = {
+  propose_memory: toolProposeMemory,
+  simulate_runway_change: toolSimulateRunwayChange,
+  draft_log_entry: toolDraftLogEntry,
   navigate_to: toolNavigateTo,
   propose_goal: toolProposeGoal,
   get_goal_detail: toolGetGoalDetail,

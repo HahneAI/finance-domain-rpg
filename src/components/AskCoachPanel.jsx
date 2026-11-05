@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable } from "./ui.jsx";
+import { panelStartersFor } from "../lib/coachPanelStarters.js";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { ASK_COACH_TOOLS, executeCoachTool } from "../lib/coachTools.js";
-import { CoachNavChip, CoachToolActivity, CoachGoalCard } from "./CoachToolUI.jsx";
+import { CoachNavChip, CoachToolActivity, CoachGoalCard, CoachSimulationStrip, CoachLogDraftChip, CoachMemoryCard } from "./CoachToolUI.jsx";
 import { ASK_COACH_SYSTEM_PROMPT, COACH_CHAT_SUMMARY_PROMPT } from "../lib/coachPrompts.js";
-import { loadCoachChats, saveCoachChat, deleteCoachChat } from "../lib/db.js";
+import { chooseCoachModel } from "../lib/coachPolicy.js";
+import { loadCoachChats, saveCoachChat, deleteCoachChat, loadCoachMemory, saveCoachMemory } from "../lib/db.js";
+import { memoryContextBlock } from "../lib/coachMemory.js";
 import coachAvatar from "../assets/coach-avatar-color.png";
 import coachLineartMono from "../assets/coach-avatar-lineart-mono.png";
 import { CoachMonocleIcon } from "./CoachMonocleIcon.jsx";
@@ -104,8 +107,23 @@ export function AskCoachPanel({
   // disabled rather than hiding it, so a missing handler is visible in
   // development instead of silently swallowing a confirm.
   onCreateGoal = null,
+  // Opens Log with a draft_log_entry result filled into its own add form. Absent = chip disabled.
+  onDraftLog = null,
+  // "Ask Coach about this" (TODO §32 A1): { id, text } from a card's Ask Coach button. Starts a
+  // fresh chat with that question once per id, then onSeedConsumed lets App drop it.
+  seedPrompt = null,
+  onSeedConsumed = null,
+  // Panel-aware Coach (TODO §32 A3): the view Coach was opened from (App's key) and the name users
+  // see for it (VIEW_LABELS — "Upkeep", never "budget"). Drives the empty chat's intro + starters
+  // and one context line, so "this" in a question has a referent. No figures ride on it.
+  originView = null,
+  originLabel = null,
   readOnly = false,
   isExiting = false,
+  // Admin/tester/investor/AI-admin. Decides whether a turn that needs range (what-if, decision,
+  // goal-setting) is routed to Sonnet — lib/coachPolicy.js ASK_COACH_SONNET_AUDIENCE. The server
+  // re-checks this independently; this only stops the browser asking for what it won't get.
+  privileged = false,
   config,
   expenses = [],
   goals = [],
@@ -126,6 +144,7 @@ export function AskCoachPanel({
   prevWeekNet = null,
   allWeeks = [],
 }) {
+  const originStarters = panelStartersFor(originView);
   const [view, setView] = useState("chat"); // "chat" | "history"
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -143,6 +162,27 @@ export function AskCoachPanel({
   // plain text, so a resumed conversation shows the words without a stale,
   // unconfirmed card whose numbers may no longer be true.
   const [goalDrafts, setGoalDrafts] = useState({});
+  // simulate_* results, same live-turn-only keying — rendered as CoachSimulationStrip so the tool's
+  // own dates sit under Coach's words (2026-10-29).
+  const [simStrips, setSimStrips] = useState({});
+  const [logDrafts, setLogDrafts] = useState({});
+  // Coach memory (TODO §32 B, migration 049). Loaded once per open; off when the user switched it off
+  // on the memory page (config.coachMemoryOff) — then nothing is loaded, sent or proposed.
+  const memoryOff = config?.coachMemoryOff === true;
+  const [memories, setMemories] = useState([]);
+  const [memoryDrafts, setMemoryDrafts] = useState({});
+  useEffect(() => {
+    if (memoryOff) return;
+    let cancelled = false;
+    loadCoachMemory().then((rows) => { if (!cancelled) setMemories(rows); });
+    return () => { cancelled = true; };
+  }, [memoryOff]);
+  const handleSaveMemory = async (proposal) => {
+    if (readOnly) return false;
+    const row = await saveCoachMemory({ ...proposal, source: "coach" });
+    if (row) setMemories((prev) => [row, ...prev]);
+    return Boolean(row);
+  };
   const [historyChats, setHistoryChats] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const listEndRef = useRef(null);
@@ -171,7 +211,7 @@ export function AskCoachPanel({
   // underneath the fixed composer with its confirm button unclickable.
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, navChips, goalDrafts, activeTool]);
+  }, [messages, navChips, goalDrafts, simStrips, logDrafts, memoryDrafts, activeTool]);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,7 +268,7 @@ export function AskCoachPanel({
         { role: "user", content: "Summarize this conversation for the saved chat history entry." },
       ];
       let summary = "";
-      for await (const chunk of chatWithCoach(summaryMessages, COACH_CHAT_SUMMARY_PROMPT, null, "haiku")) {
+      for await (const chunk of chatWithCoach(summaryMessages, COACH_CHAT_SUMMARY_PROMPT, null, "haiku", { surface: "ask_coach" })) {
         summary += chunk;
       }
       if (summary.trim()) {
@@ -256,6 +296,9 @@ export function AskCoachPanel({
     // decorate index 3 of the new one.
     setNavChips({});
     setGoalDrafts({});
+    setSimStrips({});
+    setLogDrafts({});
+    setMemoryDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -277,6 +320,9 @@ export function AskCoachPanel({
     // so it starts with no chips rather than inheriting the live turn's.
     setNavChips({});
     setGoalDrafts({});
+    setSimStrips({});
+    setLogDrafts({});
+    setMemoryDrafts({});
     setDraft("");
     setErrored(false);
     setView("chat");
@@ -294,13 +340,15 @@ export function AskCoachPanel({
     onClose();
   }
 
-  const send = async () => {
-    const text = draft.trim();
+  // `textOverride`/`baseMessages` are for a seeded question (below): it starts a fresh chat, so it
+  // sends against an empty history instead of this render's `messages`.
+  const send = async (textOverride = null, baseMessages = messages) => {
+    const text = (textOverride ?? draft).trim();
     if (!text || sending) return;
     setDraft("");
     setErrored(false);
     const userMsg = { role: "user", content: text, timestamp: new Date().toISOString() };
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [...baseMessages, userMsg];
     setMessages([...nextMessages, { role: "assistant", content: "" }]);
     setSending(true);
     try {
@@ -312,7 +360,8 @@ export function AskCoachPanel({
         // on demand instead of every call carrying it. CoachNetWorthCard has no
         // tools and deliberately leaves this false.
         detailAvailableViaTools: true,
-      });
+      }) + (originLabel ? `\nThe user opened Coach from the ${originLabel} panel; "this" or "here" in their question means that panel.` : "")
+        + memoryContextBlock(memories, { memoryOff });
       const apiMessages = nextMessages.map(({ role, content }) => ({ role, content }));
       // Drill-down tools (lib/coachTools.js) run in the browser against this
       // exact prop bag — the same one buildCoachContext() reads above, so a
@@ -323,6 +372,7 @@ export function AskCoachPanel({
       const toolData = {
         config, goals, expenses, logs, currentWeek, today, allWeeks, futureWeeks,
         timelineWeekNets, logNetLost, logNetGained, futureEventDeductions,
+        memories, memoryOff,
       };
       let accumulated = "";
       // The assistant bubble this turn is writing into — chips attach to it.
@@ -350,11 +400,26 @@ export function AskCoachPanel({
         if (event.name === "propose_goal" && event.result?.ok) {
           setGoalDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
         }
+        if (event.name === "propose_memory" && event.result?.ok) {
+          setMemoryDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
+        if (event.name === "draft_log_entry" && event.result?.ok) {
+          setLogDrafts((prev) => ({ ...prev, [assistantIdx]: event.result }));
+        }
+        if (event.name?.startsWith("simulate_") && !event.result?.error) {
+          setSimStrips((prev) => ({ ...prev, [assistantIdx]: [...(prev[assistantIdx] ?? []), { name: event.name, result: event.result }] }));
+        }
       };
-      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku", { tools: ASK_COACH_TOOLS, toolData, onToolEvent })) {
+      const turnModel = chooseCoachModel(apiMessages[apiMessages.length - 1]?.content, { privileged });
+      for await (const chunk of chatWithCoach(apiMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, turnModel, { tools: memoryOff ? ASK_COACH_TOOLS.filter((t) => t.name !== "propose_memory") : ASK_COACH_TOOLS, toolData, onToolEvent, surface: "ask_coach" })) {
         if (toolRoundOpen) {
           toolRoundOpen = false;
           setActiveTool(null);
+          // Text written after a tool round is the answer; anything Coach wrote before the tool call
+          // is dropped, so the bubble never shows the same answer twice (Haiku 5.5 often writes the
+          // full reply alongside a propose_* call, then again after the result — 2026-11-03). If
+          // nothing follows the tool, the earlier text simply stays.
+          accumulated = "";
         }
         accumulated += chunk;
         setMessages([...nextMessages, { role: "assistant", content: accumulated }]);
@@ -371,6 +436,19 @@ export function AskCoachPanel({
       setActiveTool(null);
     }
   };
+
+  // A card's "Ask Coach about this" question (TODO §32 A1): handled once per seed id — a fresh chat
+  // (the previous one is closed out first, so its summary still runs), the question sent as the
+  // user's own first message, then the seed is handed back so a later reopen doesn't resend it.
+  const handledSeedRef = useRef(null);
+  useEffect(() => {
+    if (!seedPrompt || handledSeedRef.current === seedPrompt.id) return;
+    handledSeedRef.current = seedPrompt.id;
+    if (messagesRef.current.length) endCurrentSession();
+    resetToNewChat();
+    send(seedPrompt.text, []);
+    onSeedConsumed?.();
+  }, [seedPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-projects an edited target through the REAL goal timeline, locally — the
   // same executeCoachTool the chat loop uses, so the card's date can never
@@ -507,8 +585,22 @@ export function AskCoachPanel({
           <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
             {messages.length === 0 && (
               <EmptyStateArt>
-                Ask me anything about how Authority Finance works — your setup, a metric, a panel, or how to log something.
+                {originStarters?.intro ?? "Ask me anything about how Authority Finance works — your setup, a metric, a panel, or how to log something."}
               </EmptyStateArt>
+            )}
+            {messages.length === 0 && originStarters && (
+              <div data-testid="coach-starters" style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "stretch" }}>
+                {originStarters.starters.map((q) => (
+                  <Pressable
+                    key={q}
+                    onClick={() => send(q)}
+                    className="text-sm"
+                    style={{ textAlign: "left", padding: "10px 14px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", color: "var(--color-text-primary)", cursor: "pointer" }}
+                  >
+                    {q}
+                  </Pressable>
+                ))}
+              </div>
             )}
             {messages.map((m, i) => (
               <div
@@ -579,6 +671,15 @@ export function AskCoachPanel({
                   {m.role === "assistant" && activeTool && sending && i === messages.length - 1 && (
                     <CoachToolActivity toolName={activeTool} />
                   )}
+                  {m.role === "assistant" && simStrips[i]?.map((s, k) => (
+                    <CoachSimulationStrip key={k} name={s.name} result={s.result} />
+                  ))}
+                  {m.role === "assistant" && memoryDrafts[i] && (
+                    <CoachMemoryCard result={memoryDrafts[i]} onSave={handleSaveMemory} readOnly={readOnly} />
+                  )}
+                  {m.role === "assistant" && logDrafts[i] && (
+                    <CoachLogDraftChip result={logDrafts[i]} onDraftLog={onDraftLog} readOnly={readOnly} />
+                  )}
                   {m.role === "assistant" && navChips[i] && (
                     <CoachNavChip chip={navChips[i]} onNavigate={onNavigate} />
                   )}
@@ -631,7 +732,7 @@ export function AskCoachPanel({
               }}
             />
             <Pressable
-              onClick={send}
+              onClick={() => send()}
               disabled={!draft.trim() || sending}
               className="text-xs" style={{
                 background: draft.trim() && !sending ? "var(--color-accent-primary)" : "var(--color-bg-raised)",

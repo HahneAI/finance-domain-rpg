@@ -17,6 +17,7 @@
 | 1 | 21 | Missing "Quarterly" Billing Cycle — Expense Editor Gap | 6 | 0 |
 | 1 | 27 | New Job Season — Job Hunt Operating System (rules-based V1 + 9 Coach-root seams) | 43 | 0 |
 | 1 | 31 | Goal Archetypes — Identity-Based Starter Goal Templates | 0 | 1 + 20 $ |
+| 1 | 32 | AI-First Coach — Woven Into the App → Memory → Routines → Command Center | 17 | 0 |
 | 2 | 2 | AI Layer — Coach + Contextual Intelligence | 80 | 56 |
 | 2 | 1 | Life Events Feature | 43 | 1 |
 | 2 | 3 | Master Timeline — Config History & Point-in-Time Computation Integrity | 19 | 4 |
@@ -478,7 +479,7 @@ not stored; only the user's corrections persist (`config.cashOnHandCreditCorrect
 - [ ] `docs/account-reference.json` `computed_expectations`/`ui_assertions` for the new card.
 - [x] Add a scenario to `scripts/live-test/run.mjs` for the card + check-in step.
 
-### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **applied** (production through 048 confirmed 2026-10-07); still unchecked until Anthony verifies the feature)*
+### F. Cyborg Resource snapshot — data passing to the Cyborg app *(added 2026-10-04; built 2026-10-04 — migration 047 **applied** (confirmed 2026-10-07); still unchecked until Anthony verifies the feature)*
 
 *Decided 2026-10-04 in a side-by-side session with the Cyborg repo (its `docs/resource-track-source.md`
 §5a, TODO §55-0). Cyborg's Resource track shows figures that only this app computes. Rather than Cyborg
@@ -1003,7 +1004,7 @@ reaches all three, but watch beta feedback for "where did my numbers go."
 - [$] **31.12** Migration **048** (verify number) widening the beta event check constraint + new event types.
 - [$] **31.13** Coach context line for archetype (§6/§24).
 
-**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **applied to production 2026-10-07**, so the new events now record) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
+**Phase 4 BUILT 2026-10-06 (`[$]`):** migration **048** (`048_beta_events_identity_and_goal_limits.sql`, additive CHECK widen — **applied to production 2026-10-07** (first attempt was in the wrong Supabase project; the file now guards that with a clear error), so the new events record) + `logBetaEvent` gained an optional `note`; events fired: `archetype_selected` (note = archetype id), `suggestion_accepted`/`suggestion_dismissed` (note = templateKey), `goal_limit_hit` (note = count|amount). Coach context gained a "Chosen identity" line (name + hook only, F114) and a "Goal limits" line from the same `lib/goalLimits.js` check the UI enforces.
 
 **Goal limits (added 2026-10-06, Anthony's spec) `[$]`:**
 - [$] **31.14** Max **6 active goals**; total active goal $ ≤ **(monthly take-home − monthly Needs incl. loans) × 60** (Lifestyle ignored). Monthly take-home = App `weeklyIncome` × 52/12; Needs = `computeNeedsSetAsidePerCheck().weeklyNeeds` × 52/12. No cap when income is 0 or surplus ≤ 0.
@@ -1027,6 +1028,151 @@ parity **[L]+[G]** *(written 2026-10-06)*; **F182** "suggestions live outside `e
 ---
 
 # TIER 2 — ACTIVE WORKSTREAMS (partly built; open items remain)
+
+---
+
+## 32. AI-First Coach — Woven Into the App → Memory → Routines → Command Center *(new — scoped 2026-10-29, nothing built)*
+
+*Origin: the Eden-style "AI underneath everything" direction (2026-10-29 chat). Order agreed: weave Coach into
+the panels that exist (A), give it memory (B), let it run on a schedule (C), and only then build a command-center
+hub (D). Boards are out of scope. Base model is Claude Haiku 5.5; Claude Sonnet 5.5 (effort "low") handles the
+heavier turns (`api/coach.js`, `src/lib/coachPolicy.js`; switch made 2026-10-29). Each item lists the Drift
+Warden entries to read BEFORE building it — a change counts as done only after those checks pass.*
+
+**Standing prerequisites for every item in this section**
+- Grounding rule: every figure Coach states resolves through the function the UI uses (`active-systems.md` §6/§24; warden F113). Nothing computed in a prompt.
+- Tool-driven UI only (F174): chips, cards and strips render from a tool result, never parsed prose.
+- Goal privacy (F114): goals are referenced by rank, never by name, in anything sent to the model.
+- Eager-save rule + `readOnly` shadowing for every new Save/Confirm handler (CLAUDE.md "Persistence").
+- Design tokens + `.text-*` scale; `textUtilityClassAudit.test.js` stays green (warden §22).
+- Re-run `scripts/coach-eval` (`modelCompare.mjs` + `toolLoopLiveTest.mjs`) after any prompt or tool change.
+
+### A. Coach woven into the existing UI (no new server route)
+- [ ] **A1 · "Ask Coach about this" on goal cards and expense rows** (first two surfaces). **BUILT 2026-10-30 —
+  awaiting Anthony's review + a live check:** ASK COACH on both Home goal-card copies, "Ask Coach about this"
+  in Upkeep's expense sheet (double-tap a row; kept off the row itself, which carries drag handlers), one-shot
+  seed → fresh chat (`coachSeeds.js`, `AskCoachPanel` `seedPrompt`/`onSeedConsumed`, App `openCoachAbout`). Opens Ask Coach with
+  that item preloaded as the first turn's focus (goal by rank, expense by label).
+  Warden first: F174 (chip/focus refs, `data-coach-ref`), F177 (goal card body is duplicated mobile/desktop —
+  edit as a pair), F114 (rank only), F178 (`PANEL_VIEW_KEYS` + `navigate_to` enum are one unit), the
+  `canAccessAskCoachGeneral` gate row (entry points must hide for non-entitled accounts).
+- [ ] **A2 · Same entry on paycheck weeks (Income) and log entries (Log).** **BUILT 2026-11-03 — awaiting review:**
+  an ASK pill in each active row of Income's weekly table (not the Full Detail modal — Coach would open over it;
+  stops the tap reaching the admin week inspector) and an ASK button beside EDIT on each Log entry. Questions name
+  the row's own week-end date (`paycheckCoachSeed`, `logEntryCoachSeed`). Warden first: §9 Income map
+  (week-row identity vs `get_week_breakdown`'s `weekOffset`), §13 Log map, F176 (`draft_log_entry` field parity).
+- [ ] **A3 · Panel-aware Coach** — opening Coach from a panel starts that panel's conversation (context line +
+  starter prompts). **BUILT 2026-10-30 — awaiting review + live check:** App passes `originView` +
+  `originLabel` (`VIEW_LABELS`); empty chat shows that panel's intro + 3 tap-to-ask starters
+  (`lib/coachPanelStarters.js`, worded like the tool-loop eval cases); one context line names the panel. Warden first: F113 (a new context line must match its UI tile), F178 (labels via `VIEW_LABELS`).
+- [ ] **A4 · One-line Coach notes per panel — FIXED TEMPLATES (decided 2026-10-30).** **BUILT 2026-10-30 for
+  Home, Upkeep and Log — awaiting review:** `lib/coachNotes.js` + `CoachNote.jsx`; new `lib/upkeepHealth.js`
+  makes Upkeep Health one formula (Home tile, Coach context, Upkeep note). Income and Account have no note
+  yet — their headline figures (yearly gross/net, settings) don't make a useful one-liner; revisit. No model call: each
+  note is a Coach-voiced template filled from the panel's own figures (zero cost, instant, deterministic).
+  Each template's numbers come from the same function the tile beside it uses — never a parallel formula.
+  Warden first: F113 (template figure = tile figure), F178 (panel names), F177 (Home dates only from
+  `resolveGoalFinishInfo()`), design system §22 (`.text-*` scale).
+- [ ] **A5 · Haiku 5.5 voice — DEFERRED (decided 2026-10-30).** The Metaphor target stays at 3 (no re-lock).
+  Natural output on Haiku 5.5 sits at ~1–2; two rule-wording nudges moved nothing. Revisit later with prompt
+  patterning (worked example replies that carry the voice) rather than more rules. Not a blocker for A1–A4.
+  Read first: rubric "Claude Haiku 5.5 baseline" + "Locked Targets".
+
+### B. Coach memory
+- [ ] **B1 · `coach_memory` table** **BUILT 2026-11-03 — migration 049 WRITTEN, NOT APPLIED** (decisions,
+  Anthony 2026-11-03: archived with the account on a non-payment deletion and restored on revival, dropped for
+  good on a user-requested deletion; F120 check run → RLS-only with regulated identifiers refused; warden F186).  — short user-confirmed facts (why each goal matters, decisions, things to
+  avoid, the user's own instructions). Migration **049** (verify the next number with the CLAUDE.md
+  collision check), `user_id references user_data(user_id) on delete cascade` like `coach_chats` (023), RLS own-row
+  only (migration 019 pattern). Warden first: F120 (encryption trigger — memory is free text about money and life;
+  run the sensitive-data check before shipping), §16.2 "`deleted_accounts` restore blob shape" row (decide whether
+  memory is archived on deletion or dropped — and say so in the privacy copy), F146 (retention pattern to mirror).
+- [ ] **B2 · "What Coach knows about me" page** **BUILT 2026-11-03:**  (Account panel) — view, edit, delete each memory; global
+  memory-off switch. Warden first: §12 Account map, eager-save rule, `readOnly` shadow.
+- [ ] **B3 · Memory into context** **BUILT 2026-11-03 (Ask Coach + Job Hunt):**  — a capped memory block in `buildCoachContext()` + `buildJobHuntContext()`.
+  Warden first: F113/F114 (no goal names; memory text must not smuggle them back in), prompt-cache prefix order
+  (memory goes after the frozen system prompt).
+- [ ] **B4 · Coach proposes a memory, user confirms** **BUILT 2026-11-03 (`propose_memory` + `CoachMemoryCard`):**  — a write-shaped tool on the `propose_goal` pattern
+  (card + Confirm, never a silent write). Warden first: F176 (write-shaped tool contract), F174.
+
+### C. Routines (scheduled Coach)
+- [ ] **C1 · Merge `claude/api-consolidation` first** — **DONE upstream (PR #765, 2026-10-30); preview check still Anthony's.** (12/12 → 7/12 functions) and verify on a preview
+  deployment: one route per router + one old URL. Warden first: F185 (on that branch — router rules; never move
+  `stripe-webhook.js` or the cron path).
+- [ ] **C2 · Weekly Pre-Game Briefing** — **BUILT 2026-11-03, awaiting review:** client-side on Home (no cron/slot
+  needed), once per fiscal week, Haiku 5.5 `weekly_briefing` surface, cached in `config.coachBriefing`, memory-aware;
+  live 6/6 three sentences, figures as written (warden F187). Push delivery still needs §8.C. (§8.A spec; fixture already built in `scripts/coach-eval`). Prefer folding
+  into the existing daily cron over a new slot. Warden first: F86 (cron shell: SELECT must cover every field the
+  job reads — DW-7 class), lifecycle exemption row, F87 (email disclosure rule if it emails), the per-surface
+  `maxTokens` IF/THEN in the `canAccessAiFeatures` gate row (a new surface needs a cap sized for thinking).
+- [ ] **C3 · Goal-date drift alert** — **BUILT 2026-11-03, awaiting review:** fixed-template alert on Home when a
+  Claim Date slips 14+ days past the last acknowledged date (target/rank changes re-baseline quietly); Got it +
+  Ask Coach why (`lib/claimDateWatch.js`, `ClaimDateSlipAlert.jsx`, warden F187). — fires when a goal's Claim Date slips past a threshold. Warden first: F177
+  (dates only from `resolveGoalFinishInfo()`), F18 (`computeGoalTimeline` epoch parity), F24 throttle pattern.
+
+### D. Command center hub — APPROVED 2026-11-04
+
+**Decisions (Anthony, 2026-11-04):** Home becomes the command center (no new tab) · tab label stays **Home** ·
+the ask bar sends the question straight into the chat · accounts without Coach see the non-AI parts only (no
+upgrade card in Coach's slot).
+
+**Shape (recommended): Home *becomes* the command center** — no sixth tab (the mobile bottom nav already holds
+Home · Income · Upkeep · Log · Account + Coach), no new server function, no migration. Home already carries most
+of the pieces A–C built (Claim Date hero, Coach note, slip alert, briefing, Net Worth card, collapsed "Your
+numbers"); today they sit as a loose stack. D turns that stack into one Coach-first page, top to bottom:
+
+1. **Today with Coach** — the week's briefing (C2) plus an **inline ask bar** ("Ask Coach anything…") that opens
+   the chat with the question already sent (same one-shot seed as A1). The AI is the first thing on the page,
+   not a tab you go find.
+2. **Needs you** — ONE ranked queue replacing the scattered cards: Net Worth Red/Amber (F24) → bills due today
+   (§20.C) → Claim Date slips (C3) → unconfirmed week check-in → identity bill suggestions (F182) → a Green
+   recovery note last. Each card: one line + one action. Ranking is a pure function (`lib/commandCenter.js`)
+   so the order is tested, not eyeballed. Empty queue = one calm line, not a blank gap.
+3. **Claim Dates** — the existing hero + goal cards, unchanged (F177: dates only from `resolveGoalFinishInfo()`).
+4. **Coach remembers** — a slim strip showing 2–3 saved memories in the user's words + "See all" (F186), so the
+   user can see Coach actually knows them. Hidden when memory is off or empty.
+5. **Around the app** — the A4 panel notes for Upkeep and Log condensed into tappable one-liners that open their
+   panel (Income/Account join when they get notes).
+6. **Your numbers** — the existing tiles, collapsed by default (F183's identity-first layout, extended to
+   everyone).
+
+**Build order** (each step shippable on its own):
+- [ ] **D1 · `lib/commandCenter.js` + "Needs you" queue** — **BUILT 2026-11-04, awaiting review.** `rankNeedsYou()`
+  orders Net Worth Red/Amber → bills due today → Claim Date slips → Net Worth Green; the Net Worth card moved
+  up from the bottom of Home into the queue; empty queue shows "Nothing needs you right now." The tier comes
+  from the shared `netWorthRunwayDays()` + `resolveNetWorthSignalTier()` (F24) — same as the card.
+  **Not yet in the queue:** unconfirmed week check-in and identity bill suggestions (F182) — neither is on Home
+  today; they join when they get a Home card. Warden consulted: F24, F187, §20.C, F182, F183.
+- [ ] **D2 · "Today with Coach" + inline ask bar** — **BUILT 2026-11-04, awaiting review.** New top section
+  on Home: this week's briefing (C2, gate unchanged) + `CoachAskBar` ("Ask Coach anything…"), which hands the
+  question to `openCoachAbout` — the same one-shot seed as A1 — so it opens the chat already sent. "Needs you"
+  moved up right under it, so the page now reads Today with Coach → Needs you → Claim Dates. Accounts without
+  Coach get no Coach section at all. Warden consulted: F187, F111 gate row, F177 (Claim Dates untouched).
+- [ ] **D3 · "Coach remembers" + "Around the app" strips** — **BUILT 2026-11-04, awaiting review.**
+  `CommandCenterStrips.jsx`. *Coach remembers*: the 3 newest memories in the user's words + "See all (n)", which
+  opens Account straight on "What Coach knows" (one-shot `initialSection`); Coach accounts only, hidden when
+  memory is off or empty (so it stays hidden until migration 049 is applied). *Around the app*: the Upkeep and Log
+  notes (A4) as tappable one-liners that open those panels, built from the same inputs each panel passes; labels
+  from `VIEW_LABELS`. Fixed templates, so every account sees them. Sits between Claim Dates and "Your numbers".
+  Warden consulted: F186, F113, F178.
+- [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — **BUILT 2026-11-05, awaiting review.**
+  "Your numbers" (tiles + Year-End Outlook) is now collapsed for every account, not only identity holders. Real
+  check: production `vite build` (React Compiler on) + Chromium at 390×844 against the mocked Supabase
+  (`scripts/live-test/lib.mjs`), a paid account and an expired one. Results: section order Today with Coach → Needs you →
+  Claim Dates → Coach remembers → Around the app → Your numbers, no horizontal scroll, tiles open on expand, ask bar
+  opens Coach with the question, See all lands on What Coach knows, expired account shows no Coach sections, zero
+  page errors. The Coach API was stubbed offline, so the Net Worth card and briefing were not seen live (they fail
+  quiet by design) — check those on preview. Warden consulted: F183 (updated), §22 design tokens, F177.
+- [ ] **D5 (later) · Push delivery** — briefing + slip alerts as PWA push (§8.C); needs its own design pass.
+
+**Open questions for Anthony (answer before D1):**
+1. Evolve Home into the command center (recommended) — or a separate new first tab?
+2. Name: keep the tab label **Home** (recommended — no rename churn) and title the top section "Today with
+   Coach", or rename? Screened free 2026-11-03: **HQ**, **Huddle**, **Game Plan** (taken: "Hub" — Money Moves /
+   Homebase; "Corner" — Coach's own phrasing).
+3. Ask bar: send the question straight into the chat (recommended), or show suggested questions first?
+4. Accounts without Coach (expired / no entitlement): show the non-AI parts only (recommended), or add an
+   upgrade card in Coach's slot?
 
 ---
 
@@ -2274,7 +2420,12 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     weighed yet, not a reversal). Remaining: pick and repeat-verify a target per mode (possibly
     Haiku-specific for Ask Coach, given the range gap; possibly a non-1 floor for Résumé Review).
     Full writeup: `coach-personality-rubric.md`'s Axis 3 section.
-  - [ ] Directness/bluntness and Warmth/formality — still undefined, no anchor data yet.
+  - [x] Net Worth Red flourish gap FIXED 2026-10-08 (all figures of speech banned + length restated; 0/3 flourishes, 81–95 words). Job Hunt fixture 8-vs-9-day coincidence broken (Riverbend → 2026-03-04).
+  - [x] Job Hunt application-date mix-up — own-date rule added to `JOB_HUNT_ADDENDUM` 2026-10-08; 0/6 recurrences, but only 1 draw cited a date at all (weak evidence; reopen if it reappears).
+  - [x] Job Hunt runway-weeks grounding BUILT + verified 2026-10-08 (`runwayWeeksText` in `buildJobHuntContext`: 5/5 correct when cited, misread 0/9, first pick 9/9). The proposed "N days since applying" relabel was tried and REVERTED — it made the days-ago misread worse (0/3 → 2/3) and caused date mix-ups. Warmth-4 grounding probe on Sonnet did NOT fabricate (n=1). Optional: break the fixture's 8-vs-9-day coincidence in `testAccount.js`.
+  - [x] Warmth 1–2 elicited 2026-10-07 (9 calls, +1 grounding probe at 4): Job Hunt/Sonnet clean 1→3; Résumé 2–3 (clinical override came out warmer); Haiku compressed (~2–3) on Ask Coach/Net Worth; probe did NOT fabricate shared history but only because Haiku couldn't reach 4 — next: one Sonnet probe. Writeup: rubric Known Limitations.
+  - [x] Directness extremes elicited 2026-10-07 (8 calls): Job Hunt/Sonnet full 1→5; Ask Coach + Net Worth Red/Haiku can't cushion (range ~3–4 / floor unreachable); Résumé Review natural ≈ 4; 5 on Net Worth Red collides with 'never catastrophize'. Writeup: rubric Known Limitations. Watch: Job Hunt 'days ago' misread as interview timing under override (n=2).
+  - [x] Directness (Axis 4) and Warmth/Formality (Axis 5) DEFINED 2026-10-07 in `coach-personality-rubric.md` (1–5, default 3 each; anchors scored from existing transcripts). Still open: elicit real 1s/5s for Directness; Warmth 4–5 blocked on real shared-history context (else Coach fabricates closeness).
   - [x] **Fix Net Worth Trigger Amber's stacked-touch rule violation — FIXED 2026-09-06.** Was a
     real, already-identified bug in the shipped addendum (`TIER_ADDENDA.amber`, `coachPrompts.js`):
     stacked at least two figurative touches per message and named multiple issues where the
@@ -2298,9 +2449,25 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     date-after-Today rules in `RESUME_REVIEW_ADDENDUM` — dates 3/3 fixed, recap partly (2/3 still
     close on the body's gap, as an action); length intentionally untouched. Residual (minor): loose
     runway-to-weeks conversion on tight runway. Writeup: rubric Known Limitations.
-  - [ ] **Then: the batch decision** — attach one locked target number per mode/axis pair across
+  - [$] **Then: the batch decision** — attach one locked target number per mode/axis pair across
     Ask Coach, Net Worth Trigger, Job Hunt Chat, and Résumé Review, using every finding recorded
-    above. This is Phase 5's actual finish line.
+    above. This is Phase 5's actual finish line. *(shotgun 2026-10-22 — matrix in
+    `coach-personality-rubric.md` "Locked Targets"; journal: `docs/shotgun-coding.md`)*
+  - [$] Net Worth Green grounding — stop inventing a "before" figure the card never passes; Amber/Green
+    end on a real on-screen panel (`NET_WORTH_PANEL_ACTION`); Green one-touch cap. *(shotgun 2026-10-22)*
+  - [$] Net Worth Red Directness 4 — lead with the runway figure and its biggest driver, no
+    reassurance first. *(shotgun 2026-10-22)*
+  - [$] Carried from the lock check: Ask Coach overshoots Length 2 (~4 sentences, 3/3) and closes on a
+    weak action ("Ask me about your goals"). Fixed with five WORKED EXAMPLES at the end of
+    `ASK_COACH_SYSTEM_PROMPT` (status check, one expense, what-if, tool timing, broad question): the lock
+    check now gives 2 sentences ending on Home, and broad answers use 0 tools and 3–4 numbers. *(shotgun 2026-10-29)*
+  - [ ] Still carried: Red's action names (Triage Expenses / Review Goals / Life Events) are spec names, not
+    rendered buttons. Untouched by the 2026-10-29 run.
+  - [$] Net Worth Green names the real turnaround. Each time a tier fires, the card saves
+    `coachSignalState.lastFiredSnapshot` (`netWorthCheckInSnapshot()`). A Green after Amber/Red gets an
+    "Earlier check-in" context line plus its own addendum; a Green with no snapshot keeps the plain addendum
+    byte for byte. Live: 9→90%, 91→10% and $75→$760 were exact, with no computed deltas. This grounds Green
+    Warmth 4; the lock stays at 3 until reviewed. *(shotgun 2026-10-29)*
 
 - [x] **Coach terminology/flow drift audit (2026-09-05), triggered by pulling down a sibling
   branch's homepage/goals redesign (`claude/homepage-goals-redesign-l249t1`, merged
@@ -2338,6 +2505,23 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
   mentioned in `COACH_FEATURE_GUIDE`, and the guide's goal description doesn't use the new "Claim
   Date" term Home now leads with.** Neither is wrong, just incomplete — worth a follow-up pass,
   not treated as a bug the way the Budget/Upkeep leftover was.
+
+- [$] **Layer B unbuilt list closed (`docs/coach-tuning-handoff.md` §6, 2026-10-29 shotgun).** Each item
+  has code, passing tests and a live check; the journal is in `docs/shotgun-coding.md`, 2026-10-29.
+  - [$] Fabricated counterfactuals: worked examples 2–4 make Coach quote the tool's figure first and size
+    a what-if only by a `simulate_` tool's own `differenceInWords` (computed in code by `describeShift()`;
+    Haiku had turned 0.08 weeks into "five days").
+  - [$] Goal-setting as an identity conversation (GOAL-SETTING block): when the purpose is missing, Coach asks
+    one question; it then calls `propose_goal` in the user's own words and puts no date in its prose. Haiku
+    still guesses timing in 2 of 3 two-turn draws, so these turns route to Sonnet, where they are grounded.
+  - [$] Simulation result strip: `CoachSimulationStrip` under what-if answers shows the tool's own dates and shift size.
+  - [$] `draft_log_entry`, prefill-and-hand-off: Coach drafts the entry, Log opens it in its own add form, and
+    the user saves through `addLog`. The tool never writes.
+  - [$] `JOB_HUNT_TOOLS` widened with `simulate_runway_change` (Spine A runway with one expense changed).
+    Live on Sonnet: 9 → 11 days ("about 2 days more") and 70 → 86 days.
+  - [$] Per-surface server gate plus a 4-round tool cap in `api/coach.js` (see Phase 7).
+  - Decided, not built: Ask Coach calling `navigate_to` Home on a closing "open Home" action is by design.
+    The tool's own contract is to make the closing action tappable, so it isn't a selection error.
 
 - [~] **Phase 6 — RENUMBERED 2026-09-03 (was Phase 5's original "widen to remaining flat-default
   modes" scope).** Widen live testing to Coach modes beyond the four that exist today, once each
@@ -2425,6 +2609,42 @@ there. Scoping only, nothing below is implemented. Sequenced as small, deliberat
     Review already have their own model choices from earlier work (§2.E/§2.E1, Sonnet — unrelated
     to this calibration effort, don't relitigate without new evidence), the rest have no
     calibration data yet. Don't read "two modes locked" as "the model question is closed."
+  - [$] **Per-message routing BUILT (2026-10-29).** `src/lib/coachPolicy.js` `chooseCoachModel()` sends
+    Ask Coach turns that need range (what-ifs, decisions, goal-setting, messages over 220 characters) to Sonnet
+    and keeps everything else on Haiku. The rollout is one switch: `ASK_COACH_SONNET_AUDIENCE = "privileged"`
+    (admin/tester/investor/AI admin). `api/coach.js` enforces it server-side through `resolveCoachRequest()`:
+    Job Hunt and Résumé are privileged-only, Net Worth is Haiku-only, a client can't pick a model its surface
+    doesn't allow, and tool rounds are capped at 4. Live: Sonnet grounds the goal-setting turns that Haiku
+    couldn't (13 calls). Next: flip the audience to "all" once the cost is accepted (§2.G). *(shotgun 2026-10-29)*
+  - [ ] **Switch MADE 2026-10-29 (Anthony's call): Haiku 5.5 is the base model, Sonnet 5.5 (effort `low`) the
+    heavier one; Haiku 4.5 / Sonnet 5 retired** (`api/coach.js` `MODEL_IDS`/`MODEL_EFFORT`; `lib/claude.js`
+    keeps thinking blocks on tool rounds). Tuning pass fixed blockers 1, 2 and 4 below; 3 (Metaphor) is §32 A5.
+    Awaiting review + a live check on a preview deployment.
+  - Record: **Claude Haiku 5.5 baseline taken 2026-10-29** (superseded by the switch above). Every promptfoo config was re-run on its
+    own model and on `claude-haiku-5-5` with the same prompts (`scripts/coach-eval/modelCompare.mjs`, 220 + 96
+    calls), plus all 30 tool-loop cases on Haiku 4.5 / Haiku 5.5 low / Haiku 5.5 default (production request
+    shape, thinking stripped like `lib/claude.js`). Haiku 5.5 is ~4× cheaper per call than Haiku 4.5 and
+    ~15× cheaper than Sonnet 5, matches Sonnet 5 on Job Hunt and Résumé quality, widens every axis Haiku 4.5
+    couldn't reach, and picks tools as well (27/30 each). It is 2–3× slower than Haiku 4.5 (it thinks first).
+    **Before any switch:** (1) it answers twice around write tools (`propose_goal`, `draft_log_entry`: 7 of 10
+    runs); (2) once it claimed "I've drafted" with no tool call; (3) natural Metaphor drops to ~1–2 against a
+    target of 3; (4) it invents a "Goals panel"; (5) Ask Coach status checks cite ~6 numbers against the worked
+    example's 3. Default effort beats `low` on rule-following (Red: ~48 words vs ~85). Full scoring: rubric
+    Known Limitations, "Claude Haiku 5.5 baseline".
+- [ ] **Phase 8 — Combined-axis tuning ("Phase 2 testing" in the user's words), recorded 2026-10-08.
+  Starts only after (a) every open item above is closed — Phase 5's batch decision, the Net Worth Red
+  flourish gap, the Job Hunt fixture's 8-vs-9-day coincidence, the Warmth 4–5 history dependency —
+  and (b) Coach is live after this testing.** Phases 1–5 tuned each axis one at a time. Phase 8
+  tests them **together**: monitor three axes in one shot on the same reply (e.g. Ask Coach
+  near-limit → Urgency 4 · Directness 3 · Warmth 3) and tune the set of 1–5 settings jointly, per
+  mode. Why it is its own phase: Phase 5 already found the axes pull on each other (a "clinical"
+  warmth override also cut length ~30%; a "direct" override shifted warmth; Directness 5 on Net
+  Worth Red collided with Urgency), so a per-axis lock can drift once the others are set.
+  Open design questions for when it starts, not decided now: which three axes per mode (likely the
+  three that mode's locked targets make most fragile); whether to score with fixed calibration
+  overrides or the shipped prompt alone; a combined pass/fail rule per reply; keep the Phase 5
+  budget discipline (small planned call sets, `--no-cache`, no `llm-rubric` judge calls unless the
+  judge is never one of the models under test — see the constraint below).
 - [ ] **Design constraints carried over from this session's discussion, not to redecide later:**
   grade with a judge model that is never one of the candidates being compared (avoids a model
   favoring its own output); use deterministic code assertions (not another LLM call) for any rule
@@ -5707,9 +5927,9 @@ shown the channel is worth it.***
 **Sequence:** (1) PWA push reminders (`§8.C` weekly pre-game briefing) → (2) opt-in one-way SMS
 reminders with **no dollar figures** → (3) two-way Coach over SMS. Each step is a decision gate.
 
-- [ ] **Free a serverless slot first** — `api/` is **12/12** (Hobby cap). A Twilio inbound webhook
-  needs a route: merge the three `stripe-*.js` routes (same shape) or dispatch the webhook from an
-  existing route on a body/path field, as `api/seed.js` / `admin-beta-hub.js` already do.
+- [ ] **Free a serverless slot first** — *unblocked 2026-10-29: `api/` is now 7/12* (admin, Stripe
+  user-facing and account routes merged into three routers). A Twilio inbound webhook needs its own
+  signature check on the raw body, so give it its own slot like `stripe-webhook.js`.
 - [ ] **US A2P 10DLC registration** — brand → campaign → numbers. Campaigns fail review when the
   opt-in/opt-out method is inadequate; new campaigns require privacy-policy and terms URLs from
   2026-06-30 (Twilio changelog). **Review times and fees were not confirmed — verify with Twilio

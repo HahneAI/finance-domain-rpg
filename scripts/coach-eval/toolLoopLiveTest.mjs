@@ -19,16 +19,25 @@
 // MAX_CALLS below is the only thing standing between a test pass and an
 // open-ended spend. One conversation per planned prompt, no retries — a
 // disappointing answer is a finding to write down, not a reason to re-roll.
-import { ASK_COACH_SYSTEM_PROMPT } from "../../src/lib/coachPrompts.js";
-import { COACH_TOOLS, executeCoachTool } from "../../src/lib/coachTools.js";
+import { ASK_COACH_SYSTEM_PROMPT, JOB_HUNT_SYSTEM_PROMPT } from "../../src/lib/coachPrompts.js";
+import { COACH_TOOLS, JOB_HUNT_TOOLS, executeCoachTool } from "../../src/lib/coachTools.js";
 import { buildCoachContext } from "../../src/lib/aiContext.js";
-import { buildToolTestAccount } from "./fixtures/testAccount.js";
+import { buildToolTestAccount, buildJobHuntTestAccount, buildJobHuntTestContext } from "./fixtures/testAccount.js";
 
-const MODEL = "claude-haiku-4-5";          // api/coach.js's MODEL_IDS.haiku
+// COACH_EVAL_MODEL=claude-sonnet-5 runs the same cases on Sonnet (2026-10-29: checks the
+// per-message routing premise in src/lib/coachPolicy.js). Default stays the locked Haiku.
+const MODEL = process.env.COACH_EVAL_MODEL || "claude-haiku-5-5"; // api/coach.js's MODEL_IDS.haiku (base model since 2026-10-29)
 const MAX_TOKENS = 1024;                    // api/coach.js
 const MAX_TOOL_ROUNDS = 4;                  // lib/claude.js
-const MAX_CALLS = 26;                       // hard budget stop for the whole run
-const PRICE = { input: 1.00, output: 5.00 }; // $/Mtok, api/coach.js's PRICE_PER_MTOK
+const MAX_CALLS = Number(process.env.COACH_EVAL_MAX_CALLS || 26); // hard budget stop for the whole run
+// 2026-10-29 model comparison (Haiku 5.5): Job Hunt cases default to Sonnet 5 as shipped;
+// COACH_EVAL_JOBHUNT_MODEL moves them too. COACH_EVAL_EFFORT sets output_config.effort on the
+// 5.x models (omitted = the model's default). COACH_EVAL_STRIP_THINKING=1 mimics lib/claude.js,
+// which keeps only text + tool_use blocks when it sends the assistant turn back.
+const JOBHUNT_MODEL = process.env.COACH_EVAL_JOBHUNT_MODEL || "claude-sonnet-5-5";
+const EFFORT = process.env.COACH_EVAL_EFFORT || null;
+const STRIP_THINKING = process.env.COACH_EVAL_STRIP_THINKING === "1";
+const PRICES = { "claude-haiku-4-5": { input: 1, output: 5 }, "claude-haiku-5-5": { input: 0.1, output: 0.5 }, "claude-sonnet-5": { input: 2, output: 10 }, "claude-sonnet-5-5": { input: 2, output: 10 } }; // $/Mtok
 
 const KEY = process.env.AI_ADMIN_COACH_TEST_KEY;
 if (!KEY) {
@@ -109,7 +118,54 @@ const NAVIGATE = [
     text: "What does Upkeep Health actually measure?" },
 ];
 
-const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE];
+// 2026-10-29 — goal-setting as an identity conversation (coachPrompts.js GOAL-SETTING).
+// `history` replays earlier turns so a two-turn exchange can be tested in this single-turn runner.
+const GOALSET = [
+  { id: "goalopen", expect: "purpose missing — ONE question about who/what it's for, no propose_goal yet",
+    text: "I want to start saving for something." },
+  { id: "goalanswer", expect: "purpose now given — propose_goal named in the user's words, reason as note",
+    history: [
+      { role: "user", content: "I want to start saving for something." },
+      { role: "assistant", content: "Good instinct. What would hitting it make possible for you — or who would it make you?" },
+    ],
+    text: "I want to be the kind of person who could cover three months of rent if work dried up." },
+  { id: "goaldirect", expect: "what + how much already given — propose_goal immediately, no question",
+    text: "Add a $1,000 emergency fund goal for me." },
+];
+
+// 2026-10-29 — draft_log_entry (prefill-and-hand-off). Must draft, never claim it saved anything.
+const LOGSET = [
+  { id: "logmissed", expect: "draft_log_entry missed_unpaid, this week, 1 shift — says it's drafted, not saved",
+    text: "I missed my shift yesterday, can you log it for me?" },
+  { id: "logbonus", expect: "draft_log_entry bonus 250, weekOffset -1",
+    text: "I got a $250 bonus on last week's check." },
+  { id: "logpto", expect: "draft_log_entry pto 8 hours",
+    text: "I took 8 hours of PTO this week, put that in." },
+];
+
+// 2026-10-29 — Job Hunt runs its own prompt/context/tools on Sonnet (JobHuntChatPanel), so these cases
+// carry `surface: "job_hunt"` and a runway `variant`; see setupFor() below.
+const JOBHUNT = [
+  { id: "jhcut", surface: "job_hunt", variant: "tight", expect: "simulate_runway_change Utilities 0 — quotes 9 -> 11 days, never estimates",
+    text: "If I cut my Utilities completely, how much longer could I hold out?" },
+  { id: "jhtrim", surface: "job_hunt", variant: "healthy", expect: "simulate_runway_change with a partial cost — quotes the tool's words",
+    text: "What would trimming Rent to 250 a week do for my runway?" },
+  { id: "jhfollow", surface: "job_hunt", variant: "tight", expect: "no tool needed — still Riverbend first, 1.3 weeks, no regression",
+    text: "Which of these two applications should I follow up on first, and how?" },
+];
+
+// TODO §32 B4 (2026-11-03) — propose_memory: offered for lasting things, in the user's words; never for
+// a plain status question; never claimed as saved.
+const MEMORY = [
+  { id: "memtone", expect: "propose_memory kind instruction, says they can save it (not that it's saved)",
+    text: "Just so you know, I want you to be blunt with me. No sugarcoating, ever." },
+  { id: "memwhy", expect: "propose_memory kind goal_why in their words, may also answer",
+    text: "My first goal matters because I want my kids to see me finish something for once." },
+  { id: "memnone", expect: "NO propose_memory — a status check, nothing lasting shared",
+    text: "How's my week looking?" },
+];
+
+const ALL = [...PROMPTS, ...ADVERSARIAL, ...SIMULATION, ...NAVIGATE, ...GOALSET, ...LOGSET, ...JOBHUNT, ...MEMORY];
 
 // Optional id filter: `node toolLoopLiveTest.mjs broad goal` runs just those.
 // Exists so a single planned prompt can be re-run deliberately (e.g. one that
@@ -119,6 +175,9 @@ const PLANNED = only.length
   ? (only[0] === "adversarial" ? ADVERSARIAL
     : only[0] === "simulation" ? SIMULATION
     : only[0] === "navigate" ? NAVIGATE
+    : only[0] === "goalset" ? GOALSET
+    : only[0] === "logset" ? LOGSET
+    : only[0] === "jobhunt" ? JOBHUNT
     : ALL.filter((p) => only.includes(p.id)))
   : PROMPTS;
 if (!PLANNED.length) { console.error(`No prompts match: ${only.join(", ")}`); process.exit(1); }
@@ -128,23 +187,38 @@ const bag = buildToolTestAccount();
 // tools, so the block must be the trimmed one the panel actually ships, not the
 // fuller version CoachNetWorthCard gets.
 const contextBlock = buildCoachContext({ ...bag, detailAvailableViaTools: true });
+const ASK_SETUP = { system: ASK_COACH_SYSTEM_PROMPT, contextBlock, tools: COACH_TOOLS, bag, model: MODEL };
+
+function setupFor(prompt) {
+  if (prompt.surface !== "job_hunt") return ASK_SETUP;
+  const a = buildJobHuntTestAccount({ variant: prompt.variant ?? "tight" });
+  return {
+    system: JOB_HUNT_SYSTEM_PROMPT,
+    contextBlock: buildJobHuntTestContext({ variant: prompt.variant ?? "tight" }),
+    tools: JOB_HUNT_TOOLS,
+    bag: { config: a.config, expenses: a.expenses, today: a.effectiveToday, includeBenefits: true },
+    model: JOBHUNT_MODEL,
+  };
+}
 
 let calls = 0;
-const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
-async function callAnthropic(messages, offerTools) {
+async function callAnthropic(messages, offerTools, setup = ASK_SETUP) {
   if (++calls > MAX_CALLS) throw new Error(`Budget stop: exceeded ${MAX_CALLS} calls`);
   const body = {
-    model: MODEL,
+    model: setup.model,
     max_tokens: MAX_TOKENS,
     system: [
-      { type: "text", text: ASK_COACH_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: contextBlock, cache_control: { type: "ephemeral" } },
+      { type: "text", text: setup.system, cache_control: { type: "ephemeral" } },
+      { type: "text", text: setup.contextBlock, cache_control: { type: "ephemeral" } },
     ],
     messages: messages.map((m, i) =>
       i !== messages.length - 1 ? m : withBreakpoint(m)
     ),
-    ...(offerTools ? { tools: COACH_TOOLS } : {}),
+    ...(offerTools ? { tools: setup.tools } : {}),
+    // Mirrors api/coach.js MODEL_EFFORT: Sonnet runs at "low", Haiku at its default.
+    ...((EFFORT || (setup.model.includes("sonnet") ? "low" : null)) ? { output_config: { effort: EFFORT || "low" } } : {}),
   };
   let res, lastErr;
   // Longer than a typical client backoff on purpose: a 529 capacity dip on this
@@ -171,6 +245,9 @@ async function callAnthropic(messages, offerTools) {
   }
   if (!res.ok) throw new Error(`Anthropic ${lastErr ?? res.status}: gave up after retries`);
   const json = await res.json();
+  const price = PRICES[setup.model] ?? PRICES["claude-haiku-4-5"];
+  usage.cost += ((json.usage?.input_tokens ?? 0) * price.input + (json.usage?.cache_read_input_tokens ?? 0) * price.input * 0.1
+    + (json.usage?.cache_creation_input_tokens ?? 0) * price.input * 1.25 + (json.usage?.output_tokens ?? 0) * price.output) / 1e6;
   usage.input += json.usage?.input_tokens ?? 0;
   usage.output += json.usage?.output_tokens ?? 0;
   usage.cacheRead += json.usage?.cache_read_input_tokens ?? 0;
@@ -193,7 +270,8 @@ function withBreakpoint(m) {
 }
 
 async function runConversation(prompt) {
-  const convo = [{ role: "user", content: prompt.text }];
+  const setup = setupFor(prompt);
+  const convo = [...(prompt.history ?? []), { role: "user", content: prompt.text }];
   const toolCalls = [];
   let text = "";
   let rounds = 0;
@@ -201,16 +279,19 @@ async function runConversation(prompt) {
   for (let round = 0; ; round++) {
     rounds = round + 1;
     const offerTools = round < MAX_TOOL_ROUNDS;
-    const reply = await callAnthropic(convo, offerTools);
-    text += reply.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const reply = await callAnthropic(convo, offerTools, setup);
+    // Mirrors AskCoachPanel (2026-11-03): text written after a tool round replaces what came before
+    // it, so this prints the answer a user actually sees.
+    const roundText = reply.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    if (roundText) text = round > 0 ? roundText : text + roundText;
     const uses = reply.content.filter((b) => b.type === "tool_use");
     if (!offerTools || reply.stop_reason !== "tool_use" || !uses.length) break;
 
-    convo.push({ role: "assistant", content: reply.content });
+    convo.push({ role: "assistant", content: STRIP_THINKING ? reply.content.filter((b) => b.type === "text" || b.type === "tool_use") : reply.content });
     convo.push({
       role: "user",
       content: uses.map((u) => {
-        const result = executeCoachTool(u.name, u.input, bag);
+        const result = executeCoachTool(u.name, u.input, setup.bag);
         toolCalls.push({ name: u.name, input: u.input, result });
         return { type: "tool_result", tool_use_id: u.id, content: JSON.stringify(result) };
       }),
@@ -219,7 +300,7 @@ async function runConversation(prompt) {
   return { toolCalls, text, rounds };
 }
 
-console.log(`MODEL ${MODEL} · ${PLANNED.length} planned prompts · budget cap ${MAX_CALLS} calls\n`);
+console.log(`MODEL ${MODEL} (Job Hunt: ${JOBHUNT_MODEL})${EFFORT ? ` · effort ${EFFORT}` : ""}${STRIP_THINKING ? " · thinking stripped" : ""} · ${PLANNED.length} planned prompts · budget cap ${MAX_CALLS} calls\n`);
 console.log("=== CONTEXT BLOCK SENT ===\n" + contextBlock + "\n");
 
 for (const p of PLANNED) {
@@ -235,6 +316,5 @@ for (const p of PLANNED) {
   console.log(`\nANSWER:\n${text}\n`);
 }
 
-const cost = (usage.input * PRICE.input + usage.cacheRead * PRICE.input * 0.1
-  + usage.cacheWrite * PRICE.input * 1.25 + usage.output * PRICE.output) / 1e6;
+const cost = usage.cost;
 console.log(`\n${"=".repeat(72)}\nCALLS ${calls}/${MAX_CALLS} · in ${usage.input} cache_r ${usage.cacheRead} cache_w ${usage.cacheWrite} out ${usage.output} · est $${cost.toFixed(4)}`);

@@ -1,6 +1,9 @@
 /* eslint-disable react-hooks/static-components */
 import { PaycheckCreditsLedger } from "./PaycheckCreditsLedger.jsx";
-import { useState } from "react";
+import { logCoachNote } from "../lib/coachNotes.js";
+import { logEntryCoachSeed } from "../lib/coachSeeds.js";
+import { CoachNote } from "./CoachNote.jsx";
+import { useState, useEffect } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR, TOTAL_FISCAL_WEEKS } from "../constants/config.js";
 import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
@@ -44,6 +47,11 @@ export function LogPanel({
   logNetLost = 0, logNetGained = 0, adjustedTakeHome = 0,
   ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
   cashOnHand = null, onOpenCheckIn,
+  // "Ask Coach about this" (TODO §32 A2): App passes it only when the account can open Coach.
+  onAskCoach,
+  // A draft_log_entry result handed off from Ask Coach (2026-10-29). Opens the add form filled in;
+  // the user still saves through addLog below, so the eager save is unchanged.
+  coachDraft = null, onCoachDraftConsumed,
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -54,6 +62,18 @@ export function LogPanel({
   const [adding, setAdding] = useState(false);
   const [nEv, setNEv] = useState(blank);
   const [editId, setEditId] = useState(null);
+  // Apply a new Coach draft during render (React's "adjust state when a prop changes" pattern —
+  // no setState-in-effect cascade), then tell App it was used so a remount doesn't re-open it.
+  const [appliedCoachDraft, setAppliedCoachDraft] = useState(null);
+  if (coachDraft && coachDraft !== appliedCoachDraft) {
+    setAppliedCoachDraft(coachDraft);
+    setNEv({ ...blank, ...coachDraft });
+    setEditId(null);
+    setAdding(true);
+  }
+  useEffect(() => {
+    if (coachDraft) onCoachDraftConsumed?.();
+  }, [coachDraft]); // eslint-disable-line react-hooks/exhaustive-deps
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
@@ -596,6 +616,8 @@ export function LogPanel({
 
   return (<div>
     <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
+    {/* Coach note (TODO §32 A4) — App's logTotals (the Cash Left Behind tile's figure and its gain side). */}
+    <CoachNote text={logCoachNote({ entryCount: logs.length, netLost: logNetLost, netGained: logNetGained })} />
 
     {/* Subtitle — nudges the daily logging habit */}
     <div className="text-md" style={{ textAlign: "center", color: "var(--color-text-secondary)", marginTop: "-14px", marginBottom: "24px", lineHeight: 1.4 }}>
@@ -820,6 +842,10 @@ export function LogPanel({
                   className="text-sm" style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", lineHeight: 1 }}
                   title="Impact breakdown"
                 >{expandedImpact.has(entry.id) ? "▲" : "▼"}</Pressable>
+                {/* "Ask Coach about this" (TODO §32 A2) — only when App passed onAskCoach. */}
+                {onAskCoach && (
+                  <Pressable onClick={() => onAskCoach(logEntryCoachSeed(ev.label, entry.weekEnd))} className="text-xs" aria-label={`Ask Coach about this ${ev.label} entry`} style={{ background: "transparent", border: "1px solid var(--color-border-accent)", color: "var(--color-teal)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer" }}>ASK</Pressable>
+                )}
                 <Pressable onClick={() => startEdit(entry)} className="text-xs" style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", cursor: "pointer", }}>EDIT</Pressable>
                 {cdel === entry.id
                   ? <>

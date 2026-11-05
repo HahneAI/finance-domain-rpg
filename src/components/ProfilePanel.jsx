@@ -1,7 +1,8 @@
 import { useState, useEffect, Component } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem, loadResumeProfile } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry, fetchAllBetaContentItems, saveBetaContentItem, deleteBetaContentItem, fetchBetaScoreboard, saveBetaScore, fetchAllBaseContentItems, saveBaseContentItem, deleteBaseContentItem, loadResumeProfile, loadCoachMemory, saveCoachMemory, deleteCoachMemory } from "../lib/db.js";
+import { MEMORY_KINDS, MAX_MEMORY_CHARS, validateMemory } from "../lib/coachMemory.js";
 import { ChangelogBody } from "./ChangelogModal.jsx";
 import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
@@ -269,7 +270,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/stripe-create-checkout", {
+      const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -300,7 +301,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/stripe-portal", {
+      const res = await fetch("/api/stripe/portal", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -377,7 +378,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
     }
 
     try {
-      const res = await fetch("/api/delete-account", {
+      const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1669,6 +1670,100 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   );
 }
 
+// "What Coach knows about me" (TODO §32 B2, migration 049). Everything Coach remembers, in the
+// user's own words: view, add, delete, or switch memory off entirely (config.coachMemoryOff — then
+// Coach neither reads nor proposes memories). Rows write straight to coach_memory under RLS; the
+// switch is a config change, eager-saved.
+function CoachMemoryDetail({ config, setConfig, onSaveConfig, onBack }) {
+  "use no memo"; // useState + draft-shaped handlers: the React Compiler miscompilation trigger (warden §12.4).
+  const memoryOff = config?.coachMemoryOff === true;
+  const [items, setItems] = useState(null); // null = still loading
+  const [kind, setKind] = useState("goal_why");
+  const [body, setBody] = useState("");
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCoachMemory().then((rows) => { if (!cancelled) setItems(rows); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggleMemory = () => {
+    const next = { ...config, coachMemoryOff: !memoryOff };
+    setConfig(next);
+    onSaveConfig?.(next);
+  };
+
+  const handleAdd = async () => {
+    const problem = validateMemory({ kind, body });
+    if (problem) { setError(problem); return; }
+    setSaving(true);
+    const row = await saveCoachMemory({ kind, body, source: "user" });
+    setSaving(false);
+    if (!row) { setError("Couldn't save that. Try again in a moment."); return; }
+    setItems((prev) => [row, ...(prev ?? [])]);
+    setBody("");
+    setError(null);
+  };
+
+  const handleDelete = async (id) => {
+    if (await deleteCoachMemory(id)) setItems((prev) => (prev ?? []).filter((m) => m.id !== id));
+  };
+
+  return (
+    <div>
+      <BackBar onBack={onBack} title="What Coach knows" />
+      <div className="text-sm" style={{ color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "16px" }}>
+        Things you've asked Coach to remember, in your words. Coach uses them to make answers personal; your numbers
+        in the app always come first. Nothing here is shared, and Coach never saves anything without you tapping Save.
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "14px 16px", marginBottom: "20px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px" }}>
+        <div>
+          <div className="text-base" style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>Coach memory</div>
+          <div className="text-xs" style={{ color: "var(--color-text-secondary)" }}>{memoryOff ? "Off — Coach won't read or offer to remember anything." : "On"}</div>
+        </div>
+        <Pressable onClick={toggleMemory} className="text-xs" aria-pressed={!memoryOff} style={{ padding: "8px 16px", borderRadius: "12px", border: "1px solid var(--color-border-accent)", background: memoryOff ? "var(--color-bg-raised)" : "var(--color-teal)", color: memoryOff ? "var(--color-text-secondary)" : "var(--color-bg-base)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>
+          {memoryOff ? "Turn on" : "Turn off"}
+        </Pressable>
+      </div>
+
+      <SH>Remembered</SH>
+      <div data-testid="coach-memory-list" style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
+        {items === null && <div className="text-sm" style={{ color: "var(--color-text-disabled)" }}>Loading…</div>}
+        {items?.length === 0 && <div className="text-sm" style={{ color: "var(--color-text-disabled)" }}>Nothing yet. Add something below, or tell Coach in a chat and tap Save on its card.</div>}
+        {items?.map((m) => (
+          <div key={m.id} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "12px 14px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="text-2xs" style={{ letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "2px" }}>{MEMORY_KINDS[m.kind] ?? "Note"}</div>
+              <div className="text-sm" style={{ color: "var(--color-text-primary)", lineHeight: 1.45, overflowWrap: "anywhere" }}>{m.body}</div>
+            </div>
+            <Pressable onClick={() => handleDelete(m.id)} aria-label={`Forget: ${m.body}`} className="text-xs" style={{ padding: "6px 10px", borderRadius: "12px", background: "transparent", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-disabled)", cursor: "pointer", flexShrink: 0 }}>Forget</Pressable>
+          </div>
+        ))}
+      </div>
+
+      <SH>Add something</SH>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <label style={lS} htmlFor="coach-memory-kind">What kind of thing is it</label>
+        <select id="coach-memory-kind" value={kind} onChange={(e) => setKind(e.target.value)} style={iS}>
+          {Object.entries(MEMORY_KINDS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
+        <label style={lS} htmlFor="coach-memory-body">In your words</label>
+        <textarea id="coach-memory-body" value={body} maxLength={MAX_MEMORY_CHARS} rows={3} onChange={(e) => { setBody(e.target.value); setError(null); }} style={{ ...iS, resize: "vertical" }} placeholder="e.g. I'm saving so my kids see me finish something" />
+        <div className="text-xs" style={{ display: "flex", justifyContent: "space-between", color: error ? "var(--color-red)" : "var(--color-text-disabled)" }}>
+          <span>{error ?? "No account, card or Social Security numbers."}</span>
+          <span>{body.length}/{MAX_MEMORY_CHARS}</span>
+        </div>
+        <Pressable onClick={handleAdd} disabled={saving} className="text-xs" style={{ alignSelf: "flex-start", padding: "8px 16px", borderRadius: "12px", border: "none", background: "var(--color-teal)", color: "var(--color-bg-base)", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>
+          {saving ? "Saving…" : "Save"}
+        </Pressable>
+      </div>
+    </div>
+  );
+}
+
 function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeatureUnlocked = false }) {
   // Reflect tax-exempt status only when the tax feature is unlocked. taxExemptOptIn
   // is ignored by the withholding math, so for everyone else "Standard withholding"
@@ -2335,7 +2430,7 @@ class AdminDetailErrorBoundary extends Component {
 // the write side of the "What's New" feature. UpdateAvailableBanner +
 // ChangelogModal (App.jsx) are the read side: a published entry here is what
 // makes the "What's New" tap target appear alongside the next update banner
-// a user sees. Writes go through api/admin-changelog.js (db.js's
+// a user sees. Writes go through api/_adminChangelog.js (db.js's
 // saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
 // the RLS posture the migration sets up.
 function ChangelogAdminDetail({ onBack, embedded = false }) {
@@ -2624,7 +2719,7 @@ const BASE_CONTENT_COPY = {
 // (fetchAllBetaContentItems/saveBetaContentItem/deleteBetaContentItem for
 // beta, fetchAllBaseContentItems/saveBaseContentItem/deleteBaseContentItem
 // for base) passed in by each call site below. Writes always go through
-// api/admin-beta-hub.js's service-role client — never a direct client
+// api/_adminBetaHub.js's service-role client — never a direct client
 // write, per migration 037's/039's RLS posture.
 //
 // `crossPost` (optional: { label, saveItem }) — the paired audience's own
@@ -2991,7 +3086,7 @@ const RUBRIC_ADMIN_CATEGORIES = [
 ];
 
 // App Usage rubric category (0-50, 30-pt floor) reference board — every field
-// here already comes off api/admin-beta-report.js's per-user aggregate
+// here already comes off api/_adminBetaReport.js's per-user aggregate
 // (db.js's fetchBetaScoreboard), scoped to the tester's own 10-week window
 // (docs/TODO.md §30). Purely informational — the admin still hand-enters the
 // score itself below; this just replaces the old one-line text summary with
@@ -3015,7 +3110,7 @@ function BetaUsageBoard({ row }) {
 }
 
 // Feedback rubric category (0-25) reference — the tester's own submitted
-// text (api/admin-beta-report.js's ?format=json `feedback` array, most-
+// text (api/_adminBetaReport.js's ?format=json `feedback` array, most-
 // recent first, scoped to their own 10-week window same as the usage
 // board), inline instead of only a count — so "specificity" is judgable
 // right here instead of cross-referencing the separate ?format=feedback CSV.
@@ -3046,10 +3141,10 @@ function BetaFeedbackList({ feedback }) {
 // Admin scoresheet for the beta rubric (database/migrations/037's
 // beta_scores) — docs/TODO.md §12.L's "scoring stays manual, reviewed by a
 // human" decision, given a live tester-visible home instead of only a
-// spreadsheet. Reads api/admin-beta-report.js's ?format=json (db.js's
+// spreadsheet. Reads api/_adminBetaReport.js's ?format=json (db.js's
 // fetchBetaScoreboard) for each tester's current usage/checklist stats as
 // reference alongside the score inputs; writes go through
-// api/admin-beta-hub.js (db.js's saveBetaScore).
+// api/_adminBetaHub.js (db.js's saveBetaScore).
 function BetaScoresAdminDetail({ onBack }) {
   // "use no memo" — same confirmed React Compiler miscompilation documented
   // in detail on ChangelogAdminDetail above: cancelEdit() immediately
@@ -3197,7 +3292,7 @@ function BetaScoresAdminDetail({ onBack }) {
   );
 }
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, isAiAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription, onChangeIdentity, coachAvailable = false, initialSection = null, onInitialSectionConsumed }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, AI admin, or
   // the per-user tax_projections_enabled flag). The setup wizard's "Unlock
   // projections" choice intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -3205,7 +3300,12 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   // docs/TODO.md §17/§20 — the real 10-week cohort only (isAdmin does NOT count,
   // same distinction isTrackedBetaTester enforces everywhere else).
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
-  const [activeSection, setActiveSection] = useState(null);
+  const [activeSection, setActiveSection] = useState(initialSection);
+  // One-shot entry section (Home's "Coach remembers" → See all, TODO §32 D3): read once at mount, then
+  // hand it back so the next Account visit starts on the normal page.
+  useEffect(() => {
+    if (initialSection) onInitialSectionConsumed?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });
@@ -3241,6 +3341,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "retirement") {
     return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "coachmemory" && coachAvailable) {
+    return (
+      <AdminDetailErrorBoundary title="What Coach knows" onBack={() => setActiveSection(null)}>
+        <CoachMemoryDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />
+      </AdminDetailErrorBoundary>
+    );
   }
   if (activeSection === "preferences") {
     return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} taxFeatureUnlocked={canSeeTaxPlan} />;
@@ -3330,6 +3437,14 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           summary={config.identity ? `${getArchetype(config.identity.archetypeId)?.name ?? "Chosen"} · tap to change` : "Not chosen · pick one on Home"}
           onPress={() => { if (config.identity) setShowIdentityDialog(true); }}
         />
+        {/* TODO §32 B2 — only for accounts that can open Coach (App passes coachAvailable). */}
+        {coachAvailable && (
+          <ListRow
+            label="What Coach knows about me"
+            summary={config.coachMemoryOff ? "Memory off" : "What Coach remembers — view, add or forget"}
+            onPress={() => setActiveSection("coachmemory")}
+          />
+        )}
         <ListRow
           label="Account"
           summary={authedUser?.email ?? "—"}

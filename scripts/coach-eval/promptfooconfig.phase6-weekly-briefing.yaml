@@ -1,0 +1,27 @@
+description: >
+  §2.L Phase 6 / TODO §32 C2 (2026-11-03) — Weekly Pre-Game Briefing, the first unbuilt mode to ship.
+  Checks: exactly three sentences, every figure as written in the context (no new arithmetic), the
+  upcoming check first, one goal named by rank, one heads-up ending on a real panel, at most one
+  corner-man phrase. Run with modelCompare.mjs (production shape: Haiku 5.5 default effort).
+
+providers:
+  - id: anthropic:messages:claude-haiku-5-5
+    label: haiku
+    config:
+      apiKeyEnvar: AI_ADMIN_COACH_TEST_KEY
+      max_tokens: 2048
+
+prompts:
+  - id: file://prompts/weeklyBriefing.js
+    label: weekly-briefing
+
+tests:
+  - description: "Typical week (845 net / 520 spend, $2,000 goal)"
+    vars: {}
+  - description: "Tight week (845 net / 800 spend)"
+    vars:
+      avgWeeklySpend: 800
+  - description: "Healthy week (845 net / 300 spend, $5,000 goal)"
+    vars:
+      avgWeeklySpend: 300
+      goalTarget: 5000

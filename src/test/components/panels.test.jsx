@@ -70,6 +70,23 @@ describe('IncomePanel', () => {
     expect(container.textContent.length).toBeGreaterThan(0)
   })
 
+  // TODO §32 A2 — "Ask Coach about this" on a paycheck row: only with onAskCoach, names the row's
+  // own week-end date, and never reaches the admin week inspector.
+  it('offers ASK on paycheck rows only when onAskCoach is passed, without opening the week inspector', () => {
+    const { unmount } = renderPanel()
+    expect(screen.queryAllByText('ASK')).toHaveLength(0)
+    unmount()
+    const onAskCoach = vi.fn()
+    const onWeekInspect = vi.fn()
+    renderPanel({ onAskCoach, onWeekInspect })
+    const asks = screen.queryAllByText('ASK')
+    expect(asks.length).toBeGreaterThan(0)
+    fireEvent.click(asks[0])
+    expect(onAskCoach).toHaveBeenCalledTimes(1)
+    expect(onAskCoach.mock.calls[0][0]).toMatch(/^Why is my paycheck what it is for the week ending [A-Z][a-z]{2} \d{1,2}( \((this|last|next) week\))?\?$/)
+    expect(onWeekInspect).not.toHaveBeenCalled()
+  })
+
   it('renders week rows containing net amounts from the lookup', () => {
     const { container } = renderPanel()
     // The current week's spendable value should surface somewhere in the panel

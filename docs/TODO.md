@@ -1155,9 +1155,14 @@ numbers"); today they sit as a loose stack. D turns that stack into one Coach-fi
   notes (A4) as tappable one-liners that open those panels, built from the same inputs each panel passes; labels
   from `VIEW_LABELS`. Fixed templates, so every account sees them. Sits between Claim Dates and "Your numbers".
   Warden consulted: F186, F113, F178.
-- [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — Warden first: F183 (today's
-  identity-first gate), design system §22, Liquid Glass `purpose` whitelist (`active-systems.md` §15) if glass is
-  used, `textUtilityClassAudit`. A real browser render is required (React Compiler blind spot).
+- [ ] **D4 · Layout pass at 390px + collapse "Your numbers" for everyone** — **BUILT 2026-11-05, awaiting review.**
+  "Your numbers" (tiles + Year-End Outlook) is now collapsed for every account, not only identity holders. Real
+  check: production `vite build` (React Compiler on) + Chromium at 390×844 against the mocked Supabase
+  (`scripts/live-test/lib.mjs`), a paid account and an expired one. Results: section order Today with Coach → Needs you →
+  Claim Dates → Coach remembers → Around the app → Your numbers, no horizontal scroll, tiles open on expand, ask bar
+  opens Coach with the question, See all lands on What Coach knows, expired account shows no Coach sections, zero
+  page errors. The Coach API was stubbed offline, so the Net Worth card and briefing were not seen live (they fail
+  quiet by design) — check those on preview. Warden consulted: F183 (updated), §22 design tokens, F177.
 - [ ] **D5 (later) · Push delivery** — briefing + slip alerts as PWA push (§8.C); needs its own design pass.
 
 **Open questions for Anthony (answer before D1):**

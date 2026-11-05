@@ -32,6 +32,7 @@ const baseProps = {
 describe('HomePanel', () => {
   it('labels the tile as Next Week Takehome and shows a currency value', () => {
     render(<HomePanel {...baseProps} futureWeekNets={[1234]} />)
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     const tiles = screen.getAllByText('Next Week Takehome')
     expect(tiles.length).toBeGreaterThanOrEqual(1)
     const tile = tiles[0].closest('button')
@@ -46,6 +47,7 @@ describe('HomePanel', () => {
     expect(screen.queryByText(/With this week's bills/)).toBeNull()
     unmount()
     render(<HomePanel {...props} thisWeekActualSpend={1250} />)
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     expect(screen.getByText(/With this week's bills: -?\$300|With this week's bills: \(?\$300/)).toBeTruthy()
   })
 
@@ -503,14 +505,17 @@ describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
     expect(left.style.color).toBe('var(--color-red)')
   })
 
-  it('no identity → legacy layout: no hero, no collapse, tiles visible', () => {
+  // TODO §32 D4 (2026-11-04): "Your numbers" now collapses for every account, not only identity holders.
+  it('no identity → no hero, but the tiles still collapse under "Your numbers" (§32 D4)', () => {
     render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
     expect(screen.queryByTestId('identity-hero')).toBeNull()
-    expect(screen.queryByTestId('your-numbers')).toBeNull()
+    expect(screen.getByTestId('your-numbers')).toBeTruthy()
+    expect(screen.queryByText('Next Week Takehome')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
     expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThan(0)
   })
 
-  it('Year-End Outlook lives inside "Your numbers" with an identity (hidden until expanded), at the bottom without one', () => {
+  it('Year-End Outlook lives inside "Your numbers" with or without an identity, hidden until expanded (§32 D4)', () => {
     const { unmount } = render(<HomePanel {...props} />)
     expect(screen.queryByText('Year-End Outlook')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
@@ -518,7 +523,9 @@ describe('HomePanel — identity-first Home (TODO §31 Phase 3)', () => {
     expect(screen.getByText('Surplus after all goals')).toBeTruthy()
     unmount()
     render(<HomePanel {...props} config={{ userPaySchedule: 'weekly' }} />)
-    expect(screen.getByText('Year-End Outlook')).toBeTruthy()
+    expect(screen.queryByText('Year-End Outlook')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /your numbers/i }))
+    expect(screen.getAllByText('Year-End Outlook')).toHaveLength(1)
   })
 
   it('tidy mode still takes the hero slot', () => {

@@ -1854,10 +1854,9 @@ export function HomePanel({
         ]}
       />
       {(() => {
-        // Identity-first Home (TODO §31 Phase 3): with an identity chosen, the money
-        // tiles collapse under "Your numbers" with an always-visible summary line.
-        // Without one, today's layout is untouched. The tiles themselves are one
-        // block either way — never duplicated.
+        // "Your numbers" (TODO §31 Phase 3, widened to every account in §32 D4): the money
+        // tiles collapse under an always-visible summary line. The tiles are one block —
+        // never duplicated.
         const numbersBlock = (<>
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
@@ -1918,7 +1917,8 @@ export function HomePanel({
         ))}
       </div>
         </>);
-        if (!config?.identity) return numbersBlock;
+        // Command center (TODO §32 D4, 2026-11-04): collapsed for EVERY account now, not only
+        // identity holders — the Coach sections above lead the page. Same single numbersBlock.
         return (
           <YourNumbers
             leftLabel={leftThisCheckLabel}
@@ -1936,9 +1936,6 @@ export function HomePanel({
         <NetWorthHealthTips seed={weekNumber ?? 0} />
       )}
 
-      {/* Year-End Outlook: legacy position. With an identity it lives inside
-          "Your numbers" instead (TODO §31) — same element, never duplicated. */}
-      {!config?.identity && yearEndOutlook}
     </div>
   );
 }
